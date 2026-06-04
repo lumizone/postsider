@@ -13,7 +13,7 @@ import { OauthProvider } from '@gitroom/frontend/components/auth/providers/oauth
 import { GoogleProvider } from '@gitroom/frontend/components/auth/providers/google.provider';
 import { useVariables } from '@gitroom/react/helpers/variable.context';
 import { FarcasterProvider } from '@gitroom/frontend/components/auth/providers/farcaster.provider';
-import WalletProvider from '@gitroom/frontend/components/auth/providers/wallet.provider';
+
 import { useT } from '@gitroom/react/translation/get.transation.service.client';
 type Inputs = {
   email: string;
@@ -81,7 +81,6 @@ export function Login() {
               <div className="gap-[8px] flex">
                 <GoogleProvider />
                 {!!neynarClientId && <FarcasterProvider />}
-                {billingEnabled && <WalletProvider />}
               </div>
             )}
             <div className="h-[20px] mb-[24px] mt-[24px] relative">
