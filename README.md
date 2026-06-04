@@ -1,8 +1,8 @@
 <p align="center">
-  <a href="https://postiz.com/" target="_blank">
+  <a href="https://postsider.com/" target="_blank">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/765e9d72-3ee7-4a56-9d59-a2c9befe2311">
-    <img alt="Postiz Logo" src="https://github.com/user-attachments/assets/f0d30d70-dddb-4142-8876-e9aa6ed1cb99" width="280"/>
+    <img alt="Postsider Logo" src="https://github.com/user-attachments/assets/f0d30d70-dddb-4142-8876-e9aa6ed1cb99" width="280"/>
   </picture>
   </a>
 </p>
@@ -13,65 +13,65 @@
 </a>
 </p>
 
-<h3 align="center"><strong><a href="https://github.com/gitroomhq/postiz-agent">NEW: check out Postiz agent CLI! perfect for OpenClaw and other agents</a></strong></h3>
+<h3 align="center"><strong><a href="https://github.com/gitroomhq/postsider-agent">NEW: check out Postsider agent CLI! perfect for OpenClaw and other agents</a></strong></h3>
 <div align="center">
   <strong>
   <h2>Your ultimate AI social media scheduling tool</h2><br />
-  <a href="https://postiz.com">Postiz</a>: An alternative to: Buffer.com, Hypefury, Twitter Hunter, etc...<br /><br />
+  <a href="https://postsider.com">Postsider</a>: An alternative to: Buffer.com, Hypefury, Twitter Hunter, etc...<br /><br />
   </strong>
-  Postiz offers everything you need to manage your social media posts,<br />build an audience, capture leads, and grow your business.
+  Postsider offers everything you need to manage your social media posts,<br />build an audience, capture leads, and grow your business.
 </div>
 
 <div class="flex" align="center">
   <br />
-  <img alt="Instagram" src="https://postiz.com/svgs/socials/Instagram.svg" width="32">
-  <img alt="Youtube" src="https://postiz.com/svgs/socials/Youtube.svg" width="32">
-  <img alt="Dribbble" src="https://postiz.com/svgs/socials/Dribbble.svg" width="32">
-  <img alt="Linkedin" src="https://postiz.com/svgs/socials/Linkedin.svg" width="32">
-  <img alt="Reddit" src="https://postiz.com/svgs/socials/Reddit.svg" width="32">
-  <img alt="TikTok" src="https://postiz.com/svgs/socials/TikTok.svg" width="32">
-  <img alt="Facebook" src="https://postiz.com/svgs/socials/Facebook.svg" width="32">
-  <img alt="Pinterest" src="https://postiz.com/svgs/socials/Pinterest.svg" width="32">
-  <img alt="Threads" src="https://postiz.com/svgs/socials/Threads.svg" width="32">
-  <img alt="X" src="https://postiz.com/svgs/socials/X.svg" width="32">
-  <img alt="Slack" src="https://postiz.com/svgs/socials/Slack.svg" width="32">
-  <img alt="Discord" src="https://postiz.com/svgs/socials/Discord.svg" width="32">
-  <img alt="Mastodon" src="https://postiz.com/svgs/socials/Mastodon.svg" width="32">
-  <img alt="Bluesky" src="https://postiz.com/svgs/socials/Bluesky.svg" width="32">
+  <img alt="Instagram" src="https://postsider.com/svgs/socials/Instagram.svg" width="32">
+  <img alt="Youtube" src="https://postsider.com/svgs/socials/Youtube.svg" width="32">
+  <img alt="Dribbble" src="https://postsider.com/svgs/socials/Dribbble.svg" width="32">
+  <img alt="Linkedin" src="https://postsider.com/svgs/socials/Linkedin.svg" width="32">
+  <img alt="Reddit" src="https://postsider.com/svgs/socials/Reddit.svg" width="32">
+  <img alt="TikTok" src="https://postsider.com/svgs/socials/TikTok.svg" width="32">
+  <img alt="Facebook" src="https://postsider.com/svgs/socials/Facebook.svg" width="32">
+  <img alt="Pinterest" src="https://postsider.com/svgs/socials/Pinterest.svg" width="32">
+  <img alt="Threads" src="https://postsider.com/svgs/socials/Threads.svg" width="32">
+  <img alt="X" src="https://postsider.com/svgs/socials/X.svg" width="32">
+  <img alt="Slack" src="https://postsider.com/svgs/socials/Slack.svg" width="32">
+  <img alt="Discord" src="https://postsider.com/svgs/socials/Discord.svg" width="32">
+  <img alt="Mastodon" src="https://postsider.com/svgs/socials/Mastodon.svg" width="32">
+  <img alt="Bluesky" src="https://postsider.com/svgs/socials/Bluesky.svg" width="32">
 </div>
 
 <p align="center">
   <br />
-  <a href="https://docs.postiz.com" rel="dofollow"><strong>Explore the docs »</strong></a>
+  <a href="https://docs.postsider.com" rel="dofollow"><strong>Explore the docs »</strong></a>
   <br />
 
   <br />
-  <a href="https://youtube.com/@postizofficial" rel="dofollow"><strong>Watch the YouTube Tutorials»</strong></a>
+  <a href="https://youtube.com/@postsiderofficial" rel="dofollow"><strong>Watch the YouTube Tutorials»</strong></a>
   <br />
 </p>
 
 <p align="center">
-  <a href="https://platform.postiz.com">Register</a>
+  <a href="https://platform.postsider.com">Register</a>
   ·
-  <a href="https://discord.postiz.com">Join Our Discord (devs only)</a>
+  <a href="https://discord.postsider.com">Join Our Discord (devs only)</a>
   ·
-  <a href="https://docs.postiz.com/public-api">Public API</a><br />
+  <a href="https://docs.postsider.com/public-api">Public API</a><br />
 </p>
 <p align="center">
-  <a href="https://www.npmjs.com/package/@postiz/node">NodeJS SDK</a>
+  <a href="https://www.npmjs.com/package/@postsider/node">NodeJS SDK</a>
   ·
-  <a href="https://www.npmjs.com/package/n8n-nodes-postiz">N8N custom node</a>
+  <a href="https://www.npmjs.com/package/n8n-nodes-postsider">N8N custom node</a>
   ·
-  <a href="https://apps.make.com/postiz">Make.com integration</a>
+  <a href="https://apps.make.com/postsider">Make.com integration</a>
 </p>
 
 <br /><br />
 
-## 🔌 See the leading Postiz features
+## 🔌 See the leading Postsider features
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=BdsCVvEYgHU" target="_blank">
-    <img alt="Postiz" src="https://github.com/user-attachments/assets/8b9b7939-da1a-4be5-95be-42c6fce772de" />
+    <img alt="Postsider" src="https://github.com/user-attachments/assets/8b9b7939-da1a-4be5-95be-42c6fce772de" />
   </a>
 </p>
 
@@ -85,8 +85,8 @@
 
 | Sponsor |                                  Logo                                   | Description     |
 |---------|:-----------------------------------------------------------------------:|-----------------|
-| [Hostinger](https://www.hostinger.com/vps/docker/postiz?ref=postiz) | <img src=".github/sponsors/hostinger.png" alt="Hostinger" width="500"/> | Hostinger is on a mission to make online success possible for anyone – from developers to aspiring bloggers and business owners |
-| [Virlo](https://dev.virlo.ai/?ref=postiz) | <img src="https://github.com/user-attachments/assets/25182598-5344-45fc-b9cd-e4cfa16aabfd" alt="Virlo" width="500"/> | Virlo is the #1 social media trend spotting and all-in-one GTM tool for teams leveraging short-form video |
+| [Hostinger](https://www.hostinger.com/vps/docker/postsider?ref=postsider) | <img src=".github/sponsors/hostinger.png" alt="Hostinger" width="500"/> | Hostinger is on a mission to make online success possible for anyone – from developers to aspiring bloggers and business owners |
+| [Virlo](https://dev.virlo.ai/?ref=postsider) | <img src="https://github.com/user-attachments/assets/25182598-5344-45fc-b9cd-e4cfa16aabfd" alt="Virlo" width="500"/> | Virlo is the #1 social media trend spotting and all-in-one GTM tool for teams leveraging short-form video |
 
 
 
@@ -110,29 +110,29 @@
 
 ## Quick Start
 
-To have the project up and running, please follow the [Quick Start Guide](https://docs.postiz.com/quickstart)
+To have the project up and running, please follow the [Quick Start Guide](https://docs.postsider.com/quickstart)
 
-## Sponsor Postiz
+## Sponsor Postsider
 
-We now give a few options to Sponsor Postiz:
+We now give a few options to Sponsor Postsider:
 - Just a donation: You like what we are building, and want to buy us some coffees so we can build faster.
-- Main Repository: Get your logo with a backlink from the main Postiz repository. Postiz has almost 3m downloads and 20k views per month.
+- Main Repository: Get your logo with a backlink from the main Postsider repository. Postsider has almost 3m downloads and 20k views per month.
 - Main Repository + Website: Get your logo on the central repository and the main website. Here are some metrics: - Website has 20k hits per month + 65 DR (strong backlink) - Repository has 20k hits per month + Almost 3m docker downloads.
 
-Link: https://opencollective.com/postiz
+Link: https://opencollective.com/postsider
 
-## Postiz Compliance
+## Postsider Compliance
 
-- Postiz is an open-source, self-hosted social media scheduling tool that supports platforms like X (formerly Twitter), Bluesky, Mastodon, Discord, and others.
-- Postiz hosted service uses official, platform-approved OAuth flows.
-- Postiz does not automate or scrape content from social media platforms.
-- Postiz does not collect, store, or proxy API keys or access tokens from users.
-- Postiz never ask users to paste API keys into our hosted product.
-- Postiz Users always authenticate directly with the social platform (e.g., X, Discord, etc.), ensuring platform compliance and data privacy.
+- Postsider is an open-source, self-hosted social media scheduling tool that supports platforms like X (formerly Twitter), Bluesky, Mastodon, Discord, and others.
+- Postsider hosted service uses official, platform-approved OAuth flows.
+- Postsider does not automate or scrape content from social media platforms.
+- Postsider does not collect, store, or proxy API keys or access tokens from users.
+- Postsider never ask users to paste API keys into our hosted product.
+- Postsider Users always authenticate directly with the social platform (e.g., X, Discord, etc.), ensuring platform compliance and data privacy.
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=gitroomhq/postiz-app&type=date&legend=top-left)](https://www.star-history.com/#gitroomhq/postiz-app&type=date&legend=top-left)
+[![Star History Chart](https://api.star-history.com/svg?repos=gitroomhq/postsider-app&type=date&legend=top-left)](https://www.star-history.com/#gitroomhq/postsider-app&type=date&legend=top-left)
 
 ## License
 
@@ -141,7 +141,7 @@ This repository's source code is available under the [AGPL-3.0 license](LICENSE)
 <br /><br /><br />
 
 <p align="center">
-  <a href="https://www.g2.com/products/postiz/take_survey" target="blank"><img alt="g2" src="https://github.com/user-attachments/assets/892cb74c-0b49-4589-b2f5-fbdbf7a98f66" /></a>
+  <a href="https://www.g2.com/products/postsider/take_survey" target="blank"><img alt="g2" src="https://github.com/user-attachments/assets/892cb74c-0b49-4589-b2f5-fbdbf7a98f66" /></a>
 </p>
 <p align="center">
   <img src="https://github.com/snyk-labs/secure-developer-sample-repo/raw/main/badge_full.svg" alt="Secure Developer Badge Full" width="150">

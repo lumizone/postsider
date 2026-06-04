@@ -205,7 +205,7 @@ export class AuthController {
     @Query('state') state: string,
     @Res({ passthrough: false }) response: Response
   ) {
-    const scheme = process.env.MOBILE_APP_SCHEME || 'postiz://auth/callback';
+    const scheme = process.env.MOBILE_APP_SCHEME || 'postsider://auth/callback';
     const params = new URLSearchParams();
     if (code) params.set('code', code);
     if (state) params.set('state', state);

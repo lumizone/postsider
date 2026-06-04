@@ -4,9 +4,9 @@ Based on the
 
 ## Entity Contributor License Agreement (CCLA)
 
-Thank you for your interest in contributing to GitroomHQ's Postiz ("We" or "Us").
+Thank you for your interest in contributing to GitroomHQ's Postsider ("We" or "Us").
 
-The purpose of this contributor agreement ("Agreement") is to clarify and document the rights granted by contributors to Us. To make this document effective, please follow the instructions at https://contribute.postiz.com/p/postiz/cla.
+The purpose of this contributor agreement ("Agreement") is to clarify and document the rights granted by contributors to Us. To make this document effective, please follow the instructions at https://contribute.postsider.com/p/postsider/cla.
 
 ### Preamble
 
@@ -22,7 +22,7 @@ This process only serves for the transfer of economic rights. So-called moral ri
 
 ### How to use this FLA
 
-This is the version of the Agreement for Legal Entities. It should be accepted by an individual authorized to enter into this Agreement on behalf of the Legal Entity, such as an officer or other authorized representative. By accepting this Agreement, You confirm that You have the authority to bind the Legal Entity and that Contributions Submitted to Us on behalf of the Legal Entity, including Contributions Submitted by Your Designated Employees, are covered by this Agreement. You provide Your acceptance and the list of Your Designated Employees by following the instructions at https://contribute.postiz.com/p/postiz/cla. If the Legal Entity does not own the Copyright in the entire Contribution, any other author of the Contribution should also sign the applicable Agreement. In any event, please contact Us at nevo@postiz.com.
+This is the version of the Agreement for Legal Entities. It should be accepted by an individual authorized to enter into this Agreement on behalf of the Legal Entity, such as an officer or other authorized representative. By accepting this Agreement, You confirm that You have the authority to bind the Legal Entity and that Contributions Submitted to Us on behalf of the Legal Entity, including Contributions Submitted by Your Designated Employees, are covered by this Agreement. You provide Your acceptance and the list of Your Designated Employees by following the instructions at https://contribute.postsider.com/p/postsider/cla. If the Legal Entity does not own the Copyright in the entire Contribution, any other author of the Contribution should also sign the applicable Agreement. In any event, please contact Us at nevo@postsider.com.
 
 ### Definitions
 
@@ -36,7 +36,7 @@ This is the version of the Agreement for Legal Entities. It should be accepted b
 
 **"Copyright"** means all rights protecting works of authorship, including copyright, moral and neighboring rights, as appropriate, for the full term of their existence.
 
-**"Material"** means the software and/or documentation of Postiz that We make available to third parties.
+**"Material"** means the software and/or documentation of Postsider that We make available to third parties.
 
 **"Submit"** means any act by which a Contribution is transferred to Us by You by means of tangible or intangible media, including but not limited to electronic mailing lists, source code control systems, and issue tracking systems, but excluding any transfer that is conspicuously marked or otherwise designated in writing by You as "Not a Contribution."
 
@@ -124,4 +124,4 @@ You authorize each individual listed (Your "Designated Employees") to Submit Con
 
 It is Your responsibility to keep the list of Your Designated Employees current and to notify Us of any change to that list or to the individual You have identified as Your point of contact. Until We receive notice of a change, We may rely on the most recent list You have provided. You agree to notify Us promptly when an individual is no longer authorized to Submit Contributions on Your behalf.
 
-Should You wish to Submit work that is not Your original creation, You may Submit it to Us separately, marking the work clearly and identifying its source and any license or other restriction of which You are aware. Any such work of which You are aware on the date You accept this Agreement should be identified through the contribution form at https://contribute.postiz.com/p/postiz/cla.
+Should You wish to Submit work that is not Your original creation, You may Submit it to Us separately, marking the work clearly and identifying its source and any license or other restriction of which You are aware. Any such work of which You are aware on the date You accept this Agreement should be identified through the contribution form at https://contribute.postsider.com/p/postsider/cla.

@@ -1,37 +1,37 @@
 # Do **not** use this yml for production. It is not up-to-date.
-# Use https://docs.postiz.com/installation/docker-compose
+# Use https://docs.postsider.com/installation/docker-compose
 # This is only for the dev enviroment
 
 services:
-  postiz-postgres:
+  postsider-postgres:
     # ref: https://hub.docker.com/_/postgres
     image: postgres:17-alpine # 17.0
-    container_name: postiz-postgres
+    container_name: postsider-postgres
     restart: always
     environment:
-      POSTGRES_PASSWORD: postiz-local-pwd
-      POSTGRES_USER: postiz-local
-      POSTGRES_DB: postiz-db-local
+      POSTGRES_PASSWORD: postsider-local-pwd
+      POSTGRES_USER: postsider-local
+      POSTGRES_DB: postsider-db-local
       TEMPORAL_ADDRESS: "temporal:7233"
     volumes:
       - postgres-volume:/var/lib/postgresql/data
     ports:
       - 5432:5432
     networks:
-      - postiz-network
-  postiz-redis:
+      - postsider-network
+  postsider-redis:
     # ref: https://hub.docker.com/_/redis
     image: redis:7-alpine # 7.4.0
-    container_name: postiz-redis
+    container_name: postsider-redis
     restart: always
     ports:
       - 6379:6379
     networks:
-      - postiz-network
-  postiz-pg-admin:
+      - postsider-network
+  postsider-pg-admin:
     # ref: https://hub.docker.com/r/dpage/pgadmin4/tags
     image: dpage/pgadmin4:latest
-    container_name: postiz-pg-admin
+    container_name: postsider-pg-admin
     restart: always
     ports:
       - 8081:80
@@ -39,19 +39,19 @@ services:
       PGADMIN_DEFAULT_EMAIL: admin@admin.com
       PGADMIN_DEFAULT_PASSWORD: admin
     networks:
-      - postiz-network
-  postiz-redisinsight:
+      - postsider-network
+  postsider-redisinsight:
     # ref: https://hub.docker.com/r/redis/redisinsight
     image: redis/redisinsight:latest
-    container_name: postiz-redisinsight
+    container_name: postsider-redisinsight
     links:
-      - postiz-redis
+      - postsider-redis
     ports:
       - '5540:5540'
     volumes:
       - redisinsight:/data
     networks:
-      - postiz-network
+      - postsider-network
     restart: always
 
   temporal-elasticsearch:
@@ -70,7 +70,7 @@ services:
     expose:
       - 9200
     volumes:
-      - /var/lib/elasticsearch/data
+      - temporal-es-volume:/usr/share/elasticsearch/data
 
   temporal-postgresql:
     container_name: temporal-postgresql
@@ -83,7 +83,7 @@ services:
     expose:
       - 5432
     volumes:
-      - /var/lib/postgresql/data
+      - temporal-pg-volume:/var/lib/postgresql/data
 
   temporal:
     container_name: temporal
@@ -139,9 +139,13 @@ volumes:
   redisinsight:
   postgres-volume:
     external: false
+  temporal-es-volume:
+    external: false
+  temporal-pg-volume:
+    external: false
 
 networks:
-  postiz-network:
+  postsider-network:
     external: false
   temporal-network:
     driver: bridge

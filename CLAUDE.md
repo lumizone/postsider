@@ -1,4 +1,4 @@
-This project is Postiz, a tool to schedule social media and chat posts to 28+ channels.
+This project is Postsider, a tool to schedule social media and chat posts to 28+ channels.
 You can add posts to the calendar, they will be added into a workflow and posted at the right time.
 You can find things like:
 - Schedule posts

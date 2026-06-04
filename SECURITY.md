@@ -2,29 +2,29 @@
 
 ## Introduction
 
-The Postiz app is committed to ensuring the security and integrity of our users' data. This security policy outlines our procedures for handling security vulnerabilities and our disclosure policy.
+The Postsider app is committed to ensuring the security and integrity of our users' data. This security policy outlines our procedures for handling security vulnerabilities and our disclosure policy.
 
 ## Scope
 
-We, at Postiz (gitroomhq), cover the following scopes for vulnerability disclosures:
+We, at Postsider (gitroomhq), cover the following scopes for vulnerability disclosures:
 
-- The core repository for `postiz-app` (github.com/gitroomhq/postiz-app)
-- All `gitroomhq` repositories that are official components, tooling, or integrations of Postiz
-- Official Postiz container images published under `gitroomhq` on GHCR
-- Official Postiz CLI tools and NPM packages (NPM org: @postiz)
-- Postiz-Cloud related infrastructure & services. (API, Frontend, Configurations etc.)
-- Plugins for Postiz maintained within the `gitroomhq` organization
+- The core repository for `postsider-app` (github.com/gitroomhq/postsider-app)
+- All `gitroomhq` repositories that are official components, tooling, or integrations of Postsider
+- Official Postsider container images published under `gitroomhq` on GHCR
+- Official Postsider CLI tools and NPM packages (NPM org: @postsider)
+- Postsider-Cloud related infrastructure & services. (API, Frontend, Configurations etc.)
+- Plugins for Postsider maintained within the `gitroomhq` organization
 
 Vulnerabilities in third-party dependencies or user-hosted infrastructure are outside of this scope.
 
 ## Supported Versions
 
-This project currently only supports the latest release. We recommend that users always use the latest version of the Postiz app to ensure they have the latest security patches.
+This project currently only supports the latest release. We recommend that users always use the latest version of the Postsider app to ensure they have the latest security patches.
 *CVE IDs will only be assigned to vulnerabilities affecting currently supported versions.*
 
 ## Reporting Security Vulnerabilities
 
-If you discover a security vulnerability in the Postiz app, please report it through the [GitHub Security Advisory system](https://github.com/gitroomhq/postiz-app/security/advisories/new).
+If you discover a security vulnerability in the Postsider app, please report it through the [GitHub Security Advisory system](https://github.com/gitroomhq/postsider-app/security/advisories/new).
 
 When reporting a security vulnerability, please provide as much detail as possible, including:
 
