@@ -41,15 +41,23 @@ jobs:
 
       - name: Typecheck backend
         run: npx tsc --noEmit --project apps/backend/tsconfig.json
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
 
       - name: Typecheck orchestrator
         run: npx tsc --noEmit --project apps/orchestrator/tsconfig.json
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
 
       - name: Typecheck commands
         run: npx tsc --noEmit --project apps/commands/tsconfig.json
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
 
       - name: Typecheck frontend
         run: npx tsc --noEmit --project apps/frontend/tsconfig.json
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
 
   build:
     name: Build
@@ -101,6 +109,10 @@ jobs:
           file: ./Dockerfile
           push: false
           tags: postsider/postsider-app:${{ github.sha }}
+          build-args: |
+            NEXT_PUBLIC_BACKEND_URL=https://app.postsider.com/api
+            NEXT_PUBLIC_SELF_HOSTED=true
+            NEXT_PUBLIC_VERSION=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
