@@ -2,6 +2,60 @@
 
 All notable changes to the PostSider dashboard.
 
+## 1.1.0 — Production deployment readiness
+
+Docker image, deploy tooling, and runtime fixes that make PostSider actually
+deployable on a VPS with a single `./deploy.sh` command.
+
+### Docker / build fixes (image previously did not build or start)
+
+- **Removed phantom `libraries/*/package.json` COPY** — these dirs aren't pnpm
+  packages; the old lines broke the build immediately.
+- **Added `.npmrc` to early-copy layer** — pnpm's frozen-lockfile check failed
+  without `inject-workspace-packages=true` present at install time.
+- **Added orchestrator + sdk `package.json`** to early-copy — lockfile importers
+  didn't match, causing `--frozen-lockfile` to abort.
+- **Copied Prisma schema before `pnpm install`** — the `postinstall` hook runs
+  `prisma generate` which needs the schema file.
+- **Added `apps/commands` build step** — the root `build` script only covers
+  backend + orchestrator; without this, `commands/dist` was missing and the
+  runtime COPY failed.
+- **Added `NODE_OPTIONS=--max-old-space-size=4096`** to commands build (OOM on
+  default heap).
+- **Fixed `nginx.conf` user directive** — was `user www;` but only `postsider`
+  exists in the image. Nginx crashed on start, blocking the entire container.
+- **Added orchestrator `COPY` to runtime stage** — it was built but never
+  copied into the final image; the Temporal worker couldn't start.
+- **Added `pm2` script to frontend `package.json`** — pm2 only starts packages
+  with a `pm2` script; frontend was silently skipped (502 from nginx).
+- **Injected `NEXT_PUBLIC_BACKEND_URL` as Docker build-arg** — Next.js bakes
+  `NEXT_PUBLIC_*` at compile time; without it the browser called
+  `http://localhost:3000` in production.
+
+### Deploy tooling (new files)
+
+- **`deploy.sh`** — single command to verify prerequisites, auto-generate
+  strong secrets for any remaining `CHANGE_ME` placeholders, build the image
+  with correct build-args, start the full stack, wait for health, and
+  optionally bootstrap the first admin.
+- **`deploy/Caddyfile`** — host reverse proxy config with automatic HTTPS
+  (Let's Encrypt), HSTS, security headers, `/storage/*` → MinIO routing.
+- **`deploy/nginx-host.conf`** — alternative nginx + certbot config.
+- **`DEPLOYMENT.md`** — step-by-step VPS deployment guide (DNS, firewall,
+  env config, deploy, HTTPS, backups, security checklist, troubleshooting).
+- **`.env.production.example`** — tracked template (no secrets) so
+  `git clone` + `./deploy.sh` works out of the box.
+
+### Compose / env improvements
+
+- `docker-compose.production.yaml` now passes `NEXT_PUBLIC_*` as build args.
+- `.env.production` template gains `NEXT_PUBLIC_SELF_HOSTED` and
+  `NEXT_PUBLIC_VERSION`.
+- `.gitignore` updated: `.env.production` stays ignored (real secrets),
+  `.env.production.example` is tracked.
+
+---
+
 ## 1.0.0 — SaaS release
 
 The app moves from open-source self-hosted to a managed SaaS product. Major
