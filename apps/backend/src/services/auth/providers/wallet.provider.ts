@@ -1,13 +1,13 @@
 import {
   AuthProvider,
   AuthProviderAbstract,
-} from '@gitroom/backend/services/auth/providers.interface';
+} from '@postsider/backend/services/auth/providers.interface';
 import { randomBytes } from 'crypto';
-import { ioRedis } from '@gitroom/nestjs-libraries/redis/redis.service';
+import { ioRedis } from '@postsider/nestjs-libraries/redis/redis.service';
 import bs58 from 'bs58';
 import nacl from 'tweetnacl';
 
-function hexToUint8Array(hex) {
+function hexToUint8Array(hex: string) {
   if (hex.startsWith('0x')) {
     hex = hex.slice(2);
   }
@@ -29,9 +29,9 @@ function hexToUint8Array(hex) {
 
 @AuthProvider({ provider: 'WALLET' })
 export class WalletProvider extends AuthProviderAbstract {
-  async generateLink(params: { publicKey: string }) {
+  async generateLink(params: { publicKey: string }): Promise<string> {
     if (!params.publicKey) {
-      return;
+      return undefined as unknown as string;
     }
 
     const challenge = randomBytes(32).toString('hex');

@@ -11,7 +11,7 @@ export class LoginUserDto {
   @IsString()
   @IsDefined()
   @ValidateIf((o) => !o.providerToken)
-  @MinLength(3)
+  @MinLength(3) // Kept at 3 for login to not lock out legacy users; new registrations enforce 8+
   password: string;
 
   @IsString()

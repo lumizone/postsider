@@ -7,22 +7,24 @@ import {
   Query,
   Req,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import { Response, Request } from 'express';
 
-import { CreateOrgUserDto } from '@gitroom/nestjs-libraries/dtos/auth/create.org.user.dto';
-import { LoginUserDto } from '@gitroom/nestjs-libraries/dtos/auth/login.user.dto';
-import { AuthService } from '@gitroom/backend/services/auth/auth.service';
-import { ForgotReturnPasswordDto } from '@gitroom/nestjs-libraries/dtos/auth/forgot-return.password.dto';
-import { ForgotPasswordDto } from '@gitroom/nestjs-libraries/dtos/auth/forgot.password.dto';
-import { ResendActivationDto } from '@gitroom/nestjs-libraries/dtos/auth/resend-activation.dto';
+import { CreateOrgUserDto } from '@postsider/nestjs-libraries/dtos/auth/create.org.user.dto';
+import { LoginUserDto } from '@postsider/nestjs-libraries/dtos/auth/login.user.dto';
+import { AuthService } from '@postsider/backend/services/auth/auth.service';
+import { ForgotReturnPasswordDto } from '@postsider/nestjs-libraries/dtos/auth/forgot-return.password.dto';
+import { ForgotPasswordDto } from '@postsider/nestjs-libraries/dtos/auth/forgot.password.dto';
+import { ResendActivationDto } from '@postsider/nestjs-libraries/dtos/auth/resend-activation.dto';
 import { ApiTags } from '@nestjs/swagger';
-import { getCookieUrlFromDomain } from '@gitroom/helpers/subdomain/subdomain.management';
-import { EmailService } from '@gitroom/nestjs-libraries/services/email.service';
+import { getCookieUrlFromDomain } from '@postsider/helpers/subdomain/subdomain.management';
+import { EmailService } from '@postsider/nestjs-libraries/services/email.service';
 import { RealIP } from 'nestjs-real-ip';
-import { UserAgent } from '@gitroom/nestjs-libraries/user/user.agent';
+import { UserAgent } from '@postsider/nestjs-libraries/user/user.agent';
 import { Provider } from '@prisma/client';
 import * as Sentry from '@sentry/nestjs';
+import { AuthRateLimitGuard } from '@postsider/nestjs-libraries/services/auth-rate-limit.guard';
 
 @ApiTags('Auth')
 @Controller('/auth')
@@ -40,16 +42,20 @@ export class AuthController {
   }
 
   @Post('/register')
+  @UseGuards(AuthRateLimitGuard)
   async register(
     @Req() req: Request,
-    @Body() body: CreateOrgUserDto,
+    @Body() body: CreateOrgUserDto & { org?: string },
     @Res({ passthrough: false }) response: Response,
     @RealIP() ip: string,
     @UserAgent() userAgent: string
   ) {
     try {
+      // Prefer the explicit ?org/body.org token from the invite link;
+      // fall back to the legacy cookie when present. This keeps the
+      // header-only flow (NOT_SECURED) working without cross-site cookies.
       const getOrgFromCookie = this._authService.getOrgFromCookie(
-        req?.cookies?.org
+        body?.org || req?.cookies?.org
       );
 
       const { jwt, addedOrg } = await this._authService.routeAuth(
@@ -61,7 +67,9 @@ export class AuthController {
       );
 
       const activationRequired =
-        body.provider === 'LOCAL' && this._emailService.hasProvider();
+        body.provider === 'LOCAL' &&
+        this._emailService.hasProvider() &&
+        process.env.REQUIRE_EMAIL_ACTIVATION === 'true';
 
       if (activationRequired) {
         response.header('activate', 'true');
@@ -78,7 +86,7 @@ export class AuthController {
               sameSite: 'none',
             }
           : {}),
-        expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365),
+        expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14),
       });
 
       if (process.env.NOT_SECURED) {
@@ -95,7 +103,7 @@ export class AuthController {
                 sameSite: 'none',
               }
             : {}),
-          expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365),
+          expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14),
         });
 
         if (process.env.NOT_SECURED) {
@@ -114,16 +122,17 @@ export class AuthController {
   }
 
   @Post('/login')
+  @UseGuards(AuthRateLimitGuard)
   async login(
     @Req() req: Request,
-    @Body() body: LoginUserDto,
+    @Body() body: LoginUserDto & { org?: string },
     @Res({ passthrough: false }) response: Response,
     @RealIP() ip: string,
     @UserAgent() userAgent: string
   ) {
     try {
       const getOrgFromCookie = this._authService.getOrgFromCookie(
-        req?.cookies?.org
+        body?.org || req?.cookies?.org
       );
 
       const { jwt, addedOrg } = await this._authService.routeAuth(
@@ -143,7 +152,7 @@ export class AuthController {
               sameSite: 'none',
             }
           : {}),
-        expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365),
+        expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14),
       });
 
       if (process.env.NOT_SECURED) {
@@ -160,7 +169,7 @@ export class AuthController {
                 sameSite: 'none',
               }
             : {}),
-          expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365),
+          expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14),
         });
 
         if (process.env.NOT_SECURED) {
@@ -178,6 +187,7 @@ export class AuthController {
   }
 
   @Post('/forgot')
+  @UseGuards(AuthRateLimitGuard)
   async forgot(@Body() body: ForgotPasswordDto) {
     try {
       await this._authService.forgot(body.email);
@@ -240,7 +250,7 @@ export class AuthController {
             sameSite: 'none',
           }
         : {}),
-      expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365),
+      expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14),
     });
 
     if (process.env.NOT_SECURED) {
@@ -293,7 +303,7 @@ export class AuthController {
             sameSite: 'none',
           }
         : {}),
-      expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365),
+      expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14),
     });
 
     if (process.env.NOT_SECURED) {

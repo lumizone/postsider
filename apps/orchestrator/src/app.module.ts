@@ -1,17 +1,19 @@
 import { Module } from '@nestjs/common';
-import { PostActivity } from '@gitroom/orchestrator/activities/post.activity';
-import { getTemporalModule } from '@gitroom/nestjs-libraries/temporal/temporal.module';
-import { DatabaseModule } from '@gitroom/nestjs-libraries/database/prisma/database.module';
-import { AutopostService } from '@gitroom/nestjs-libraries/database/prisma/autopost/autopost.service';
-import { EmailActivity } from '@gitroom/orchestrator/activities/email.activity';
-import { IntegrationsActivity } from '@gitroom/orchestrator/activities/integrations.activity';
-import { HealthController } from '@gitroom/orchestrator/health.controller';
+import { PostActivity } from '@postsider/orchestrator/activities/post.activity';
+import { getTemporalModule } from '@postsider/nestjs-libraries/temporal/temporal.module';
+import { DatabaseModule } from '@postsider/nestjs-libraries/database/prisma/database.module';
+import { AutopostService } from '@postsider/nestjs-libraries/database/prisma/autopost/autopost.service';
+import { EmailActivity } from '@postsider/orchestrator/activities/email.activity';
+import { IntegrationsActivity } from '@postsider/orchestrator/activities/integrations.activity';
+import { MediaCleanupActivity } from '@postsider/orchestrator/activities/media.cleanup.activity';
+import { HealthController } from '@postsider/orchestrator/health.controller';
 
 const activities = [
   PostActivity,
   AutopostService,
   EmailActivity,
   IntegrationsActivity,
+  MediaCleanupActivity,
 ];
 @Module({
   imports: [

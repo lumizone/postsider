@@ -7,14 +7,14 @@ import {
   Post,
   Put,
 } from '@nestjs/common';
-import { GetOrgFromRequest } from '@gitroom/nestjs-libraries/user/org.from.request';
+import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
 import { Organization } from '@prisma/client';
 import { ApiTags } from '@nestjs/swagger';
-import { SetsService } from '@gitroom/nestjs-libraries/database/prisma/sets/sets.service';
+import { SetsService } from '@postsider/nestjs-libraries/database/prisma/sets/sets.service';
 import {
   UpdateSetsDto,
   SetsDto,
-} from '@gitroom/nestjs-libraries/dtos/sets/sets.dto';
+} from '@postsider/nestjs-libraries/dtos/sets/sets.dto';
 
 @ApiTags('Sets')
 @Controller('/sets')

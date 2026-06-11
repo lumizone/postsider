@@ -1,19 +1,19 @@
-import { OpenaiService } from '@gitroom/nestjs-libraries/openai/openai.service';
+import { OpenaiService } from '@postsider/nestjs-libraries/openai/openai.service';
 import {
   ExposeVideoFunction,
   URL,
   Video,
   VideoAbstract,
-} from '@gitroom/nestjs-libraries/videos/video.interface';
+} from '@postsider/nestjs-libraries/videos/video.interface';
 import { chunk } from 'lodash';
 import Transloadit from 'transloadit';
-import { UploadFactory } from '@gitroom/nestjs-libraries/upload/upload.factory';
+import { UploadFactory } from '@postsider/nestjs-libraries/upload/upload.factory';
 import { Readable } from 'stream';
-import { parseBuffer } from 'music-metadata';
+
 import { stringifySync } from 'subtitle';
 
 import pLimit from 'p-limit';
-import { FalService } from '@gitroom/nestjs-libraries/openai/fal.service';
+import { FalService } from '@postsider/nestjs-libraries/openai/fal.service';
 import { IsString } from 'class-validator';
 import { JSONSchema } from 'class-validator-jsonschema';
 const limit = pLimit(2);
@@ -24,6 +24,7 @@ const transloadit = new Transloadit({
 });
 
 async function getAudioDuration(buffer: Buffer): Promise<number> {
+  const { parseBuffer } = await import('music-metadata');
   const metadata = await parseBuffer(buffer, 'audio/mpeg');
   return metadata.format.duration || 0;
 }
@@ -164,8 +165,6 @@ export class ImagesSlides extends VideoAbstract<ImagesSlidesParams> {
         })),
       { format: 'SRT' }
     );
-
-    console.log(split);
 
     const { results } = await transloadit.createAssembly({
       uploads: {

@@ -1,13 +1,13 @@
-import { AgentToolInterface } from '@gitroom/nestjs-libraries/chat/agent.tool.interface';
+import { AgentToolInterface } from '@postsider/nestjs-libraries/chat/agent.tool.interface';
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import { Injectable } from '@nestjs/common';
 import {
   IntegrationManager,
   socialIntegrationList,
-} from '@gitroom/nestjs-libraries/integrations/integration.manager';
-import { getValidationSchemas } from '@gitroom/nestjs-libraries/chat/validation.schemas.helper';
-import { checkAuth } from '@gitroom/nestjs-libraries/chat/auth.context';
+} from '@postsider/nestjs-libraries/integrations/integration.manager';
+import { getValidationSchemas } from '@postsider/nestjs-libraries/chat/validation.schemas.helper';
+import { checkAuth } from '@postsider/nestjs-libraries/chat/auth.context';
 
 @Injectable()
 export class IntegrationValidationTool implements AgentToolInterface {

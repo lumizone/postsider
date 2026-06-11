@@ -2,9 +2,9 @@ import {
   ClientInformation,
   PostDetails,
   PostResponse,
-} from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
-import { MastodonProvider } from '@gitroom/nestjs-libraries/integrations/social/mastodon.provider';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
+} from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { MastodonProvider } from '@postsider/nestjs-libraries/integrations/social/mastodon.provider';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import { Integration } from '@prisma/client';
 
 export class MastodonCustomProvider extends MastodonProvider {

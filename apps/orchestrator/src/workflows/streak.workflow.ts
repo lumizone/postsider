@@ -1,5 +1,5 @@
 import { proxyActivities, sleep } from '@temporalio/workflow';
-import { EmailActivity } from '@gitroom/orchestrator/activities/email.activity';
+import { EmailActivity } from '@postsider/orchestrator/activities/email.activity';
 
 const { sendEmailAsync, getUserOrgs, setStreak } = proxyActivities<EmailActivity>({
   startToCloseTimeout: '10 minute',
@@ -15,7 +15,7 @@ export async function streakWorkflow({
   await setStreak(organizationId, 'start');
   await sleep(79200000);
   const userOrgs = await getUserOrgs(organizationId);
-  for (const user of userOrgs.users) {
+  for (const user of userOrgs!.users) {
     if (!user.user.sendStreakEmails) {
       continue;
     }

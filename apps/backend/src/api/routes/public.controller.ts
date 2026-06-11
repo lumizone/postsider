@@ -10,23 +10,23 @@ import {
   StreamableFile,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { PostsService } from '@gitroom/nestjs-libraries/database/prisma/posts/posts.service';
-import { TrackService } from '@gitroom/nestjs-libraries/track/track.service';
+import { PostsService } from '@postsider/nestjs-libraries/database/prisma/posts/posts.service';
+import { TrackService } from '@postsider/nestjs-libraries/track/track.service';
 import { RealIP } from 'nestjs-real-ip';
-import { UserAgent } from '@gitroom/nestjs-libraries/user/user.agent';
-import { TrackEnum } from '@gitroom/nestjs-libraries/user/track.enum';
+import { UserAgent } from '@postsider/nestjs-libraries/user/user.agent';
+import { TrackEnum } from '@postsider/nestjs-libraries/user/track.enum';
 import { Request, Response } from 'express';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
-import { getCookieUrlFromDomain } from '@gitroom/helpers/subdomain/subdomain.management';
-import { AgentGraphInsertService } from '@gitroom/nestjs-libraries/agent/agent.graph.insert.service';
-import { SubscriptionService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/subscription.service';
-import { AuthService } from '@gitroom/helpers/auth/auth.service';
-import { pricing } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
+import { getCookieUrlFromDomain } from '@postsider/helpers/subdomain/subdomain.management';
+import { AgentGraphInsertService } from '@postsider/nestjs-libraries/agent/agent.graph.insert.service';
+import { SubscriptionService } from '@postsider/nestjs-libraries/database/prisma/subscriptions/subscription.service';
+import { AuthService } from '@postsider/helpers/auth/auth.service';
+import { pricing } from '@postsider/nestjs-libraries/database/prisma/subscriptions/pricing';
 import { Readable, pipeline } from 'stream';
 import { promisify } from 'util';
-import { OnlyURL } from '@gitroom/nestjs-libraries/dtos/webhooks/webhooks.dto';
-import { isSafePublicHttpsUrl } from '@gitroom/nestjs-libraries/dtos/webhooks/webhook.url.validator';
-import { ssrfSafeDispatcher } from '@gitroom/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
+import { OnlyURL } from '@postsider/nestjs-libraries/dtos/webhooks/webhooks.dto';
+import { isSafePublicHttpsUrl } from '@postsider/nestjs-libraries/dtos/webhooks/webhook.url.validator';
+import { ssrfSafeDispatcher } from '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
 
 const pump = promisify(pipeline);
 
@@ -105,7 +105,7 @@ export class PublicController {
             }
           : {}),
         sameSite: 'none',
-        expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365),
+        expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14),
       });
     }
 
@@ -119,7 +119,7 @@ export class PublicController {
             }
           : {}),
         sameSite: 'none',
-        expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365),
+        expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14),
       });
     }
 

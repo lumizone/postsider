@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { Activity, ActivityMethod } from 'nestjs-temporal-core';
-import { IntegrationService } from '@gitroom/nestjs-libraries/database/prisma/integrations/integration.service';
+import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
 import { Integration } from '@prisma/client';
-import { RefreshIntegrationService } from '@gitroom/nestjs-libraries/integrations/refresh.integration.service';
+import { RefreshIntegrationService } from '@postsider/nestjs-libraries/integrations/refresh.integration.service';
 
 @Injectable()
 @Activity()

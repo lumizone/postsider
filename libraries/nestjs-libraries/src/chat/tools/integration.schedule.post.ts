@@ -1,17 +1,17 @@
-import { AgentToolInterface } from '@gitroom/nestjs-libraries/chat/agent.tool.interface';
+import { AgentToolInterface } from '@postsider/nestjs-libraries/chat/agent.tool.interface';
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import { Injectable } from '@nestjs/common';
-import { IntegrationService } from '@gitroom/nestjs-libraries/database/prisma/integrations/integration.service';
-import { PostsService } from '@gitroom/nestjs-libraries/database/prisma/posts/posts.service';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
-import { AllProvidersSettings } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/all.providers.settings';
+import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
+import { PostsService } from '@postsider/nestjs-libraries/database/prisma/posts/posts.service';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
+import { AllProvidersSettings } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/all.providers.settings';
 import { Integration } from '@prisma/client';
-import { checkAuth } from '@gitroom/nestjs-libraries/chat/auth.context';
+import { checkAuth } from '@postsider/nestjs-libraries/chat/auth.context';
 import {
   ValidUrlExtension,
   ValidUrlPath,
-} from '@gitroom/helpers/utils/valid.url.path';
+} from '@postsider/helpers/utils/valid.url.path';
 
 const validUrlExtension = new ValidUrlExtension();
 const validUrlPath = new ValidUrlPath();
@@ -135,15 +135,15 @@ If the tools return errors, you would need to rerun it with the right parameters
         const organizationId = JSON.parse(
           (context?.requestContext as any)?.get('organization') as string
         ).id;
-        const finalOutput = [];
+        const finalOutput: any[] = [];
 
         const integrations = {} as Record<string, Integration>;
         for (const platform of inputData.socialPost) {
           integrations[platform.integrationId] =
-            await this._integrationService.getIntegrationById(
+            (await this._integrationService.getIntegrationById(
               organizationId,
               platform.integrationId
-            );
+            ))!;
 
           // Same server-side validation as the dashboard / public API
           // (settings DTO + media checkValidity + empty / too-long content).

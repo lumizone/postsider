@@ -1,16 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { Provider, User } from '@prisma/client';
-import { CreateOrgUserDto } from '@gitroom/nestjs-libraries/dtos/auth/create.org.user.dto';
-import { LoginUserDto } from '@gitroom/nestjs-libraries/dtos/auth/login.user.dto';
-import { UsersService } from '@gitroom/nestjs-libraries/database/prisma/users/users.service';
-import { OrganizationService } from '@gitroom/nestjs-libraries/database/prisma/organizations/organization.service';
-import { AuthService as AuthChecker } from '@gitroom/helpers/auth/auth.service';
-import { AuthProviderManager } from '@gitroom/backend/services/auth/providers/providers.manager';
+import { CreateOrgUserDto } from '@postsider/nestjs-libraries/dtos/auth/create.org.user.dto';
+import { LoginUserDto } from '@postsider/nestjs-libraries/dtos/auth/login.user.dto';
+import { UsersService } from '@postsider/nestjs-libraries/database/prisma/users/users.service';
+import { OrganizationService } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.service';
+import { AuthService as AuthChecker } from '@postsider/helpers/auth/auth.service';
+import { AuthProviderManager } from '@postsider/backend/services/auth/providers/providers.manager';
 import dayjs from 'dayjs';
-import { NotificationService } from '@gitroom/nestjs-libraries/database/prisma/notifications/notification.service';
-import { ForgotReturnPasswordDto } from '@gitroom/nestjs-libraries/dtos/auth/forgot-return.password.dto';
-import { EmailService } from '@gitroom/nestjs-libraries/services/email.service';
-import { NewsletterService } from '@gitroom/nestjs-libraries/newsletter/newsletter.service';
+import { NotificationService } from '@postsider/nestjs-libraries/database/prisma/notifications/notification.service';
+import { ForgotReturnPasswordDto } from '@postsider/nestjs-libraries/dtos/auth/forgot-return.password.dto';
+import { EmailService } from '@postsider/nestjs-libraries/services/email.service';
+import { NewsletterService } from '@postsider/nestjs-libraries/newsletter/newsletter.service';
+import { activateAccountEmail, resetPasswordEmail } from '@postsider/nestjs-libraries/emails/email.templates';
 
 @Injectable()
 export class AuthService {
@@ -21,11 +22,18 @@ export class AuthService {
     private _emailService: EmailService,
     private _providerManager: AuthProviderManager
   ) {}
-  async canRegister(provider: string) {
+  async canRegister(provider: string, hasValidInvite = false) {
     if (
       process.env.DISABLE_REGISTRATION !== 'true' ||
       provider === Provider.GENERIC
     ) {
+      return true;
+    }
+
+    // A signed invite from an existing org admin always opens the door,
+    // regardless of DISABLE_REGISTRATION. The very first install (zero
+    // orgs) is also allowed so the bootstrap CLI / first-run flow works.
+    if (hasValidInvite) {
       return true;
     }
 
@@ -39,25 +47,33 @@ export class AuthService {
     userAgent: string,
     addToOrg?: boolean | { orgId: string; role: 'USER' | 'ADMIN'; id: string }
   ) {
+    // Detect registration vs login by checking for the `company` field
+    // (present only on CreateOrgUserDto). The `instanceof` check is unreliable
+    // because NestJS ValidationPipe with intersection types doesn't always
+    // produce a true class instance.
+    const isRegistration = 'company' in body && !!(body as any).company;
+
     if (provider === Provider.LOCAL) {
       if (process.env.DISALLOW_PLUS && body.email.includes('+')) {
         throw new Error('Email with plus sign is not allowed');
       }
-      if (body instanceof CreateOrgUserDto) {
+      if (isRegistration) {
         body.email = body.email.toLowerCase();
       }
       const user = await this._userService.getUserByEmail(body.email);
-      if (body instanceof CreateOrgUserDto) {
+      if (isRegistration) {
         if (user) {
           throw new Error('Email already exists');
         }
 
-        if (!(await this.canRegister(provider))) {
+        const hasValidInvite =
+          !!addToOrg && typeof addToOrg !== 'boolean' && !!addToOrg.orgId;
+        if (!(await this.canRegister(provider, hasValidInvite))) {
           throw new Error('Registration is disabled');
         }
 
         const create = await this._organizationService.createOrgAndUser(
-          body,
+          body as CreateOrgUserDto,
           ip,
           userAgent
         );
@@ -76,13 +92,13 @@ export class AuthService {
         await this._emailService.sendEmail(
           body.email,
           'Activate your account',
-          `Click <a href="${process.env.FRONTEND_URL}/auth/activate/${obj.jwt}">here</a> to activate your account`,
+          activateAccountEmail(`${process.env.FRONTEND_URL}/auth/activate/${obj.jwt}`),
           'top'
         );
         return obj;
       }
 
-      if (!user || !AuthChecker.comparePassword(body.password, user.password)) {
+      if (!user || !AuthChecker.comparePassword(body.password, user.password!)) {
         throw new Error('Invalid user name or password');
       }
 
@@ -228,7 +244,7 @@ export class AuthService {
     await this._notificationService.sendEmail(
       user.email,
       'Reset your password',
-      `You have requested to reset your passsord. <br />Click <a href="${process.env.FRONTEND_URL}/auth/forgot/${resetValues}">here</a> to reset your password<br />The link will expire in 20 minutes`
+      resetPasswordEmail(`${process.env.FRONTEND_URL}/auth/forgot/${resetValues}`)
     );
   }
 
@@ -252,7 +268,7 @@ export class AuthService {
     };
     if (user.id && !user.activated) {
       const getUserAgain = await this._userService.getUserByEmail(user.email);
-      if (getUserAgain.activated) {
+      if (getUserAgain!.activated) {
         return false;
       }
       await this._userService.activateUser(user.id);
@@ -281,7 +297,7 @@ export class AuthService {
     await this._emailService.sendEmail(
       user.email,
       'Activate your account',
-      `Click <a href="${process.env.FRONTEND_URL}/auth/activate/${jwt}">here</a> to activate your account`,
+      activateAccountEmail(`${process.env.FRONTEND_URL}/auth/activate/${jwt}`),
       'top'
     );
 
@@ -313,8 +329,8 @@ export class AuthService {
 
   private async jwt(user: User) {
     if (user.password) {
-      delete user.password;
+      delete (user as any).password;
     }
-    return AuthChecker.signJWT(user);
+    return AuthChecker.signSessionJWT(user);
   }
 }

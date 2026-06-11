@@ -1,6 +1,6 @@
 services:
   postsider:
-    image: ghcr.io/gitroomhq/postsider-app:latest
+    image: ghcr.io/postsider/postsider-app:latest
     container_name: postsider
     restart: always
     environment:
@@ -94,9 +94,6 @@ services:
       STRIPE_SIGNING_KEY: ''
       STRIPE_SIGNING_KEY_CONNECT: ''
 
-      # === Developer Settings
-      NX_ADD_PLUGINS: false
-
       # === Short Link Service Settings (Optional - leave blank if unused)
       # DUB_TOKEN: ""
       # DUB_API_ENDPOINT: "https://api.dub.co"
@@ -117,6 +114,12 @@ services:
     networks:
       - postsider-network
       - temporal-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     depends_on:
       postsider-postgres:
         condition: service_healthy
@@ -183,7 +186,7 @@ services:
     expose:
       - 9200
     volumes:
-      - /var/lib/elasticsearch/data
+      - temporal-elasticsearch-data:/var/lib/elasticsearch/data
 
   temporal-postgresql:
     container_name: temporal-postgresql
@@ -196,7 +199,7 @@ services:
     expose:
       - 5432
     volumes:
-      - /var/lib/postgresql/data
+      - temporal-postgres-data:/var/lib/postgresql/data
 
   temporal:
     container_name: temporal
@@ -259,6 +262,12 @@ volumes:
     external: false
 
   postsider-uploads:
+    external: false
+
+  temporal-postgres-data:
+    external: false
+
+  temporal-elasticsearch-data:
     external: false
 
 networks:

@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { NotificationsRepository } from '@gitroom/nestjs-libraries/database/prisma/notifications/notifications.repository';
-import { EmailService } from '@gitroom/nestjs-libraries/services/email.service';
-import { OrganizationRepository } from '@gitroom/nestjs-libraries/database/prisma/organizations/organization.repository';
+import { NotificationsRepository } from '@postsider/nestjs-libraries/database/prisma/notifications/notifications.repository';
+import { EmailService } from '@postsider/nestjs-libraries/services/email.service';
+import { OrganizationRepository } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.repository';
 import { TemporalService } from 'nestjs-temporal-core';
 import { TypedSearchAttributes } from '@temporalio/common';
-import { organizationId } from '@gitroom/nestjs-libraries/temporal/temporal.search.attribute';
+import { organizationId } from '@postsider/nestjs-libraries/temporal/temporal.search.attribute';
 
 export type NotificationType = 'success' | 'fail' | 'info';
 

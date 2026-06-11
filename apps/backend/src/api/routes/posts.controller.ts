@@ -10,25 +10,25 @@ import {
   Query,
   Res,
 } from '@nestjs/common';
-import { PostsService } from '@gitroom/nestjs-libraries/database/prisma/posts/posts.service';
-import { GetOrgFromRequest } from '@gitroom/nestjs-libraries/user/org.from.request';
+import { PostsService } from '@postsider/nestjs-libraries/database/prisma/posts/posts.service';
+import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
 import { Organization, User } from '@prisma/client';
-import { GetPostsDto } from '@gitroom/nestjs-libraries/dtos/posts/get.posts.dto';
-import { GetPostsListDto } from '@gitroom/nestjs-libraries/dtos/posts/get.posts.list.dto';
-import { CheckPolicies } from '@gitroom/backend/services/auth/permissions/permissions.ability';
+import { GetPostsDto } from '@postsider/nestjs-libraries/dtos/posts/get.posts.dto';
+import { GetPostsListDto } from '@postsider/nestjs-libraries/dtos/posts/get.posts.list.dto';
+import { CheckPolicies } from '@postsider/backend/services/auth/permissions/permissions.ability';
 import { ApiTags } from '@nestjs/swagger';
-import { GeneratorDto } from '@gitroom/nestjs-libraries/dtos/generator/generator.dto';
-import { CreateGeneratedPostsDto } from '@gitroom/nestjs-libraries/dtos/generator/create.generated.posts.dto';
-import { AgentGraphService } from '@gitroom/nestjs-libraries/agent/agent.graph.service';
+import { GeneratorDto } from '@postsider/nestjs-libraries/dtos/generator/generator.dto';
+import { CreateGeneratedPostsDto } from '@postsider/nestjs-libraries/dtos/generator/create.generated.posts.dto';
+import { AgentGraphService } from '@postsider/nestjs-libraries/agent/agent.graph.service';
 import { Response } from 'express';
-import { GetUserFromRequest } from '@gitroom/nestjs-libraries/user/user.from.request';
-import { ShortLinkService } from '@gitroom/nestjs-libraries/short-linking/short.link.service';
-import { CreateTagDto } from '@gitroom/nestjs-libraries/dtos/posts/create.tag.dto';
+import { GetUserFromRequest } from '@postsider/nestjs-libraries/user/user.from.request';
+import { ShortLinkService } from '@postsider/nestjs-libraries/short-linking/short.link.service';
+import { CreateTagDto } from '@postsider/nestjs-libraries/dtos/posts/create.tag.dto';
 import {
   AuthorizationActions,
   Sections,
-} from '@gitroom/backend/services/auth/permissions/permission.exception.class';
-import { PostValidationException } from '@gitroom/backend/api/routes/posts.validation.exception';
+} from '@postsider/backend/services/auth/permissions/permission.exception.class';
+import { PostValidationException } from '@postsider/backend/api/routes/posts.validation.exception';
 
 @ApiTags('Posts')
 @Controller('/posts')
@@ -197,7 +197,7 @@ export class PostsController {
     };
 
     for (const item of validation) {
-      if (item.emptyContent) {
+      if (item.emptyContent && rawBody?.type !== 'draft') {
         fail(
           item,
           'Your post should have at least one character or one image.'
@@ -271,5 +271,20 @@ export class PostsController {
     @Body() body: { content: string; len: number }
   ) {
     return this._postsService.separatePosts(body.content, body.len);
+  }
+
+  /**
+   * Duplicate a post group as a new draft.
+   * Optionally target a different channel by passing `targetIntegrationId`.
+   * PostSider-exclusive — not available in the OSS version.
+   */
+  @Post('/group/:group/duplicate')
+  @CheckPolicies([AuthorizationActions.Create, Sections.POSTS_PER_MONTH])
+  async duplicatePost(
+    @GetOrgFromRequest() org: Organization,
+    @Param('group') group: string,
+    @Body() body: { targetIntegrationId?: string; date?: string },
+  ) {
+    return this._postsService.duplicatePost(org.id, group, body.targetIntegrationId, body.date);
   }
 }

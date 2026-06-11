@@ -13,6 +13,17 @@ export class InfiniteWorkflowRegister implements OnModuleInit {
           ?.workflow?.start('missingPostWorkflow', {
             workflowId: 'missing-post-workflow',
             taskQueue: 'main',
+            workflowIdConflictPolicy: 'USE_EXISTING',
+          });
+      } catch (err) {}
+
+      try {
+        await this._temporalService.client
+          ?.getRawClient()
+          ?.workflow?.start('mediaCleanupWorkflow', {
+            workflowId: 'media-cleanup-workflow',
+            taskQueue: 'main',
+            workflowIdConflictPolicy: 'USE_EXISTING',
           });
       } catch (err) {}
     }

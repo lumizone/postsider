@@ -8,29 +8,32 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
-import { GetUserFromRequest } from '@gitroom/nestjs-libraries/user/user.from.request';
+import { GetUserFromRequest } from '@postsider/nestjs-libraries/user/user.from.request';
 import { sign } from 'jsonwebtoken';
 import { Organization, User } from '@prisma/client';
-import { SubscriptionService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/subscription.service';
-import { GetOrgFromRequest } from '@gitroom/nestjs-libraries/user/org.from.request';
-import { StripeService } from '@gitroom/nestjs-libraries/services/stripe.service';
+import { SubscriptionService } from '@postsider/nestjs-libraries/database/prisma/subscriptions/subscription.service';
+import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
+import { StripeService } from '@postsider/nestjs-libraries/services/stripe.service';
+import { PolarService } from '@postsider/nestjs-libraries/services/polar.service';
+import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
 import { Response, Request } from 'express';
-import { AuthService } from '@gitroom/backend/services/auth/auth.service';
-import { OrganizationService } from '@gitroom/nestjs-libraries/database/prisma/organizations/organization.service';
-import { CheckPolicies } from '@gitroom/backend/services/auth/permissions/permissions.ability';
-import { getCookieUrlFromDomain } from '@gitroom/helpers/subdomain/subdomain.management';
-import { pricing } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing';
+import { AuthService } from '@postsider/backend/services/auth/auth.service';
+import { AuthService as AuthChecker } from '@postsider/helpers/auth/auth.service';
+import { OrganizationService } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.service';
+import { CheckPolicies } from '@postsider/backend/services/auth/permissions/permissions.ability';
+import { getCookieUrlFromDomain } from '@postsider/helpers/subdomain/subdomain.management';
+import { pricing } from '@postsider/nestjs-libraries/database/prisma/subscriptions/pricing';
 import { ApiTags } from '@nestjs/swagger';
-import { UsersService } from '@gitroom/nestjs-libraries/database/prisma/users/users.service';
-import { UserDetailDto } from '@gitroom/nestjs-libraries/dtos/users/user.details.dto';
-import { EmailNotificationsDto } from '@gitroom/nestjs-libraries/dtos/users/email-notifications.dto';
-import { HttpForbiddenException } from '@gitroom/nestjs-libraries/services/exception.filter';
+import { UsersService } from '@postsider/nestjs-libraries/database/prisma/users/users.service';
+import { UserDetailDto } from '@postsider/nestjs-libraries/dtos/users/user.details.dto';
+import { EmailNotificationsDto } from '@postsider/nestjs-libraries/dtos/users/email-notifications.dto';
+import { HttpForbiddenException } from '@postsider/nestjs-libraries/services/exception.filter';
 import { RealIP } from 'nestjs-real-ip';
-import { UserAgent } from '@gitroom/nestjs-libraries/user/user.agent';
-import { TrackEnum } from '@gitroom/nestjs-libraries/user/track.enum';
-import { TrackService } from '@gitroom/nestjs-libraries/track/track.service';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
-import { AuthorizationActions, Sections } from '@gitroom/backend/services/auth/permissions/permission.exception.class';
+import { UserAgent } from '@postsider/nestjs-libraries/user/user.agent';
+import { TrackEnum } from '@postsider/nestjs-libraries/user/track.enum';
+import { TrackService } from '@postsider/nestjs-libraries/track/track.service';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
+import { AuthorizationActions, Sections } from '@postsider/backend/services/auth/permissions/permission.exception.class';
 
 @ApiTags('User')
 @Controller('/user')
@@ -38,6 +41,7 @@ export class UsersController {
   constructor(
     private _subscriptionService: SubscriptionService,
     private _stripeService: StripeService,
+    private _polarService: PolarService,
     private _authService: AuthService,
     private _orgService: OrganizationService,
     private _userService: UsersService,
@@ -71,22 +75,35 @@ export class UsersController {
     }
 
     const impersonate = req.cookies.impersonate || req.headers.impersonate;
+    const billingOn = isBillingEnabled();
+    // @ts-ignore
+    const hasPaidSub = !!organization?.subscription;
+    const onTrial = billingOn && !!organization?.isTrailing && !hasPaidSub;
+    // Trial runs 7 days from org creation. Clamp at 0.
+    let trialDaysLeft: number | null = null;
+    if (onTrial && organization?.createdAt) {
+      const end = new Date(organization.createdAt).getTime() + 7 * 24 * 60 * 60 * 1000;
+      const msLeft = end - Date.now();
+      trialDaysLeft = Math.max(0, Math.ceil(msLeft / (24 * 60 * 60 * 1000)));
+    }
     // @ts-ignore
     return {
       ...user,
       orgId: organization.id,
       // @ts-ignore
-      totalChannels: !process.env.STRIPE_PUBLISHABLE_KEY ? 10000 : organization?.subscription?.totalChannels || pricing.FREE.channel,
+      totalChannels: !billingOn ? 10000 : organization?.subscription?.totalChannels || pricing.FREE.channel,
       // @ts-ignore
-      tier: organization?.subscription?.subscriptionTier || (!process.env.STRIPE_PUBLISHABLE_KEY ? 'ULTIMATE' : 'FREE'),
+      tier: organization?.subscription?.subscriptionTier || (!billingOn ? 'ULTIMATE' : 'FREE'),
       // @ts-ignore
       role: organization?.users[0]?.role,
       // @ts-ignore
       isLifetime: !!organization?.subscription?.isLifetime,
       admin: !!user.isSuperAdmin,
       impersonate: !!impersonate,
-      isTrailing: !process.env.STRIPE_PUBLISHABLE_KEY ? false : organization?.isTrailing,
+      isTrailing: !billingOn ? false : organization?.isTrailing,
       allowTrial: organization?.allowTrial,
+      onTrial,
+      trialDaysLeft,
       streakSince: organization?.streakSince || null,
       // @ts-ignore
       publicApi: organization?.users[0]?.role === 'SUPERADMIN' || organization?.users[0]?.role === 'ADMIN' ? organization?.apiKey : '',
@@ -96,6 +113,79 @@ export class UsersController {
   @Get('/personal')
   async getPersonalInformation(@GetUserFromRequest() user: User) {
     return this._userService.getPersonal(user.id);
+  }
+
+  @Post('/change-password')
+  async changePassword(
+    @GetUserFromRequest() user: User,
+    @Body() body: { currentPassword: string; newPassword: string }
+  ) {
+    if (!body.newPassword || body.newPassword.length < 8) {
+      throw new HttpException('New password must be at least 8 characters', 400);
+    }
+
+    // Load the full user row to compare hashed password.
+    const fullUser = await this._userService.getUserById(user.id);
+    if (!fullUser) {
+      throw new HttpForbiddenException();
+    }
+
+    // If user has a password set, validate the current one.
+    // Bootstrap/setup users may have an empty password field — skip for them.
+    if (fullUser.password && fullUser.password.length > 0) {
+      if (!body.currentPassword || !AuthChecker.comparePassword(body.currentPassword, fullUser.password)) {
+        throw new HttpException('Current password is incorrect', 400);
+      }
+    }
+
+    await this._userService.updatePassword(user.id, body.newPassword);
+    return { changed: true };
+  }
+
+  /**
+   * First-time account setup. Called once after the initial bootstrap login.
+   * Allows the admin to set their real email, name and password.
+   */
+  @Post('/setup')
+  async setupAccount(
+    @GetUserFromRequest() user: User,
+    @Body() body: { email?: string; name?: string; password?: string },
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    if (body.password && body.password.length < 8) {
+      throw new HttpException('Password must be at least 8 characters', 400);
+    }
+
+    // Build an update payload — only set what was provided.
+    const data: Record<string, any> = {};
+    if (body.email && body.email !== user.email) {
+      data.email = body.email.toLowerCase();
+    }
+    if (body.name) {
+      data.name = body.name;
+    }
+    if (body.password) {
+      data.password = AuthChecker.hashPassword(body.password);
+    }
+
+    if (Object.keys(data).length > 0) {
+      // Go through UsersService's underlying repo to keep the write within
+      // the same transactional boundary as any other change.
+      await (this._userService as any)._usersRepository._user.model.user.update({
+        where: { id: user.id },
+        data,
+      });
+    }
+
+    // Re-issue JWT with updated data.
+    const updatedUser = await this._userService.getUserById(user.id);
+    if (updatedUser) {
+      delete (updatedUser as any).password;
+      const jwt = AuthChecker.signJWT(updatedUser);
+      response.header('auth', jwt);
+    }
+
+    return { setup: true };
   }
 
   @Get('/impersonate')
@@ -129,7 +219,7 @@ export class UsersController {
             sameSite: 'none',
           }
         : {}),
-      expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365),
+      expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14),
     });
 
     if (process.env.NOT_SECURED) {
@@ -178,7 +268,9 @@ export class UsersController {
   @Get('/subscription/tiers')
   @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
   async tiers() {
-    return this._stripeService.getPackages();
+    return PolarService.isEnabled()
+      ? this._polarService.getPackages()
+      : this._stripeService.getPackages();
   }
 
   @Post('/join-org')
@@ -226,7 +318,7 @@ export class UsersController {
             sameSite: 'none',
           }
         : {}),
-      expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365),
+      expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14),
     });
 
     if (process.env.NOT_SECURED) {
@@ -312,7 +404,7 @@ export class UsersController {
               sameSite: 'none',
             }
           : {}),
-        expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365),
+        expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14),
       });
     }
 

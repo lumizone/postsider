@@ -1,48 +1,53 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
-import { AuthController } from '@gitroom/backend/api/routes/auth.controller';
-import { AuthService } from '@gitroom/backend/services/auth/auth.service';
-import { UsersController } from '@gitroom/backend/api/routes/users.controller';
-import { AuthMiddleware } from '@gitroom/backend/services/auth/auth.middleware';
-import { StripeController } from '@gitroom/backend/api/routes/stripe.controller';
-import { StripeService } from '@gitroom/nestjs-libraries/services/stripe.service';
-import { AnalyticsController } from '@gitroom/backend/api/routes/analytics.controller';
-import { PoliciesGuard } from '@gitroom/backend/services/auth/permissions/permissions.guard';
-import { PermissionsService } from '@gitroom/backend/services/auth/permissions/permissions.service';
-import { IntegrationsController } from '@gitroom/backend/api/routes/integrations.controller';
-import { IntegrationManager } from '@gitroom/nestjs-libraries/integrations/integration.manager';
-import { SettingsController } from '@gitroom/backend/api/routes/settings.controller';
-import { PostsController } from '@gitroom/backend/api/routes/posts.controller';
-import { MediaController } from '@gitroom/backend/api/routes/media.controller';
-import { UploadModule } from '@gitroom/nestjs-libraries/upload/upload.module';
-import { BillingController } from '@gitroom/backend/api/routes/billing.controller';
-import { NotificationsController } from '@gitroom/backend/api/routes/notifications.controller';
-import { OpenaiService } from '@gitroom/nestjs-libraries/openai/openai.service';
-import { ExtractContentService } from '@gitroom/nestjs-libraries/openai/extract.content.service';
-import { CodesService } from '@gitroom/nestjs-libraries/services/codes.service';
-import { CopilotController } from '@gitroom/backend/api/routes/copilot.controller';
-import { PublicController } from '@gitroom/backend/api/routes/public.controller';
-import { RootController } from '@gitroom/backend/api/routes/root.controller';
-import { TrackService } from '@gitroom/nestjs-libraries/track/track.service';
-import { ShortLinkService } from '@gitroom/nestjs-libraries/short-linking/short.link.service';
-import { WebhookController } from '@gitroom/backend/api/routes/webhooks.controller';
-import { SignatureController } from '@gitroom/backend/api/routes/signature.controller';
-import { AutopostController } from '@gitroom/backend/api/routes/autopost.controller';
-import { SetsController } from '@gitroom/backend/api/routes/sets.controller';
-import { ThirdPartyController } from '@gitroom/backend/api/routes/third-party.controller';
-import { MonitorController } from '@gitroom/backend/api/routes/monitor.controller';
-import { NoAuthIntegrationsController } from '@gitroom/backend/api/routes/no.auth.integrations.controller';
-import { EnterpriseController } from '@gitroom/backend/api/routes/enterprise.controller';
-import { OAuthAppController } from '@gitroom/backend/api/routes/oauth-app.controller';
-import { ApprovedAppsController } from '@gitroom/backend/api/routes/approved-apps.controller';
-import { OAuthController, OAuthAuthorizedController } from '@gitroom/backend/api/routes/oauth.controller';
-import { AnnouncementsController } from '@gitroom/backend/api/routes/announcements.controller';
-import { AdminController } from '@gitroom/backend/api/routes/admin.controller';
-import { AuthProviderManager } from '@gitroom/backend/services/auth/providers/providers.manager';
-import { GithubProvider } from '@gitroom/backend/services/auth/providers/github.provider';
-import { GoogleProvider } from '@gitroom/backend/services/auth/providers/google.provider';
-import { FarcasterProvider } from '@gitroom/backend/services/auth/providers/farcaster.provider';
-import { WalletProvider } from '@gitroom/backend/services/auth/providers/wallet.provider';
-import { OauthProvider } from '@gitroom/backend/services/auth/providers/oauth.provider';
+import { AuthController } from '@postsider/backend/api/routes/auth.controller';
+import { AuthService } from '@postsider/backend/services/auth/auth.service';
+import { UsersController } from '@postsider/backend/api/routes/users.controller';
+import { AuthMiddleware } from '@postsider/backend/services/auth/auth.middleware';
+import { StripeController } from '@postsider/backend/api/routes/stripe.controller';
+import { StripeService } from '@postsider/nestjs-libraries/services/stripe.service';
+import { PolarController } from '@postsider/backend/api/routes/polar.controller';
+import { PolarService } from '@postsider/nestjs-libraries/services/polar.service';
+import { AnalyticsController } from '@postsider/backend/api/routes/analytics.controller';
+import { PoliciesGuard } from '@postsider/backend/services/auth/permissions/permissions.guard';
+import { PermissionsService } from '@postsider/backend/services/auth/permissions/permissions.service';
+import { IntegrationsController } from '@postsider/backend/api/routes/integrations.controller';
+import { IntegrationManager } from '@postsider/nestjs-libraries/integrations/integration.manager';
+import { SettingsController } from '@postsider/backend/api/routes/settings.controller';
+import { PostsController } from '@postsider/backend/api/routes/posts.controller';
+import { MediaController } from '@postsider/backend/api/routes/media.controller';
+import { UploadModule } from '@postsider/nestjs-libraries/upload/upload.module';
+import { BillingController } from '@postsider/backend/api/routes/billing.controller';
+import { NotificationsController } from '@postsider/backend/api/routes/notifications.controller';
+import { OpenaiService } from '@postsider/nestjs-libraries/openai/openai.service';
+import { ExtractContentService } from '@postsider/nestjs-libraries/openai/extract.content.service';
+import { CodesService } from '@postsider/nestjs-libraries/services/codes.service';
+import { CopilotController } from '@postsider/backend/api/routes/copilot.controller';
+import { PublicController } from '@postsider/backend/api/routes/public.controller';
+import { RootController } from '@postsider/backend/api/routes/root.controller';
+import { TrackService } from '@postsider/nestjs-libraries/track/track.service';
+import { ShortLinkService } from '@postsider/nestjs-libraries/short-linking/short.link.service';
+import { WebhookController } from '@postsider/backend/api/routes/webhooks.controller';
+import { SignatureController } from '@postsider/backend/api/routes/signature.controller';
+import { AutopostController } from '@postsider/backend/api/routes/autopost.controller';
+import { SetsController } from '@postsider/backend/api/routes/sets.controller';
+import { ThirdPartyController } from '@postsider/backend/api/routes/third-party.controller';
+import { MonitorController } from '@postsider/backend/api/routes/monitor.controller';
+import { NoAuthIntegrationsController } from '@postsider/backend/api/routes/no.auth.integrations.controller';
+import { EnterpriseController } from '@postsider/backend/api/routes/enterprise.controller';
+import { OAuthAppController } from '@postsider/backend/api/routes/oauth-app.controller';
+import { ApprovedAppsController } from '@postsider/backend/api/routes/approved-apps.controller';
+import { OAuthController, OAuthAuthorizedController } from '@postsider/backend/api/routes/oauth.controller';
+import { AnnouncementsController } from '@postsider/backend/api/routes/announcements.controller';
+import { AdminController } from '@postsider/backend/api/routes/admin.controller';
+import { AuthProviderManager } from '@postsider/backend/services/auth/providers/providers.manager';
+import { GithubProvider } from '@postsider/backend/services/auth/providers/github.provider';
+import { GoogleProvider } from '@postsider/backend/services/auth/providers/google.provider';
+import { FarcasterProvider } from '@postsider/backend/services/auth/providers/farcaster.provider';
+import { WalletProvider } from '@postsider/backend/services/auth/providers/wallet.provider';
+import { OauthProvider } from '@postsider/backend/services/auth/providers/oauth.provider';
+
+import { RequestIdMiddleware } from '@postsider/nestjs-libraries/services/request-id.middleware';
+import { CsrfMiddleware } from '@postsider/backend/services/auth/csrf.middleware';
 
 const authenticatedController = [
   UsersController,
@@ -70,6 +75,7 @@ const authenticatedController = [
   controllers: [
     RootController,
     StripeController,
+    PolarController,
     AuthController,
     PublicController,
     MonitorController,
@@ -81,9 +87,11 @@ const authenticatedController = [
   providers: [
     AuthService,
     StripeService,
+    PolarService,
     OpenaiService,
     ExtractContentService,
     AuthMiddleware,
+    CsrfMiddleware,
     PoliciesGuard,
     PermissionsService,
     CodesService,
@@ -103,6 +111,8 @@ const authenticatedController = [
 })
 export class ApiModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestIdMiddleware).forRoutes('*');
+    consumer.apply(CsrfMiddleware).forRoutes(...authenticatedController);
     consumer.apply(AuthMiddleware).forRoutes(...authenticatedController);
   }
 }

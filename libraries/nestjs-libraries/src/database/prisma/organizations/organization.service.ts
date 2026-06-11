@@ -1,13 +1,14 @@
-import { CreateOrgUserDto } from '@gitroom/nestjs-libraries/dtos/auth/create.org.user.dto';
+import { CreateOrgUserDto } from '@postsider/nestjs-libraries/dtos/auth/create.org.user.dto';
 import { Injectable } from '@nestjs/common';
-import { OrganizationRepository } from '@gitroom/nestjs-libraries/database/prisma/organizations/organization.repository';
-import { NotificationService } from '@gitroom/nestjs-libraries/database/prisma/notifications/notification.service';
-import { AddTeamMemberDto } from '@gitroom/nestjs-libraries/dtos/settings/add.team.member.dto';
-import { AuthService } from '@gitroom/helpers/auth/auth.service';
+import { OrganizationRepository } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.repository';
+import { NotificationService } from '@postsider/nestjs-libraries/database/prisma/notifications/notification.service';
+import { AddTeamMemberDto } from '@postsider/nestjs-libraries/dtos/settings/add.team.member.dto';
+import { AuthService } from '@postsider/helpers/auth/auth.service';
 import dayjs from 'dayjs';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import { Organization, ShortLinkPreference } from '@prisma/client';
-import { AutopostService } from '@gitroom/nestjs-libraries/database/prisma/autopost/autopost.service';
+import { AutopostService } from '@postsider/nestjs-libraries/database/prisma/autopost/autopost.service';
+import { teamInviteEmail } from '@postsider/nestjs-libraries/emails/email.templates';
 
 @Injectable()
 export class OrganizationService {
@@ -20,12 +21,29 @@ export class OrganizationService {
     ip: string,
     userAgent: string
   ) {
-    return this._organizationRepository.createOrgAndUser(
+    // Free 7-day trial is granted only the FIRST time an email is seen.
+    // The TrialUsage table is permanent (survives account deletion), so a
+    // user can't delete + re-register the same email to farm new trials.
+    const alreadyUsedTrial = await this._organizationRepository.hasUsedTrial(
+      body.email
+    );
+    const allowTrial = !alreadyUsedTrial;
+
+    const created = await this._organizationRepository.createOrgAndUser(
       body,
       this._notificationsService.hasEmailProvider(),
       ip,
-      userAgent
+      userAgent,
+      allowTrial
     );
+
+    // Record the email as having consumed its trial so future re-registrations
+    // don't get another one.
+    if (allowTrial) {
+      await this._organizationRepository.markTrialUsed(body.email);
+    }
+
+    return created;
   }
 
   async getCount() {
@@ -78,19 +96,78 @@ export class OrganizationService {
   }
 
   async inviteTeamMember(orgId: string, body: AddTeamMemberDto) {
-    const timeLimit = dayjs().add(1, 'hour').format('YYYY-MM-DD HH:mm:ss');
-    const id = makeId(5);
-    const url =
-      process.env.FRONTEND_URL +
-      `/?org=${AuthService.signJWT({ ...body, orgId, timeLimit, id })}`;
+    // Create the user immediately with a random one-time password.
+    // The invited user logs in with this password and is forced to set
+    // their own on the /setup screen (name=null triggers this).
+    const oneTimePassword = makeId(12);
+    const hashedPassword = AuthService.hashPassword(oneTimePassword);
+
+    // Check if user with that email already exists.
+    const existingUser = await this._organizationRepository.findUserByEmail(
+      body.email
+    );
+
+    if (existingUser) {
+      // Check if user is already active in this org.
+      const existingLink = await this._organizationRepository.getUserOrgLink(
+        orgId,
+        existingUser.id,
+      );
+
+      if (existingLink && !existingLink.disabled) {
+        return {
+          email: body.email,
+          password: null,
+          message: 'This user is already a member of this organization.',
+        };
+      }
+
+      // User exists but is NOT in this org (or was removed). Re-add them
+      // and reset their password so they can sign in fresh.
+      const newPassword = makeId(12);
+      await this._organizationRepository.createUserOrgLink(
+        orgId,
+        existingUser.id,
+        body.role as 'USER' | 'ADMIN'
+      );
+      // Reset their password to the new one-time value and clear name to
+      // trigger the setup screen.
+      await this._organizationRepository.resetUserForReinvite(
+        existingUser.id,
+        AuthService.hashPassword(newPassword),
+      );
+
+      return {
+        email: body.email,
+        password: newPassword,
+        message: 'User re-added to the organization with a new one-time password.',
+      };
+    }
+
+    // Create new user + add to org.
+    const newUser = await this._organizationRepository.createUserForOrg(
+      orgId,
+      {
+        email: body.email.toLowerCase(),
+        password: hashedPassword,
+        role: body.role as 'USER' | 'ADMIN',
+      }
+    );
+
     if (body.sendEmail) {
       await this._notificationsService.sendEmail(
         body.email,
-        'You have been invited to join an organization',
-        `You have been invited to join an organization. Click <a href="${url}">here</a> to join.<br />The link will expire in 1 hour.`
+        'Your PostSider account is ready',
+        teamInviteEmail(body.email, oneTimePassword)
       );
     }
-    return { url };
+
+    return {
+      id: newUser?.user?.id || newUser?.userId || null,
+      email: body.email,
+      password: oneTimePassword,
+      message: 'User created. Share the one-time password with them.',
+    };
   }
 
   async deleteTeamMember(org: Organization, userId: string) {
@@ -113,6 +190,30 @@ export class OrganizationService {
     return this._organizationRepository.deleteTeamMember(org.id, userId);
   }
 
+  async changeTeamMemberRole(orgId: string, userId: string, role: 'ADMIN' | 'USER') {
+    return this._organizationRepository.changeTeamMemberRole(orgId, userId, role);
+  }
+
+  async getMediaStats(orgId: string) {
+    return this._organizationRepository.getMediaStats(orgId);
+  }
+
+  async listApiKeys(orgId: string) {
+    return this._organizationRepository.listApiKeys(orgId);
+  }
+
+  async createApiKey(orgId: string, name: string) {
+    return this._organizationRepository.createApiKey(orgId, name);
+  }
+
+  async renameApiKey(orgId: string, keyId: string, name: string) {
+    return this._organizationRepository.renameApiKey(orgId, keyId, name);
+  }
+
+  async deleteApiKey(orgId: string, keyId: string) {
+    return this._organizationRepository.deleteApiKey(orgId, keyId);
+  }
+
   disableOrEnableNonSuperAdminUsers(orgId: string, disable: boolean) {
     return this._organizationRepository.disableOrEnableNonSuperAdminUsers(
       orgId,
@@ -122,6 +223,16 @@ export class OrganizationService {
 
   getShortlinkPreference(orgId: string) {
     return this._organizationRepository.getShortlinkPreference(orgId);
+  }
+
+  /**
+   * Permanently delete an organization and all of its data, then remove the
+   * user if they no longer belong to any organization. Irreversible.
+   */
+  async deleteAccount(orgId: string, userId: string) {
+    await this._organizationRepository.deleteOrganizationCascade(orgId);
+    await this._organizationRepository.deleteUserIfOrphan(userId);
+    return { deleted: true };
   }
 
   updateShortlinkPreference(orgId: string, shortlink: ShortLinkPreference) {

@@ -1,4 +1,4 @@
-import { ShortLinking } from '@gitroom/nestjs-libraries/short-linking/short-linking.interface';
+import { ShortLinking } from '@postsider/nestjs-libraries/short-linking/short-linking.interface';
 
 const LINK_DRIP_API_ENDPOINT =
   process.env.LINK_DRIP_API_ENDPOINT || 'https://api.linkdrip.com/v1/';

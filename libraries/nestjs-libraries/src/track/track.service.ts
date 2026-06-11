@@ -1,4 +1,4 @@
-import { TrackEnum } from '@gitroom/nestjs-libraries/user/track.enum';
+import { TrackEnum } from '@postsider/nestjs-libraries/user/track.enum';
 import { User } from '@prisma/client';
 import { Injectable } from '@nestjs/common';
 import {
@@ -53,7 +53,7 @@ export class TrackService {
       userData.setEmail(this.hashValue(user.email));
     }
 
-    let customData = null;
+    let customData: any = null;
     if (additional?.value) {
       customData = new CustomData();
       customData.setValue(additional.value).setCurrency('USD');

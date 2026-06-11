@@ -5,7 +5,7 @@ import {
   IsString,
   ValidateNested,
 } from 'class-validator';
-import { IsSafeWebhookUrl } from '@gitroom/nestjs-libraries/dtos/webhooks/webhook.url.validator';
+import { IsSafeWebhookUrl } from '@postsider/nestjs-libraries/dtos/webhooks/webhook.url.validator';
 
 export class ImportMediaItemDto {
   @IsString()

@@ -1,39 +1,70 @@
-import { IUploadProvider } from './upload.interface';
+import { IUploadProvider, UploadedFile } from './upload.interface';
 import { mkdirSync, unlink, writeFileSync } from 'fs';
-import { isSafePublicHttpsUrl } from '@gitroom/nestjs-libraries/dtos/webhooks/webhook.url.validator';
-import { ssrfSafeDispatcher } from '@gitroom/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
-import { parseDataUrl } from '@gitroom/nestjs-libraries/upload/data.url';
+import * as path from 'path';
+import { isSafePublicHttpsUrl } from '@postsider/nestjs-libraries/dtos/webhooks/webhook.url.validator';
+import { ssrfSafeDispatcher } from '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
+import { parseDataUrl } from '@postsider/nestjs-libraries/upload/data.url';
+import {
+  ALLOWED_MIME,
+  classifyMime,
+  MediaKind,
+} from '@postsider/nestjs-libraries/upload/mime.types';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { fromBuffer } = require('file-type');
 
-const LOCAL_STORAGE_ALLOWED_MIME = new Set<string>([
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  'image/avif',
-  'image/bmp',
-  'image/tiff',
-  'video/mp4',
-  'audio/mpeg',
-  'audio/mp4',
-  'audio/wav',
-  'audio/ogg',
-]);
 export class LocalStorage implements IUploadProvider {
   constructor(private uploadDirectory: string) {}
 
-  async uploadSimple(path: string) {
-    const dataUrl = path.startsWith('data:') ? parseDataUrl(path) : null;
+  /**
+   * Build the on-disk path and the public URL path for a freshly generated
+   * filename. Files are partitioned by media kind first, then by upload date,
+   * so that CDN/cache rules and bulk operations can target a single class of
+   * media without iterating the whole tree.
+   */
+  private buildPaths(kind: MediaKind, ext: string) {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+
+    const innerPath = `/${kind}/${year}/${month}/${day}`;
+    const dir = `${this.uploadDirectory}${innerPath}`;
+    mkdirSync(dir, { recursive: true });
+
+    const randomName = Array(32)
+      .fill(null)
+      .map(() => Math.round(Math.random() * 16).toString(16))
+      .join('');
+
+    return {
+      filePath: `${dir}/${randomName}.${ext}`,
+      publicPath: `${innerPath}/${randomName}.${ext}`,
+    };
+  }
+
+  /**
+   * Compose the public URL backend exposes for a stored asset.
+   *
+   * Prefer `BACKEND_URL` when set (the headless, agent-bridge deployment that
+   * has no frontend at all). Fall back to `FRONTEND_URL` for legacy setups
+   * where a separate web app reverse-proxies `/uploads/*` to the backend.
+   */
+  private publicUrl(publicPath: string) {
+    const base = process.env.BACKEND_URL || process.env.FRONTEND_URL || '';
+    return `${base}/uploads${publicPath}`;
+  }
+
+  async uploadSimple(input: string) {
+    const dataUrl = input.startsWith('data:') ? parseDataUrl(input) : null;
 
     let body: Buffer;
     if (dataUrl) {
       body = dataUrl.buffer;
     } else {
-      if (!(await isSafePublicHttpsUrl(path))) {
+      if (!(await isSafePublicHttpsUrl(input))) {
         throw new Error('Unsafe URL');
       }
-      const loadImage = await fetch(path, {
+      const loadImage = await fetch(input, {
         // @ts-ignore — undici option, not in lib.dom fetch types
         dispatcher: ssrfSafeDispatcher,
       });
@@ -46,66 +77,37 @@ export class LocalStorage implements IUploadProvider {
     // arbitrary file (e.g. .html/.svg with embedded script) into the
     // publicly served uploads directory on the app's own origin.
     const detected = await fromBuffer(body);
-    if (!detected || !LOCAL_STORAGE_ALLOWED_MIME.has(detected.mime)) {
+    if (!detected || !ALLOWED_MIME.has(detected.mime)) {
       throw new Error('Unsupported file type.');
     }
-    const findExtension = detected.ext;
+    const kind = classifyMime(detected.mime);
+    const { filePath, publicPath } = this.buildPaths(kind, detected.ext);
 
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-
-    const innerPath = `/${year}/${month}/${day}`;
-    const dir = `${this.uploadDirectory}${innerPath}`;
-    mkdirSync(dir, { recursive: true });
-
-    const randomName = Array(32)
-      .fill(null)
-      .map(() => Math.round(Math.random() * 16).toString(16))
-      .join('');
-
-    const filePath = `${dir}/${randomName}.${findExtension}`;
-    const publicPath = `${innerPath}/${randomName}.${findExtension}`;
-    // Logic to save the file to the filesystem goes here
     writeFileSync(filePath, body);
 
-    return process.env.FRONTEND_URL + '/uploads' + publicPath;
+    return this.publicUrl(publicPath);
   }
 
-  async uploadFile(file: Express.Multer.File): Promise<any> {
+  async uploadFile(file: Express.Multer.File): Promise<UploadedFile> {
     try {
       const detected = await fromBuffer(file.buffer);
-      if (!detected || !LOCAL_STORAGE_ALLOWED_MIME.has(detected.mime)) {
+      if (!detected || !ALLOWED_MIME.has(detected.mime)) {
         throw new Error('Unsupported file type.');
       }
-      const safeExt = `.${detected.ext}`;
+      const kind = classifyMime(detected.mime);
+      const safeExt = detected.ext;
       const safeMime = detected.mime;
 
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const day = String(now.getDate()).padStart(2, '0');
-
-      const innerPath = `/${year}/${month}/${day}`;
-      const dir = `${this.uploadDirectory}${innerPath}`;
-      mkdirSync(dir, { recursive: true });
-
-      const randomName = Array(32)
-        .fill(null)
-        .map(() => Math.round(Math.random() * 16).toString(16))
-        .join('');
-
-      const filePath = `${dir}/${randomName}${safeExt}`;
-      const publicPath = `${innerPath}/${randomName}${safeExt}`;
-
+      const { filePath, publicPath } = this.buildPaths(kind, safeExt);
       writeFileSync(filePath, file.buffer);
 
+      const filename = path.basename(filePath);
       return {
-        filename: `${randomName}${safeExt}`,
-        path: process.env.FRONTEND_URL + '/uploads' + publicPath,
+        filename,
+        path: this.publicUrl(publicPath),
         mimetype: safeMime,
-        originalname: `${randomName}${safeExt}`,
+        originalname: filename,
+        kind,
       };
     } catch (err) {
       console.error('Error uploading file to Local Storage:', err);
@@ -113,16 +115,38 @@ export class LocalStorage implements IUploadProvider {
     }
   }
 
+  /**
+   * Translate a public URL back to a local filesystem path and unlink it.
+   *
+   * Idempotent — missing files do not throw, because the only legitimate
+   * caller is `MediaService.deleteMedia` and a partial state where the DB
+   * row exists but the file was already cleaned up should not block the
+   * delete flow.
+   */
   async removeFile(filePath: string): Promise<void> {
-    // Logic to remove the file from the filesystem goes here
-    return new Promise((resolve, reject) => {
-      unlink(filePath, (err) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve();
-        }
-      });
+    let publicPath: string;
+    try {
+      // Accept both absolute URLs and bare `/uploads/...` paths.
+      publicPath = filePath.startsWith('http')
+        ? new URL(filePath).pathname
+        : filePath;
+    } catch {
+      return;
+    }
+
+    const marker = '/uploads';
+    const idx = publicPath.indexOf(marker);
+    if (idx === -1) return;
+    const inner = publicPath.slice(idx + marker.length);
+
+    // Refuse path traversal: only accept paths that resolve under the
+    // configured upload directory.
+    const resolved = path.resolve(this.uploadDirectory, '.' + inner);
+    const root = path.resolve(this.uploadDirectory);
+    if (!resolved.startsWith(root + path.sep)) return;
+
+    return new Promise((resolve) => {
+      unlink(resolved, () => resolve());
     });
   }
 }

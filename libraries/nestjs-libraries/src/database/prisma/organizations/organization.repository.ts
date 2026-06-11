@@ -1,16 +1,18 @@
-import { PrismaRepository } from '@gitroom/nestjs-libraries/database/prisma/prisma.service';
+import { PrismaRepository, PrismaService } from '@postsider/nestjs-libraries/database/prisma/prisma.service';
 import { Role, ShortLinkPreference, SubscriptionTier } from '@prisma/client';
 import { Injectable } from '@nestjs/common';
-import { AuthService } from '@gitroom/helpers/auth/auth.service';
-import { CreateOrgUserDto } from '@gitroom/nestjs-libraries/dtos/auth/create.org.user.dto';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
+import { AuthService } from '@postsider/helpers/auth/auth.service';
+import { CreateOrgUserDto } from '@postsider/nestjs-libraries/dtos/auth/create.org.user.dto';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
+import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
 
 @Injectable()
 export class OrganizationRepository {
   constructor(
     private _organization: PrismaRepository<'organization'>,
     private _userOrg: PrismaRepository<'userOrganization'>,
-    private _user: PrismaRepository<'user'>
+    private _user: PrismaRepository<'user'>,
+    private _prisma: PrismaService
   ) {}
 
   createMaxUser(id: string, name: string, saasName: string, email: string) {
@@ -230,7 +232,7 @@ export class OrganizationRepository {
       });
 
     if (
-      process.env.STRIPE_PUBLISHABLE_KEY &&
+      isBillingEnabled() &&
       checkForSubscription?.subscription?.subscriptionTier ===
         SubscriptionTier.STANDARD
     ) {
@@ -261,14 +263,15 @@ export class OrganizationRepository {
     body: Omit<CreateOrgUserDto, 'providerToken'> & { providerId?: string },
     hasEmail: boolean,
     ip: string,
-    userAgent: string
+    userAgent: string,
+    allowTrial = true
   ) {
     return this._organization.model.organization.create({
       data: {
         name: body.company,
         apiKey: AuthService.fixedEncryption(makeId(20)),
-        allowTrial: true,
-        isTrailing: true,
+        allowTrial,
+        isTrailing: allowTrial,
         users: {
           create: {
             role: Role.SUPERADMIN,
@@ -384,6 +387,162 @@ export class OrganizationRepository {
     });
   }
 
+  async changeTeamMemberRole(orgId: string, userId: string, role: 'ADMIN' | 'USER') {
+    return this._userOrg.model.userOrganization.update({
+      where: {
+        userId_organizationId: {
+          userId,
+          organizationId: orgId,
+        },
+      },
+      data: {
+        role,
+      },
+    });
+  }
+
+  async findUserByEmail(email: string) {
+    return (this._organization.model as any).user.findFirst({
+      where: { email: email.toLowerCase(), providerName: 'LOCAL' },
+      select: { id: true, email: true },
+    });
+  }
+
+  async createUserForOrg(
+    orgId: string,
+    data: { email: string; password: string; role: 'USER' | 'ADMIN' }
+  ) {
+    return this._userOrg.model.userOrganization.create({
+      data: {
+        role: data.role,
+        organization: { connect: { id: orgId } },
+        user: {
+          create: {
+            email: data.email,
+            password: data.password,
+            providerName: 'LOCAL',
+            providerId: '',
+            timezone: 0,
+            activated: true,
+            // name is null — triggers the setup screen on first login.
+          },
+        },
+      },
+      select: {
+        userId: true,
+        user: { select: { id: true, email: true } },
+      },
+    });
+  }
+
+  async createUserOrgLink(orgId: string, userId: string, role: 'USER' | 'ADMIN') {
+    return this._userOrg.model.userOrganization.upsert({
+      where: {
+        userId_organizationId: {
+          userId,
+          organizationId: orgId,
+        },
+      },
+      update: { role, disabled: false },
+      create: {
+        role,
+        organization: { connect: { id: orgId } },
+        user: { connect: { id: userId } },
+      },
+    });
+  }
+
+  async getUserOrgLink(orgId: string, userId: string) {
+    return this._userOrg.model.userOrganization.findUnique({
+      where: {
+        userId_organizationId: {
+          userId,
+          organizationId: orgId,
+        },
+      },
+      select: { disabled: true, role: true },
+    });
+  }
+
+  async resetUserForReinvite(userId: string, hashedPassword: string) {
+    return (this._organization.model as any).user.update({
+      where: { id: userId },
+      data: { password: hashedPassword, name: null },
+    });
+  }
+
+  async getMediaStats(orgId: string) {
+    const media = this._organization.model as any;
+    const [total, images, videos, totalSize] = await Promise.all([
+      media.media.count({
+        where: { organizationId: orgId, deletedAt: null },
+      }),
+      media.media.count({
+        where: { organizationId: orgId, deletedAt: null, type: 'image' },
+      }),
+      media.media.count({
+        where: { organizationId: orgId, deletedAt: null, type: 'video' },
+      }),
+      media.media.aggregate({
+        where: { organizationId: orgId, deletedAt: null },
+        _sum: { fileSize: true },
+      }),
+    ]);
+    return {
+      total,
+      images,
+      videos,
+      totalBytes: totalSize?._sum?.fileSize ?? 0,
+    };
+  }
+
+  async listApiKeys(orgId: string) {
+    const db = this._organization.model as any;
+    return db.apiKey.findMany({
+      where: { organizationId: orgId, deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        key: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async createApiKey(orgId: string, name: string) {
+    const db = this._organization.model as any;
+    const rawKey = 'ps_' + makeId(40);
+    const hashedKey = AuthService.fixedEncryption(rawKey);
+    const created = await db.apiKey.create({
+      data: {
+        name,
+        key: hashedKey,
+        organization: { connect: { id: orgId } },
+      },
+      select: { id: true, name: true, createdAt: true },
+    });
+    // Return the raw key only at creation (never again).
+    return { ...created, key: rawKey };
+  }
+
+  async renameApiKey(orgId: string, keyId: string, name: string) {
+    const db = this._organization.model as any;
+    return db.apiKey.update({
+      where: { id: keyId, organizationId: orgId },
+      data: { name },
+      select: { id: true, name: true },
+    });
+  }
+
+  async deleteApiKey(orgId: string, keyId: string) {
+    const db = this._organization.model as any;
+    return db.apiKey.update({
+      where: { id: keyId, organizationId: orgId },
+      data: { deletedAt: new Date() },
+    });
+  }
+
   disableOrEnableNonSuperAdminUsers(orgId: string, disable: boolean) {
     return this._userOrg.model.userOrganization.updateMany({
       where: {
@@ -418,5 +577,154 @@ export class OrganizationRepository {
         shortlink,
       },
     });
+  }
+
+  /**
+   * Has this email already consumed a free trial? Checked against the
+   * permanent TrialUsage table (which survives account deletion).
+   */
+  async hasUsedTrial(email: string): Promise<boolean> {
+    const normalized = email.trim().toLowerCase();
+    const found = await this._prisma.trialUsage.findUnique({
+      where: { email: normalized },
+    });
+    return !!found;
+  }
+
+  /**
+   * Permanently record that an email has used its free trial. Idempotent.
+   */
+  async markTrialUsed(email: string): Promise<void> {
+    const normalized = email.trim().toLowerCase();
+    await this._prisma.trialUsage.upsert({
+      where: { email: normalized },
+      update: {},
+      create: { email: normalized },
+    });
+  }
+
+  /**
+   * Permanently delete an organization and ALL of its data.
+   *
+   * The schema has no ON DELETE CASCADE, so we delete every dependent row in
+   * FK-safe order (children before parents) inside a single transaction. This
+   * is irreversible.
+   */
+  async deleteOrganizationCascade(orgId: string) {
+    const prisma = this._prisma;
+
+    // Collect ids we need for nested relations.
+    const posts = await prisma.post.findMany({
+      where: { organizationId: orgId },
+      select: { id: true },
+    });
+    const postIds = posts.map((p) => p.id);
+
+    const integrations = await prisma.integration.findMany({
+      where: { organizationId: orgId },
+      select: { id: true },
+    });
+    const integrationIds = integrations.map((i) => i.id);
+
+    const webhooks = await prisma.webhooks.findMany({
+      where: { organizationId: orgId },
+      select: { id: true },
+    });
+    const webhookIds = webhooks.map((w) => w.id);
+
+    await prisma.$transaction(async (tx) => {
+      // Post-dependent rows
+      if (postIds.length) {
+        await tx.tagsPosts.deleteMany({ where: { postId: { in: postIds } } });
+        await tx.errors.deleteMany({ where: { postId: { in: postIds } } });
+        await tx.comments.deleteMany({ where: { postId: { in: postIds } } });
+        await tx.payoutProblems.deleteMany({
+          where: { postId: { in: postIds } },
+        });
+      }
+
+      // Integration-dependent rows
+      if (integrationIds.length) {
+        await tx.exisingPlugData.deleteMany({
+          where: { integrationId: { in: integrationIds } },
+        });
+        await tx.integrationsWebhooks.deleteMany({
+          where: { integrationId: { in: integrationIds } },
+        });
+        await tx.orderItems.deleteMany({
+          where: { integrationId: { in: integrationIds } },
+        });
+      }
+      if (webhookIds.length) {
+        await tx.integrationsWebhooks.deleteMany({
+          where: { webhookId: { in: webhookIds } },
+        });
+      }
+
+      // Org-scoped rows that reference posts/integrations indirectly
+      await tx.plugs.deleteMany({ where: { organizationId: orgId } });
+      await tx.errors.deleteMany({ where: { organizationId: orgId } });
+      await tx.comments.deleteMany({ where: { organizationId: orgId } });
+
+      // Posts: clear self-references first, then delete
+      await tx.post.updateMany({
+        where: { organizationId: orgId },
+        data: { parentPostId: null, lastMessageId: null, submittedForOrderId: null },
+      });
+      await tx.post.deleteMany({ where: { organizationId: orgId } });
+
+      // Tags
+      await tx.tags.deleteMany({ where: { orgId } });
+
+      // Integrations + customers
+      await tx.integration.deleteMany({ where: { organizationId: orgId } });
+      await tx.customer.deleteMany({ where: { orgId } });
+
+      // Misc org-scoped data
+      await tx.webhooks.deleteMany({ where: { organizationId: orgId } });
+      await tx.autoPost.deleteMany({ where: { organizationId: orgId } });
+      await tx.sets.deleteMany({ where: { organizationId: orgId } });
+      await tx.thirdParty.deleteMany({ where: { organizationId: orgId } });
+      await tx.signatures.deleteMany({ where: { organizationId: orgId } });
+      await tx.notifications.deleteMany({ where: { organizationId: orgId } });
+      await tx.credits.deleteMany({ where: { organizationId: orgId } });
+      await tx.media.deleteMany({ where: { organizationId: orgId } });
+      await tx.gitHub.deleteMany({ where: { organizationId: orgId } });
+      await tx.usedCodes.deleteMany({ where: { orgId } });
+      await tx.subscription.deleteMany({ where: { organizationId: orgId } });
+      await tx.apiKey.deleteMany({ where: { organizationId: orgId } });
+      await tx.providerCredentials.deleteMany({
+        where: { organizationId: orgId },
+      });
+      await tx.oAuthAuthorization.deleteMany({
+        where: { organizationId: orgId },
+      });
+      await tx.oAuthApp.deleteMany({ where: { organizationId: orgId } });
+
+      // Finally the membership links and the org itself
+      await tx.userOrganization.deleteMany({
+        where: { organizationId: orgId },
+      });
+      await tx.organization.delete({ where: { id: orgId } });
+    });
+  }
+
+  /**
+   * Delete a user if they no longer belong to any organization, removing
+   * personal rows first.
+   */
+  async deleteUserIfOrphan(userId: string) {
+    const prisma = this._prisma;
+    const remaining = await prisma.userOrganization.count({
+      where: { userId },
+    });
+    if (remaining > 0) {
+      return false;
+    }
+    await prisma.$transaction(async (tx) => {
+      await tx.itemUser.deleteMany({ where: { userId } });
+      await tx.user.delete({ where: { id: userId } });
+    });
+    return true;
   }
 }

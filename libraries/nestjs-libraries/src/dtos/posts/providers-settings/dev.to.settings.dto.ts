@@ -9,9 +9,9 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
-import { MediaDto } from '@gitroom/nestjs-libraries/dtos/media/media.dto';
+import { MediaDto } from '@postsider/nestjs-libraries/dtos/media/media.dto';
 import { Type } from 'class-transformer';
-import { DevToTagsSettingsDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/dev.to.tags.settings.dto';
+import { DevToTagsSettingsDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/dev.to.tags.settings.dto';
 
 export class DevToSettingsDto {
   @IsString()

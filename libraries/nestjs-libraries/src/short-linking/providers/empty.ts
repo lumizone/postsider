@@ -1,9 +1,11 @@
-import { ShortLinking } from '@gitroom/nestjs-libraries/short-linking/short-linking.interface';
+import { ShortLinking } from '@postsider/nestjs-libraries/short-linking/short-linking.interface';
 
 export class Empty implements ShortLinking {
   shortLinkDomain = 'empty';
 
-  async linksStatistics(links: string[]) {
+  async linksStatistics(
+    links: string[]
+  ): Promise<{ short: string; original: string; clicks: string }[]> {
     return [];
   }
 

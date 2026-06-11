@@ -1,11 +1,11 @@
-import { AgentToolInterface } from '@gitroom/nestjs-libraries/chat/agent.tool.interface';
+import { AgentToolInterface } from '@postsider/nestjs-libraries/chat/agent.tool.interface';
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import { Injectable } from '@nestjs/common';
-import { MediaService } from '@gitroom/nestjs-libraries/database/prisma/media/media.service';
-import { UploadFactory } from '@gitroom/nestjs-libraries/upload/upload.factory';
-import { checkAuth } from '@gitroom/nestjs-libraries/chat/auth.context';
-import { ssrfSafeDispatcher } from '@gitroom/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
+import { MediaService } from '@postsider/nestjs-libraries/database/prisma/media/media.service';
+import { UploadFactory } from '@postsider/nestjs-libraries/upload/upload.factory';
+import { checkAuth } from '@postsider/nestjs-libraries/chat/auth.context';
+import { ssrfSafeDispatcher } from '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
 import { Readable } from 'stream';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { fromBuffer } = require('file-type');
@@ -91,7 +91,9 @@ so the attachment passes the upload-domain validation. Returns the hosted media 
         return this._mediaService.saveFile(
           org.id,
           getFile.originalname,
-          getFile.path
+          getFile.path,
+          undefined,
+          getFile.kind
         );
       },
     });

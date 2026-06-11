@@ -1,41 +1,49 @@
 import 'reflect-metadata';
 
 import { Injectable } from '@nestjs/common';
-import { XProvider } from '@gitroom/nestjs-libraries/integrations/social/x.provider';
-import { SocialProvider } from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
-import { LinkedinProvider } from '@gitroom/nestjs-libraries/integrations/social/linkedin.provider';
-import { RedditProvider } from '@gitroom/nestjs-libraries/integrations/social/reddit.provider';
-import { DevToProvider } from '@gitroom/nestjs-libraries/integrations/social/dev.to.provider';
-import { HashnodeProvider } from '@gitroom/nestjs-libraries/integrations/social/hashnode.provider';
-import { MediumProvider } from '@gitroom/nestjs-libraries/integrations/social/medium.provider';
-import { FacebookProvider } from '@gitroom/nestjs-libraries/integrations/social/facebook.provider';
-import { InstagramProvider } from '@gitroom/nestjs-libraries/integrations/social/instagram.provider';
-import { YoutubeProvider } from '@gitroom/nestjs-libraries/integrations/social/youtube.provider';
-import { TiktokProvider } from '@gitroom/nestjs-libraries/integrations/social/tiktok.provider';
-import { PinterestProvider } from '@gitroom/nestjs-libraries/integrations/social/pinterest.provider';
-import { DribbbleProvider } from '@gitroom/nestjs-libraries/integrations/social/dribbble.provider';
-import { LinkedinPageProvider } from '@gitroom/nestjs-libraries/integrations/social/linkedin.page.provider';
-import { ThreadsProvider } from '@gitroom/nestjs-libraries/integrations/social/threads.provider';
-import { DiscordProvider } from '@gitroom/nestjs-libraries/integrations/social/discord.provider';
-import { SlackProvider } from '@gitroom/nestjs-libraries/integrations/social/slack.provider';
-import { MastodonProvider } from '@gitroom/nestjs-libraries/integrations/social/mastodon.provider';
-import { BlueskyProvider } from '@gitroom/nestjs-libraries/integrations/social/bluesky.provider';
-import { LemmyProvider } from '@gitroom/nestjs-libraries/integrations/social/lemmy.provider';
-import { InstagramStandaloneProvider } from '@gitroom/nestjs-libraries/integrations/social/instagram.standalone.provider';
-import { FarcasterProvider } from '@gitroom/nestjs-libraries/integrations/social/farcaster.provider';
-import { TelegramProvider } from '@gitroom/nestjs-libraries/integrations/social/telegram.provider';
-import { NostrProvider } from '@gitroom/nestjs-libraries/integrations/social/nostr.provider';
-import { VkProvider } from '@gitroom/nestjs-libraries/integrations/social/vk.provider';
-import { WordpressProvider } from '@gitroom/nestjs-libraries/integrations/social/wordpress.provider';
-import { ListmonkProvider } from '@gitroom/nestjs-libraries/integrations/social/listmonk.provider';
-import { GmbProvider } from '@gitroom/nestjs-libraries/integrations/social/gmb.provider';
-import { KickProvider } from '@gitroom/nestjs-libraries/integrations/social/kick.provider';
-import { TwitchProvider } from '@gitroom/nestjs-libraries/integrations/social/twitch.provider';
-import { SocialAbstract } from '@gitroom/nestjs-libraries/integrations/social.abstract';
-import { MoltbookProvider } from '@gitroom/nestjs-libraries/integrations/social/moltbook.provider';
-import { SkoolProvider } from '@gitroom/nestjs-libraries/integrations/social/skool.provider';
-import { WhopProvider } from '@gitroom/nestjs-libraries/integrations/social/whop.provider';
-import { MeweProvider } from '@gitroom/nestjs-libraries/integrations/social/mewe.provider';
+import { XProvider } from '@postsider/nestjs-libraries/integrations/social/x.provider';
+import { SocialProvider } from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { LinkedinProvider } from '@postsider/nestjs-libraries/integrations/social/linkedin.provider';
+import { RedditProvider } from '@postsider/nestjs-libraries/integrations/social/reddit.provider';
+import { DevToProvider } from '@postsider/nestjs-libraries/integrations/social/dev.to.provider';
+import { HashnodeProvider } from '@postsider/nestjs-libraries/integrations/social/hashnode.provider';
+import { MediumProvider } from '@postsider/nestjs-libraries/integrations/social/medium.provider';
+import { FacebookProvider } from '@postsider/nestjs-libraries/integrations/social/facebook.provider';
+import { InstagramProvider } from '@postsider/nestjs-libraries/integrations/social/instagram.provider';
+import { YoutubeProvider } from '@postsider/nestjs-libraries/integrations/social/youtube.provider';
+import { TiktokProvider } from '@postsider/nestjs-libraries/integrations/social/tiktok.provider';
+import { PinterestProvider } from '@postsider/nestjs-libraries/integrations/social/pinterest.provider';
+import { DribbbleProvider } from '@postsider/nestjs-libraries/integrations/social/dribbble.provider';
+import { LinkedinPageProvider } from '@postsider/nestjs-libraries/integrations/social/linkedin.page.provider';
+import { ThreadsProvider } from '@postsider/nestjs-libraries/integrations/social/threads.provider';
+import { DiscordProvider } from '@postsider/nestjs-libraries/integrations/social/discord.provider';
+import { SlackProvider } from '@postsider/nestjs-libraries/integrations/social/slack.provider';
+import { MastodonProvider } from '@postsider/nestjs-libraries/integrations/social/mastodon.provider';
+import { BlueskyProvider } from '@postsider/nestjs-libraries/integrations/social/bluesky.provider';
+import { LemmyProvider } from '@postsider/nestjs-libraries/integrations/social/lemmy.provider';
+import { InstagramStandaloneProvider } from '@postsider/nestjs-libraries/integrations/social/instagram.standalone.provider';
+import { FarcasterProvider } from '@postsider/nestjs-libraries/integrations/social/farcaster.provider';
+import { TelegramProvider } from '@postsider/nestjs-libraries/integrations/social/telegram.provider';
+import { NostrProvider } from '@postsider/nestjs-libraries/integrations/social/nostr.provider';
+import { VkProvider } from '@postsider/nestjs-libraries/integrations/social/vk.provider';
+import { WordpressProvider } from '@postsider/nestjs-libraries/integrations/social/wordpress.provider';
+import { ListmonkProvider } from '@postsider/nestjs-libraries/integrations/social/listmonk.provider';
+import { GmbProvider } from '@postsider/nestjs-libraries/integrations/social/gmb.provider';
+import { KickProvider } from '@postsider/nestjs-libraries/integrations/social/kick.provider';
+import { TwitchProvider } from '@postsider/nestjs-libraries/integrations/social/twitch.provider';
+import { SocialAbstract } from '@postsider/nestjs-libraries/integrations/social.abstract';
+import { MoltbookProvider } from '@postsider/nestjs-libraries/integrations/social/moltbook.provider';
+import { SkoolProvider } from '@postsider/nestjs-libraries/integrations/social/skool.provider';
+import { WhopProvider } from '@postsider/nestjs-libraries/integrations/social/whop.provider';
+import { MeweProvider } from '@postsider/nestjs-libraries/integrations/social/mewe.provider';
+import { RumbleProvider } from '@postsider/nestjs-libraries/integrations/social/rumble.provider';
+import { GhostProvider } from '@postsider/nestjs-libraries/integrations/social/ghost.provider';
+import { BloggerProvider } from '@postsider/nestjs-libraries/integrations/social/blogger.provider';
+import { NotionProvider } from '@postsider/nestjs-libraries/integrations/social/notion.provider';
+import { BearBlogProvider } from '@postsider/nestjs-libraries/integrations/social/bear.blog.provider';
+import { MataroaProvider } from '@postsider/nestjs-libraries/integrations/social/mataroa.provider';
+import { WriteAsProvider } from '@postsider/nestjs-libraries/integrations/social/writeas.provider';
+import { GmailProvider } from '@postsider/nestjs-libraries/integrations/social/gmail.provider';
 
 export const socialIntegrationList: Array<SocialAbstract & SocialProvider> = [
   new XProvider(),
@@ -48,12 +56,13 @@ export const socialIntegrationList: Array<SocialAbstract & SocialProvider> = [
   new ThreadsProvider(),
   new YoutubeProvider(),
   new GmbProvider(),
+  new BloggerProvider(),
   new TiktokProvider(),
   new PinterestProvider(),
   new DribbbleProvider(),
   new DiscordProvider(),
   new SlackProvider(),
-  new KickProvider(),
+  // new KickProvider(), // hidden — low priority
   new TwitchProvider(),
   new MastodonProvider(),
   new BlueskyProvider(),
@@ -71,7 +80,14 @@ export const socialIntegrationList: Array<SocialAbstract & SocialProvider> = [
   new WhopProvider(),
   new SkoolProvider(),
   new MeweProvider(),
-  // new MastodonCustomProvider(),
+  new RumbleProvider(),
+  new GhostProvider(),
+  new NotionProvider(),
+  new BearBlogProvider(),
+  new MataroaProvider(),
+  new WriteAsProvider(),
+  new GmailProvider(),
+  // MastodonCustomProvider disabled — use Mastodon with custom instance URL instead
 ];
 
 @Injectable()

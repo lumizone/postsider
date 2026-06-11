@@ -4,18 +4,18 @@ import {
   PostDetails,
   PostResponse,
   SocialProvider,
-} from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
+} from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library/build/src/auth/oauth2client';
 import {
   SocialAbstract,
   ValidityMedia,
-} from '@gitroom/nestjs-libraries/integrations/social.abstract';
+} from '@postsider/nestjs-libraries/integrations/social.abstract';
 import * as process from 'node:process';
 import dayjs from 'dayjs';
-import { Rules } from '@gitroom/nestjs-libraries/chat/rules.description.decorator';
-import { GmbSettingsDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/gmb.settings.dto';
+import { Rules } from '@postsider/nestjs-libraries/chat/rules.description.decorator';
+import { GmbSettingsDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/gmb.settings.dto';
 
 const clientAndGmb = () => {
   const client = new google.auth.OAuth2({
@@ -194,7 +194,11 @@ export class GmbProvider extends SocialAbstract implements SocialProvider {
       accessToken: tokens.access_token!,
       expiresIn: unixTimestamp,
       refreshToken: tokens.refresh_token!,
-      id: data.id!,
+      // Prefix the temporary id with the provider so a two-step GMB connection
+      // doesn't collide with another Google-based integration (e.g. YouTube)
+      // that shares the same Google account id. fetchPageInformation replaces
+      // this with the real location id once the user picks a location.
+      id: `gmb-${data.id!}`,
       name: data.name!,
       picture: data?.picture || '',
       username: '',

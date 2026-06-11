@@ -1,21 +1,21 @@
-import { PrismaRepository } from '@gitroom/nestjs-libraries/database/prisma/prisma.service';
+import { PrismaRepository } from '@postsider/nestjs-libraries/database/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
-import { Post as PostBody } from '@gitroom/nestjs-libraries/dtos/posts/create.post.dto';
+import { Post as PostBody } from '@postsider/nestjs-libraries/dtos/posts/create.post.dto';
 import {
   APPROVED_SUBMIT_FOR_ORDER,
   CreationMethod,
   Post,
   State,
 } from '@prisma/client';
-import { GetPostsDto } from '@gitroom/nestjs-libraries/dtos/posts/get.posts.dto';
-import { GetPostsListDto } from '@gitroom/nestjs-libraries/dtos/posts/get.posts.list.dto';
+import { GetPostsDto } from '@postsider/nestjs-libraries/dtos/posts/get.posts.dto';
+import { GetPostsListDto } from '@postsider/nestjs-libraries/dtos/posts/get.posts.list.dto';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import weekOfYear from 'dayjs/plugin/weekOfYear';
 import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
 import utc from 'dayjs/plugin/utc';
 import { v4 as uuidv4 } from 'uuid';
-import { CreateTagDto } from '@gitroom/nestjs-libraries/dtos/posts/create.tag.dto';
+import { CreateTagDto } from '@postsider/nestjs-libraries/dtos/posts/create.tag.dto';
 
 dayjs.extend(isoWeek);
 dayjs.extend(weekOfYear);
@@ -160,16 +160,10 @@ export class PostsRepository {
         integration: {
           deletedAt: null,
           organizationId: orgId,
+          ...(query.customer ? { customerId: query.customer } : {}),
         },
         deletedAt: null,
         parentPostId: null,
-        ...(query.customer
-          ? {
-              integration: {
-                customerId: query.customer,
-              },
-            }
-          : {}),
       },
       select: {
         id: true,
@@ -202,7 +196,7 @@ export class PostsRepository {
         return [...all, post];
       }
 
-      const addMorePosts = [];
+      const addMorePosts: any[] = [];
       let startingDate = dayjs.utc(post.publishDate);
       while (dayjs.utc(endDate).isSameOrAfter(startingDate)) {
         if (dayjs(startingDate).isSameOrAfter(dayjs.utc(post.publishDate))) {
@@ -255,11 +249,11 @@ export class PostsRepository {
         },
       ],
       ...stateAndDate,
-      // Published posts were already posted (publishDate in the past), so fetch
-      // all of them; everything else stays upcoming. Ordering handles the rest.
-      ...(stateFilter === 'published'
-        ? {}
-        : { publishDate: { gte: dayjs.utc().toDate() } }),
+      // Scheduled posts should only show upcoming ones (publishDate in the
+      // future). Drafts and "all" should show regardless of date. Published
+      // posts were already posted, so fetch all of them too.
+      // NOTE: The Posts list page is an archive/overview — it shows everything.
+      // The calendar is the "upcoming" view that naturally filters by date range.
       deletedAt: null as Date | null,
       parentPostId: null as string | null,
       intervalInDays: null as number | null,
@@ -570,7 +564,12 @@ export class PostsRepository {
       posts.push(
         await this._post.model.post.upsert({
           where: {
+            // Scope by organizationId so a client-supplied `value.id` can only
+            // ever match a post the caller already owns. Without this, passing
+            // another org's post id would let an attacker reassign/overwrite it
+            // (the update branch reconnects org + integration to the caller).
             id: value.id || uuidv4(),
+            organizationId: orgId,
           },
           create: { ...updateData('create') },
           update: {
@@ -758,10 +757,10 @@ export class PostsRepository {
   }) {
     return this._popularPosts.model.popularPosts.create({
       data: {
-        category: 'category',
-        topic: 'topic',
-        content: 'content',
-        hook: 'hook',
+        category: post.category,
+        topic: post.topic,
+        content: post.content,
+        hook: post.hook,
       },
     });
   }
@@ -830,6 +829,7 @@ export class PostsRepository {
     return this._tags.model.tags.update({
       where: {
         id,
+        orgId,
       },
       data: {
         name: body.name,

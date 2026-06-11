@@ -20,7 +20,7 @@ export class ConfigurationChecker {
   }
 
   readEnvFromProcess() {
-    this.cfg = process.env;
+    this.cfg = process.env as dotenv.DotenvParseOutput;
   }
 
   check() {
@@ -86,12 +86,12 @@ export class ConfigurationChecker {
     const urlString = this.get(key);
 
     try {
-      new URL(urlString);
+      new URL(urlString!);
     } catch (error) {
       this.issues.push(key + ' is not a valid URL');
     }
 
-    if (urlString.endsWith('/')) {
+    if (urlString!.endsWith('/')) {
       this.issues.push(key + ' should not end with /');
     }
   }

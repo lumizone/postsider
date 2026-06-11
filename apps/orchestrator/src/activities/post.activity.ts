@@ -4,25 +4,27 @@ import {
   ActivityMethod,
   TemporalService,
 } from 'nestjs-temporal-core';
-import { PostsService } from '@gitroom/nestjs-libraries/database/prisma/posts/posts.service';
+import { PostsService } from '@postsider/nestjs-libraries/database/prisma/posts/posts.service';
 import {
   NotificationService,
   NotificationType,
-} from '@gitroom/nestjs-libraries/database/prisma/notifications/notification.service';
+} from '@postsider/nestjs-libraries/database/prisma/notifications/notification.service';
 import { Integration, Post, State } from '@prisma/client';
-import { stripHtmlValidation } from '@gitroom/helpers/utils/strip.html.validation';
-import { IntegrationManager } from '@gitroom/nestjs-libraries/integrations/integration.manager';
-import { AuthTokenDetails } from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
-import { RefreshIntegrationService } from '@gitroom/nestjs-libraries/integrations/refresh.integration.service';
-import { timer } from '@gitroom/helpers/utils/timer';
-import { IntegrationService } from '@gitroom/nestjs-libraries/database/prisma/integrations/integration.service';
-import { WebhooksService } from '@gitroom/nestjs-libraries/database/prisma/webhooks/webhooks.service';
+import { stripHtmlValidation } from '@postsider/helpers/utils/strip.html.validation';
+import { IntegrationManager } from '@postsider/nestjs-libraries/integrations/integration.manager';
+import { AuthTokenDetails } from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { RefreshIntegrationService } from '@postsider/nestjs-libraries/integrations/refresh.integration.service';
+import { timer } from '@postsider/helpers/utils/timer';
+import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
+import { WebhooksService } from '@postsider/nestjs-libraries/database/prisma/webhooks/webhooks.service';
 import { TypedSearchAttributes } from '@temporalio/common';
 import {
   organizationId,
   postId as postIdSearchParam,
-} from '@gitroom/nestjs-libraries/temporal/temporal.search.attribute';
-import { SubscriptionService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/subscription.service';
+} from '@postsider/nestjs-libraries/temporal/temporal.search.attribute';
+import { SubscriptionService } from '@postsider/nestjs-libraries/database/prisma/subscriptions/subscription.service';
+import { ProviderEnvHelper } from '@postsider/nestjs-libraries/integrations/provider-env.helper';
+import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
 
 // Drops fields the workflow and downstream activities never read — biggest wins are `error` (grows per retry) and `childrenPost` (Prisma side-loads it on every recursive row).
 function slimPost(post: any) {
@@ -62,7 +64,8 @@ export class PostActivity {
     private _refreshIntegrationService: RefreshIntegrationService,
     private _webhookService: WebhooksService,
     private _temporalService: TemporalService,
-    private _subscriptionService: SubscriptionService
+    private _subscriptionService: SubscriptionService,
+    private _providerEnvHelper: ProviderEnvHelper,
   ) {}
 
   @ActivityMethod()
@@ -74,8 +77,8 @@ export class PostActivity {
   async searchForMissingThreeHoursPosts() {
     const list = await this._postService.searchForMissingThreeHoursPosts();
     for (const post of list) {
-      await this._temporalService.client
-        .getRawClient()
+      await this._temporalService.client!
+        .getRawClient()!
         .workflow.signalWithStart('postWorkflowV105', {
           workflowId: `post_${post.id}`,
           taskQueue: 'main',
@@ -112,7 +115,7 @@ export class PostActivity {
 
   @ActivityMethod()
   async getPost(orgId: string, postId: string) {
-    if (process.env.STRIPE_SECRET_KEY) {
+    if (isBillingEnabled()) {
       const subscription = await this._subscriptionService.getSubscription(
         orgId
       );
@@ -121,7 +124,7 @@ export class PostActivity {
       }
     }
     const post = await this._postService.getPostById(postId, orgId);
-    if (post.deletedAt) {
+    if (post!.deletedAt) {
       return false;
     }
 
@@ -130,7 +133,7 @@ export class PostActivity {
 
   @ActivityMethod()
   async getPostsList(orgId: string, postId: string) {
-    if (process.env.STRIPE_SECRET_KEY) {
+    if (isBillingEnabled()) {
       const subscription = await this._subscriptionService.getSubscription(
         orgId
       );
@@ -167,105 +170,117 @@ export class PostActivity {
     integration: Integration,
     posts: Post[]
   ) {
-    const getIntegration = this._integrationManager.getSocialIntegration(
-      integration.providerIdentifier
-    );
-
-    const newPosts = await this._postService.updateTags(
+    return this._providerEnvHelper.withCredentials(
       integration.organizationId,
-      posts
-    );
+      integration.providerIdentifier,
+      async () => {
+        const getIntegration = this._integrationManager.getSocialIntegration(
+          integration.providerIdentifier
+        );
 
-    return getIntegration.comment(
-      integration.internalId,
-      postId,
-      lastPostId,
-      integration.token,
-      await Promise.all(
-        (newPosts || []).map(async (p) => ({
-          id: p.id,
-          message: stripHtmlValidation(
-            getIntegration.editor,
-            p.content,
-            true,
-            false,
-            !/<\/?[a-z][\s\S]*>/i.test(p.content),
-            getIntegration.mentionFormat
+        const newPosts = await this._postService.updateTags(
+          integration.organizationId,
+          posts
+        );
+
+        return getIntegration.comment!(
+          integration.internalId,
+          postId,
+          lastPostId,
+          integration.token,
+          await Promise.all(
+            (newPosts || []).map(async (p) => ({
+              id: p.id,
+              message: stripHtmlValidation(
+                getIntegration.editor,
+                p.content,
+                true,
+                false,
+                !/<\/?[a-z][\s\S]*>/i.test(p.content),
+                getIntegration.mentionFormat
+              ),
+              settings: JSON.parse(p.settings || '{}'),
+              media: await this._postService.updateMedia(
+                p.id,
+                JSON.parse(p.image || '[]'),
+                getIntegration?.convertToJPEG || false
+              ),
+            }))
           ),
-          settings: JSON.parse(p.settings || '{}'),
-          media: await this._postService.updateMedia(
-            p.id,
-            JSON.parse(p.image || '[]'),
-            getIntegration?.convertToJPEG || false
-          ),
-        }))
-      ),
-      integration
+          integration
+        );
+      },
     );
   }
 
   @ActivityMethod()
   async postSocial(integration: Integration, posts: Post[]) {
-    if (process.env.STRIPE_SECRET_KEY) {
-      const subscription = await this._subscriptionService.getSubscription(
-        integration.organizationId
-      );
-
-      if (!subscription) {
-        throw new Error('No active subscription found for this organization.');
-      }
-    }
-
-    const getIntegration = this._integrationManager.getSocialIntegration(
-      integration.providerIdentifier
-    );
-
-    const newPosts = await this._postService.updateTags(
+    return this._providerEnvHelper.withCredentials(
       integration.organizationId,
-      posts
-    );
+      integration.providerIdentifier,
+      async () => {
+        if (isBillingEnabled()) {
+          const subscription = await this._subscriptionService.getSubscription(
+            integration.organizationId
+          );
 
-    const postNow = await getIntegration.post(
-      integration.internalId,
-      integration.token,
-      await Promise.all(
-        (newPosts || []).map(async (p) => ({
-          id: p.id,
-          message: stripHtmlValidation(
-            getIntegration.editor,
-            p.content,
-            true,
-            false,
-            !/<\/?[a-z][\s\S]*>/i.test(p.content),
-            getIntegration.mentionFormat
+          if (!subscription) {
+            throw new Error('No active subscription found for this organization.');
+          }
+        }
+
+        const getIntegration = this._integrationManager.getSocialIntegration(
+          integration.providerIdentifier
+        );
+
+        const newPosts = await this._postService.updateTags(
+          integration.organizationId,
+          posts
+        );
+
+        const postNow = await getIntegration.post(
+          integration.internalId,
+          integration.token,
+          await Promise.all(
+            (newPosts || []).map(async (p) => ({
+              id: p.id,
+              message: stripHtmlValidation(
+                getIntegration.editor,
+                p.content,
+                true,
+                false,
+                !/<\/?[a-z][\s\S]*>/i.test(p.content),
+                getIntegration.mentionFormat
+              ),
+              settings: JSON.parse(p.settings || '{}'),
+              media: await this._postService.updateMedia(
+                p.id,
+                JSON.parse(p.image || '[]'),
+                getIntegration?.convertToJPEG || false
+              ),
+            }))
           ),
-          settings: JSON.parse(p.settings || '{}'),
-          media: await this._postService.updateMedia(
-            p.id,
-            JSON.parse(p.image || '[]'),
-            getIntegration?.convertToJPEG || false
-          ),
-        }))
-      ),
-      integration
+          integration
+        );
+
+        await this._temporalService.client!
+          .getRawClient()!
+          .workflow.start('streakWorkflow', {
+            args: [{ organizationId: integration.organizationId }],
+            workflowId: `streak_${integration.organizationId}`,
+            taskQueue: 'main',
+            workflowIdConflictPolicy: 'TERMINATE_EXISTING',
+            typedSearchAttributes: new TypedSearchAttributes([
+              {
+                key: organizationId,
+                value: integration.organizationId,
+              },
+            ]),
+          });
+
+        return postNow;
+      },
     );
-
-    await this._temporalService.client
-      .getRawClient()
-      .workflow.start('streakWorkflow', {
-        args: [{ organizationId: integration.organizationId }],
-        workflowId: `streak_${integration.organizationId}`,
-        taskQueue: 'main',
-        workflowIdConflictPolicy: 'TERMINATE_EXISTING',
-        typedSearchAttributes: new TypedSearchAttributes([
-          {
-            key: organizationId,
-            value: integration.organizationId,
-          },
-        ]),
-      });
-
-    return postNow;
   }
 
   @ActivityMethod()
@@ -325,16 +340,28 @@ export class PostActivity {
     const post = await this._postService.getPostByForWebhookId(postId);
     await Promise.all(
       webhooks.map(async (webhook) => {
-        try {
-          await fetch(webhook.url, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(post),
-          });
-        } catch (e) {
-          /**empty**/
+        // Retry with exponential backoff (up to 3 attempts)
+        // OSS does fire-and-forget with no retry — PostSider improvement.
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const res = await fetch(webhook.url, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Webhook-Attempt': String(attempt + 1),
+                'X-Postsider-Event': 'post.published',
+              },
+              body: JSON.stringify(post),
+              signal: AbortSignal.timeout(10000),
+            });
+            if (res.ok || res.status < 500) break; // Success or client error — don't retry
+            // Server error — retry after backoff
+          } catch (e) {
+            // Network error — retry after backoff
+          }
+          if (attempt < 2) {
+            await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt)));
+          }
         }
       })
     );
@@ -367,27 +394,33 @@ export class PostActivity {
   async refreshToken(
     integration: Integration
   ): Promise<false | AuthTokenDetails> {
-    const getIntegration = this._integrationManager.getSocialIntegration(
-      integration.providerIdentifier
+    return this._providerEnvHelper.withCredentials(
+      integration.organizationId,
+      integration.providerIdentifier,
+      async () => {
+        const getIntegration = this._integrationManager.getSocialIntegration(
+          integration.providerIdentifier
+        );
+
+        try {
+          const refresh = await this._refreshIntegrationService.refresh(
+            integration
+          );
+          if (!refresh) {
+            return false;
+          }
+
+          if (getIntegration.refreshWait) {
+            await timer(10000);
+          }
+
+          return refresh;
+        } catch (err) {
+          await this._refreshIntegrationService.setBetweenSteps(integration);
+          return false;
+        }
+      },
     );
-
-    try {
-      const refresh = await this._refreshIntegrationService.refresh(
-        integration
-      );
-      if (!refresh) {
-        return false;
-      }
-
-      if (getIntegration.refreshWait) {
-        await timer(10000);
-      }
-
-      return refresh;
-    } catch (err) {
-      await this._refreshIntegrationService.setBetweenSteps(integration);
-      return false;
-    }
   }
 
   @ActivityMethod()
@@ -395,27 +428,33 @@ export class PostActivity {
     integration: Integration,
     cause: string
   ): Promise<false | AuthTokenDetails> {
-    const getIntegration = this._integrationManager.getSocialIntegration(
-      integration.providerIdentifier
+    return this._providerEnvHelper.withCredentials(
+      integration.organizationId,
+      integration.providerIdentifier,
+      async () => {
+        const getIntegration = this._integrationManager.getSocialIntegration(
+          integration.providerIdentifier
+        );
+
+        try {
+          const refresh = await this._refreshIntegrationService.refresh(
+            integration,
+            cause
+          );
+          if (!refresh) {
+            return false;
+          }
+
+          if (getIntegration.refreshWait) {
+            await timer(10000);
+          }
+
+          return refresh;
+        } catch (err) {
+          await this._refreshIntegrationService.setBetweenSteps(integration, cause);
+          return false;
+        }
+      },
     );
-
-    try {
-      const refresh = await this._refreshIntegrationService.refresh(
-        integration,
-        cause
-      );
-      if (!refresh) {
-        return false;
-      }
-
-      if (getIntegration.refreshWait) {
-        await timer(10000);
-      }
-
-      return refresh;
-    } catch (err) {
-      await this._refreshIntegrationService.setBetweenSteps(integration, cause);
-      return false;
-    }
   }
 }

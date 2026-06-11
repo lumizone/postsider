@@ -5,7 +5,7 @@ import {
   RawBodyRequest,
   Req,
 } from '@nestjs/common';
-import { StripeService } from '@gitroom/nestjs-libraries/services/stripe.service';
+import { StripeService } from '@postsider/nestjs-libraries/services/stripe.service';
 import { ApiTags } from '@nestjs/swagger';
 
 @ApiTags('Stripe')
@@ -18,17 +18,17 @@ export class StripeController {
   @Post('/')
   stripe(@Req() req: RawBodyRequest<Request>) {
     const event = this._stripeService.validateRequest(
-      req.rawBody,
+      req.rawBody!,
       // @ts-ignore
       req.headers['stripe-signature'],
-      process.env.STRIPE_SIGNING_KEY
+      process.env.STRIPE_SIGNING_KEY!
     );
 
     // Maybe it comes from another stripe webhook
     if (
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       // @ts-ignore
-      event?.data?.object?.metadata?.service !== 'gitroom' &&
+      event?.data?.object?.metadata?.service !== 'postsider' &&
       event.type !== 'invoice.payment_succeeded'
     ) {
       return { ok: true };
@@ -48,7 +48,7 @@ export class StripeController {
           return { ok: true };
       }
     } catch (e) {
-      throw new HttpException(e, 500);
+      throw new HttpException(e as any, 500);
     }
   }
 }

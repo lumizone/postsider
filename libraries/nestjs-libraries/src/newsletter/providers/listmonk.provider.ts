@@ -1,4 +1,4 @@
-import { NewsletterInterface } from '@gitroom/nestjs-libraries/newsletter/newsletter.interface';
+import { NewsletterInterface } from '@postsider/nestjs-libraries/newsletter/newsletter.interface';
 
 export class ListmonkProvider implements NewsletterInterface {
   name = 'listmonk';
@@ -6,7 +6,7 @@ export class ListmonkProvider implements NewsletterInterface {
     const body = {
       email,
       status: 'enabled',
-      lists: [+process.env.LISTMONK_LIST_ID].filter((f) => f),
+      lists: [+process.env.LISTMONK_LIST_ID!].filter((f) => f),
     };
 
     const authString = `${process.env.LISTMONK_USER}:${process.env.LISTMONK_API_KEY}`;
@@ -31,7 +31,7 @@ export class ListmonkProvider implements NewsletterInterface {
 
       const welcomeEmail = {
         subscriber_id: id,
-        template_id: +process.env.LISTMONK_WELCOME_TEMPLATE_ID,
+        template_id: +process.env.LISTMONK_WELCOME_TEMPLATE_ID!,
         subject: 'Welcome to Postsider 🚀',
       };
 

@@ -8,14 +8,14 @@ import {
   Put,
   Query,
 } from '@nestjs/common';
-import { GetOrgFromRequest } from '@gitroom/nestjs-libraries/user/org.from.request';
+import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
 import { Organization } from '@prisma/client';
 import { ApiTags } from '@nestjs/swagger';
-import { CheckPolicies } from '@gitroom/backend/services/auth/permissions/permissions.ability';
-import { AutopostService } from '@gitroom/nestjs-libraries/database/prisma/autopost/autopost.service';
-import { AutopostDto } from '@gitroom/nestjs-libraries/dtos/autopost/autopost.dto';
-import { AuthorizationActions, Sections } from '@gitroom/backend/services/auth/permissions/permission.exception.class';
-import { OnlyURL } from '@gitroom/nestjs-libraries/dtos/webhooks/webhooks.dto';
+import { CheckPolicies } from '@postsider/backend/services/auth/permissions/permissions.ability';
+import { AutopostService } from '@postsider/nestjs-libraries/database/prisma/autopost/autopost.service';
+import { AutopostDto } from '@postsider/nestjs-libraries/dtos/autopost/autopost.dto';
+import { AuthorizationActions, Sections } from '@postsider/backend/services/auth/permissions/permission.exception.class';
+import { OnlyURL } from '@postsider/nestjs-libraries/dtos/webhooks/webhooks.dto';
 
 @ApiTags('Autopost')
 @Controller('/autopost')
@@ -28,7 +28,6 @@ export class AutopostController {
   }
 
   @Post('/')
-  @CheckPolicies([AuthorizationActions.Create, Sections.WEBHOOKS])
   async createAutopost(
     @GetOrgFromRequest() org: Organization,
     @Body() body: AutopostDto

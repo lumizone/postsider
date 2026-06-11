@@ -1,4 +1,4 @@
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import { SocialAbstract } from '../social.abstract';
 import {
   AuthTokenDetails,
@@ -8,10 +8,10 @@ import {
 } from './social.integrations.interface';
 import dayjs from 'dayjs';
 import { Integration } from '@prisma/client';
-import { ListmonkDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/listmonk.dto';
-import { AuthService } from '@gitroom/helpers/auth/auth.service';
+import { ListmonkDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/listmonk.dto';
+import { AuthService } from '@postsider/helpers/auth/auth.service';
 import slugify from 'slugify';
-import { Tool } from '@gitroom/nestjs-libraries/integrations/tool.decorator';
+import { Tool } from '@postsider/nestjs-libraries/integrations/tool.decorator';
 
 export class ListmonkProvider extends SocialAbstract implements SocialProvider {
   override maxConcurrentJob = 100; // Bluesky has moderate rate limits
@@ -79,7 +79,6 @@ export class ListmonkProvider extends SocialAbstract implements SocialProvider {
     const body: { url: string; username: string; password: string } =
       JSON.parse(Buffer.from(params.code, 'base64').toString());
 
-    console.log(body);
     try {
       const basic = Buffer.from(body.username + ':' + body.password).toString(
         'base64'
@@ -119,7 +118,7 @@ export class ListmonkProvider extends SocialAbstract implements SocialProvider {
   ) {
     const body: { url: string; username: string; password: string } =
       JSON.parse(
-        AuthService.fixedDecryption(integration.customInstanceDetails!)
+        AuthService.decryptSecret(integration.customInstanceDetails!)
       );
 
     const auth = Buffer.from(`${body.username}:${body.password}`).toString(
@@ -146,7 +145,7 @@ export class ListmonkProvider extends SocialAbstract implements SocialProvider {
   ) {
     const body: { url: string; username: string; password: string } =
       JSON.parse(
-        AuthService.fixedDecryption(integration.customInstanceDetails!)
+        AuthService.decryptSecret(integration.customInstanceDetails!)
       );
 
     const auth = Buffer.from(`${body.username}:${body.password}`).toString(
@@ -175,7 +174,7 @@ export class ListmonkProvider extends SocialAbstract implements SocialProvider {
   ): Promise<PostResponse[]> {
     const body: { url: string; username: string; password: string } =
       JSON.parse(
-        AuthService.fixedDecryption(integration.customInstanceDetails!)
+        AuthService.decryptSecret(integration.customInstanceDetails!)
       );
 
     const auth = Buffer.from(`${body.username}:${body.password}`).toString(

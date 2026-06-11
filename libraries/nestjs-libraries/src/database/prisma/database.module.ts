@@ -1,49 +1,61 @@
 import { Global, Module } from '@nestjs/common';
 import { PrismaRepository, PrismaService, PrismaTransaction } from './prisma.service';
-import { OrganizationRepository } from '@gitroom/nestjs-libraries/database/prisma/organizations/organization.repository';
-import { OrganizationService } from '@gitroom/nestjs-libraries/database/prisma/organizations/organization.service';
-import { UsersService } from '@gitroom/nestjs-libraries/database/prisma/users/users.service';
-import { UsersRepository } from '@gitroom/nestjs-libraries/database/prisma/users/users.repository';
-import { SubscriptionService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/subscription.service';
-import { SubscriptionRepository } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/subscription.repository';
-import { NotificationService } from '@gitroom/nestjs-libraries/database/prisma/notifications/notification.service';
-import { IntegrationService } from '@gitroom/nestjs-libraries/database/prisma/integrations/integration.service';
-import { IntegrationRepository } from '@gitroom/nestjs-libraries/database/prisma/integrations/integration.repository';
-import { PostsService } from '@gitroom/nestjs-libraries/database/prisma/posts/posts.service';
-import { PostsRepository } from '@gitroom/nestjs-libraries/database/prisma/posts/posts.repository';
-import { IntegrationManager } from '@gitroom/nestjs-libraries/integrations/integration.manager';
-import { MediaService } from '@gitroom/nestjs-libraries/database/prisma/media/media.service';
-import { MediaRepository } from '@gitroom/nestjs-libraries/database/prisma/media/media.repository';
-import { NotificationsRepository } from '@gitroom/nestjs-libraries/database/prisma/notifications/notifications.repository';
-import { EmailService } from '@gitroom/nestjs-libraries/services/email.service';
-import { StripeService } from '@gitroom/nestjs-libraries/services/stripe.service';
-import { ExtractContentService } from '@gitroom/nestjs-libraries/openai/extract.content.service';
-import { OpenaiService } from '@gitroom/nestjs-libraries/openai/openai.service';
-import { AgenciesService } from '@gitroom/nestjs-libraries/database/prisma/agencies/agencies.service';
-import { AgenciesRepository } from '@gitroom/nestjs-libraries/database/prisma/agencies/agencies.repository';
-import { TrackService } from '@gitroom/nestjs-libraries/track/track.service';
-import { ShortLinkService } from '@gitroom/nestjs-libraries/short-linking/short.link.service';
-import { WebhooksRepository } from '@gitroom/nestjs-libraries/database/prisma/webhooks/webhooks.repository';
-import { WebhooksService } from '@gitroom/nestjs-libraries/database/prisma/webhooks/webhooks.service';
-import { SignatureRepository } from '@gitroom/nestjs-libraries/database/prisma/signatures/signature.repository';
-import { SignatureService } from '@gitroom/nestjs-libraries/database/prisma/signatures/signature.service';
-import { AutopostRepository } from '@gitroom/nestjs-libraries/database/prisma/autopost/autopost.repository';
-import { AutopostService } from '@gitroom/nestjs-libraries/database/prisma/autopost/autopost.service';
-import { SetsService } from '@gitroom/nestjs-libraries/database/prisma/sets/sets.service';
-import { SetsRepository } from '@gitroom/nestjs-libraries/database/prisma/sets/sets.repository';
-import { ThirdPartyRepository } from '@gitroom/nestjs-libraries/database/prisma/third-party/third-party.repository';
-import { ThirdPartyService } from '@gitroom/nestjs-libraries/database/prisma/third-party/third-party.service';
-import { VideoManager } from '@gitroom/nestjs-libraries/videos/video.manager';
-import { FalService } from '@gitroom/nestjs-libraries/openai/fal.service';
-import { RefreshIntegrationService } from '@gitroom/nestjs-libraries/integrations/refresh.integration.service';
-import { OAuthRepository } from '@gitroom/nestjs-libraries/database/prisma/oauth/oauth.repository';
-import { OAuthService } from '@gitroom/nestjs-libraries/database/prisma/oauth/oauth.service';
-import { AnnouncementsRepository } from '@gitroom/nestjs-libraries/database/prisma/announcements/announcements.repository';
-import { AnnouncementsService } from '@gitroom/nestjs-libraries/database/prisma/announcements/announcements.service';
-import { ErrorsRepository } from '@gitroom/nestjs-libraries/database/prisma/errors/errors.repository';
-import { ErrorsService } from '@gitroom/nestjs-libraries/database/prisma/errors/errors.service';
-import { AdminStatsRepository } from '@gitroom/nestjs-libraries/database/prisma/admin-stats/admin-stats.repository';
-import { AdminStatsService } from '@gitroom/nestjs-libraries/database/prisma/admin-stats/admin-stats.service';
+import { OrganizationRepository } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.repository';
+import { OrganizationService } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.service';
+import { UsersService } from '@postsider/nestjs-libraries/database/prisma/users/users.service';
+import { UsersRepository } from '@postsider/nestjs-libraries/database/prisma/users/users.repository';
+import { SubscriptionService } from '@postsider/nestjs-libraries/database/prisma/subscriptions/subscription.service';
+import { SubscriptionRepository } from '@postsider/nestjs-libraries/database/prisma/subscriptions/subscription.repository';
+import { NotificationService } from '@postsider/nestjs-libraries/database/prisma/notifications/notification.service';
+import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
+import { IntegrationRepository } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.repository';
+import { PostsService } from '@postsider/nestjs-libraries/database/prisma/posts/posts.service';
+import { PostsRepository } from '@postsider/nestjs-libraries/database/prisma/posts/posts.repository';
+import { IntegrationManager } from '@postsider/nestjs-libraries/integrations/integration.manager';
+import { MediaService } from '@postsider/nestjs-libraries/database/prisma/media/media.service';
+import { MediaRepository } from '@postsider/nestjs-libraries/database/prisma/media/media.repository';
+import { NotificationsRepository } from '@postsider/nestjs-libraries/database/prisma/notifications/notifications.repository';
+import { EmailService } from '@postsider/nestjs-libraries/services/email.service';
+import { StripeService } from '@postsider/nestjs-libraries/services/stripe.service';
+import { ExtractContentService } from '@postsider/nestjs-libraries/openai/extract.content.service';
+import { OpenaiService } from '@postsider/nestjs-libraries/openai/openai.service';
+import { AgenciesService } from '@postsider/nestjs-libraries/database/prisma/agencies/agencies.service';
+import { AgenciesRepository } from '@postsider/nestjs-libraries/database/prisma/agencies/agencies.repository';
+import { TrackService } from '@postsider/nestjs-libraries/track/track.service';
+import { ShortLinkService } from '@postsider/nestjs-libraries/short-linking/short.link.service';
+import { WebhooksRepository } from '@postsider/nestjs-libraries/database/prisma/webhooks/webhooks.repository';
+import { WebhooksService } from '@postsider/nestjs-libraries/database/prisma/webhooks/webhooks.service';
+import { SignatureRepository } from '@postsider/nestjs-libraries/database/prisma/signatures/signature.repository';
+import { SignatureService } from '@postsider/nestjs-libraries/database/prisma/signatures/signature.service';
+import { AutopostRepository } from '@postsider/nestjs-libraries/database/prisma/autopost/autopost.repository';
+import { AutopostService } from '@postsider/nestjs-libraries/database/prisma/autopost/autopost.service';
+import { SetsService } from '@postsider/nestjs-libraries/database/prisma/sets/sets.service';
+import { SetsRepository } from '@postsider/nestjs-libraries/database/prisma/sets/sets.repository';
+import { ThirdPartyRepository } from '@postsider/nestjs-libraries/database/prisma/third-party/third-party.repository';
+import { ThirdPartyService } from '@postsider/nestjs-libraries/database/prisma/third-party/third-party.service';
+import { VideoManager } from '@postsider/nestjs-libraries/videos/video.manager';
+import { FalService } from '@postsider/nestjs-libraries/openai/fal.service';
+import { RefreshIntegrationService } from '@postsider/nestjs-libraries/integrations/refresh.integration.service';
+import { OAuthRepository } from '@postsider/nestjs-libraries/database/prisma/oauth/oauth.repository';
+import { OAuthService } from '@postsider/nestjs-libraries/database/prisma/oauth/oauth.service';
+import { AnnouncementsRepository } from '@postsider/nestjs-libraries/database/prisma/announcements/announcements.repository';
+import { AnnouncementsService } from '@postsider/nestjs-libraries/database/prisma/announcements/announcements.service';
+import { ErrorsRepository } from '@postsider/nestjs-libraries/database/prisma/errors/errors.repository';
+import { ErrorsService } from '@postsider/nestjs-libraries/database/prisma/errors/errors.service';
+import { AdminStatsRepository } from '@postsider/nestjs-libraries/database/prisma/admin-stats/admin-stats.repository';
+import { AdminStatsService } from '@postsider/nestjs-libraries/database/prisma/admin-stats/admin-stats.service';
+import { ProviderCredentialsRepository } from '@postsider/nestjs-libraries/database/prisma/integrations/provider-credentials.repository';
+import { ProviderCredentialsService } from '@postsider/nestjs-libraries/database/prisma/integrations/provider-credentials.service';
+import { ProviderEnvHelper } from '@postsider/nestjs-libraries/integrations/provider-env.helper';
+import { AgentTokenRepository } from '@postsider/nestjs-libraries/database/prisma/agent-tokens/agent-token.repository';
+import { AgentTokenService } from '@postsider/nestjs-libraries/database/prisma/agent-tokens/agent-token.service';
+import { AuditLogger } from '@postsider/nestjs-libraries/database/prisma/audit/audit.logger';
+import { ConnectorCatalogService } from '@postsider/nestjs-libraries/integrations/connector.catalog';
+import { AgentRateLimiter } from '@postsider/nestjs-libraries/services/agent-rate-limit.service';
+import { AgentBridgeService } from '@postsider/nestjs-libraries/agent-bridge/agent-bridge.service';
+import { InboundSubscriptionRepository } from '@postsider/nestjs-libraries/database/prisma/inbound/inbound-subscription.repository';
+import { InboundService } from '@postsider/nestjs-libraries/database/prisma/inbound/inbound.service';
+import { InboundSourceRegistry } from '@postsider/nestjs-libraries/integrations/inbound/inbound.registry';
 
 @Global()
 @Module({
@@ -97,6 +109,18 @@ import { AdminStatsService } from '@gitroom/nestjs-libraries/database/prisma/adm
     ErrorsService,
     AdminStatsRepository,
     AdminStatsService,
+    ProviderCredentialsRepository,
+    ProviderCredentialsService,
+    ProviderEnvHelper,
+    AgentTokenRepository,
+    AgentTokenService,
+    AuditLogger,
+    ConnectorCatalogService,
+    AgentRateLimiter,
+    AgentBridgeService,
+    InboundSubscriptionRepository,
+    InboundService,
+    InboundSourceRegistry,
   ],
   get exports() {
     return this.providers;

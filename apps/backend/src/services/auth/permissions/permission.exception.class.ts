@@ -6,7 +6,7 @@ export enum Sections {
   VIDEOS_PER_MONTH = 'videos_per_month',
   TEAM_MEMBERS = 'team_members',
   COMMUNITY_FEATURES = 'community_features',
-  FEATURED_BY_GITROOM = 'featured_by_gitroom',
+  FEATURED_BY_POSTSIDER = 'featured_by_postsider',
   AI = 'ai',
   IMPORT_FROM_CHANNELS = 'import_from_channels',
   ADMIN = 'admin',

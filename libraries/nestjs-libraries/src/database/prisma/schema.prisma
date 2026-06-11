@@ -19,6 +19,7 @@ model Organization {
   updatedAt           DateTime             @updatedAt
   allowTrial          Boolean              @default(false)
   isTrailing          Boolean              @default(false)
+  hitlMode            Boolean              @default(false)
   shortlink           ShortLinkPreference  @default(ASK)
   autoPost            AutoPost[]
   Comments            Comments[]
@@ -43,6 +44,11 @@ model Organization {
   webhooks            Webhooks[]
   oauthApp            OAuthApp[]
   oauthAuthorizations OAuthAuthorization[]
+  apiKeys             ApiKey[]
+  providerCredentials ProviderCredentials[]
+  agentTokens         AgentToken[]
+  auditLogs           AuditLog[]
+  inboundSubscriptions InboundEventSubscription[]
 
   @@index([apiKey])
   @@index([streakSince])
@@ -905,6 +911,7 @@ enum State {
   PUBLISHED
   ERROR
   DRAFT
+  APPROVAL
 }
 
 enum SubscriptionTier {
@@ -912,6 +919,7 @@ enum SubscriptionTier {
   PRO
   TEAM
   ULTIMATE
+  SAMURAI
 }
 
 enum Period {
@@ -967,4 +975,117 @@ model Announcement {
   description String
   color       AnnouncementColor @default(INFO)
   createdAt   DateTime          @default(now())
+}
+
+/// Permanent record of email addresses that have already consumed a free
+/// trial. This table is intentionally NEVER deleted on account deletion, so a
+/// user cannot delete their account and re-register the same email to get a
+/// fresh trial.
+model TrialUsage {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  usedAt    DateTime @default(now())
+
+  @@index([email])
+}
+
+model ApiKey {
+  id             String       @id @default(uuid())
+  organizationId String
+  name           String
+  key            String       @unique
+  createdAt      DateTime     @default(now())
+  deletedAt      DateTime?
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@index([key])
+  @@index([deletedAt])
+}
+
+model ProviderCredentials {
+  id             String       @id @default(uuid())
+  organizationId String
+  provider       String       // e.g. "x", "linkedin", "facebook"
+  clientId       String
+  clientSecret   String
+  extraData      String?      // JSON for provider-specific fields (e.g. redirect_uri overrides)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, provider])
+  @@index([organizationId])
+}
+
+/// Capabilities a Connector can declare for the Agent Bridge.
+enum Capability {
+  PUBLISH
+  SOURCE
+  ANALYTICS
+  SCHEDULE
+}
+
+/// Scoped token issued to an AI agent (prefix "agt_"). Only a one-way hash of
+/// the token is stored; the plaintext is shown once at creation.
+model AgentToken {
+  id                 String       @id @default(uuid())
+  organizationId     String
+  name               String
+  tokenHash          String       @unique
+  // Scope. An empty `connectors` list means "all connectors authorized by the org".
+  connectors         String[]
+  capabilities       Capability[]
+  // Per-token rate limits (Requirement 16).
+  rateLimitPerMinute Int          @default(60)
+  rateLimitPerDay    Int          @default(10000)
+  expiresAt          DateTime?
+  revokedAt          DateTime?
+  lastUsedAt         DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  organization       Organization @relation(fields: [organizationId], references: [id])
+  auditLogs          AuditLog[]
+
+  @@index([organizationId])
+  @@index([tokenHash])
+  @@index([revokedAt])
+}
+
+/// Immutable record of every operation performed through the Agent Bridge
+/// (Requirements 15.3, 18, 23).
+model AuditLog {
+  id             String       @id @default(uuid())
+  organizationId String
+  agentTokenId   String?
+  operation      String
+  connectorId    String?
+  correlationId  String
+  status         String       // "ok" | "error" | "rate_limited" | "connector_not_authorized" | ...
+  inputHash      String?      // hash of input params, never raw secrets
+  type           String?      // "rate_limited" | "connector_revoked" | ...
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  agentToken     AgentToken?  @relation(fields: [agentTokenId], references: [id])
+
+  @@index([organizationId])
+  @@index([agentTokenId])
+  @@index([connectorId])
+  @@index([correlationId])
+  @@index([createdAt])
+}
+
+/// Subscription that delivers inbound source events to an external webhook with
+/// an HMAC signature (Requirement 19.2).
+model InboundEventSubscription {
+  id             String       @id @default(uuid())
+  organizationId String
+  sources        String[]     // Inbound_Source identifiers
+  webhookUrl     String
+  secret         String       // per-subscription HMAC secret
+  createdAt      DateTime     @default(now())
+  revokedAt      DateTime?
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
 }

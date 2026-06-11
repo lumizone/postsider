@@ -3,15 +3,15 @@ import {
   PostDetails,
   PostResponse,
   SocialProvider,
-} from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
-import { SocialAbstract } from '@gitroom/nestjs-libraries/integrations/social.abstract';
-import { tags } from '@gitroom/nestjs-libraries/integrations/social/hashnode.tags';
+} from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { SocialAbstract } from '@postsider/nestjs-libraries/integrations/social.abstract';
+import { tags } from '@postsider/nestjs-libraries/integrations/social/hashnode.tags';
 import { jsonToGraphQLQuery } from 'json-to-graphql-query';
-import { HashnodeSettingsDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/hashnode.settings.dto';
+import { HashnodeSettingsDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/hashnode.settings.dto';
 import dayjs from 'dayjs';
 import { Integration } from '@prisma/client';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
-import { Tool } from '@gitroom/nestjs-libraries/integrations/tool.decorator';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
+import { Tool } from '@postsider/nestjs-libraries/integrations/tool.decorator';
 
 export class HashnodeProvider extends SocialAbstract implements SocialProvider {
   override maxConcurrentJob = 3; // Hashnode has lenient publishing limits

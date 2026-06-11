@@ -1,22 +1,22 @@
 import { Global, Module } from '@nestjs/common';
-import { DatabaseModule } from '@gitroom/nestjs-libraries/database/prisma/database.module';
-import { ApiModule } from '@gitroom/backend/api/api.module';
+import { DatabaseModule } from '@postsider/nestjs-libraries/database/prisma/database.module';
+import { ApiModule } from '@postsider/backend/api/api.module';
 import { APP_GUARD } from '@nestjs/core';
-import { PoliciesGuard } from '@gitroom/backend/services/auth/permissions/permissions.guard';
-import { PublicApiModule } from '@gitroom/backend/public-api/public.api.module';
-import { ThrottlerBehindProxyGuard } from '@gitroom/nestjs-libraries/throttler/throttler.provider';
+import { PoliciesGuard } from '@postsider/backend/services/auth/permissions/permissions.guard';
+import { PublicApiModule } from '@postsider/backend/public-api/public.api.module';
+import { ThrottlerBehindProxyGuard } from '@postsider/nestjs-libraries/throttler/throttler.provider';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { AgentModule } from '@gitroom/nestjs-libraries/agent/agent.module';
-import { ThirdPartyModule } from '@gitroom/nestjs-libraries/3rdparties/thirdparty.module';
-import { VideoModule } from '@gitroom/nestjs-libraries/videos/video.module';
+import { AgentModule } from '@postsider/nestjs-libraries/agent/agent.module';
+import { ThirdPartyModule } from '@postsider/nestjs-libraries/3rdparties/thirdparty.module';
+import { VideoModule } from '@postsider/nestjs-libraries/videos/video.module';
 import { SentryModule } from '@sentry/nestjs/setup';
-import { FILTER } from '@gitroom/nestjs-libraries/sentry/sentry.exception';
-import { ChatModule } from '@gitroom/nestjs-libraries/chat/chat.module';
-import { getTemporalModule } from '@gitroom/nestjs-libraries/temporal/temporal.module';
-import { TemporalRegisterMissingSearchAttributesModule } from '@gitroom/nestjs-libraries/temporal/temporal.register';
-import { InfiniteWorkflowRegisterModule } from '@gitroom/nestjs-libraries/temporal/infinite.workflow.register';
+import { FILTER } from '@postsider/nestjs-libraries/sentry/sentry.exception';
+import { ChatModule } from '@postsider/nestjs-libraries/chat/chat.module';
+import { getTemporalModule } from '@postsider/nestjs-libraries/temporal/temporal.module';
+import { TemporalRegisterMissingSearchAttributesModule } from '@postsider/nestjs-libraries/temporal/temporal.register';
+import { InfiniteWorkflowRegisterModule } from '@postsider/nestjs-libraries/temporal/infinite.workflow.register';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
-import { ioRedis } from '@gitroom/nestjs-libraries/redis/redis.service';
+import { ioRedis } from '@postsider/nestjs-libraries/redis/redis.service';
 
 @Global()
 @Module({
@@ -36,7 +36,7 @@ import { ioRedis } from '@gitroom/nestjs-libraries/redis/redis.service';
       throttlers: [
         {
           ttl: 3600000,
-          limit: process.env.API_LIMIT ? Number(process.env.API_LIMIT) : 90,
+          limit: process.env.API_LIMIT ? Number(process.env.API_LIMIT) : 9999,
         },
       ],
       storage: new ThrottlerStorageRedisService(ioRedis),

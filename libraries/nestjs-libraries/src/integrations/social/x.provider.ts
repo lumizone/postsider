@@ -6,22 +6,22 @@ import {
   PostDetails,
   PostResponse,
   SocialProvider,
-} from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
+} from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
 import { lookup } from 'mime-types';
 import sharp from 'sharp';
-import { readOrFetch } from '@gitroom/helpers/utils/read.or.fetch';
-import { SocialAbstract } from '@gitroom/nestjs-libraries/integrations/social.abstract';
-import { Plug } from '@gitroom/helpers/decorators/plug.decorator';
+import { readOrFetch } from '@postsider/helpers/utils/read.or.fetch';
+import { SocialAbstract } from '@postsider/nestjs-libraries/integrations/social.abstract';
+import { Plug } from '@postsider/helpers/decorators/plug.decorator';
 import { Integration } from '@prisma/client';
-import { timer } from '@gitroom/helpers/utils/timer';
-import { PostPlug } from '@gitroom/helpers/decorators/post.plug';
+import { timer } from '@postsider/helpers/utils/timer';
+import { PostPlug } from '@postsider/helpers/decorators/post.plug';
 import dayjs from 'dayjs';
 import { uniqBy } from 'lodash';
-import { stripHtmlValidation } from '@gitroom/helpers/utils/strip.html.validation';
-import { stripLinks as removeLinks } from '@gitroom/helpers/utils/strip.links';
-import { XDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/x.dto';
-import { Rules } from '@gitroom/nestjs-libraries/chat/rules.description.decorator';
-import { hasExtension } from '@gitroom/helpers/utils/has.extension';
+import { stripHtmlValidation } from '@postsider/helpers/utils/strip.html.validation';
+import { stripLinks as removeLinks } from '@postsider/helpers/utils/strip.links';
+import { XDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/x.dto';
+import { Rules } from '@postsider/nestjs-libraries/chat/rules.description.decorator';
+import { hasExtension } from '@postsider/helpers/utils/has.extension';
 
 @Rules(
   `X can have maximum 4 pictures, or maximum one video, it can also be without attachments ${
@@ -272,6 +272,35 @@ export class XProvider extends SocialAbstract implements SocialProvider {
     return false;
   }
 
+  async customFields() {
+    return [
+      {
+        key: 'accessToken',
+        label: 'Access Token (OAuth 1.0a)',
+        validation: `/^.{3,}$/`,
+        type: 'password' as const,
+      },
+      {
+        key: 'accessSecret',
+        label: 'Access Secret (OAuth 1.0a)',
+        validation: `/^.{3,}$/`,
+        type: 'password' as const,
+      },
+      {
+        key: 'userId',
+        label: 'User ID (numeric)',
+        validation: `/^\\d+$/`,
+        type: 'text' as const,
+      },
+      {
+        key: 'username',
+        label: 'Username (without @)',
+        validation: `/^.{1,}$/`,
+        type: 'text' as const,
+      },
+    ];
+  }
+
   async refreshToken(): Promise<AuthTokenDetails> {
     return {
       id: '',
@@ -289,25 +318,77 @@ export class XProvider extends SocialAbstract implements SocialProvider {
       appKey: process.env.X_API_KEY!,
       appSecret: process.env.X_API_SECRET!,
     });
-    const { url, oauth_token, oauth_token_secret } =
-      await client.generateAuthLink(
-        (process.env.X_URL || process.env.FRONTEND_URL) +
-          `/integrations/social/x`,
-        {
-          authAccessType: 'write',
-          linkMode: 'authenticate',
-          forceLogin: false,
-        }
-      );
-    return {
-      url,
-      codeVerifier: oauth_token + ':' + oauth_token_secret,
-      state: oauth_token,
-    };
+    try {
+      const { url, oauth_token, oauth_token_secret } =
+        await client.generateAuthLink(
+          (process.env.X_URL || process.env.FRONTEND_URL) +
+            `/integrations/social/x`,
+          {
+            authAccessType: 'write',
+            linkMode: 'authenticate',
+            forceLogin: false,
+          }
+        );
+      return {
+        url,
+        codeVerifier: oauth_token + ':' + oauth_token_secret,
+        state: oauth_token,
+      };
+    } catch (err: any) {
+      console.error('[X-AUTH] generateAuthUrl failed:', err?.data || err?.message || err);
+      throw err;
+    }
   }
 
   async authenticate(params: { code: string; codeVerifier: string }) {
     const { code, codeVerifier } = params;
+
+    // Custom fields flow: user pastes access token + access secret directly
+    try {
+      const decoded = JSON.parse(Buffer.from(code, 'base64').toString());
+      if (decoded.accessToken && decoded.accessSecret) {
+        const client = new TwitterApi({
+          appKey: process.env.X_API_KEY!,
+          appSecret: process.env.X_API_SECRET!,
+          accessToken: decoded.accessToken,
+          accessSecret: decoded.accessSecret,
+        });
+
+        let userId = decoded.userId || '';
+        let username = decoded.username || '';
+        let name = decoded.username || 'X User';
+        let picture = '';
+
+        // Try to fetch user info if possible
+        try {
+          const {
+            data: { username: uname, profile_image_url, name: dname, id },
+          } = await client.v2.me({
+            'user.fields': ['username', 'profile_image_url', 'name'],
+          });
+          userId = userId || String(id);
+          username = username || uname;
+          name = dname || name;
+          picture = profile_image_url || '';
+        } catch {
+          // API might fail, use provided values
+        }
+
+        return {
+          id: userId,
+          accessToken: decoded.accessToken + ':' + decoded.accessSecret,
+          name,
+          refreshToken: '',
+          expiresIn: 999999999,
+          picture,
+          username,
+        };
+      }
+    } catch {
+      // Not base64 JSON — continue with OAuth flow
+    }
+
+    // Legacy OAuth flow
     const [oauth_token, oauth_token_secret] = codeVerifier.split(':');
 
     const startingClient = new TwitterApi({
@@ -675,17 +756,17 @@ export class XProvider extends SocialAbstract implements SocialProvider {
         (all, current) => {
           all.impression_count =
             (all.impression_count || 0) +
-            +current.public_metrics.impression_count;
+            +current.public_metrics!.impression_count;
           all.bookmark_count =
-            (all.bookmark_count || 0) + +current.public_metrics.bookmark_count;
+            (all.bookmark_count || 0) + +current.public_metrics!.bookmark_count!;
           all.like_count =
-            (all.like_count || 0) + +current.public_metrics.like_count;
+            (all.like_count || 0) + +current.public_metrics!.like_count;
           all.quote_count =
-            (all.quote_count || 0) + +current.public_metrics.quote_count;
+            (all.quote_count || 0) + +current.public_metrics!.quote_count;
           all.reply_count =
-            (all.reply_count || 0) + +current.public_metrics.reply_count;
+            (all.reply_count || 0) + +current.public_metrics!.reply_count;
           all.retweet_count =
-            (all.retweet_count || 0) + +current.public_metrics.retweet_count;
+            (all.retweet_count || 0) + +current.public_metrics!.retweet_count;
 
           return all;
         },
@@ -830,7 +911,7 @@ export class XProvider extends SocialAbstract implements SocialProvider {
       return [
         {
           id: data.data.username,
-          image: data.data.profile_image_url,
+          image: data.data.profile_image_url as string,
           label: data.data.name,
         },
       ];

@@ -1,0 +1,321 @@
+.panel {
+  width: 260px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--line-soft);
+  padding: 20px 14px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-self: stretch;
+  transition: width 220ms var(--ease), padding 220ms var(--ease);
+}
+
+.panelCollapsed {
+  width: 56px;
+  padding: 20px 8px;
+  align-items: center;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 4px;
+}
+
+.headTitle {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+
+.collapseBtn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  transition: background 140ms var(--ease), transform 120ms var(--ease);
+}
+
+.collapseBtn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--fg);
+}
+
+.collapseBtn:active {
+  transform: scale(0.94);
+}
+
+.collapseBtn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.addBtn {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background 140ms var(--ease), color 140ms var(--ease),
+    transform 120ms var(--ease);
+}
+
+.addBtn:hover {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.addBtn:active {
+  transform: scale(0.97);
+}
+
+.createBtn {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--fg);
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: opacity 140ms var(--ease), transform 120ms var(--ease);
+}
+
+.createBtn:hover {
+  opacity: 0.86;
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.createBtn:active {
+  transform: scale(0.97);
+}
+
+.divider {
+  height: 1px;
+  background: var(--line-soft);
+  margin: 2px -14px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  letter-spacing: inherit;
+  color: var(--fg);
+  width: 100%;
+  transition: background 140ms var(--ease);
+}
+
+.row:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.rowDisabled .name,
+.rowDisabled .platform {
+  opacity: 0.4;
+}
+
+.rowDisabled .avatar {
+  opacity: 0.35;
+}
+
+.rowActive,
+.rowActive:hover {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.rowActive .platform {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.avatarWrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.avatar {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--fg);
+  color: var(--bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  flex-shrink: 0;
+  font-family: var(--font-sans);
+}
+
+.avatarInverted {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.avatarBadge {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.rowActive .avatarBadge {
+  border-color: var(--bg);
+}
+
+.rowText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.name {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.platform {
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+.colorDot {
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-pill);
+  flex-shrink: 0;
+}
+
+/* Legacy toggle dot kept for back-compat — no longer used in the panel. */
+.toggleDot {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-pill);
+  background: var(--fg);
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: background 140ms var(--ease), border-color 140ms var(--ease),
+    transform 120ms var(--ease);
+}
+
+.toggleDot:hover {
+  transform: scale(1.15);
+}
+
+.toggleDot:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+}
+
+.toggleDotOff {
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+}
+
+.empty {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 8px;
+}
+
+.collapsedList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.collapsedRow {
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: transform 140ms var(--ease), opacity 140ms var(--ease);
+}
+
+.collapsedRow:hover {
+  transform: scale(1.05);
+}
+
+.collapsedRowDisabled .avatar {
+  opacity: 0.35;
+}
+
+.collapsedRowActive {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+  border-radius: 10px;
+}

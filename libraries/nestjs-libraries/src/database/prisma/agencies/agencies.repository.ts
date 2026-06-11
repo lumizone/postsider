@@ -1,7 +1,7 @@
-import { PrismaRepository } from '@gitroom/nestjs-libraries/database/prisma/prisma.service';
+import { PrismaRepository } from '@postsider/nestjs-libraries/database/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
 import { User } from '@prisma/client';
-import { CreateAgencyDto } from '@gitroom/nestjs-libraries/dtos/agencies/create.agency.dto';
+import { CreateAgencyDto } from '@postsider/nestjs-libraries/dtos/agencies/create.agency.dto';
 
 @Injectable()
 export class AgenciesRepository {

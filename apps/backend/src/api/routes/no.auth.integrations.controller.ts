@@ -7,22 +7,23 @@ import {
   Post,
   UseFilters,
 } from '@nestjs/common';
-import { ioRedis } from '@gitroom/nestjs-libraries/redis/redis.service';
-import { ConnectIntegrationDto } from '@gitroom/nestjs-libraries/dtos/integrations/connect.integration.dto';
-import { IntegrationManager } from '@gitroom/nestjs-libraries/integrations/integration.manager';
-import { IntegrationService } from '@gitroom/nestjs-libraries/database/prisma/integrations/integration.service';
-import { CheckPolicies } from '@gitroom/backend/services/auth/permissions/permissions.ability';
+import { ioRedis } from '@postsider/nestjs-libraries/redis/redis.service';
+import { ConnectIntegrationDto } from '@postsider/nestjs-libraries/dtos/integrations/connect.integration.dto';
+import { IntegrationManager } from '@postsider/nestjs-libraries/integrations/integration.manager';
+import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
+import { CheckPolicies } from '@postsider/backend/services/auth/permissions/permissions.ability';
 import { ApiTags } from '@nestjs/swagger';
-import { NotEnoughScopesFilter } from '@gitroom/nestjs-libraries/integrations/integration.missing.scopes';
-import { AuthService } from '@gitroom/helpers/auth/auth.service';
-import { AuthTokenDetails } from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
-import { NotEnoughScopes } from '@gitroom/nestjs-libraries/integrations/social.abstract';
+import { NotEnoughScopesFilter } from '@postsider/nestjs-libraries/integrations/integration.missing.scopes';
+import { AuthService } from '@postsider/helpers/auth/auth.service';
+import { AuthTokenDetails } from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { NotEnoughScopes } from '@postsider/nestjs-libraries/integrations/social.abstract';
 import {
   AuthorizationActions,
   Sections,
-} from '@gitroom/backend/services/auth/permissions/permission.exception.class';
-import { RefreshIntegrationService } from '@gitroom/nestjs-libraries/integrations/refresh.integration.service';
-import { OrganizationService } from '@gitroom/nestjs-libraries/database/prisma/organizations/organization.service';
+} from '@postsider/backend/services/auth/permissions/permission.exception.class';
+import { RefreshIntegrationService } from '@postsider/nestjs-libraries/integrations/refresh.integration.service';
+import { OrganizationService } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.service';
+import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
 
 @ApiTags('Integrations')
 @Controller('/integrations')
@@ -57,9 +58,7 @@ export class NoAuthIntegrationsController {
     const integrationProvider =
       this._integrationManager.getSocialIntegration(integration);
 
-    const getCodeVerifier = integrationProvider.customFields
-      ? 'none'
-      : await ioRedis.get(`login:${body.state}`);
+    const getCodeVerifier = await ioRedis.get(`login:${body.state}`) || 'none';
     if (!getCodeVerifier) {
       throw new Error('Invalid state');
     }
@@ -69,11 +68,9 @@ export class NoAuthIntegrationsController {
       throw new Error('Organization not found');
     }
 
-    const org = await this._organizationService.getOrgById(organization);
+    const org = (await this._organizationService.getOrgById(organization))!;
 
-    if (!integrationProvider.customFields) {
-      await ioRedis.del(`login:${body.state}`);
-    }
+    await ioRedis.del(`login:${body.state}`);
 
     const details = integrationProvider.externalUrl
       ? await ioRedis.get(`external:${body.state}`)
@@ -106,6 +103,75 @@ export class NoAuthIntegrationsController {
       // eslint-disable-next-line no-async-promise-executor
     } = await new Promise<AuthTokenDetails>(async (res) => {
       try {
+        // For providers without customFields, handle direct token paste
+        if (!integrationProvider.customFields) {
+          try {
+            const decoded = JSON.parse(Buffer.from(body.code, 'base64').toString());
+            if (decoded.accessToken || decoded.signerUuid || decoded.serverId || decoded.cookies) {
+              // Build the appropriate token format per provider
+              let token = decoded.accessToken || '';
+              let odId = decoded.userId || decoded.pageId || decoded.channelId || decoded.teamId || decoded.locationId || decoded.serverId || decoded.fid || '';
+              let odName = decoded.name || decoded.username || integration;
+              let odUsername = decoded.username || '';
+
+              // X: token format is accessToken:accessSecret
+              if (integration === 'x' && decoded.accessSecret) {
+                token = `${decoded.accessToken}:${decoded.accessSecret}`;
+              }
+
+              // Instagram: token format is pageToken___userToken (we only have page token)
+              if (integration === 'instagram') {
+                token = `${decoded.accessToken}___${decoded.accessToken}`;
+                odId = decoded.pageId || '';
+              }
+
+              // Discord: doesn't use token for posting (uses env BOT_TOKEN), id is guild/server ID
+              if (integration === 'discord') {
+                token = decoded.accessToken || 'bot-token-from-env';
+                odId = decoded.serverId || '';
+              }
+
+              // Farcaster: signer UUID is the token
+              if (integration === 'wrapcast') {
+                token = decoded.signerUuid || '';
+                odId = decoded.fid || '';
+              }
+
+              // Skool: cookies as token
+              if (integration === 'skool') {
+                token = decoded.cookies || '';
+              }
+
+              // LinkedIn Page: id is the org ID
+              if (integration === 'linkedin-page') {
+                odId = decoded.pageId || '';
+              }
+
+              // YouTube: id is channel ID
+              if (integration === 'youtube') {
+                odId = decoded.channelId || '';
+              }
+
+              // GMB: id is location path
+              if (integration === 'gmb') {
+                odId = decoded.locationId || '';
+              }
+
+              return res({
+                id: odId || token.substring(0, 16),
+                name: odName,
+                accessToken: token,
+                refreshToken: '',
+                expiresIn: 999999999,
+                picture: '',
+                username: odUsername,
+              });
+            }
+          } catch {
+            // Not base64 JSON — fall through to normal authenticate
+          }
+        }
+
         const auth = await integrationProvider.authenticate(
           {
             code: body.code,
@@ -128,7 +194,6 @@ export class NoAuthIntegrationsController {
         }
 
         if (refresh && integrationProvider.reConnect) {
-          console.log('reconnect');
           try {
             const newAuth = await integrationProvider.reConnect(
               auth.id,
@@ -199,7 +264,7 @@ export class NoAuthIntegrationsController {
     }
 
     if (
-      process.env.STRIPE_PUBLISHABLE_KEY &&
+      isBillingEnabled() &&
       org.isTrailing &&
       (await this._integrationService.checkPreviousConnections(
         org.id,
@@ -227,13 +292,13 @@ export class NoAuthIntegrationsController {
         body.refresh,
         +body.timezone,
         details
-          ? AuthService.fixedEncryption(details)
+          ? AuthService.encryptSecret(details)
           : integrationProvider.customFields
-          ? AuthService.fixedEncryption(
+          ? AuthService.encryptSecret(
               Buffer.from(body.code, 'base64').toString()
             )
           : integrationProvider.isChromeExtension
-          ? AuthService.fixedEncryption(
+          ? AuthService.encryptSecret(
               Buffer.from(body.code, 'base64').toString()
             )
           : undefined
@@ -327,7 +392,7 @@ export class NoAuthIntegrationsController {
       throw new Error('Organization not found');
     }
 
-    const org = await this._organizationService.getOrgById(organization);
+    const org = (await this._organizationService.getOrgById(organization))!;
 
     return this._integrationService.saveProviderPage(org.id, id, body);
   }

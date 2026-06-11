@@ -3,13 +3,13 @@ import {
   PostDetails,
   PostResponse,
   SocialProvider,
-} from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
-import { SocialAbstract } from '@gitroom/nestjs-libraries/integrations/social.abstract';
+} from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { SocialAbstract } from '@postsider/nestjs-libraries/integrations/social.abstract';
 import dayjs from 'dayjs';
 import { Integration } from '@prisma/client';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
-import { MediumSettingsDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/medium.settings.dto';
-import { Tool } from '@gitroom/nestjs-libraries/integrations/tool.decorator';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
+import { MediumSettingsDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/medium.settings.dto';
+import { Tool } from '@postsider/nestjs-libraries/integrations/tool.decorator';
 
 export class MediumProvider extends SocialAbstract implements SocialProvider {
   override maxConcurrentJob = 3; // Medium has lenient publishing limits

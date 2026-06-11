@@ -1,0 +1,64 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# PostSider — Host reverse proxy (Caddy)  ·  automatic HTTPS via Let's Encrypt
+# ─────────────────────────────────────────────────────────────────────────────
+# Install Caddy on the VPS host (NOT in docker), then:
+#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+#   # edit the domain + email below
+#   sudo systemctl reload caddy
+#
+# DNS: app.postsider.com  →  A record pointing at this VPS public IP.
+# Caddy obtains + renews TLS certificates automatically.
+# ─────────────────────────────────────────────────────────────────────────────
+
+{
+	# Email used by Let's Encrypt for expiry notices.
+	email admin@postsider.com
+}
+
+app.postsider.com {
+	encode zstd gzip
+
+	# Allow large media uploads (matches the in-container nginx 2G limit).
+	request_body {
+		max_size 2GB
+	}
+
+	# Security headers (HTTPS is terminated here).
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# Public media (MINIO_PUBLIC_URL=https://app.postsider.com/storage).
+	# Strip /storage and serve from the MinIO bucket "postsider-media".
+	handle_path /storage/* {
+		rewrite * /postsider-media{uri}
+		reverse_proxy 127.0.0.1:9000
+	}
+
+	# Everything else → the app container's internal nginx (frontend + /api).
+	handle {
+		reverse_proxy 127.0.0.1:5000
+	}
+}
+
+# ── Optional: expose admin dashboards on separate subdomains (protected) ──────
+# Uncomment and protect with basic auth before exposing. Generate a hash with:
+#   caddy hash-password
+#
+# temporal.postsider.com {
+# 	basic_auth {
+# 		admin <BCRYPT_HASH>
+# 	}
+# 	reverse_proxy 127.0.0.1:8080
+# }
+#
+# db.postsider.com {
+# 	basic_auth {
+# 		admin <BCRYPT_HASH>
+# 	}
+# 	reverse_proxy 127.0.0.1:8082
+# }

@@ -1,6 +1,6 @@
 import { Command } from 'nestjs-command';
 import { Injectable } from '@nestjs/common';
-import { AgentGraphService } from '@gitroom/nestjs-libraries/agent/agent.graph.service';
+import { AgentGraphService } from '@postsider/nestjs-libraries/agent/agent.graph.service';
 
 @Injectable()
 export class AgentRun {
@@ -10,6 +10,15 @@ export class AgentRun {
     describe: 'Run the agent',
   })
   async agentRun() {
-    console.log(await this._agentGraphService.createGraph('hello', true));
+    const stream = this._agentGraphService.start('debug-org', {
+      research: 'hello',
+      isPicture: true,
+      format: 'one_short',
+      tone: 'personal',
+    } as any);
+
+    for await (const event of stream) {
+      console.log(event);
+    }
   }
 }

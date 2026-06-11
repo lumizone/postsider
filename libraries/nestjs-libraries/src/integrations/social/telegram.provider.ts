@@ -3,10 +3,10 @@ import {
   PostDetails,
   PostResponse,
   SocialProvider,
-} from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
+} from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import dayjs from 'dayjs';
-import { SocialAbstract } from '@gitroom/nestjs-libraries/integrations/social.abstract';
+import { SocialAbstract } from '@postsider/nestjs-libraries/integrations/social.abstract';
 //@ts-ignore
 import mime from 'mime';
 import TelegramBot from 'node-telegram-bot-api';
@@ -28,6 +28,17 @@ export class TelegramProvider extends SocialAbstract implements SocialProvider {
   editor = 'html' as const;
   maxLength() {
     return 4096;
+  }
+
+  async customFields() {
+    return [
+      {
+        key: 'chatId',
+        label: 'Chat/Channel ID or @username',
+        validation: `/^.{1,}$/`,
+        type: 'text' as const,
+      },
+    ];
   }
 
   async refreshToken(refresh_token: string): Promise<AuthTokenDetails> {
@@ -56,7 +67,18 @@ export class TelegramProvider extends SocialAbstract implements SocialProvider {
     codeVerifier: string;
     refresh?: string;
   }) {
-    const chat = await telegramBot.getChat(params.code);
+    // Support both raw chat ID (legacy) and base64-encoded JSON from custom fields form
+    let chatId = params.code;
+    try {
+      const decoded = JSON.parse(Buffer.from(params.code, 'base64').toString());
+      if (decoded.chatId) {
+        chatId = decoded.chatId;
+      }
+    } catch {
+      // Not base64 JSON — treat as raw chat ID (legacy flow)
+    }
+
+    const chat = await telegramBot.getChat(chatId);
 
     console.log(JSON.stringify(chat));
     if (!chat?.id) {
@@ -114,7 +136,7 @@ export class TelegramProvider extends SocialAbstract implements SocialProvider {
         );
       } else {
         // Delete the message that triggered the connection
-        await telegramBot.deleteMessage(chatId, connectMessageId);
+        await telegramBot.deleteMessage(chatId, connectMessageId!);
         // Send success message to the chat
         const successMessage = await telegramBot.sendMessage(
           chatId,
@@ -308,7 +330,7 @@ export class TelegramProvider extends SocialAbstract implements SocialProvider {
   }
   // chunkMedia is used to split media into groups of "size". 10 is used here because telegram api allows a maximum of 10 media per group
   private chunkMedia(media: { type: string; media: string }[], size: number) {
-    const result = [];
+    const result: { type: string; media: string }[][] = [];
     for (let i = 0; i < media.length; i += size) {
       result.push(media.slice(i, i + size));
     }

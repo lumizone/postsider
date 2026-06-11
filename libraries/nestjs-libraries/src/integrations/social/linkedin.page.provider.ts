@@ -4,14 +4,14 @@ import {
   PostDetails,
   PostResponse,
   SocialProvider,
-} from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
-import { LinkedinProvider } from '@gitroom/nestjs-libraries/integrations/social/linkedin.provider';
+} from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
+import { LinkedinProvider } from '@postsider/nestjs-libraries/integrations/social/linkedin.provider';
 import dayjs from 'dayjs';
 import { Integration } from '@prisma/client';
-import { Plug } from '@gitroom/helpers/decorators/plug.decorator';
-import { timer } from '@gitroom/helpers/utils/timer';
-import { Rules } from '@gitroom/nestjs-libraries/chat/rules.description.decorator';
+import { Plug } from '@postsider/helpers/decorators/plug.decorator';
+import { timer } from '@postsider/helpers/utils/timer';
+import { Rules } from '@postsider/nestjs-libraries/chat/rules.description.decorator';
 
 @Rules(
   'LinkedIn can have maximum one attachment when selecting video, when choosing a carousel on LinkedIn minimum amount of attachment must be two, and only pictures, if uploading a video, LinkedIn can have only one attachment'
@@ -26,10 +26,8 @@ export class LinkedinPageProvider
   override refreshWait = true;
   override maxConcurrentJob = 2; // LinkedIn Page has professional posting limits
   override scopes = [
-    'openid',
-    'profile',
-    'w_member_social',
     'r_basicprofile',
+    'w_member_social',
     'rw_organization_admin',
     'w_organization_social',
     'r_organization_social',
@@ -59,25 +57,27 @@ export class LinkedinPageProvider
       })
     ).json();
 
-    const { vanityName } = await (
-      await fetch('https://api.linkedin.com/v2/me', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      })
+    const {
+      localizedFirstName,
+      localizedLastName,
+      id,
+      vanityName,
+      profilePicture,
+    } = await (
+      await fetch(
+        'https://api.linkedin.com/v2/me?projection=(id,localizedFirstName,localizedLastName,vanityName,profilePicture(displayImage~:playableStreams))',
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      )
     ).json();
 
-    const {
-      name,
-      sub: id,
-      picture,
-    } = await (
-      await fetch('https://api.linkedin.com/v2/userinfo', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      })
-    ).json();
+    const name = `${localizedFirstName} ${localizedLastName}`.trim();
+    const picture =
+      profilePicture?.['displayImage~']?.elements?.[0]?.identifiers?.[0]
+        ?.identifier || '';
 
     return {
       id,
@@ -231,30 +231,37 @@ export class LinkedinPageProvider
       })
     ).json();
 
-    this.checkScopes(this.scopes, scope);
+    // In SaaS mode, verify the minimum required scopes for organization posting.
+    this.checkScopes(['w_organization_social', 'rw_organization_admin'], scope);
 
     const {
-      name,
-      sub: id,
-      picture,
+      localizedFirstName,
+      localizedLastName,
+      id,
+      vanityName,
+      profilePicture,
     } = await (
-      await fetch('https://api.linkedin.com/v2/userinfo', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      })
+      await fetch(
+        'https://api.linkedin.com/v2/me?projection=(id,localizedFirstName,localizedLastName,vanityName,profilePicture(displayImage~:playableStreams))',
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      )
     ).json();
 
-    const { vanityName } = await (
-      await fetch('https://api.linkedin.com/v2/me', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      })
-    ).json();
+    const name = `${localizedFirstName} ${localizedLastName}`.trim();
+    const picture =
+      profilePicture?.['displayImage~']?.elements?.[0]?.identifiers?.[0]
+        ?.identifier || '';
 
     return {
-      id: id,
+      // Use a distinct temporary id so the page integration does NOT collide
+      // with the user's personal LinkedIn integration (which uses the bare
+      // person id). saveProviderPage() later replaces this with the real
+      // organization id once the user picks a page.
+      id: `linkedin-page-${id}`,
       accessToken,
       refreshToken,
       expiresIn,

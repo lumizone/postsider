@@ -3,9 +3,9 @@ import {
   PostDetails,
   PostResponse,
   SocialProvider,
-} from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
-import { SocialAbstract } from '@gitroom/nestjs-libraries/integrations/social.abstract';
+} from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
+import { SocialAbstract } from '@postsider/nestjs-libraries/integrations/social.abstract';
 import dayjs from 'dayjs';
 import { Integration } from '@prisma/client';
 import axios from 'axios';
@@ -23,6 +23,17 @@ export class MoltbookProvider extends SocialAbstract implements SocialProvider {
 
   maxLength() {
     return 300;
+  }
+
+  async customFields() {
+    return [
+      {
+        key: 'apiKey',
+        label: 'API Key',
+        validation: `/^.{3,}$/`,
+        type: 'password' as const,
+      },
+    ];
   }
 
   async refreshToken(refreshToken: string): Promise<AuthTokenDetails> {
@@ -85,7 +96,16 @@ export class MoltbookProvider extends SocialAbstract implements SocialProvider {
     codeVerifier: string;
     refresh?: string;
   }) {
-    const apiKey = params.code;
+    // Support both raw API key (legacy) and base64-encoded JSON from custom fields form
+    let apiKey = params.code;
+    try {
+      const decoded = JSON.parse(Buffer.from(params.code, 'base64').toString());
+      if (decoded.apiKey) {
+        apiKey = decoded.apiKey;
+      }
+    } catch {
+      // Not base64 JSON — treat as raw API key (legacy flow)
+    }
 
     const profile = await this.getAgentProfile(apiKey);
 

@@ -1,0 +1,30 @@
+# Rebrand allowlist (Requirement 11.3)
+#
+# Files/globs listed here are EXEMPT from the rebrand grep check in
+# scripts/rebrand-check.mjs. A file is allowed to retain a legacy identifier
+# (gitroom / gitroomhq / postiz) only for legal, historical, or
+# documentation/migration reasons.
+#
+# Syntax: one glob per line. Lines starting with '#' are comments.
+# Globs are matched against repo-relative POSIX paths.
+
+# Legal / attribution — must preserve upstream notices (Requirement 10.1)
+LICENSE
+ATTRIBUTION.md
+CHANGELOG.md
+**/CHANGELOG.md
+
+# Migration guide intentionally documents legacy env var names and the rebrand
+# check itself, so it references the legacy names by design (Requirement 22.1).
+docs/MIGRATION.md
+
+# Spec & steering docs intentionally describe the migration from the source
+# project, so they reference the legacy names by design.
+.kiro/**
+
+# The check tooling itself and its allowlist contain the patterns as literals.
+.rebrand-allowlist
+scripts/rebrand-check.mjs
+
+# Lockfile may contain transitive upstream package metadata outside our control.
+pnpm-lock.yaml

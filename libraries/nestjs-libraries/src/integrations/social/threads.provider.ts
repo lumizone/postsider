@@ -4,16 +4,16 @@ import {
   PostDetails,
   PostResponse,
   SocialProvider,
-} from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
-import { timer } from '@gitroom/helpers/utils/timer';
+} from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
+import { timer } from '@postsider/helpers/utils/timer';
 import dayjs from 'dayjs';
-import { SocialAbstract } from '@gitroom/nestjs-libraries/integrations/social.abstract';
+import { SocialAbstract } from '@postsider/nestjs-libraries/integrations/social.abstract';
 import { capitalize, chunk } from 'lodash';
-import { Plug } from '@gitroom/helpers/decorators/plug.decorator';
+import { Plug } from '@postsider/helpers/decorators/plug.decorator';
 import { Integration } from '@prisma/client';
-import { stripHtmlValidation } from '@gitroom/helpers/utils/strip.html.validation';
-import { hasExtension } from '@gitroom/helpers/utils/has.extension';
+import { stripHtmlValidation } from '@postsider/helpers/utils/strip.html.validation';
+import { hasExtension } from '@postsider/helpers/utils/has.extension';
 
 export class ThreadsProvider extends SocialAbstract implements SocialProvider {
   identifier = 'threads';
@@ -237,7 +237,7 @@ export class ThreadsProvider extends SocialAbstract implements SocialProvider {
     replyToId?: string
   ): Promise<string> {
     // Create each media item
-    const mediaIds = [];
+    const mediaIds: string[] = [];
     for (const mediaItem of media) {
       const mediaId = await this.createSingleMediaContent(
         userId,

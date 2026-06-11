@@ -7,17 +7,12 @@
       "dynamicImport": true
     },
     "target": "es2020",
-    "baseUrl": "/Users/nevodavid/Projects/gitroom",
+    "baseUrl": "../..",
     "paths": {
-      "@gitroom/backend/*": ["apps/backend/src/*"],
-      "@gitroom/cron/*": ["apps/cron/src/*"],
-      "@gitroom/frontend/*": ["apps/frontend/src/*"],
-      "@gitroom/helpers/*": ["libraries/helpers/src/*"],
-      "@gitroom/nestjs-libraries/*": ["libraries/nestjs-libraries/src/*"],
-      "@gitroom/react/*": ["libraries/react-shared-libraries/src/*"],
-      "@gitroom/plugins/*": ["libraries/plugins/src/*"],
-      "@gitroom/workers/*": ["apps/workers/src/*"],
-      "@gitroom/extension/*": ["apps/extension/src/*"]
+      "@postsider/backend/*": ["apps/backend/src/*"],
+      "@postsider/helpers/*": ["libraries/helpers/src/*"],
+      "@postsider/nestjs-libraries/*": ["libraries/nestjs-libraries/src/*"],
+      "@postsider/orchestrator/*": ["apps/orchestrator/src/*"]
     },
     "keepClassNames": true,
     "transform": {
@@ -35,4 +30,4 @@
   },
   "sourceMaps": true,
   "minify": false
-} 
+}

@@ -1,4 +1,4 @@
-import { PostActivity } from '@gitroom/orchestrator/activities/post.activity';
+import { PostActivity } from '@postsider/orchestrator/activities/post.activity';
 import {
   ActivityFailure,
   ApplicationFailure,
@@ -11,10 +11,10 @@ import {
 import dayjs from 'dayjs';
 import { Integration } from '@prisma/client';
 import { capitalize, sortBy } from 'lodash';
-import { PostResponse } from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
+import { PostResponse } from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import { TypedSearchAttributes } from '@temporalio/common';
-import { postId as postIdSearchParam } from '@gitroom/nestjs-libraries/temporal/temporal.search.attribute';
+import { postId as postIdSearchParam } from '@postsider/nestjs-libraries/temporal/temporal.search.attribute';
 
 const proxyTaskQueue = (taskQueue: string) => {
   return proxyActivities<PostActivity>({
@@ -294,7 +294,7 @@ export async function postWorkflowV104({
 
       return all;
     },
-    []
+    [] as any[]
   );
 
   // Check if the post is repeatable
@@ -310,7 +310,7 @@ export async function postWorkflowV104({
       ];
 
   // Sort all the actions by delay, so we can process them in order
-  const list = sortBy(
+  const list: any[] = sortBy(
     [...internalPlugsList, ...globalPlugsList, ...repeatPost],
     'delay'
   );
@@ -335,7 +335,7 @@ export async function postWorkflowV104({
             err.cause.type === 'refresh_token'
           ) {
             const refresh = await refreshTokenWithCause(
-              await getIntegrationById(organizationId, todo.integration),
+              (await getIntegrationById(organizationId, todo.integration))!,
               err?.cause?.message || ''
             );
             if (!refresh || !refresh.accessToken) {
@@ -375,7 +375,7 @@ export async function postWorkflowV104({
                 }
 
                 return all;
-              }, [])
+              }, [] as number[])
               .reverse();
 
             for (const index of toDelete) {

@@ -1,4 +1,4 @@
-import { NewsletterInterface } from '@gitroom/nestjs-libraries/newsletter/newsletter.interface';
+import { NewsletterInterface } from '@postsider/nestjs-libraries/newsletter/newsletter.interface';
 
 export class BeehiivProvider implements NewsletterInterface {
   name = 'beehiiv';
@@ -7,7 +7,7 @@ export class BeehiivProvider implements NewsletterInterface {
       email,
       reactivate_existing: false,
       send_welcome_email: true,
-      utm_source: 'gitroom_platform',
+      utm_source: 'postsider_platform',
     };
 
     await fetch(

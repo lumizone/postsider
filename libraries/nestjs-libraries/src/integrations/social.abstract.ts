@@ -1,7 +1,7 @@
-import { timer } from '@gitroom/helpers/utils/timer';
+import { timer } from '@postsider/helpers/utils/timer';
 import { Integration } from '@prisma/client';
 import { ApplicationFailure } from '@temporalio/activity';
-import { readOrFetch } from '@gitroom/helpers/utils/read.or.fetch';
+import { readOrFetch } from '@postsider/helpers/utils/read.or.fetch';
 import sharp from 'sharp';
 
 export type ValidityMedia = {
@@ -124,7 +124,7 @@ export abstract class SocialAbstract {
     } catch (err) {
       const handle = this.handleErrors(safeStringify(err), 200);
       value = { err: true, value: 'Unknown Error', ...(handle || {}) };
-      globalErr = err;
+      globalErr = err as any;
     }
 
     if (value && value?.err && value?.value) {

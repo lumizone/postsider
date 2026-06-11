@@ -5,7 +5,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { MediaDto } from '@gitroom/nestjs-libraries/dtos/media/media.dto';
+import { MediaDto } from '@postsider/nestjs-libraries/dtos/media/media.dto';
 import { Type } from 'class-transformer';
 
 export class WordpressDto {

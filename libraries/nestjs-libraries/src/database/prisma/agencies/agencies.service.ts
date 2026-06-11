@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { AgenciesRepository } from '@gitroom/nestjs-libraries/database/prisma/agencies/agencies.repository';
+import { AgenciesRepository } from '@postsider/nestjs-libraries/database/prisma/agencies/agencies.repository';
 import { User } from '@prisma/client';
-import { CreateAgencyDto } from '@gitroom/nestjs-libraries/dtos/agencies/create.agency.dto';
-import { NotificationService } from '@gitroom/nestjs-libraries/database/prisma/notifications/notification.service';
+import { CreateAgencyDto } from '@postsider/nestjs-libraries/dtos/agencies/create.agency.dto';
+import { NotificationService } from '@postsider/nestjs-libraries/database/prisma/notifications/notification.service';
 
 @Injectable()
 export class AgenciesService {
@@ -203,7 +203,7 @@ export class AgenciesService {
         </tr>
         <tr>
             <td style="padding: 20px; text-align: center; background-color: #f4f4f4;">
-                <p style="color: #777; font-size: 14px;">&copy; 2024 Your Gitroom Limited All rights reserved.</p>
+                <p style="color: #777; font-size: 14px;">&copy; 2024 Your PostSider Limited All rights reserved.</p>
             </td>
         </tr>
     </table>

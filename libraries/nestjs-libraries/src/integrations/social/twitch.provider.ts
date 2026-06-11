@@ -3,12 +3,12 @@ import {
   PostDetails,
   PostResponse,
   SocialProvider,
-} from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
-import { SocialAbstract } from '@gitroom/nestjs-libraries/integrations/social.abstract';
+} from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
+import { SocialAbstract } from '@postsider/nestjs-libraries/integrations/social.abstract';
 import { Integration } from '@prisma/client';
-import { TwitchDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/twitch.dto';
-import { timer } from '@gitroom/helpers/utils/timer';
+import { TwitchDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/twitch.dto';
+import { timer } from '@postsider/helpers/utils/timer';
 
 export class TwitchProvider extends SocialAbstract implements SocialProvider {
   override maxConcurrentJob = 1;

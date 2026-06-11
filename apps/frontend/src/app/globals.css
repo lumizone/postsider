@@ -1,0 +1,122 @@
+/* PostSider UI — strict black & white, Apple-inspired premium feel */
+
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter",
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-brand: "Changa One", Impact, "Arial Black", sans-serif;
+
+  --bg: #ffffff;
+  --fg: #000000;
+  --line: #000000;
+  --line-soft: rgba(0, 0, 0, 0.08);
+  --muted: rgba(0, 0, 0, 0.55);
+  --hover: rgba(0, 0, 0, 0.04);
+  --hover-strong: rgba(0, 0, 0, 0.08);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 28px;
+  --radius-pill: 999px;
+
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/*
+ * Default styling for plain <button> elements that aren't styled by a CSS
+ * module. Components are responsible for their own button look — anything
+ * with a class attribute opts out of these defaults.
+ */
+button:not([class]) {
+  font: inherit;
+  letter-spacing: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background 160ms var(--ease), color 160ms var(--ease),
+    transform 120ms var(--ease);
+}
+
+button:not([class]):hover {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+button:not([class]):active {
+  transform: scale(0.97);
+}
+
+button:not([class]):disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+button:not([class]):disabled:hover {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+button:not([class]):focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+}
+
+/* Bare reset for any <button> with classes, so component styles win without
+ * fighting global hover/transition rules. */
+button[class] {
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.brand {
+  font-family: var(--font-brand);
+  font-weight: 400;
+  letter-spacing: 0;
+}

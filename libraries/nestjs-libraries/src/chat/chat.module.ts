@@ -1,7 +1,7 @@
 import { Global, Module } from '@nestjs/common';
-import { LoadToolsService } from '@gitroom/nestjs-libraries/chat/load.tools.service';
-import { MastraService } from '@gitroom/nestjs-libraries/chat/mastra.service';
-import { toolList } from '@gitroom/nestjs-libraries/chat/tools/tool.list';
+import { LoadToolsService } from '@postsider/nestjs-libraries/chat/load.tools.service';
+import { MastraService } from '@postsider/nestjs-libraries/chat/mastra.service';
+import { toolList } from '@postsider/nestjs-libraries/chat/tools/tool.list';
 
 @Global()
 @Module({

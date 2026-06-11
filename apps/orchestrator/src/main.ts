@@ -1,4 +1,4 @@
-import { initializeSentry } from '@gitroom/nestjs-libraries/sentry/initialize.sentry';
+import { initializeSentry } from '@postsider/nestjs-libraries/sentry/initialize.sentry';
 initializeSentry('orchestrator', true);
 import 'source-map-support/register';
 import dayjs from 'dayjs';
@@ -6,7 +6,7 @@ import utc from 'dayjs/plugin/utc';
 dayjs.extend(utc);
 
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from '@gitroom/orchestrator/app.module';
+import { AppModule } from '@postsider/orchestrator/app.module';
 import * as dns from 'node:dns';
 dns.setDefaultResultOrder('ipv4first');
 

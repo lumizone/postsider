@@ -1,5 +1,6 @@
-import { MediaDto } from '@gitroom/nestjs-libraries/dtos/media/media.dto';
+import { MediaDto } from '@postsider/nestjs-libraries/dtos/media/media.dto';
 import {
+  IsNumber,
   IsOptional,
   IsString,
   MinLength,
@@ -8,8 +9,21 @@ import {
 
 export class UserDetailDto {
   @IsString()
-  @MinLength(3)
+  @IsOptional()
+  @MinLength(1)
   fullname: string;
+
+  @IsString()
+  @IsOptional()
+  name: string;
+
+  @IsString()
+  @IsOptional()
+  lastName: string;
+
+  @IsNumber()
+  @IsOptional()
+  timezone: number;
 
   @IsString()
   @IsOptional()

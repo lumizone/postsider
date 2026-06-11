@@ -5,25 +5,26 @@ import {
   Inject,
   Injectable,
 } from '@nestjs/common';
-import { IntegrationRepository } from '@gitroom/nestjs-libraries/database/prisma/integrations/integration.repository';
-import { IntegrationManager } from '@gitroom/nestjs-libraries/integrations/integration.manager';
+import { IntegrationRepository } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.repository';
+import { IntegrationManager } from '@postsider/nestjs-libraries/integrations/integration.manager';
 import {
   AnalyticsData,
   SocialProvider,
-} from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
+} from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
 import { Integration, Organization } from '@prisma/client';
-import { NotificationService } from '@gitroom/nestjs-libraries/database/prisma/notifications/notification.service';
+import { NotificationService } from '@postsider/nestjs-libraries/database/prisma/notifications/notification.service';
 import dayjs from 'dayjs';
-import { timer } from '@gitroom/helpers/utils/timer';
-import { ioRedis } from '@gitroom/nestjs-libraries/redis/redis.service';
-import { RefreshToken } from '@gitroom/nestjs-libraries/integrations/social.abstract';
-import { IntegrationTimeDto } from '@gitroom/nestjs-libraries/dtos/integrations/integration.time.dto';
-import { UploadFactory } from '@gitroom/nestjs-libraries/upload/upload.factory';
-import { PlugDto } from '@gitroom/nestjs-libraries/dtos/plugs/plug.dto';
+import { timer } from '@postsider/helpers/utils/timer';
+import { ioRedis } from '@postsider/nestjs-libraries/redis/redis.service';
+import { RefreshToken } from '@postsider/nestjs-libraries/integrations/social.abstract';
+import { IntegrationTimeDto } from '@postsider/nestjs-libraries/dtos/integrations/integration.time.dto';
+import { UploadFactory } from '@postsider/nestjs-libraries/upload/upload.factory';
+import { PlugDto } from '@postsider/nestjs-libraries/dtos/plugs/plug.dto';
 import { difference, uniq } from 'lodash';
 import utc from 'dayjs/plugin/utc';
-import { AutopostRepository } from '@gitroom/nestjs-libraries/database/prisma/autopost/autopost.repository';
-import { RefreshIntegrationService } from '@gitroom/nestjs-libraries/integrations/refresh.integration.service';
+import { AutopostRepository } from '@postsider/nestjs-libraries/database/prisma/autopost/autopost.repository';
+import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
+import { RefreshIntegrationService } from '@postsider/nestjs-libraries/integrations/refresh.integration.service';
 import { TemporalService } from 'nestjs-temporal-core';
 
 dayjs.extend(utc);
@@ -256,7 +257,7 @@ export class IntegrationService {
       await this._integrationRepository.getIntegrationsList(org)
     ).filter((f) => !f.disabled);
     if (
-      !!process.env.STRIPE_PUBLISHABLE_KEY &&
+      isBillingEnabled() &&
       integrations.length >= totalChannels
     ) {
       throw new Error('You have reached the maximum number of channels');
@@ -345,6 +346,10 @@ export class IntegrationService {
     const integrationProvider = this._integrationManager.getSocialIntegration(
       getIntegration.providerIdentifier
     );
+
+    if (!integrationProvider) {
+      return [];
+    }
 
     if (
       dayjs(getIntegration?.tokenExpiration).isBefore(dayjs()) ||

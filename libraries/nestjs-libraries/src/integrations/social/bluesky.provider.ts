@@ -3,14 +3,14 @@ import {
   PostDetails,
   PostResponse,
   SocialProvider,
-} from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
+} from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import {
   BadBody,
   RefreshToken,
   SocialAbstract,
   ValidityMedia,
-} from '@gitroom/nestjs-libraries/integrations/social.abstract';
+} from '@postsider/nestjs-libraries/integrations/social.abstract';
 import {
   BskyAgent,
   RichText,
@@ -21,14 +21,14 @@ import {
 } from '@atproto/api';
 import dayjs from 'dayjs';
 import { Integration } from '@prisma/client';
-import { AuthService } from '@gitroom/helpers/auth/auth.service';
+import { AuthService } from '@postsider/helpers/auth/auth.service';
 import sharp from 'sharp';
-import { Plug } from '@gitroom/helpers/decorators/plug.decorator';
-import { timer } from '@gitroom/helpers/utils/timer';
+import { Plug } from '@postsider/helpers/decorators/plug.decorator';
+import { timer } from '@postsider/helpers/utils/timer';
 import axios from 'axios';
-import { stripHtmlValidation } from '@gitroom/helpers/utils/strip.html.validation';
-import { Rules } from '@gitroom/nestjs-libraries/chat/rules.description.decorator';
-import { hasExtension } from '@gitroom/helpers/utils/has.extension';
+import { stripHtmlValidation } from '@postsider/helpers/utils/strip.html.validation';
+import { Rules } from '@postsider/nestjs-libraries/chat/rules.description.decorator';
+import { hasExtension } from '@postsider/helpers/utils/has.extension';
 
 async function reduceImageBySize(url: string, maxSizeKB = 976) {
   try {
@@ -263,7 +263,7 @@ export class BlueskyProvider extends SocialAbstract implements SocialProvider {
 
   private async getAgent(integration: Integration) {
     const body = JSON.parse(
-      AuthService.fixedDecryption(integration.customInstanceDetails!)
+      AuthService.decryptSecret(integration.customInstanceDetails!)
     );
     const agent = new BskyAgent({
       service: body.service,
@@ -451,7 +451,7 @@ export class BlueskyProvider extends SocialAbstract implements SocialProvider {
     fields: { likesAmount: string }
   ) {
     const body = JSON.parse(
-      AuthService.fixedDecryption(integration.customInstanceDetails!)
+      AuthService.decryptSecret(integration.customInstanceDetails!)
     );
     const agent = new BskyAgent({
       service: body.service,
@@ -512,7 +512,7 @@ export class BlueskyProvider extends SocialAbstract implements SocialProvider {
     fields: { likesAmount: string; post: string }
   ) {
     const body = JSON.parse(
-      AuthService.fixedDecryption(integration.customInstanceDetails!)
+      AuthService.decryptSecret(integration.customInstanceDetails!)
     );
     const agent = new BskyAgent({
       service: body.service,
@@ -567,7 +567,7 @@ export class BlueskyProvider extends SocialAbstract implements SocialProvider {
     integration: Integration
   ) {
     const body = JSON.parse(
-      AuthService.fixedDecryption(integration.customInstanceDetails!)
+      AuthService.decryptSecret(integration.customInstanceDetails!)
     );
 
     const agent = new BskyAgent({
@@ -584,9 +584,9 @@ export class BlueskyProvider extends SocialAbstract implements SocialProvider {
     });
 
     return list.data.actors.map((p) => ({
-      label: p.displayName,
+      label: p.displayName as string,
       id: p.handle,
-      image: p.avatar,
+      image: p.avatar as string,
     }));
   }
 

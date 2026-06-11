@@ -1,5 +1,5 @@
 import { proxyActivities, sleep } from '@temporalio/workflow';
-import { IntegrationsActivity } from '@gitroom/orchestrator/activities/integrations.activity';
+import { IntegrationsActivity } from '@postsider/orchestrator/activities/integrations.activity';
 
 const { getIntegrationsById, refreshToken } =
   proxyActivities<IntegrationsActivity>({
@@ -30,7 +30,7 @@ export async function refreshTokenWorkflow({
     }
 
     const today = new Date();
-    const endDate = new Date(integration.tokenExpiration);
+    const endDate = new Date(integration.tokenExpiration!);
 
     const minMax = Math.max(0, endDate.getTime() - today.getTime());
     if (!minMax) {

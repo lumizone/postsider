@@ -3,10 +3,10 @@ import { BaseMessage, HumanMessage } from '@langchain/core/messages';
 import { END, START, StateGraph } from '@langchain/langgraph';
 import { ChatOpenAI } from '@langchain/openai';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
-import { agentCategories } from '@gitroom/nestjs-libraries/agent/agent.categories';
+import { agentCategories } from '@postsider/nestjs-libraries/agent/agent.categories';
 import { z } from 'zod';
-import { agentTopics } from '@gitroom/nestjs-libraries/agent/agent.topics';
-import { PostsService } from '@gitroom/nestjs-libraries/database/prisma/posts/posts.service';
+import { agentTopics } from '@postsider/nestjs-libraries/agent/agent.topics';
+import { PostsService } from '@postsider/nestjs-libraries/database/prisma/posts/posts.service';
 
 const model = new ChatOpenAI({
   apiKey: process.env.OPENAI_API_KEY || 'sk-proj-',
@@ -43,7 +43,7 @@ export class AgentGraphInsertService {
         messages: {
           reducer: (currentState, updateValue) =>
             currentState.concat(updateValue),
-          default: () => [],
+          default: (): any[] => [],
         },
         topic: null,
         category: null,

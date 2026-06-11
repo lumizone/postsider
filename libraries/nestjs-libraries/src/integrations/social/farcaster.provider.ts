@@ -3,18 +3,18 @@ import {
   PostDetails,
   PostResponse,
   SocialProvider,
-} from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
+} from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import dayjs from 'dayjs';
 import {
   SocialAbstract,
   ValidityMedia,
-} from '@gitroom/nestjs-libraries/integrations/social.abstract';
+} from '@postsider/nestjs-libraries/integrations/social.abstract';
 import { NeynarAPIClient } from '@neynar/nodejs-sdk';
 import { Integration } from '@prisma/client';
-import { FarcasterDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/farcaster.dto';
-import { Tool } from '@gitroom/nestjs-libraries/integrations/tool.decorator';
-import { Rules } from '@gitroom/nestjs-libraries/chat/rules.description.decorator';
+import { FarcasterDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/farcaster.dto';
+import { Tool } from '@postsider/nestjs-libraries/integrations/tool.decorator';
+import { Rules } from '@postsider/nestjs-libraries/chat/rules.description.decorator';
 
 const client = new NeynarAPIClient({
   apiKey: process.env.NEYNAR_SECRET_KEY || '00000000-000-0000-000-000000000000',
@@ -107,9 +107,9 @@ export class FarcasterProvider
     for (const channel of channels) {
       const data = await client.publishCast({
         embeds:
-          firstPost?.media?.map((media) => ({
+          (firstPost?.media?.map((media) => ({
             url: media.path,
-          })) || [],
+          })) as any) || [],
         signerUuid: accessToken,
         text: firstPost.message,
         ...(channel?.value?.id ? { channelId: channel?.value?.id } : {}),
@@ -149,9 +149,9 @@ export class FarcasterProvider
     for (const parentHash of parentIds) {
       const data = await client.publishCast({
         embeds:
-          commentPost?.media?.map((media) => ({
+          (commentPost?.media?.map((media) => ({
             url: media.path,
-          })) || [],
+          })) as any) || [],
         signerUuid: accessToken,
         text: commentPost.message,
         parent: parentHash,

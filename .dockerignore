@@ -1,17 +1,13 @@
-# We want the docker builds to be clean, and as fast as possible. Don't send
-# any half-built stuff in the build context as a pre-caution (also saves copying
-# 180k files in node_modules that isn't used!).
+# Keep docker build context lean — exclude everything that isn't needed at build time.
 **/node_modules
 node_modules/*
 node_modules
 docker-data/*
 dist
-.nx
-/apps/frontend/.next
 /apps/backend/dist
-/apps/workers/dist
-/apps/cron/dist
+/apps/orchestrator/dist
 /apps/commands/dist
+/apps/sdk/dist
 .devcontainer
 **/.git
 **/*.md

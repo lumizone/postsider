@@ -8,13 +8,13 @@ import {
   Delete,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { ThirdPartyManager } from '@gitroom/nestjs-libraries/3rdparties/thirdparty.manager';
-import { GetOrgFromRequest } from '@gitroom/nestjs-libraries/user/org.from.request';
+import { ThirdPartyManager } from '@postsider/nestjs-libraries/3rdparties/thirdparty.manager';
+import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
 import { Organization } from '@prisma/client';
-import { AuthService } from '@gitroom/helpers/auth/auth.service';
-import { UploadFactory } from '@gitroom/nestjs-libraries/upload/upload.factory';
-import { MediaService } from '@gitroom/nestjs-libraries/database/prisma/media/media.service';
-import { ImportMediaDto } from '@gitroom/nestjs-libraries/dtos/third-party/import-media.dto';
+import { AuthService } from '@postsider/helpers/auth/auth.service';
+import { UploadFactory } from '@postsider/nestjs-libraries/upload/upload.factory';
+import { MediaService } from '@postsider/nestjs-libraries/database/prisma/media/media.service';
+import { ImportMediaDto } from '@postsider/nestjs-libraries/dtos/third-party/import-media.dto';
 
 @ApiTags('Third Party')
 @Controller('/third-party')
@@ -40,7 +40,7 @@ export class ThirdPartyController {
         )
       ).map((thirdParty) => {
         const { description, fields, position, title, identifier } =
-          this._thirdPartyManager.getThirdPartyByName(thirdParty.identifier);
+          this._thirdPartyManager.getThirdPartyByName(thirdParty.identifier)!;
         return {
           ...thirdParty,
           title,
@@ -84,12 +84,12 @@ export class ThirdPartyController {
     }
 
     const loadedData = await thirdPartyInstance?.instance?.sendData(
-      AuthService.fixedDecryption(thirdParty.apiKey),
+      AuthService.decryptSecret(thirdParty.apiKey),
       data
     );
 
     const file = await this.storage.uploadSimple(loadedData);
-    return this._mediaService.saveFile(organization.id, file.split('/').pop(), file);
+    return this._mediaService.saveFile(organization.id, file.split('/').pop()!, file);
   }
 
   @Post('/function/:id/:functionName')
@@ -99,6 +99,21 @@ export class ThirdPartyController {
     @Param('functionName') functionName: string,
     @Body() data: any
   ) {
+    // Block potentially dangerous property accesses from user-controlled input.
+    const BLOCKED_NAMES = new Set([
+      'constructor',
+      '__proto__',
+      '__defineGetter__',
+      '__defineSetter__',
+      'prototype',
+      'toString',
+      'valueOf',
+      'hasOwnProperty',
+    ]);
+    if (BLOCKED_NAMES.has(functionName)) {
+      throw new HttpException('Invalid function', 400);
+    }
+
     const thirdParty = await this._thirdPartyManager.getIntegrationById(
       organization.id,
       id
@@ -116,8 +131,16 @@ export class ThirdPartyController {
       throw new HttpException('Invalid identifier', 400);
     }
 
-    return thirdPartyInstance?.instance?.[functionName](
-      AuthService.fixedDecryption(thirdParty.apiKey),
+    // Only allow calling methods that exist directly on the instance and are
+    // functions — never inherited Object.prototype methods or non-functions.
+    const fn = thirdPartyInstance.instance?.[functionName];
+    if (typeof fn !== 'function') {
+      throw new HttpException('Invalid function', 400);
+    }
+
+    return fn.call(
+      thirdPartyInstance.instance,
+      AuthService.decryptSecret(thirdParty.apiKey),
       data
     );
   }
@@ -146,7 +169,7 @@ export class ThirdPartyController {
     }
 
     const downloadUrls = await thirdPartyInstance?.instance?.['importMedia']?.(
-      AuthService.fixedDecryption(thirdParty.apiKey),
+      AuthService.decryptSecret(thirdParty.apiKey),
       body.items
     );
 
@@ -154,7 +177,7 @@ export class ThirdPartyController {
       throw new HttpException('Import not supported', 400);
     }
 
-    const results = [];
+    const results: any[] = [];
     for (const item of downloadUrls) {
       const file = await this.storage.uploadSimple(item.url);
       const saved = await this._mediaService.saveFile(

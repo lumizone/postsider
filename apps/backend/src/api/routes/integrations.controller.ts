@@ -8,30 +8,32 @@ import {
   Put,
   Query,
 } from '@nestjs/common';
-import { ioRedis } from '@gitroom/nestjs-libraries/redis/redis.service';
-import { IntegrationManager } from '@gitroom/nestjs-libraries/integrations/integration.manager';
-import { IntegrationService } from '@gitroom/nestjs-libraries/database/prisma/integrations/integration.service';
-import { GetOrgFromRequest } from '@gitroom/nestjs-libraries/user/org.from.request';
+import { ioRedis } from '@postsider/nestjs-libraries/redis/redis.service';
+import { IntegrationManager } from '@postsider/nestjs-libraries/integrations/integration.manager';
+import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
+import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
 import { Organization, User } from '@prisma/client';
-import { IntegrationFunctionDto } from '@gitroom/nestjs-libraries/dtos/integrations/integration.function.dto';
-import { CheckPolicies } from '@gitroom/backend/services/auth/permissions/permissions.ability';
-import { pricing } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing';
+import { IntegrationFunctionDto } from '@postsider/nestjs-libraries/dtos/integrations/integration.function.dto';
+import { CheckPolicies } from '@postsider/backend/services/auth/permissions/permissions.ability';
+import { pricing } from '@postsider/nestjs-libraries/database/prisma/subscriptions/pricing';
 import { ApiTags } from '@nestjs/swagger';
-import { GetUserFromRequest } from '@gitroom/nestjs-libraries/user/user.from.request';
-import { PostsService } from '@gitroom/nestjs-libraries/database/prisma/posts/posts.service';
-import { IntegrationTimeDto } from '@gitroom/nestjs-libraries/dtos/integrations/integration.time.dto';
-import { PlugDto } from '@gitroom/nestjs-libraries/dtos/plugs/plug.dto';
-import { RefreshToken } from '@gitroom/nestjs-libraries/integrations/social.abstract';
+import { GetUserFromRequest } from '@postsider/nestjs-libraries/user/user.from.request';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
+import { PostsService } from '@postsider/nestjs-libraries/database/prisma/posts/posts.service';
+import { IntegrationTimeDto } from '@postsider/nestjs-libraries/dtos/integrations/integration.time.dto';
+import { PlugDto } from '@postsider/nestjs-libraries/dtos/plugs/plug.dto';
+import { RefreshToken } from '@postsider/nestjs-libraries/integrations/social.abstract';
 
-import { timer } from '@gitroom/helpers/utils/timer';
-import { TelegramProvider } from '@gitroom/nestjs-libraries/integrations/social/telegram.provider';
-import { MoltbookProvider } from '@gitroom/nestjs-libraries/integrations/social/moltbook.provider';
+import { timer } from '@postsider/helpers/utils/timer';
+import { TelegramProvider } from '@postsider/nestjs-libraries/integrations/social/telegram.provider';
+import { MoltbookProvider } from '@postsider/nestjs-libraries/integrations/social/moltbook.provider';
 import {
   AuthorizationActions,
   Sections,
-} from '@gitroom/backend/services/auth/permissions/permission.exception.class';
+} from '@postsider/backend/services/auth/permissions/permission.exception.class';
 import { uniqBy } from 'lodash';
-import { RefreshIntegrationService } from '@gitroom/nestjs-libraries/integrations/refresh.integration.service';
+import { RefreshIntegrationService } from '@postsider/nestjs-libraries/integrations/refresh.integration.service';
+import { ProviderCredentialsService } from '@postsider/nestjs-libraries/database/prisma/integrations/provider-credentials.service';
 
 @ApiTags('Integrations')
 @Controller('/integrations')
@@ -40,7 +42,8 @@ export class IntegrationsController {
     private _integrationManager: IntegrationManager,
     private _integrationService: IntegrationService,
     private _postService: PostsService,
-    private _refreshIntegrationService: RefreshIntegrationService
+    private _refreshIntegrationService: RefreshIntegrationService,
+    private _providerCredentialsService: ProviderCredentialsService,
   ) {}
 
   @Post('/provider/:id/connect')
@@ -211,20 +214,11 @@ export class IntegrationsController {
     const integrationProvider =
       this._integrationManager.getSocialIntegration(integration);
 
-    if (integrationProvider.externalUrl && !externalUrl) {
-      throw new Error('Missing external url');
-    }
-
     try {
-      const getExternalUrl = integrationProvider.externalUrl
-        ? {
-            ...(await integrationProvider.externalUrl(externalUrl)),
-            instanceUrl: externalUrl,
-          }
-        : undefined;
+      const state = makeId(10);
 
-      const { codeVerifier, state, url } =
-        await integrationProvider.generateAuthUrl(getExternalUrl);
+      await ioRedis.set(`organization:${state}`, org.id, 'EX', 3600);
+      await ioRedis.set(`login:${state}`, 'none', 'EX', 3600);
 
       if (refresh) {
         await ioRedis.set(`refresh:${state}`, refresh, 'EX', 3600);
@@ -238,19 +232,369 @@ export class IntegrationsController {
         await ioRedis.set(`redirect:${state}`, redirectUrl, 'EX', 3600);
       }
 
-      await ioRedis.set(`organization:${state}`, org.id, 'EX', 3600);
-      await ioRedis.set(`login:${state}`, codeVerifier, 'EX', 3600);
-      await ioRedis.set(
-        `external:${state}`,
-        JSON.stringify(getExternalUrl),
-        'EX',
-        3600
-      );
+      // Determine if this provider is OAuth-capable (has env mapping defined).
+      // In SaaS mode, OAuth providers never expose manual credential fields to
+      // the end user — only API-key-only providers get customFields.
+      const isOAuthCapable = Object.keys(this.getEnvMapping(integration)).length > 0;
 
-      return { url };
+      let customFields: any[] | undefined;
+      if (!isOAuthCapable) {
+        // Manual-only provider — return the credential form fields.
+        if (integrationProvider.customFields) {
+          customFields = await integrationProvider.customFields();
+        } else {
+          customFields = this.getDefaultCustomFields(integration);
+        }
+      }
+
+      // Try to generate an OAuth URL if the provider supports it and the
+      // required env vars are configured. If it fails (missing keys, network
+      // error), we simply omit the oauthUrl — the credential form remains
+      // available as a fallback.
+      let oauthUrl: string | undefined;
+      let oauthConfigured = false;
+      try {
+        // Check if org has OAuth credentials stored in DB for this provider
+        const dbCreds = await this._providerCredentialsService.getCredentials(org.id, integration);
+        if (dbCreds && dbCreds.clientId && dbCreds.clientSecret) {
+          // Temporarily inject into process.env so provider's generateAuthUrl works
+          const envMapping = this.getEnvMapping(integration);
+          const originalEnv: Record<string, string | undefined> = {};
+          for (const [envKey, credKey] of Object.entries(envMapping)) {
+            originalEnv[envKey] = process.env[envKey];
+            if (credKey === 'clientId') process.env[envKey] = dbCreds.clientId;
+            else if (credKey === 'clientSecret') process.env[envKey] = dbCreds.clientSecret;
+          }
+
+          try {
+            const getExternalUrl = integrationProvider.externalUrl && externalUrl
+              ? {
+                  ...(await integrationProvider.externalUrl(externalUrl)),
+                  instanceUrl: externalUrl,
+                }
+              : undefined;
+
+            const authResult = await integrationProvider.generateAuthUrl(getExternalUrl);
+            if (authResult?.url && authResult.url.startsWith('http')) {
+              oauthUrl = authResult.url;
+              oauthConfigured = true;
+              await ioRedis.set(`login:${authResult.state}`, authResult.codeVerifier, 'EX', 3600);
+              await ioRedis.set(`organization:${authResult.state}`, org.id, 'EX', 3600);
+              if (refresh) {
+                await ioRedis.set(`refresh:${authResult.state}`, refresh, 'EX', 3600);
+              }
+              if (onboarding === 'true') {
+                await ioRedis.set(`onboarding:${authResult.state}`, 'true', 'EX', 3600);
+              }
+              if (redirectUrl) {
+                await ioRedis.set(`redirect:${authResult.state}`, redirectUrl, 'EX', 3600);
+              }
+              if (getExternalUrl) {
+                await ioRedis.set(`external:${authResult.state}`, JSON.stringify(getExternalUrl), 'EX', 3600);
+              }
+            }
+          } finally {
+            // Restore original env vars
+            for (const [envKey] of Object.entries(envMapping)) {
+              if (originalEnv[envKey] === undefined) delete process.env[envKey];
+              else process.env[envKey] = originalEnv[envKey];
+            }
+          }
+        } else if (!dbCreds) {
+          // No DB creds — check if env vars are actually set (non-empty)
+          const envMapping = this.getEnvMapping(integration);
+          const hasEnvVars = Object.keys(envMapping).length > 0 &&
+            Object.keys(envMapping).every((key) => !!process.env[key]?.trim());
+
+          if (hasEnvVars) {
+            const getExternalUrl = integrationProvider.externalUrl && externalUrl
+              ? {
+                  ...(await integrationProvider.externalUrl(externalUrl)),
+                  instanceUrl: externalUrl,
+                }
+              : undefined;
+
+            const authResult = await integrationProvider.generateAuthUrl(getExternalUrl);
+            if (authResult?.url && authResult.url.startsWith('http')) {
+              oauthUrl = authResult.url;
+              oauthConfigured = true;
+              await ioRedis.set(`login:${authResult.state}`, authResult.codeVerifier, 'EX', 3600);
+              await ioRedis.set(`organization:${authResult.state}`, org.id, 'EX', 3600);
+              if (refresh) {
+                await ioRedis.set(`refresh:${authResult.state}`, refresh, 'EX', 3600);
+              }
+              if (onboarding === 'true') {
+                await ioRedis.set(`onboarding:${authResult.state}`, 'true', 'EX', 3600);
+              }
+              if (redirectUrl) {
+                await ioRedis.set(`redirect:${authResult.state}`, redirectUrl, 'EX', 3600);
+              }
+              if (getExternalUrl) {
+                await ioRedis.set(`external:${authResult.state}`, JSON.stringify(getExternalUrl), 'EX', 3600);
+              }
+            }
+          }
+        }
+      } catch (oauthErr) {
+        // OAuth not available for this provider (missing env vars, etc.)
+      }
+
+      return {
+        url: state,
+        ...(customFields ? { customFields } : {}),
+        ...(oauthUrl ? { oauthUrl } : {}),
+        oauthConfigured,
+      };
     } catch (err) {
       return { err: true };
     }
+  }
+
+  private getEnvMapping(integration: string): Record<string, 'clientId' | 'clientSecret'> {
+    const mappings: Record<string, Record<string, 'clientId' | 'clientSecret'>> = {
+      x: { X_API_KEY: 'clientId', X_API_SECRET: 'clientSecret' },
+      linkedin: { LINKEDIN_CLIENT_ID: 'clientId', LINKEDIN_CLIENT_SECRET: 'clientSecret' },
+      'linkedin-page': { LINKEDIN_CLIENT_ID: 'clientId', LINKEDIN_CLIENT_SECRET: 'clientSecret' },
+      reddit: { REDDIT_CLIENT_ID: 'clientId', REDDIT_CLIENT_SECRET: 'clientSecret' },
+      facebook: { FACEBOOK_APP_ID: 'clientId', FACEBOOK_APP_SECRET: 'clientSecret' },
+      instagram: { FACEBOOK_APP_ID: 'clientId', FACEBOOK_APP_SECRET: 'clientSecret' },
+      'instagram-standalone': { INSTAGRAM_APP_ID: 'clientId', INSTAGRAM_APP_SECRET: 'clientSecret' },
+      threads: { THREADS_APP_ID: 'clientId', THREADS_APP_SECRET: 'clientSecret' },
+      youtube: { YOUTUBE_CLIENT_ID: 'clientId', YOUTUBE_CLIENT_SECRET: 'clientSecret' },
+      gmb: { YOUTUBE_CLIENT_ID: 'clientId', YOUTUBE_CLIENT_SECRET: 'clientSecret' },
+      blogger: { YOUTUBE_CLIENT_ID: 'clientId', YOUTUBE_CLIENT_SECRET: 'clientSecret' },
+      tiktok: { TIKTOK_CLIENT_ID: 'clientId', TIKTOK_CLIENT_SECRET: 'clientSecret' },
+      pinterest: { PINTEREST_CLIENT_ID: 'clientId', PINTEREST_CLIENT_SECRET: 'clientSecret' },
+      dribbble: { DRIBBBLE_CLIENT_ID: 'clientId', DRIBBBLE_CLIENT_SECRET: 'clientSecret' },
+      discord: { DISCORD_CLIENT_ID: 'clientId', DISCORD_CLIENT_SECRET: 'clientSecret' },
+      slack: { SLACK_ID: 'clientId', SLACK_SECRET: 'clientSecret' },
+      kick: { KICK_CLIENT_ID: 'clientId', KICK_SECRET: 'clientSecret' },
+      twitch: { TWITCH_CLIENT_ID: 'clientId', TWITCH_CLIENT_SECRET: 'clientSecret' },
+      mastodon: { MASTODON_CLIENT_ID: 'clientId', MASTODON_CLIENT_SECRET: 'clientSecret' },
+      vk: { VK_ID: 'clientId' },
+      gmail: { GOOGLE_GMAIL_CLIENT_ID: 'clientId', GOOGLE_GMAIL_CLIENT_SECRET: 'clientSecret' },
+      whop: { WHOP_CLIENT_ID: 'clientId', WHOP_CLIENT_SECRET: 'clientSecret' },
+    };
+    return mappings[integration] || {};
+  }
+
+  private getOAuthSetupFields(integration: string): { key: string; label: string; type: 'text' | 'password' }[] | null {
+    const fields: Record<string, { key: string; label: string; type: 'text' | 'password' }[]> = {
+      x: [
+        { key: 'clientId', label: 'API Key (Consumer Key)', type: 'text' },
+        { key: 'clientSecret', label: 'API Secret (Consumer Secret)', type: 'password' },
+      ],
+      linkedin: [
+        { key: 'clientId', label: 'Client ID', type: 'text' },
+        { key: 'clientSecret', label: 'Client Secret', type: 'password' },
+      ],
+      'linkedin-page': [
+        { key: 'clientId', label: 'Client ID', type: 'text' },
+        { key: 'clientSecret', label: 'Client Secret', type: 'password' },
+      ],
+      reddit: [
+        { key: 'clientId', label: 'Client ID', type: 'text' },
+        { key: 'clientSecret', label: 'Client Secret', type: 'password' },
+      ],
+      facebook: [
+        { key: 'clientId', label: 'Facebook App ID', type: 'text' },
+        { key: 'clientSecret', label: 'Facebook App Secret', type: 'password' },
+      ],
+      instagram: [
+        { key: 'clientId', label: 'Facebook App ID', type: 'text' },
+        { key: 'clientSecret', label: 'Facebook App Secret', type: 'password' },
+      ],
+      'instagram-standalone': [
+        { key: 'clientId', label: 'Instagram App ID', type: 'text' },
+        { key: 'clientSecret', label: 'Instagram App Secret', type: 'password' },
+      ],
+      threads: [
+        { key: 'clientId', label: 'Threads App ID', type: 'text' },
+        { key: 'clientSecret', label: 'Threads App Secret', type: 'password' },
+      ],
+      youtube: [
+        { key: 'clientId', label: 'Google Client ID', type: 'text' },
+        { key: 'clientSecret', label: 'Google Client Secret', type: 'password' },
+      ],
+      gmb: [
+        { key: 'clientId', label: 'Google Client ID', type: 'text' },
+        { key: 'clientSecret', label: 'Google Client Secret', type: 'password' },
+      ],
+      tiktok: [
+        { key: 'clientId', label: 'Client Key', type: 'text' },
+        { key: 'clientSecret', label: 'Client Secret', type: 'password' },
+      ],
+      pinterest: [
+        { key: 'clientId', label: 'App ID', type: 'text' },
+        { key: 'clientSecret', label: 'App Secret', type: 'password' },
+      ],
+      dribbble: [
+        { key: 'clientId', label: 'Client ID', type: 'text' },
+        { key: 'clientSecret', label: 'Client Secret', type: 'password' },
+      ],
+      discord: [
+        { key: 'clientId', label: 'Client ID', type: 'text' },
+        { key: 'clientSecret', label: 'Client Secret', type: 'password' },
+      ],
+      slack: [
+        { key: 'clientId', label: 'Client ID', type: 'text' },
+        { key: 'clientSecret', label: 'Client Secret', type: 'password' },
+      ],
+      kick: [
+        { key: 'clientId', label: 'Client ID', type: 'text' },
+        { key: 'clientSecret', label: 'Client Secret', type: 'password' },
+      ],
+      twitch: [
+        { key: 'clientId', label: 'Client ID', type: 'text' },
+        { key: 'clientSecret', label: 'Client Secret', type: 'password' },
+      ],
+      mastodon: [
+        { key: 'clientId', label: 'Client ID', type: 'text' },
+        { key: 'clientSecret', label: 'Client Secret', type: 'password' },
+      ],
+      gmail: [
+        { key: 'clientId', label: 'Google Client ID', type: 'text' },
+        { key: 'clientSecret', label: 'Google Client Secret', type: 'password' },
+      ],
+      whop: [
+        { key: 'clientId', label: 'Client ID', type: 'text' },
+        { key: 'clientSecret', label: 'Client Secret', type: 'password' },
+      ],
+    };
+    // Providers that are customFields-only (no OAuth) return null
+    // so the frontend won't show "Setup OAuth" option for them.
+    return fields[integration] || null;
+  }
+
+  private getDefaultCustomFields(integration: string) {
+    const fields: Record<string, any[]> = {
+      x: [
+        { key: 'accessToken', label: 'Access Token (OAuth 1.0a)', validation: '/^.{3,}$/', type: 'password' },
+        { key: 'accessSecret', label: 'Access Secret (OAuth 1.0a)', validation: '/^.{3,}$/', type: 'password' },
+        { key: 'userId', label: 'User ID (numeric)', validation: '/^\\d+$/', type: 'text' },
+        { key: 'username', label: 'Username (without @)', validation: '/^.{1,}$/', type: 'text' },
+      ],
+      linkedin: [
+        { key: 'accessToken', label: 'Access Token', validation: '/^.{3,}$/', type: 'password' },
+        { key: 'userId', label: 'Person ID (sub claim)', validation: '/^.{3,}$/', type: 'text' },
+        { key: 'name', label: 'Display Name', validation: '/^.{1,}$/', type: 'text' },
+      ],
+      'linkedin-page': [
+        { key: 'accessToken', label: 'Access Token', validation: '/^.{3,}$/', type: 'password' },
+        { key: 'pageId', label: 'Organization ID (numeric)', validation: '/^\\d+$/', type: 'text' },
+        { key: 'name', label: 'Page Name', validation: '/^.{1,}$/', type: 'text' },
+      ],
+      reddit: [
+        { key: 'accessToken', label: 'Access Token', validation: '/^.{3,}$/', type: 'password' },
+        { key: 'username', label: 'Reddit Username', validation: '/^.{1,}$/', type: 'text' },
+      ],
+      instagram: [
+        { key: 'accessToken', label: 'Page Access Token (long-lived)', validation: '/^.{3,}$/', type: 'password' },
+        { key: 'pageId', label: 'Instagram Business Account ID', validation: '/^\\d+$/', type: 'text' },
+        { key: 'name', label: 'Account Name', validation: '/^.{1,}$/', type: 'text' },
+      ],
+      'instagram-standalone': [
+        { key: 'accessToken', label: 'Long-lived Access Token', validation: '/^.{3,}$/', type: 'password' },
+        { key: 'userId', label: 'Instagram User ID', validation: '/^\\d+$/', type: 'text' },
+        { key: 'username', label: 'Username', validation: '/^.{1,}$/', type: 'text' },
+      ],
+      facebook: [
+        { key: 'accessToken', label: 'Page Access Token (long-lived)', validation: '/^.{3,}$/', type: 'password' },
+        { key: 'pageId', label: 'Facebook Page ID', validation: '/^\\d+$/', type: 'text' },
+        { key: 'name', label: 'Page Name', validation: '/^.{1,}$/', type: 'text' },
+      ],
+      threads: [
+        { key: 'accessToken', label: 'Access Token', validation: '/^.{3,}$/', type: 'password' },
+        { key: 'userId', label: 'Threads User ID', validation: '/^\\d+$/', type: 'text' },
+        { key: 'username', label: 'Username', validation: '/^.{1,}$/', type: 'text' },
+      ],
+      youtube: [
+        { key: 'accessToken', label: 'OAuth Access Token', validation: '/^.{3,}$/', type: 'password' },
+        { key: 'channelId', label: 'Channel ID (UC...)', validation: '/^.{3,}$/', type: 'text' },
+        { key: 'name', label: 'Channel Name', validation: '/^.{1,}$/', type: 'text' },
+      ],
+      gmb: [
+        { key: 'accessToken', label: 'OAuth Access Token', validation: '/^.{3,}$/', type: 'password' },
+        { key: 'locationId', label: 'Location ID (accounts/XXX/locations/YYY)', validation: '/^.{3,}$/', type: 'text' },
+        { key: 'name', label: 'Business Name', validation: '/^.{1,}$/', type: 'text' },
+      ],
+      tiktok: [
+        { key: 'accessToken', label: 'Access Token', validation: '/^.{3,}$/', type: 'password' },
+        { key: 'userId', label: 'Open ID (user ID)', validation: '/^.{3,}$/', type: 'text' },
+        { key: 'username', label: 'Username', validation: '/^.{1,}$/', type: 'text' },
+      ],
+      pinterest: [
+        { key: 'accessToken', label: 'Access Token', validation: '/^.{3,}$/', type: 'password' },
+        { key: 'userId', label: 'User ID', validation: '/^.{3,}$/', type: 'text' },
+        { key: 'username', label: 'Username', validation: '/^.{1,}$/', type: 'text' },
+      ],
+      dribbble: [
+        { key: 'accessToken', label: 'Access Token', validation: '/^.{3,}$/', type: 'password' },
+        { key: 'userId', label: 'User ID', validation: '/^\\d+$/', type: 'text' },
+        { key: 'username', label: 'Username', validation: '/^.{1,}$/', type: 'text' },
+      ],
+      discord: [
+        { key: 'serverId', label: 'Server (Guild) ID', validation: '/^\\d+$/', type: 'text' },
+        { key: 'name', label: 'Bot/Server Name', validation: '/^.{1,}$/', type: 'text' },
+      ],
+      slack: [
+        { key: 'accessToken', label: 'Bot OAuth Token (xoxb-...)', validation: '/^xoxb-.{3,}$/', type: 'password' },
+        { key: 'teamId', label: 'Workspace ID (Team ID)', validation: '/^.{3,}$/', type: 'text' },
+        { key: 'name', label: 'Bot Name', validation: '/^.{1,}$/', type: 'text' },
+      ],
+      kick: [
+        { key: 'accessToken', label: 'Access Token', validation: '/^.{3,}$/', type: 'password' },
+        { key: 'userId', label: 'User ID (numeric)', validation: '/^\\d+$/', type: 'text' },
+        { key: 'username', label: 'Channel Name', validation: '/^.{1,}$/', type: 'text' },
+      ],
+      twitch: [
+        { key: 'accessToken', label: 'Access Token', validation: '/^.{3,}$/', type: 'password' },
+        { key: 'userId', label: 'User ID (numeric)', validation: '/^\\d+$/', type: 'text' },
+        { key: 'username', label: 'Channel Name', validation: '/^.{1,}$/', type: 'text' },
+      ],
+      mastodon: [
+        { key: 'accessToken', label: 'Access Token', validation: '/^.{3,}$/', type: 'password' },
+        { key: 'instanceUrl', label: 'Instance URL', defaultValue: 'https://mastodon.social', validation: '/^https?:\\/\\/.+/', type: 'text' },
+        { key: 'username', label: 'Username', validation: '/^.{1,}$/', type: 'text' },
+      ],
+      'mastodon-custom': [
+        { key: 'accessToken', label: 'Access Token', validation: '/^.{3,}$/', type: 'password' },
+        { key: 'instanceUrl', label: 'Instance URL', validation: '/^https?:\\/\\/.+/', type: 'text' },
+        { key: 'username', label: 'Username', validation: '/^.{1,}$/', type: 'text' },
+      ],
+      vk: [
+        { key: 'accessToken', label: 'Access Token', validation: '/^.{3,}$/', type: 'password' },
+        { key: 'userId', label: 'User ID (numeric)', validation: '/^\\d+$/', type: 'text' },
+        { key: 'name', label: 'Display Name', validation: '/^.{1,}$/', type: 'text' },
+      ],
+      mewe: [
+        { key: 'accessToken', label: 'Access Token', validation: '/^.{3,}$/', type: 'password' },
+        { key: 'userId', label: 'User ID', validation: '/^.{3,}$/', type: 'text' },
+        { key: 'username', label: 'Username', validation: '/^.{1,}$/', type: 'text' },
+      ],
+      whop: [
+        { key: 'accessToken', label: 'Access Token', validation: '/^.{3,}$/', type: 'password' },
+        { key: 'userId', label: 'User ID (sub)', validation: '/^.{3,}$/', type: 'text' },
+        { key: 'username', label: 'Username', validation: '/^.{1,}$/', type: 'text' },
+      ],
+      gmail: [
+        { key: 'accessToken', label: 'Google OAuth Access Token (gmail.send scope)', validation: '/^.{3,}$/', type: 'password' },
+        { key: 'userId', label: 'Google User ID', validation: '/^.{3,}$/', type: 'text' },
+        { key: 'name', label: 'Email Address', validation: '/^.+@.+/', type: 'text' },
+      ],
+      wrapcast: [
+        { key: 'signerUuid', label: 'Signer UUID (from Neynar)', validation: '/^.{3,}$/', type: 'password' },
+        { key: 'fid', label: 'Farcaster FID', validation: '/^\\d+$/', type: 'text' },
+        { key: 'username', label: 'Username', validation: '/^.{1,}$/', type: 'text' },
+      ],
+      skool: [
+        { key: 'cookies', label: 'Session Cookie', validation: '/^.{3,}$/', type: 'password' },
+      ],
+    };
+
+    return fields[integration] || [
+      { key: 'accessToken', label: 'Access Token', defaultValue: '', validation: '/^.{3,}$/', type: 'password' },
+    ];
   }
 
   @Post('/:id/time')
@@ -336,6 +680,21 @@ export class IntegrationsController {
     );
     if (!integrationProvider) {
       throw new Error('Invalid provider');
+    }
+
+    // Only allow invoking methods explicitly registered as @Tool functions for
+    // this provider — never arbitrary properties/methods on the instance
+    // (e.g. fetch, refreshToken, internal helpers). `body.name` comes straight
+    // from the client.
+    const allowedTools: string[] = (
+      Reflect.getMetadata(
+        'custom:tool',
+        (integrationProvider as any)?.constructor?.prototype
+      ) || []
+    ).map((t: { methodName: string }) => t.methodName);
+
+    if (!allowedTools.includes(body.name)) {
+      throw new Error('Invalid function');
     }
 
     // @ts-ignore

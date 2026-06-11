@@ -13,7 +13,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Request, Response } from 'express';
 import crypto from 'crypto';
 import path from 'path';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { fromBuffer } = require('file-type');
 

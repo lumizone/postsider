@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpException,
   Param,
   Post,
   Query,
@@ -13,18 +14,20 @@ import {
   UsePipes,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { GetOrgFromRequest } from '@gitroom/nestjs-libraries/user/org.from.request';
-import { Organization } from '@prisma/client';
-import { MediaService } from '@gitroom/nestjs-libraries/database/prisma/media/media.service';
+import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
+import { GetUserFromRequest } from '@postsider/nestjs-libraries/user/user.from.request';
+import { Organization, User } from '@prisma/client';
+import { MediaService } from '@postsider/nestjs-libraries/database/prisma/media/media.service';
 import { ApiTags } from '@nestjs/swagger';
-import handleR2Upload from '@gitroom/nestjs-libraries/upload/r2.uploader';
+import handleR2Upload from '@postsider/nestjs-libraries/upload/r2.uploader';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { CustomFileValidationPipe } from '@gitroom/nestjs-libraries/upload/custom.upload.validation';
-import { SubscriptionService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/subscription.service';
-import { UploadFactory } from '@gitroom/nestjs-libraries/upload/upload.factory';
-import { SaveMediaInformationDto } from '@gitroom/nestjs-libraries/dtos/media/save.media.information.dto';
-import { VideoDto } from '@gitroom/nestjs-libraries/dtos/videos/video.dto';
-import { VideoFunctionDto } from '@gitroom/nestjs-libraries/dtos/videos/video.function.dto';
+import { CustomFileValidationPipe } from '@postsider/nestjs-libraries/upload/custom.upload.validation';
+import { SubscriptionService } from '@postsider/nestjs-libraries/database/prisma/subscriptions/subscription.service';
+import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
+import { UploadFactory } from '@postsider/nestjs-libraries/upload/upload.factory';
+import { SaveMediaInformationDto } from '@postsider/nestjs-libraries/dtos/media/save.media.information.dto';
+import { VideoDto } from '@postsider/nestjs-libraries/dtos/videos/video.dto';
+import { VideoFunctionDto } from '@postsider/nestjs-libraries/dtos/videos/video.function.dto';
 
 @ApiTags('Media')
 @Controller('/media')
@@ -40,12 +43,39 @@ export class MediaController {
     return this._mediaService.deleteMedia(org.id, id);
   }
 
+  /**
+   * Delete all media not referenced by any post. Superadmin-only, mirroring the
+   * gating on the storage settings page. Destructive — the UI requires a typed
+   * confirmation before calling.
+   */
+  @Post('/cleanup/unused')
+  cleanupUnused(
+    @GetOrgFromRequest() org: Organization,
+    @GetUserFromRequest() user: User
+  ) {
+    if (!user.isSuperAdmin) {
+      throw new HttpException('Not available in managed mode', 403);
+    }
+    return this._mediaService.deleteUnusedMedia(org.id);
+  }
+
+  /** Permanently clear the entire media library. Superadmin-only. */
+  @Post('/cleanup/all')
+  cleanupAll(
+    @GetOrgFromRequest() org: Organization,
+    @GetUserFromRequest() user: User
+  ) {
+    if (!user.isSuperAdmin) {
+      throw new HttpException('Not available in managed mode', 403);
+    }
+    return this._mediaService.deleteAllMedia(org.id);
+  }
+
   @Post('/generate-video')
   generateVideo(
     @GetOrgFromRequest() org: Organization,
     @Body() body: VideoDto
   ) {
-    console.log('hello');
     return this._mediaService.generateVideo(org, body);
   }
 
@@ -57,7 +87,7 @@ export class MediaController {
     isPicturePrompt = false
   ) {
     const total = await this._subscriptionService.checkCredits(org);
-    if (process.env.STRIPE_PUBLISHABLE_KEY && total.credits <= 0) {
+    if (isBillingEnabled() && total.credits <= 0) {
       return false;
     }
 
@@ -81,7 +111,7 @@ export class MediaController {
 
     const file = await this.storage.uploadSimple(image.output);
 
-    return this._mediaService.saveFile(org.id, file.split('/').pop(), file);
+    return this._mediaService.saveFile(org.id, file.split('/').pop()!, file);
   }
 
   @Post('/upload-server')
@@ -97,7 +127,8 @@ export class MediaController {
       org.id,
       uploadedFile.originalname,
       uploadedFile.path,
-      originalName
+      originalName,
+      uploadedFile.kind
     );
   }
 
@@ -147,7 +178,8 @@ export class MediaController {
       org.id,
       getFile.originalname,
       getFile.path,
-      originalName
+      originalName,
+      getFile.kind
     );
   }
 

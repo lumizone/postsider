@@ -1,11 +1,11 @@
-import { ShortLinking } from '@gitroom/nestjs-libraries/short-linking/short-linking.interface';
+import { ShortLinking } from '@postsider/nestjs-libraries/short-linking/short-linking.interface';
 
 const KUTT_API_ENDPOINT = process.env.KUTT_API_ENDPOINT || 'https://kutt.it/api/v2';
 const KUTT_SHORT_LINK_DOMAIN = process.env.KUTT_SHORT_LINK_DOMAIN || 'kutt.it';
 
 const getOptions = () => ({
   headers: {
-    'X-API-Key': process.env.KUTT_API_KEY,
+    'X-API-Key': process.env.KUTT_API_KEY || '',
     'Content-Type': 'application/json',
   },
 });

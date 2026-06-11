@@ -5,11 +5,11 @@ import {
   sleep,
   continueAsNew,
 } from '@temporalio/workflow';
-import { EmailActivity } from '@gitroom/orchestrator/activities/email.activity';
+import { EmailActivity } from '@postsider/orchestrator/activities/email.activity';
 import {
   SendEmail,
   sendEmailSignal,
-} from '@gitroom/orchestrator/signals/send.email.signal';
+} from '@postsider/orchestrator/signals/send.email.signal';
 
 const { sendEmail } = proxyActivities<EmailActivity>({
   startToCloseTimeout: '10 minute',

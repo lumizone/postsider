@@ -1,11 +1,11 @@
-import { PrismaRepository } from '@gitroom/nestjs-libraries/database/prisma/prisma.service';
+import { PrismaRepository } from '@postsider/nestjs-libraries/database/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
 import dayjs from 'dayjs';
 import { Integration } from '@prisma/client';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
-import { IntegrationTimeDto } from '@gitroom/nestjs-libraries/dtos/integrations/integration.time.dto';
-import { UploadFactory } from '@gitroom/nestjs-libraries/upload/upload.factory';
-import { PlugDto } from '@gitroom/nestjs-libraries/dtos/plugs/plug.dto';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
+import { IntegrationTimeDto } from '@postsider/nestjs-libraries/dtos/integrations/integration.time.dto';
+import { UploadFactory } from '@postsider/nestjs-libraries/upload/upload.factory';
+import { PlugDto } from '@postsider/nestjs-libraries/dtos/plugs/plug.dto';
 
 @Injectable()
 export class IntegrationRepository {
@@ -155,7 +155,7 @@ export class IntegrationRepository {
       where: {
         organizationId_internalId: {
           organizationId: params.organizationId!,
-          internalId: params.internalId,
+          internalId: params.internalId!,
         },
       },
     });

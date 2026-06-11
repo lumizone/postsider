@@ -14,15 +14,15 @@ import {
   copilotRuntimeNodeHttpEndpoint,
   copilotRuntimeNextJSAppRouterEndpoint,
 } from '@copilotkit/runtime';
-import { GetOrgFromRequest } from '@gitroom/nestjs-libraries/user/org.from.request';
+import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
 import { Organization } from '@prisma/client';
-import { SubscriptionService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/subscription.service';
+import { SubscriptionService } from '@postsider/nestjs-libraries/database/prisma/subscriptions/subscription.service';
 import { MastraAgent } from '@ag-ui/mastra';
-import { MastraService } from '@gitroom/nestjs-libraries/chat/mastra.service';
+import { MastraService } from '@postsider/nestjs-libraries/chat/mastra.service';
 import { Request, Response } from 'express';
 import { RequestContext } from '@mastra/core/di';
-import { CheckPolicies } from '@gitroom/backend/services/auth/permissions/permissions.ability';
-import { AuthorizationActions, Sections } from '@gitroom/backend/services/auth/permissions/permission.exception.class';
+import { CheckPolicies } from '@postsider/backend/services/auth/permissions/permissions.ability';
+import { AuthorizationActions, Sections } from '@postsider/backend/services/auth/permissions/permission.exception.class';
 
 export type ChannelsContext = {
   integrations: string;
@@ -58,7 +58,6 @@ export class CopilotController {
   }
 
   @Post('/agent')
-  @CheckPolicies([AuthorizationActions.Create, Sections.AI])
   async agent(
     @Req() req: Request,
     @Res() res: Response,
@@ -115,7 +114,6 @@ export class CopilotController {
   }
 
   @Get('/:thread/list')
-  @CheckPolicies([AuthorizationActions.Create, Sections.AI])
   async getMessagesList(
     @GetOrgFromRequest() organization: Organization,
     @Param('thread') threadId: string
@@ -123,7 +121,7 @@ export class CopilotController {
     const mastra = await this._mastraService.mastra();
     const memory = await mastra.getAgent('postsider').getMemory();
     try {
-      return await memory.recall({
+      return await memory!.recall({
         resourceId: organization.id,
         threadId,
       });
@@ -133,11 +131,10 @@ export class CopilotController {
   }
 
   @Get('/list')
-  @CheckPolicies([AuthorizationActions.Create, Sections.AI])
   async getList(@GetOrgFromRequest() organization: Organization) {
     const mastra = await this._mastraService.mastra();
     const memory = await mastra.getAgent('postsider').getMemory();
-    const list = await memory.listThreads({
+    const list = await memory!.listThreads({
       filter: { resourceId: organization.id },
       perPage: 100000,
       page: 0,

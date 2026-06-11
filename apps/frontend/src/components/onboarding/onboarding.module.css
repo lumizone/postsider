@@ -1,0 +1,187 @@
+.page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 16px;
+  background: var(--bg);
+}
+
+.container {
+  width: 100%;
+  max-width: 560px;
+  padding: 40px 32px;
+}
+
+.progress {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 32px;
+}
+
+.progressDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line-soft);
+  transition: background 200ms var(--ease);
+}
+
+.progressDotActive {
+  background: var(--fg);
+}
+
+.stepContent {
+  text-align: center;
+}
+
+/* Welcome step — two-column layout */
+
+.welcomeLayout {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+}
+
+.welcomeLeft {
+  flex: 1;
+  text-align: left;
+}
+
+.welcomeRight {
+  flex-shrink: 0;
+}
+
+.welcomeImage {
+  width: 200px;
+  height: 200px;
+  object-fit: contain;
+  border-radius: 20px;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0 0 10px;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--muted);
+  margin: 0 0 28px;
+  line-height: 1.5;
+}
+
+/* Buttons */
+
+.primaryButton {
+  display: block;
+  width: 100%;
+  padding: 13px 20px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 120ms var(--ease);
+}
+
+.primaryButton:hover {
+  opacity: 0.9;
+}
+
+.primaryButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.skipButton {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 120ms var(--ease);
+}
+
+.skipButton:hover {
+  color: var(--fg);
+}
+
+/* Source grid (how did you find us) */
+
+.sourceGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 28px;
+}
+
+.sourceChip {
+  padding: 8px 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 120ms var(--ease), background 120ms var(--ease);
+}
+
+.sourceChip:hover {
+  border-color: var(--fg);
+}
+
+.sourceChipActive {
+  border-color: var(--fg);
+  background: var(--fg);
+  color: var(--bg);
+}
+
+/* Platform grid (connect channel) */
+
+.platformGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.platformCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  cursor: pointer;
+  transition: border-color 120ms var(--ease), box-shadow 120ms var(--ease);
+}
+
+.platformCard:hover {
+  border-color: var(--fg);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.platformIcon {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  object-fit: contain;
+}
+
+.platformName {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--fg);
+  text-align: center;
+}

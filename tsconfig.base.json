@@ -19,21 +19,19 @@
     "skipDefaultLibCheck": true,
     "baseUrl": ".",
     "incremental": true,
-    "strictNullChecks": false,
+    "strictNullChecks": true,
     "noImplicitAny": true,
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": true,
     "strict": true,
     "paths": {
       "@langchain/langgraph/prebuilt": ["node_modules/@langchain/langgraph/dist/prebuilt/index.d.ts"],
-      "@gitroom/backend/*": ["apps/backend/src/*"],
-      "@gitroom/frontend/*": ["apps/frontend/src/*"],
-      "@gitroom/helpers/*": ["libraries/helpers/src/*"],
-      "@gitroom/nestjs-libraries/*": ["libraries/nestjs-libraries/src/*"],
-      "@gitroom/react/*": ["libraries/react-shared-libraries/src/*"],
-      "@gitroom/plugins/*": ["libraries/plugins/src/*"],
-      "@gitroom/orchestrator/*": ["apps/orchestrator/src/*"],
-      "@gitroom/extension/*": ["apps/extension/src/*"]
+      "@polar-sh/sdk/webhooks": ["node_modules/@polar-sh/sdk/dist/commonjs/webhooks.d.ts"],
+      "@postsider/backend/*": ["apps/backend/src/*"],
+      "@postsider/frontend/*": ["apps/frontend/src/*"],
+      "@postsider/helpers/*": ["libraries/helpers/src/*"],
+      "@postsider/nestjs-libraries/*": ["libraries/nestjs-libraries/src/*"],
+      "@postsider/orchestrator/*": ["apps/orchestrator/src/*"]
     }
   },
   "exclude": ["node_modules", "tmp"]

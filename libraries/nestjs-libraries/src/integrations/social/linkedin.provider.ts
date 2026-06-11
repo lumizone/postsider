@@ -3,24 +3,24 @@ import {
   PostDetails,
   PostResponse,
   SocialProvider,
-} from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
+} from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import sharp from 'sharp';
 import { lookup } from 'mime-types';
-import { readOrFetch } from '@gitroom/helpers/utils/read.or.fetch';
-import { hasExtension } from '@gitroom/helpers/utils/has.extension';
-import { timer } from '@gitroom/helpers/utils/timer';
+import { readOrFetch } from '@postsider/helpers/utils/read.or.fetch';
+import { hasExtension } from '@postsider/helpers/utils/has.extension';
+import { timer } from '@postsider/helpers/utils/timer';
 import {
   BadBody,
   SocialAbstract,
   ValidityMedia,
-} from '@gitroom/nestjs-libraries/integrations/social.abstract';
+} from '@postsider/nestjs-libraries/integrations/social.abstract';
 import { Integration } from '@prisma/client';
-import { PostPlug } from '@gitroom/helpers/decorators/post.plug';
-import { LinkedinDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/linkedin.dto';
+import { PostPlug } from '@postsider/helpers/decorators/post.plug';
+import { LinkedinDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/linkedin.dto';
 import imageToPDF from 'image-to-pdf';
 import { Readable } from 'stream';
-import { Rules } from '@gitroom/nestjs-libraries/chat/rules.description.decorator';
+import { Rules } from '@postsider/nestjs-libraries/chat/rules.description.decorator';
 
 @Rules(
   'LinkedIn can have maximum one attachment when selecting video, when choosing a carousel on LinkedIn minimum amount of attachment must be two, and only pictures, if uploading a video, LinkedIn can have only one attachment'
@@ -32,13 +32,8 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
 
   isBetweenSteps = false;
   scopes = [
-    'openid',
-    'profile',
-    'w_member_social',
     'r_basicprofile',
-    'rw_organization_admin',
-    'w_organization_social',
-    'r_organization_social',
+    'w_member_social',
   ];
   override maxConcurrentJob = 2; // LinkedIn has professional posting limits
   refreshWait = true;
@@ -124,16 +119,25 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
     ).json();
 
     const {
-      name,
-      sub: id,
-      picture,
+      localizedFirstName,
+      localizedLastName,
+      id,
+      profilePicture,
     } = await (
-      await fetch('https://api.linkedin.com/v2/userinfo', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      })
+      await fetch(
+        'https://api.linkedin.com/v2/me?projection=(id,localizedFirstName,localizedLastName,profilePicture(displayImage~:playableStreams))',
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      )
     ).json();
+
+    const name = `${localizedFirstName} ${localizedLastName}`.trim();
+    const picture =
+      profilePicture?.['displayImage~']?.elements?.[0]?.identifiers?.[0]
+        ?.identifier || '';
 
     return {
       id,
@@ -141,7 +145,7 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
       refreshToken,
       expiresIn: expires_in,
       name,
-      picture: picture || '',
+      picture,
       username: vanityName,
     };
   }
@@ -178,12 +182,7 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
     body.append('client_id', process.env.LINKEDIN_CLIENT_ID!);
     body.append('client_secret', process.env.LINKEDIN_CLIENT_SECRET!);
 
-    const {
-      access_token: accessToken,
-      expires_in: expiresIn,
-      refresh_token: refreshToken,
-      scope,
-    } = await (
+    const tokenResponse = await (
       await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
         method: 'POST',
         headers: {
@@ -193,27 +192,38 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
       })
     ).json();
 
-    this.checkScopes(this.scopes, scope);
+    const {
+      access_token: accessToken,
+      expires_in: expiresIn,
+      refresh_token: refreshToken,
+      scope,
+    } = tokenResponse;
+
+    // In SaaS mode, LinkedIn may return additional scopes from Advertising API.
+    // We only verify the minimum required scope for posting.
+    this.checkScopes(['w_member_social'], scope);
 
     const {
-      name,
-      sub: id,
-      picture,
+      localizedFirstName,
+      localizedLastName,
+      id,
+      vanityName,
+      profilePicture,
     } = await (
-      await fetch('https://api.linkedin.com/v2/userinfo', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      })
+      await fetch(
+        'https://api.linkedin.com/v2/me?projection=(id,localizedFirstName,localizedLastName,vanityName,profilePicture(displayImage~:playableStreams))',
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      )
     ).json();
 
-    const { vanityName } = await (
-      await fetch('https://api.linkedin.com/v2/me', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      })
-    ).json();
+    const name = `${localizedFirstName} ${localizedLastName}`.trim();
+    const picture =
+      profilePicture?.['displayImage~']?.elements?.[0]?.identifiers?.[0]
+        ?.identifier || '';
 
     return {
       id,
@@ -313,7 +323,7 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
     const sendUrlRequest = uploadInstructions?.[0]?.uploadUrl || uploadUrl;
     const finalOutput = video || image || document;
 
-    const etags = [];
+    const etags: (string | null)[] = [];
     if (isVideo) {
       // Only the Videos API uses multipart chunked uploads. Each 2MB part is
       // PUT separately and the returned etags are passed to finalizeUpload.

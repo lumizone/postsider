@@ -1,7 +1,7 @@
 import {
   AuthProvider,
   AuthProviderAbstract,
-} from '@gitroom/backend/services/auth/providers.interface';
+} from '@postsider/backend/services/auth/providers.interface';
 
 @AuthProvider({ provider: 'GENERIC' })
 export class OauthProvider extends AuthProviderAbstract {

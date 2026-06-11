@@ -1,36 +1,103 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PostSider Frontend
 
-## Getting Started
+Next.js 15 dashboard for the PostSider publishing bridge. Strict black-and-white
+UI, Apple-inspired layout, no AI generation — this app is a clean view layer
+on top of the NestJS backend.
 
-First, run the development server:
+## Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Next.js 15 (App Router)
+- React 19
+- CSS Modules
+- `next/font/google` for `Inter` and `Changa One`
+- `simple-icons` for select platform marks; bespoke PNGs in `public/platforms/`
+
+## Layout
+
+```
+src/
+  app/
+    calendar/        # main schedule with month / week / day / year views
+    analytics/       # per-channel insights with platform-aware labels
+    media/           # image + video library with list / grid + preview modal
+    posts/           # all posts across statuses with filter and search
+    settings/
+      general/       # workspace, defaults, behaviour toggles
+      users/         # invitations, roles, members
+      teams/         # team groups and channel access
+      security/      # 2FA (optional), sessions, login history
+      storage/       # local / Cloudflare R2 + retention + maintenance
+      email/         # Resend / SMTP / Listmonk + delivery log
+      api/           # tokens, quick start, limits
+      webhooks/      # endpoints, events, signing secret
+      mcp/           # MCP servers + CLI / client setup
+    icon.png         # 32×31 favicon (auto-wired by Next.js)
+    apple-icon.png   # 180×174 apple-touch-icon
+  components/
+    dashboard-shell.tsx       # collapsible sidebar (icons + brand mark)
+    channels-panel.tsx        # left rail with channel list + colour dots
+    channel-avatar.tsx        # avatar with optional platform badge
+    channel-detail-modal.tsx  # ID / colour / reconnect / delete
+    add-channel-modal.tsx     # platform picker (40+ providers)
+    platform-icon.tsx         # PNG/SVG glyphs + brand colours
+    create-post-modal.tsx     # composer (single / multi channel, media, threads)
+    day-popup.tsx             # per-day timeline popup from month view
+    calendar.tsx              # the four calendar views
+    analytics.tsx             # per-channel KPIs + audience chart
+    media.tsx                 # library, list/grid, preview modal
+    posts.tsx                 # filter tabs + search + status pills
+    settings-shell.tsx        # secondary sidebar for /settings/*
+    settings-ui.tsx           # shared cards/switches/etc.
+  lib/
+    calendar-data.ts          # demo channels + events (replace with API later)
+    media-data.ts             # demo media items
+    platform-labels.ts        # platform-specific KPI / unit labels
+public/
+  brand/postsider-logo.png    # logo used as favicon and sidebar mark
+  platforms/*.png             # native platform icons
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Local setup
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```sh
+pnpm install
+pnpm run dev:frontend
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The dev server runs on `http://localhost:4200` and reads `BACKEND_URL` /
+`NEXT_PUBLIC_BACKEND_URL` from `.env`.
 
-## Learn More
+If you ever see a runtime error like `Cannot find module './XXX.js'` after a
+fresh `pnpm install`, clear the Next.js cache once:
 
-To learn more about Next.js, take a look at the following resources:
+```sh
+rm -rf apps/frontend/.next
+pnpm run dev:frontend
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+A small `predev` / `prebuild` script (`apps/frontend/scripts/dedupe-react.cjs`)
+removes duplicate React copies that pnpm's hoisted node-linker would otherwise
+leave behind in this monorepo.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Wiring to the backend
 
-## Deploy on Vercel
+All views currently read from in-memory demo data in `src/lib/`. Each demo
+module mirrors the shape returned by the matching backend route, so swapping
+in real fetches is a one-file change per surface:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Frontend module        | Backend route(s) (NestJS)                    |
+| ---------------------- | --------------------------------------------- |
+| `calendar-data.ts`     | `posts.controller.ts`, `integrations.controller.ts`, `analytics.controller.ts` |
+| `media-data.ts`        | `media.controller.ts`                         |
+| Add Channel modal      | `oauth.controller.ts`, `oauth-app.controller.ts` |
+| Settings → MCP         | (separate MCP server config)                  |
+| Settings → API/Webhooks| (existing token + webhook endpoints)          |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Conventions
+
+- Black-and-white only. Brand colours appear strictly inside platform avatars
+  and platform icons in the Add Channel modal.
+- No external chart library. The line charts on `/analytics` are pure SVG.
+- `public/platforms/*.png` are the source of truth for channel icons; drop a
+  new file there and add it to the map in `components/platform-icon.tsx`.
+- Every list / grid / card uses CSS Modules, never inline class strings.

@@ -8,33 +8,34 @@ import {
   Post,
   Put,
   Query,
+  Req,
   UploadedFile,
   UseInterceptors,
   UsePipes,
 } from '@nestjs/common';
-import { CustomFileValidationPipe } from '@gitroom/nestjs-libraries/upload/custom.upload.validation';
+import { CustomFileValidationPipe } from '@postsider/nestjs-libraries/upload/custom.upload.validation';
 import { ApiTags } from '@nestjs/swagger';
-import { GetOrgFromRequest } from '@gitroom/nestjs-libraries/user/org.from.request';
+import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
 import { Organization } from '@prisma/client';
-import { IntegrationService } from '@gitroom/nestjs-libraries/database/prisma/integrations/integration.service';
-import { CheckPolicies } from '@gitroom/backend/services/auth/permissions/permissions.ability';
-import { PostsService } from '@gitroom/nestjs-libraries/database/prisma/posts/posts.service';
+import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
+import { CheckPolicies } from '@postsider/backend/services/auth/permissions/permissions.ability';
+import { PostsService } from '@postsider/nestjs-libraries/database/prisma/posts/posts.service';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { UploadFactory } from '@gitroom/nestjs-libraries/upload/upload.factory';
-import { MediaService } from '@gitroom/nestjs-libraries/database/prisma/media/media.service';
-import { GetPostsDto } from '@gitroom/nestjs-libraries/dtos/posts/get.posts.dto';
-import { ChangePostStatusDto } from '@gitroom/nestjs-libraries/dtos/posts/change.post.status.dto';
+import { UploadFactory } from '@postsider/nestjs-libraries/upload/upload.factory';
+import { MediaService } from '@postsider/nestjs-libraries/database/prisma/media/media.service';
+import { GetPostsDto } from '@postsider/nestjs-libraries/dtos/posts/get.posts.dto';
+import { ChangePostStatusDto } from '@postsider/nestjs-libraries/dtos/posts/change.post.status.dto';
 import {
   AuthorizationActions,
   Sections,
-} from '@gitroom/backend/services/auth/permissions/permission.exception.class';
-import { VideoDto } from '@gitroom/nestjs-libraries/dtos/videos/video.dto';
-import { VideoFunctionDto } from '@gitroom/nestjs-libraries/dtos/videos/video.function.dto';
-import { UploadDto } from '@gitroom/nestjs-libraries/dtos/media/upload.dto';
-import { NotificationService } from '@gitroom/nestjs-libraries/database/prisma/notifications/notification.service';
-import { GetNotificationsDto } from '@gitroom/nestjs-libraries/dtos/notifications/get.notifications.dto';
+} from '@postsider/backend/services/auth/permissions/permission.exception.class';
+import { VideoDto } from '@postsider/nestjs-libraries/dtos/videos/video.dto';
+import { VideoFunctionDto } from '@postsider/nestjs-libraries/dtos/videos/video.function.dto';
+import { UploadDto } from '@postsider/nestjs-libraries/dtos/media/upload.dto';
+import { NotificationService } from '@postsider/nestjs-libraries/database/prisma/notifications/notification.service';
+import { GetNotificationsDto } from '@postsider/nestjs-libraries/dtos/notifications/get.notifications.dto';
 import { Readable } from 'stream';
-import { ssrfSafeDispatcher } from '@gitroom/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
+import { ssrfSafeDispatcher } from '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { fromBuffer } = require('file-type');
 
@@ -52,13 +53,15 @@ import * as Sentry from '@sentry/nestjs';
 import {
   socialIntegrationList,
   IntegrationManager,
-} from '@gitroom/nestjs-libraries/integrations/integration.manager';
-import { getValidationSchemas } from '@gitroom/nestjs-libraries/chat/validation.schemas.helper';
-import { RefreshIntegrationService } from '@gitroom/nestjs-libraries/integrations/refresh.integration.service';
-import { RefreshToken } from '@gitroom/nestjs-libraries/integrations/social.abstract';
-import { PostValidationException } from '@gitroom/backend/api/routes/posts.validation.exception';
-import { timer } from '@gitroom/helpers/utils/timer';
-import { ioRedis } from '@gitroom/nestjs-libraries/redis/redis.service';
+} from '@postsider/nestjs-libraries/integrations/integration.manager';
+import { getValidationSchemas } from '@postsider/nestjs-libraries/chat/validation.schemas.helper';
+import { RefreshIntegrationService } from '@postsider/nestjs-libraries/integrations/refresh.integration.service';
+import { RefreshToken } from '@postsider/nestjs-libraries/integrations/social.abstract';
+import { PostValidationException } from '@postsider/backend/api/routes/posts.validation.exception';
+import { timer } from '@postsider/helpers/utils/timer';
+import { ioRedis } from '@postsider/nestjs-libraries/redis/redis.service';
+import { AgentBridgeService } from '@postsider/nestjs-libraries/agent-bridge/agent-bridge.service';
+import { Request } from 'express';
 
 @ApiTags('Public API')
 @Controller('/public/v1')
@@ -71,7 +74,8 @@ export class PublicIntegrationsController {
     private _mediaService: MediaService,
     private _notificationService: NotificationService,
     private _integrationManager: IntegrationManager,
-    private _refreshIntegrationService: RefreshIntegrationService
+    private _refreshIntegrationService: RefreshIntegrationService,
+    private _agentBridge: AgentBridgeService
   ) {}
 
   @Post('/upload')
@@ -90,7 +94,9 @@ export class PublicIntegrationsController {
     return this._mediaService.saveFile(
       org.id,
       getFile.originalname,
-      getFile.path
+      getFile.path,
+      undefined,
+      getFile.kind
     );
   }
 
@@ -131,7 +137,9 @@ export class PublicIntegrationsController {
     return this._mediaService.saveFile(
       org.id,
       getFile.originalname,
-      getFile.path
+      getFile.path,
+      undefined,
+      getFile.kind
     );
   }
 
@@ -161,9 +169,23 @@ export class PublicIntegrationsController {
   @CheckPolicies([AuthorizationActions.Create, Sections.POSTS_PER_MONTH])
   async createPost(
     @GetOrgFromRequest() org: Organization,
-    @Body() rawBody: any
+    @Body() rawBody: any,
+    @Req() req: Request
   ) {
     Sentry.metrics.count('public_api-request', 1);
+
+    // Idempotency (Requirement 14.10): replay returns the previously created
+    // publication id without enqueuing a duplicate.
+    const idempotencyKey =
+      (req.headers['idempotency-key'] as string) || undefined;
+    const replay = await this._agentBridge.lookupIdempotent(
+      org.id,
+      idempotencyKey
+    );
+    if (replay) {
+      return JSON.parse(replay);
+    }
+
     const body = await this._postsService.mapTypeToPost(
       rawBody,
       org.id,
@@ -176,7 +198,7 @@ export class PublicIntegrationsController {
       body.posts.some((p) =>
         p.value.some((a) =>
           a.image.some(
-            (i) => i.path.indexOf(process.env.RESTRICT_UPLOAD_DOMAINS) === -1
+            (i) => i.path.indexOf(process.env.RESTRICT_UPLOAD_DOMAINS!) === -1
           )
         )
       )
@@ -234,7 +256,28 @@ export class PublicIntegrationsController {
       ? (rawBody.creationMethod as 'CLI' | 'API')
       : 'API';
 
-    return this._postsService.createPost(org.id, body, creationMethod);
+    // HITL gate (Requirement 15.4): when the org requires human approval and
+    // the request comes from an agent token, hold the publication as a draft
+    // (it is NOT enqueued to a publishing workflow) so a human can approve it.
+    // @ts-ignore — set by PublicAuthMiddleware for agt_ tokens
+    const isAgent = !!req.agentToken;
+    if (isAgent && this._agentBridge.isHitlEnabled(org) && body.type !== 'draft') {
+      body.type = 'draft';
+    }
+
+    const result = await this._postsService.createPost(
+      org.id,
+      body,
+      creationMethod
+    );
+
+    await this._agentBridge.rememberIdempotent(
+      org.id,
+      idempotencyKey,
+      JSON.stringify(result)
+    );
+
+    return result;
   }
 
   @Delete('/posts/:id')

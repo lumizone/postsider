@@ -4,19 +4,19 @@ import {
   PostDetails,
   PostResponse,
   SocialProvider,
-} from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
+} from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import dayjs from 'dayjs';
 import {
   SocialAbstract,
   ValidityMedia,
-} from '@gitroom/nestjs-libraries/integrations/social.abstract';
-import { FacebookDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/facebook.dto';
-import { DribbbleDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/dribbble.dto';
+} from '@postsider/nestjs-libraries/integrations/social.abstract';
+import { FacebookDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/facebook.dto';
+import { DribbbleDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/dribbble.dto';
 import { Integration } from '@prisma/client';
-import { hasExtension } from '@gitroom/helpers/utils/has.extension';
-import { timer } from '@gitroom/helpers/utils/timer';
-import { Rules } from '@gitroom/nestjs-libraries/chat/rules.description.decorator';
+import { hasExtension } from '@postsider/helpers/utils/has.extension';
+import { timer } from '@postsider/helpers/utils/timer';
+import { Rules } from '@postsider/nestjs-libraries/chat/rules.description.decorator';
 
 @Rules(
   "Facebook posts can be text only, or include photos or a video. If it's a story, it must have at least one attachment (photo or video), and each media is published as a separate story."
@@ -311,7 +311,11 @@ export class FacebookProvider extends SocialAbstract implements SocialProvider {
     ).json();
 
     return {
-      id,
+      // Prefix the temporary id with the provider so a two-step Facebook
+      // connection doesn't collide with an Instagram integration that shares
+      // the same Facebook user id. fetchPageInformation replaces this with the
+      // real page id once the user picks a page.
+      id: `facebook-${id}`,
       name,
       accessToken: access_token,
       refreshToken: access_token,

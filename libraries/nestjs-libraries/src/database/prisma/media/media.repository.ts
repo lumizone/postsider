@@ -1,12 +1,59 @@
-import { PrismaRepository } from '@gitroom/nestjs-libraries/database/prisma/prisma.service';
+import { PrismaRepository } from '@postsider/nestjs-libraries/database/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
-import { SaveMediaInformationDto } from '@gitroom/nestjs-libraries/dtos/media/save.media.information.dto';
+import { SaveMediaInformationDto } from '@postsider/nestjs-libraries/dtos/media/save.media.information.dto';
 
 @Injectable()
 export class MediaRepository {
-  constructor(private _media: PrismaRepository<'media'>) {}
+  constructor(
+    private _media: PrismaRepository<'media'>,
+    private _post: PrismaRepository<'post'>
+  ) {}
 
-  saveFile(org: string, fileName: string, filePath: string, originalName?: string) {
+  /**
+   * All non-deleted media for an organization, reduced to the fields needed
+   * for cleanup scanning (id + path).
+   */
+  listAllForOrg(org: string) {
+    return this._media.model.media.findMany({
+      where: { organizationId: org, deletedAt: null },
+      select: { id: true, path: true },
+    });
+  }
+
+  /**
+   * Content + image blobs of every non-deleted post for the organization.
+   * Used to detect which media are still referenced by a post.
+   */
+  getPostMediaReferences(org: string) {
+    return this._post.model.post.findMany({
+      where: { organizationId: org, deletedAt: null },
+      select: { content: true, image: true },
+    });
+  }
+
+  /** Soft-delete a specific set of media ids belonging to the organization. */
+  softDeleteByIds(org: string, ids: string[]) {
+    return this._media.model.media.updateMany({
+      where: { organizationId: org, id: { in: ids }, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
+  }
+
+  /** Soft-delete every non-deleted media for the organization. */
+  softDeleteAllForOrg(org: string) {
+    return this._media.model.media.updateMany({
+      where: { organizationId: org, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
+  }
+
+  saveFile(
+    org: string,
+    fileName: string,
+    filePath: string,
+    originalName?: string,
+    type: 'image' | 'video' | 'audio' = 'image'
+  ) {
     return this._media.model.media.create({
       data: {
         organization: {
@@ -17,6 +64,7 @@ export class MediaRepository {
         name: fileName,
         path: filePath,
         originalName: originalName || null,
+        type,
       },
       select: {
         id: true,
@@ -25,14 +73,16 @@ export class MediaRepository {
         path: true,
         thumbnail: true,
         alt: true,
+        type: true,
       },
     });
   }
 
-  getMediaById(id: string) {
+  getMediaById(id: string, orgId?: string) {
     return this._media.model.media.findUnique({
       where: {
         id,
+        ...(orgId ? { organizationId: orgId } : {}),
       },
     });
   }
@@ -83,7 +133,7 @@ export class MediaRepository {
           },
         }
       : {};
-    const query = {
+    const query: { where: any } = {
       where: {
         organization: {
           id: org,

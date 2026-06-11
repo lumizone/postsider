@@ -1,7 +1,7 @@
 import {
   ThirdParty,
   ThirdPartyAbstract,
-} from '@gitroom/nestjs-libraries/3rdparties/thirdparty.interface';
+} from '@postsider/nestjs-libraries/3rdparties/thirdparty.interface';
 
 const BASE_URL = 'https://reel.farm/api/v1';
 
@@ -51,7 +51,7 @@ export class ReelFarmProvider extends ThirdPartyAbstract {
     const limit = 20;
     const offset = (page - 1) * limit;
 
-    const allVideos = [];
+    const allVideos: any[] = [];
 
     for (const videoType of ['ugc', 'greenscreen']) {
       const res = await fetch(

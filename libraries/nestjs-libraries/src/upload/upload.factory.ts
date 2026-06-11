@@ -1,4 +1,5 @@
 import { CloudflareStorage } from './cloudflare.storage';
+import { MinioStorage } from './minio.storage';
 import { IUploadProvider } from './upload.interface';
 import { LocalStorage } from './local.storage';
 
@@ -17,6 +18,14 @@ export class UploadFactory {
           process.env.CLOUDFLARE_REGION!,
           process.env.CLOUDFLARE_BUCKETNAME!,
           process.env.CLOUDFLARE_BUCKET_URL!
+        );
+      case 'minio':
+        return new MinioStorage(
+          process.env.MINIO_ENDPOINT!,
+          process.env.MINIO_ACCESS_KEY!,
+          process.env.MINIO_SECRET_KEY!,
+          process.env.MINIO_BUCKET!,
+          process.env.MINIO_PUBLIC_URL!
         );
       default:
         throw new Error(`Invalid storage type ${storageProvider}`);

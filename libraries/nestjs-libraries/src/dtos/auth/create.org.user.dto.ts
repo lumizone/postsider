@@ -10,7 +10,7 @@ import { Provider } from '@prisma/client';
 
 export class CreateOrgUserDto {
   @IsString()
-  @MinLength(3)
+  @MinLength(8)
   @MaxLength(64)
   @IsDefined()
   @ValidateIf((o) => !o.providerToken)

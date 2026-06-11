@@ -1,5 +1,6 @@
-import { CreatePostDto } from '@gitroom/nestjs-libraries/dtos/posts/create.post.dto';
-import { GetPostsDto } from '@gitroom/nestjs-libraries/dtos/posts/get.posts.dto';
+import { CreatePostDto } from '@postsider/nestjs-libraries/dtos/posts/create.post.dto';
+import { GetPostsDto } from '@postsider/nestjs-libraries/dtos/posts/get.posts.dto';
+import { createHmac, timingSafeEqual } from 'crypto';
 import fetch, { FormData } from 'node-fetch';
 
 function toQueryString(obj: Record<string, any>): string {
@@ -81,6 +82,73 @@ export default class Postsider {
         },
       })
     ).json();
+  }
+
+  /** Agent Bridge: list connectors with capabilities and authorization status. */
+  async listConnectors() {
+    return (
+      await fetch(`${this._path}/public/v1/connectors`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: this._apiKey,
+        },
+      })
+    ).json();
+  }
+
+  /** Agent Bridge: start authorization for a connector (returns an OAuth URL or { authorized: true }). */
+  async authorizeConnector(connectorId: string) {
+    return (
+      await fetch(
+        `${this._path}/public/v1/connectors/${connectorId}/authorize`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: this._apiKey,
+          },
+        }
+      )
+    ).json();
+  }
+
+  /** Agent Bridge: analytics for a connector over a date range. */
+  async connectorAnalytics(connectorId: string, date: string) {
+    return (
+      await fetch(
+        `${this._path}/public/v1/connectors/${connectorId}/analytics?date=${encodeURIComponent(
+          date
+        )}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: this._apiKey,
+          },
+        }
+      )
+    ).json();
+  }
+
+  /**
+   * Verify an inbound webhook HMAC signature (Requirement 19.3).
+   * `signature` is the value of the `X-Postsider-Signature` header
+   * (`sha256=<hex>`), `body` is the raw request body, `secret` is the
+   * per-subscription secret.
+   */
+  static verifyWebhookSignature(
+    signature: string,
+    body: string,
+    secret: string
+  ): boolean {
+    if (!signature) return false;
+    const expected =
+      'sha256=' + createHmac('sha256', secret).update(body).digest('hex');
+    const a = Buffer.from(signature);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length) return false;
+    return timingSafeEqual(a, b);
   }
 
   deletePost(id: string) {

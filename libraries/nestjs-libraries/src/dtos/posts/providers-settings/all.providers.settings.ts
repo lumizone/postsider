@@ -1,29 +1,36 @@
-import { RedditSettingsDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/reddit.dto';
-import { PinterestSettingsDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/pinterest.dto';
-import { YoutubeSettingsDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/youtube.settings.dto';
-import { TikTokDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/tiktok.dto';
-import { XDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/x.dto';
-import { LemmySettingsDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/lemmy.dto';
-import { DribbbleDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/dribbble.dto';
-import { DiscordDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/discord.dto';
-import { SlackDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/slack.dto';
-import { KickDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/kick.dto';
-import { TwitchDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/twitch.dto';
-import { InstagramDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/instagram.dto';
-import { LinkedinDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/linkedin.dto';
+import { RedditSettingsDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/reddit.dto';
+import { PinterestSettingsDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/pinterest.dto';
+import { YoutubeSettingsDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/youtube.settings.dto';
+import { TikTokDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/tiktok.dto';
+import { XDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/x.dto';
+import { LemmySettingsDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/lemmy.dto';
+import { DribbbleDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/dribbble.dto';
+import { DiscordDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/discord.dto';
+import { SlackDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/slack.dto';
+import { KickDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/kick.dto';
+import { TwitchDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/twitch.dto';
+import { InstagramDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/instagram.dto';
+import { LinkedinDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/linkedin.dto';
 import { IsIn } from 'class-validator';
-import { MediumSettingsDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/medium.settings.dto';
-import { DevToSettingsDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/dev.to.settings.dto';
-import { HashnodeSettingsDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/hashnode.settings.dto';
-import { WordpressDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/wordpress.dto';
-import { ListmonkDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/listmonk.dto';
-import { GmbSettingsDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/gmb.settings.dto';
-import { FarcasterDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/farcaster.dto';
-import { FacebookDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/facebook.dto';
-import { MoltbookDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/moltbook.dto';
-import { SkoolDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/skool.dto';
-import { WhopDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/whop.dto';
-import { MeweDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/mewe.dto';
+import { MediumSettingsDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/medium.settings.dto';
+import { DevToSettingsDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/dev.to.settings.dto';
+import { HashnodeSettingsDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/hashnode.settings.dto';
+import { WordpressDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/wordpress.dto';
+import { ListmonkDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/listmonk.dto';
+import { GmbSettingsDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/gmb.settings.dto';
+import { FarcasterDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/farcaster.dto';
+import { FacebookDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/facebook.dto';
+import { MoltbookDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/moltbook.dto';
+import { SkoolDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/skool.dto';
+import { WhopDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/whop.dto';
+import { MeweDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/mewe.dto';
+import { RumbleDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/rumble.dto';
+import { GhostDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/ghost.dto';
+import { NotionDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/notion.dto';
+import { BearBlogDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/bear.blog.dto';
+import { MataroaDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/mataroa.dto';
+import { WriteAsDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/writeas.dto';
+import { GmailDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/gmail.dto';
 
 export type ProviderExtension<T extends string, M> = { __type: T } & M;
 export type AllProvidersSettings =
@@ -59,7 +66,14 @@ export type AllProvidersSettings =
   | ProviderExtension<'vk', None>
   | ProviderExtension<'skool', SkoolDto>
   | ProviderExtension<'mewe', MeweDto>
-  | ProviderExtension<'whop', WhopDto>;
+  | ProviderExtension<'whop', WhopDto>
+  | ProviderExtension<'rumble', RumbleDto>
+  | ProviderExtension<'ghost', GhostDto>
+  | ProviderExtension<'notion', NotionDto>
+  | ProviderExtension<'bear-blog', BearBlogDto>
+  | ProviderExtension<'mataroa', MataroaDto>
+  | ProviderExtension<'writeas', WriteAsDto>
+  | ProviderExtension<'gmail', GmailDto>;
 
 type None = NonNullable<unknown>;
 
@@ -98,6 +112,13 @@ export const allProviders = (setEmpty?: any) => {
     { value: SkoolDto, name: 'skool' },
     { value: WhopDto, name: 'whop' },
     { value: MeweDto, name: 'mewe' },
+    { value: RumbleDto, name: 'rumble' },
+    { value: GhostDto, name: 'ghost' },
+    { value: NotionDto, name: 'notion' },
+    { value: BearBlogDto, name: 'bear-blog' },
+    { value: MataroaDto, name: 'mataroa' },
+    { value: WriteAsDto, name: 'writeas' },
+    { value: GmailDto, name: 'gmail' },
   ].filter((f) => f.value);
 };
 

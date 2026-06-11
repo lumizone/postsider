@@ -4,18 +4,18 @@ import {
   PostDetails,
   PostResponse,
   SocialProvider,
-} from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
-import { timer } from '@gitroom/helpers/utils/timer';
+} from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
+import { timer } from '@postsider/helpers/utils/timer';
 import dayjs from 'dayjs';
 import {
   SocialAbstract,
   ValidityMedia,
-} from '@gitroom/nestjs-libraries/integrations/social.abstract';
-import { InstagramDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/instagram.dto';
+} from '@postsider/nestjs-libraries/integrations/social.abstract';
+import { InstagramDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/instagram.dto';
 import { Integration } from '@prisma/client';
-import { Rules } from '@gitroom/nestjs-libraries/chat/rules.description.decorator';
-import { hasExtension } from '@gitroom/helpers/utils/has.extension';
+import { Rules } from '@postsider/nestjs-libraries/chat/rules.description.decorator';
+import { hasExtension } from '@postsider/helpers/utils/has.extension';
 
 @Rules(
   "Instagram should have at least one attachment, if it's a story, it can have only one picture"
@@ -452,7 +452,11 @@ export class InstagramProvider
     ).json();
 
     return {
-      id,
+      // Prefix the temporary id with the provider so a two-step Instagram
+      // connection doesn't collide with a Facebook integration that shares the
+      // same Facebook user id. fetchPageInformation replaces this with the real
+      // Instagram account id once the user picks an account.
+      id: `instagram-${id}`,
       name,
       accessToken: access_token,
       refreshToken: access_token,
@@ -881,7 +885,7 @@ export class InstagramProvider
         `https://${type}/v21.0/${id}/insights?metric_type=total_value&metric=likes,views,comments,shares,saves,replies&access_token=${accessToken}&period=day&since=${since}&until=${until}`
       )
     ).json();
-    const analytics = [];
+    const analytics: any[] = [];
 
     analytics.push(
       ...(data?.map((d: any) => ({

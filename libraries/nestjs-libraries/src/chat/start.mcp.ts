@@ -1,10 +1,10 @@
 import { INestApplication } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { MastraService } from '@gitroom/nestjs-libraries/chat/mastra.service';
+import { MastraService } from '@postsider/nestjs-libraries/chat/mastra.service';
 import { MCPServer } from '@mastra/mcp';
 import { randomUUID } from 'crypto';
-import { OrganizationService } from '@gitroom/nestjs-libraries/database/prisma/organizations/organization.service';
-import { OAuthService } from '@gitroom/nestjs-libraries/database/prisma/oauth/oauth.service';
+import { OrganizationService } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.service';
+import { OAuthService } from '@postsider/nestjs-libraries/database/prisma/oauth/oauth.service';
 import { runWithContext } from './async.storage';
 import { createOAuthMiddleware } from './oauth-middleware';
 const fixAcceptHeader = (req: Request) => {
@@ -131,7 +131,7 @@ export const startMcp = async (app: INestApplication) => {
   });
 
   app.use('/mcp', async (req: Request, res: Response, next: () => void) => {
-    // Skip if this is the /mcp/:id route
+    // Skip if this is the /mcp/:id route or /mcp/info
     if (req.path !== '/' && req.path !== '') {
       next();
       return;
@@ -179,6 +179,43 @@ export const startMcp = async (app: INestApplication) => {
         req,
         res,
       });
+    });
+  });
+
+  app.use('/mcp/info', (req: Request, res: Response) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', 'application/json');
+    res.json({
+      name: 'PostSider MCP Server',
+      version: '1.0.0',
+      description: 'Full social media management via MCP. Schedule posts, manage channels, view analytics, generate media.',
+      auth: {
+        methods: [
+          { type: 'bearer', endpoint: '/mcp', description: 'Pass API key or OAuth token as Bearer header' },
+          { type: 'url-key', endpoint: '/mcp/:apiKey', description: 'Pass API key in URL path — no headers needed' },
+          { type: 'oauth2', endpoint: '/mcp-oauth', description: 'OAuth 2.1 with PKCE for third-party apps' },
+          { type: 'sse', endpoint: '/sse/:apiKey', description: 'SSE transport for streaming — no headers needed' },
+        ],
+      },
+      tools: Object.keys(tools).map((name) => ({
+        name,
+        title: (tools[name] as any)?.description?.slice(0, 100) || name,
+      })),
+      quickstart: {
+        claude_code: {
+          config: '{ "mcpServers": { "postsider": { "url": "YOUR_BACKEND_URL/mcp/YOUR_API_KEY" } } }',
+        },
+        hermes_agent: {
+          config: 'Add MCP server: url=YOUR_BACKEND_URL/mcp, header Authorization=Bearer YOUR_API_KEY',
+        },
+        openclaw: {
+          config: 'Add tool server: YOUR_BACKEND_URL/mcp/YOUR_API_KEY',
+        },
+        generic: {
+          http: 'POST YOUR_BACKEND_URL/mcp with Authorization: Bearer YOUR_API_KEY',
+          sse: 'GET YOUR_BACKEND_URL/sse/YOUR_API_KEY (for streaming)',
+        },
+      },
     });
   });
 

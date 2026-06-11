@@ -1,7 +1,7 @@
 import {
   AuthProvider,
   AuthProviderAbstract,
-} from '@gitroom/backend/services/auth/providers.interface';
+} from '@postsider/backend/services/auth/providers.interface';
 
 @AuthProvider({ provider: 'GITHUB' })
 export class GithubProvider extends AuthProviderAbstract {

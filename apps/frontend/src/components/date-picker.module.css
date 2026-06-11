@@ -1,0 +1,257 @@
+/* Custom Date/Time Picker — PostSider style (B&W, Apple-inspired) */
+
+.wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-soft);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  transition: border-color 140ms var(--ease), background 140ms var(--ease);
+  white-space: nowrap;
+}
+
+.trigger:hover {
+  border-color: var(--fg);
+}
+
+.trigger svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+/* ---------- Date Dropdown ---------- */
+
+.dropdown {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 100;
+  width: 280px;
+  padding: 14px;
+  background: var(--bg);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.14), 0 4px 12px rgba(0, 0, 0, 0.06);
+  animation: popIn 140ms var(--ease);
+}
+
+/* ---------- Header (month/year nav) ---------- */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.headerLabel {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.navBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-soft);
+  background: var(--bg);
+  color: var(--fg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 120ms var(--ease);
+}
+
+.navBtn:hover {
+  background: var(--hover-strong);
+}
+
+/* ---------- Weekday row ---------- */
+
+.weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0;
+  margin-bottom: 4px;
+}
+
+.weekday {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 4px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ---------- Day grid ---------- */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.day {
+  width: 100%;
+  aspect-ratio: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 100ms var(--ease), color 100ms var(--ease);
+}
+
+.day:hover {
+  background: var(--hover-strong);
+}
+
+.dayMuted {
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+.dayToday {
+  font-weight: 700;
+  background: var(--hover-strong);
+}
+
+.daySelected,
+.daySelected:hover {
+  background: var(--fg);
+  color: var(--bg);
+  font-weight: 700;
+}
+
+/* ---------- Footer ---------- */
+
+.footer {
+  margin-top: 10px;
+  display: flex;
+  justify-content: center;
+}
+
+.footerBtn {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  transition: background 120ms var(--ease);
+}
+
+.footerBtn:hover {
+  background: var(--hover-strong);
+}
+
+/* ---------- Time Dropdown (Apple wheel-style) ---------- */
+
+.timeDropdown {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 100;
+  padding: 10px;
+  background: var(--bg);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.14), 0 4px 12px rgba(0, 0, 0, 0.06);
+  animation: popIn 140ms var(--ease);
+}
+
+.timeColumns {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.timeColumn {
+  width: 52px;
+  height: 180px;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  -webkit-overflow-scrolling: touch;
+  /* Hide scrollbar for a clean wheel look */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.timeColumn::-webkit-scrollbar {
+  display: none;
+}
+
+.timeSeparator {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--fg);
+  padding: 0 4px;
+  user-select: none;
+}
+
+.timeCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  scroll-snap-align: center;
+  transition: background 100ms var(--ease), color 100ms var(--ease);
+}
+
+.timeCell:hover {
+  background: var(--hover-strong);
+}
+
+.timeCellActive,
+.timeCellActive:hover {
+  background: var(--fg);
+  color: var(--bg);
+  font-weight: 700;
+}
+
+/* ---------- Animation ---------- */
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

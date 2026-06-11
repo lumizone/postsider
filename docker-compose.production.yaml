@@ -1,0 +1,308 @@
+# PostSider SaaS — Production Docker Compose
+# Target: VPS with 6GB free RAM, 50GB free disk
+# Domain: app.postsider.com (behind nginx reverse proxy on host)
+#
+# Total estimated RAM usage: ~3.5-4GB
+# - PostgreSQL:    ~256MB (shared_buffers)
+# - Redis:         ~128MB (maxmemory)
+# - MinIO:         ~256MB
+# - Temporal:      ~512MB
+# - Temporal PG:   ~128MB
+# - Elasticsearch: ~512MB (heap)
+# - PostSider App: ~1024MB (Node.js backend + frontend)
+# - DbGate:       ~128MB
+
+services:
+  # ─── PostSider Application ────────────────────────────────────────────────
+  postsider:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_* must be available at build time (baked into the JS bundle).
+        # deploy.sh exports these from .env.production before `docker compose build`.
+        NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:?NEXT_PUBLIC_BACKEND_URL must be set in .env.production}
+        NEXT_PUBLIC_SELF_HOSTED: ${NEXT_PUBLIC_SELF_HOSTED:-true}
+        NEXT_PUBLIC_VERSION: ${NEXT_PUBLIC_VERSION:-1.0.0}
+    container_name: postsider-app
+    restart: always
+    env_file: .env.production
+    deploy:
+      resources:
+        limits:
+          memory: 1280M
+        reservations:
+          memory: 512M
+    volumes:
+      - postsider-config:/config/
+    ports:
+      - "127.0.0.1:5000:5000"
+    networks:
+      - postsider-network
+      - temporal-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      postsider-postgres:
+        condition: service_healthy
+      postsider-redis:
+        condition: service_healthy
+      postsider-minio:
+        condition: service_healthy
+
+  # ─── PostgreSQL (App Database) ────────────────────────────────────────────
+  postsider-postgres:
+    image: postgres:17-alpine
+    container_name: postsider-postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postsider-secure-pwd-change-me}
+      POSTGRES_USER: ${POSTGRES_USER:-postsider}
+      POSTGRES_DB: ${POSTGRES_DB:-postsider_prod}
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+        reservations:
+          memory: 128M
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=128MB"
+      - "-c"
+      - "effective_cache_size=256MB"
+      - "-c"
+      - "work_mem=4MB"
+      - "-c"
+      - "maintenance_work_mem=64MB"
+      - "-c"
+      - "max_connections=100"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - postsider-network
+    healthcheck:
+      test: pg_isready -U ${POSTGRES_USER:-postsider} -d ${POSTGRES_DB:-postsider_prod}
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ─── Redis ────────────────────────────────────────────────────────────────
+  postsider-redis:
+    image: redis:7-alpine
+    container_name: postsider-redis
+    restart: always
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru --save 60 1000
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+        reservations:
+          memory: 64M
+    volumes:
+      - redis-data:/data
+    networks:
+      - postsider-network
+    healthcheck:
+      test: redis-cli ping
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # ─── MinIO (S3-compatible Object Storage) ─────────────────────────────────
+  postsider-minio:
+    image: minio/minio:latest
+    container_name: postsider-minio
+    restart: always
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-postsider-minio-key}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-postsider-minio-secret-change-me}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+    volumes:
+      - minio-data:/data
+    ports:
+      - "127.0.0.1:9000:9000"   # API (proxied via nginx for public access)
+      - "127.0.0.1:9001:9001"   # Console UI (optional, can remove in prod)
+    networks:
+      - postsider-network
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # MinIO bucket initialization (runs once, then exits)
+  minio-init:
+    image: minio/mc:latest
+    container_name: postsider-minio-init
+    depends_on:
+      postsider-minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://postsider-minio:9000 ${MINIO_ACCESS_KEY:-postsider-minio-key} ${MINIO_SECRET_KEY:-postsider-minio-secret-change-me};
+      mc mb myminio/${MINIO_BUCKET:-postsider-media} --ignore-existing;
+      mc anonymous set download myminio/${MINIO_BUCKET:-postsider-media};
+      echo 'MinIO bucket ready';
+      exit 0;
+      "
+    networks:
+      - postsider-network
+
+  # ─── DbGate (Database UI) ───────────────────────────────────────────────
+  postsider-dbgate:
+    image: dbgate/dbgate:latest
+    container_name: postsider-dbgate
+    restart: always
+    environment:
+      CONNECTIONS: con1
+      LABEL_con1: PostSider Production
+      SERVER_con1: postsider-postgres
+      USER_con1: ${POSTGRES_USER:-postsider}
+      PASSWORD_con1: ${POSTGRES_PASSWORD:-postsider-secure-pwd-change-me}
+      PORT_con1: 5432
+      ENGINE_con1: postgres@dbgate-plugin-postgres
+      DATABASE_con1: ${POSTGRES_DB:-postsider_prod}
+      WEB_LOGIN: "true"
+      LOGIN_PASSWORD: ${DBGATE_PASSWORD:-change-me-dbgate}
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+        reservations:
+          memory: 64M
+    ports:
+      - "127.0.0.1:8082:3000"
+    networks:
+      - postsider-network
+    depends_on:
+      postsider-postgres:
+        condition: service_healthy
+
+  # ─── Temporal Stack ───────────────────────────────────────────────────────
+  temporal-elasticsearch:
+    image: elasticsearch:7.17.27
+    container_name: postsider-temporal-es
+    restart: always
+    environment:
+      - cluster.routing.allocation.disk.threshold_enabled=true
+      - cluster.routing.allocation.disk.watermark.low=512mb
+      - cluster.routing.allocation.disk.watermark.high=256mb
+      - cluster.routing.allocation.disk.watermark.flood_stage=128mb
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms256m -Xmx256m
+      - xpack.security.enabled=false
+    deploy:
+      resources:
+        limits:
+          memory: 640M
+        reservations:
+          memory: 384M
+    networks:
+      - temporal-network
+    expose:
+      - 9200
+    volumes:
+      - temporal-es-data:/usr/share/elasticsearch/data
+
+  temporal-postgresql:
+    image: postgres:16-alpine
+    container_name: postsider-temporal-pg
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: temporal
+      POSTGRES_USER: temporal
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+        reservations:
+          memory: 64M
+    networks:
+      - temporal-network
+    expose:
+      - 5432
+    volumes:
+      - temporal-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready -U temporal
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  temporal:
+    image: temporalio/auto-setup:1.28.1
+    container_name: postsider-temporal
+    restart: always
+    depends_on:
+      temporal-postgresql:
+        condition: service_healthy
+      temporal-elasticsearch:
+        condition: service_started
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=temporal
+      - POSTGRES_PWD=temporal
+      - POSTGRES_SEEDS=postsider-temporal-pg
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+      - ENABLE_ES=true
+      - ES_SEEDS=postsider-temporal-es
+      - ES_VERSION=v7
+      - TEMPORAL_NAMESPACE=default
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    networks:
+      - temporal-network
+    expose:
+      - 7233
+    volumes:
+      - ./dynamicconfig:/etc/temporal/config/dynamicconfig
+
+  temporal-ui:
+    image: temporalio/ui:2.34.0
+    container_name: postsider-temporal-ui
+    restart: always
+    environment:
+      - TEMPORAL_ADDRESS=postsider-temporal:7233
+      - TEMPORAL_CORS_ORIGINS=https://app.postsider.com
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+    networks:
+      - temporal-network
+    ports:
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
+  postsider-config:
+  temporal-es-data:
+  temporal-pg-data:
+
+networks:
+  postsider-network:
+    driver: bridge
+  temporal-network:
+    driver: bridge
+    name: postsider-temporal-network

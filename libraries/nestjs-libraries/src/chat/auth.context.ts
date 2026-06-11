@@ -1,4 +1,4 @@
-import { getAuth } from '@gitroom/nestjs-libraries/chat/async.storage';
+import { getAuth } from '@postsider/nestjs-libraries/chat/async.storage';
 
 export const checkAuth = (
   inputData: any,

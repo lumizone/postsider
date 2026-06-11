@@ -8,7 +8,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { IsSafeWebhookUrl } from '@gitroom/nestjs-libraries/dtos/webhooks/webhook.url.validator';
+import { IsSafeWebhookUrl } from '@postsider/nestjs-libraries/dtos/webhooks/webhook.url.validator';
 
 export class Integrations {
   @IsString()

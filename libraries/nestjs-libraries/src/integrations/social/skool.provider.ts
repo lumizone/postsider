@@ -1,4 +1,4 @@
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import { SocialAbstract } from '../social.abstract';
 import {
   AuthTokenDetails,
@@ -9,9 +9,9 @@ import {
 } from './social.integrations.interface';
 import dayjs from 'dayjs';
 import { Integration } from '@prisma/client';
-import { Tool } from '@gitroom/nestjs-libraries/integrations/tool.decorator';
-import { SkoolDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/skool.dto';
-import { AuthService } from '@gitroom/helpers/auth/auth.service';
+import { Tool } from '@postsider/nestjs-libraries/integrations/tool.decorator';
+import { SkoolDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/skool.dto';
+import { AuthService } from '@postsider/helpers/auth/auth.service';
 
 export class SkoolProvider extends SocialAbstract implements SocialProvider {
   identifier = 'skool';
@@ -34,7 +34,7 @@ export class SkoolProvider extends SocialAbstract implements SocialProvider {
     const stored = integration.customInstanceDetails!;
     try {
       // Current format: credentials stored as at-rest AES-encrypted JSON.
-      return JSON.parse(AuthService.fixedDecryption(stored)) as {
+      return JSON.parse(AuthService.decryptSecret(stored)) as {
         client_id: string;
         auth_token: string;
       };
@@ -118,7 +118,7 @@ export class SkoolProvider extends SocialAbstract implements SocialProvider {
       return {
         refreshToken: '',
         expiresIn: dayjs().add(100, 'year').unix() - dayjs().unix(),
-        accessToken: AuthService.fixedEncryption(JSON.stringify(cookies)),
+        accessToken: AuthService.encryptSecret(JSON.stringify(cookies)),
         id: data.id,
         name: data.first_name + ' ' + data.last_name,
         picture: data.metadata.picture_profile || '',

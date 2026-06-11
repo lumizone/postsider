@@ -1,18 +1,24 @@
-import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
-import { GetOrgFromRequest } from '@gitroom/nestjs-libraries/user/org.from.request';
+import { Body, Controller, Delete, Get, HttpException, Param, Post, Put } from '@nestjs/common';
+import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
 import { Organization } from '@prisma/client';
-import { CheckPolicies } from '@gitroom/backend/services/auth/permissions/permissions.ability';
-import { OrganizationService } from '@gitroom/nestjs-libraries/database/prisma/organizations/organization.service';
-import { AddTeamMemberDto } from '@gitroom/nestjs-libraries/dtos/settings/add.team.member.dto';
-import { ShortlinkPreferenceDto } from '@gitroom/nestjs-libraries/dtos/settings/shortlink-preference.dto';
+import { CheckPolicies } from '@postsider/backend/services/auth/permissions/permissions.ability';
+import { OrganizationService } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.service';
+import { AddTeamMemberDto } from '@postsider/nestjs-libraries/dtos/settings/add.team.member.dto';
+import { ShortlinkPreferenceDto } from '@postsider/nestjs-libraries/dtos/settings/shortlink-preference.dto';
 import { ApiTags } from '@nestjs/swagger';
-import { AuthorizationActions, Sections } from '@gitroom/backend/services/auth/permissions/permission.exception.class';
+import { AuthorizationActions, Sections } from '@postsider/backend/services/auth/permissions/permission.exception.class';
+import { GetUserFromRequest } from '@postsider/nestjs-libraries/user/user.from.request';
+import { User } from '@prisma/client';
+import { ProviderCredentialsService } from '@postsider/nestjs-libraries/database/prisma/integrations/provider-credentials.service';
+import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
 
 @ApiTags('Settings')
 @Controller('/settings')
 export class SettingsController {
   constructor(
-    private _organizationService: OrganizationService
+    private _organizationService: OrganizationService,
+    private _providerCredentialsService: ProviderCredentialsService,
+    private _integrationService: IntegrationService,
   ) {}
 
   @Get('/team')
@@ -63,5 +69,200 @@ export class SettingsController {
       org.id,
       body.shortlink
     );
+  }
+
+  /**
+   * Change a team member's role. Only SUPERADMIN (Owner) can do this.
+   */
+  @Put('/team/:id/role')
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  async changeTeamMemberRole(
+    @GetOrgFromRequest() org: Organization,
+    @GetUserFromRequest() user: User,
+    @Param('id') userId: string,
+    @Body('role') role: string
+  ) {
+    // Only SUPERADMIN can change roles.
+    // @ts-ignore
+    const myRole = org.users?.[0]?.role;
+    if (myRole !== 'SUPERADMIN') {
+      throw new HttpException('Only the owner can change roles', 403);
+    }
+
+    if (role !== 'ADMIN' && role !== 'USER') {
+      throw new HttpException('Role must be ADMIN or USER', 400);
+    }
+
+    // Cannot change own role or promote to SUPERADMIN from here.
+    if (userId === user.id) {
+      throw new HttpException('Cannot change your own role', 400);
+    }
+
+    return this._organizationService.changeTeamMemberRole(org.id, userId, role);
+  }
+
+  /**
+   * API Keys — CRUD for multiple named keys per organization.
+   */
+  @Get('/api-keys')
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  async listApiKeys(@GetOrgFromRequest() org: Organization) {
+    return this._organizationService.listApiKeys(org.id);
+  }
+
+  @Post('/api-keys')
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  async createApiKey(
+    @GetOrgFromRequest() org: Organization,
+    @Body('name') name: string
+  ) {
+    if (!name || name.trim().length === 0) {
+      throw new HttpException('Name is required', 400);
+    }
+    return this._organizationService.createApiKey(org.id, name.trim());
+  }
+
+  @Put('/api-keys/:id')
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  async renameApiKey(
+    @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string,
+    @Body('name') name: string
+  ) {
+    if (!name || name.trim().length === 0) {
+      throw new HttpException('Name is required', 400);
+    }
+    return this._organizationService.renameApiKey(org.id, id, name.trim());
+  }
+
+  @Delete('/api-keys/:id')
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  async deleteApiKey(
+    @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string
+  ) {
+    return this._organizationService.deleteApiKey(org.id, id);
+  }
+
+  @Get('/storage')
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  async getStorageInfo(
+    @GetOrgFromRequest() org: Organization,
+    @GetUserFromRequest() user: User
+  ) {
+    // In SaaS mode, only platform superadmins can view storage config.
+    // Regular org admins should not see server infrastructure details.
+    if (!user.isSuperAdmin) {
+      throw new HttpException('Not available in managed mode', 403);
+    }
+
+    const provider = process.env.STORAGE_PROVIDER || 'local';
+    const mediaStats = await this._organizationService.getMediaStats(org.id);
+
+    return {
+      provider,
+      config:
+        provider === 'local'
+          ? {
+              uploadDirectory: process.env.UPLOAD_DIRECTORY || '(not set)',
+              publicUrl:
+                (process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000') +
+                '/uploads',
+            }
+          : {
+              bucket: process.env.CLOUDFLARE_BUCKETNAME || '(not set)',
+              region: process.env.CLOUDFLARE_REGION || 'auto',
+              bucketUrl: process.env.CLOUDFLARE_BUCKET_URL || '(not set)',
+              accountId: process.env.CLOUDFLARE_ACCOUNT_ID
+                ? process.env.CLOUDFLARE_ACCOUNT_ID.slice(0, 8) + '…'
+                : '(not set)',
+            },
+      stats: mediaStats,
+    };
+  }
+
+  // --- Provider OAuth Credentials ---
+
+  @Get('/provider-credentials')
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  async listProviderCredentials(@GetOrgFromRequest() org: Organization) {
+    const configured = await this._providerCredentialsService.getAllConfigured(org.id);
+    return { providers: configured };
+  }
+
+  @Get('/provider-credentials/:provider')
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  async getProviderCredentials(
+    @GetOrgFromRequest() org: Organization,
+    @Param('provider') provider: string,
+  ) {
+    const creds = await this._providerCredentialsService.getCredentials(org.id, provider);
+    if (!creds) return { configured: false };
+    // Return clientId but mask the secret
+    return {
+      configured: true,
+      clientId: creds.clientId,
+      clientSecret: creds.clientSecret.slice(0, 4) + '••••',
+      extraData: creds.extraData,
+    };
+  }
+
+  @Post('/provider-credentials/:provider')
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  async saveProviderCredentials(
+    @GetOrgFromRequest() org: Organization,
+    @Param('provider') provider: string,
+    @Body() body: { clientId: string; clientSecret: string; extraData?: Record<string, any> },
+  ) {
+    if (!body.clientId || !body.clientSecret) {
+      throw new HttpException('Client ID and Client Secret are required', 400);
+    }
+    await this._providerCredentialsService.saveCredentials(
+      org.id,
+      provider,
+      body.clientId.trim(),
+      body.clientSecret.trim(),
+      body.extraData,
+    );
+    return { success: true };
+  }
+
+  @Delete('/provider-credentials/:provider')
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  async deleteProviderCredentials(
+    @GetOrgFromRequest() org: Organization,
+    @Param('provider') provider: string,
+  ) {
+    await this._providerCredentialsService.deleteCredentials(org.id, provider);
+    return { success: true };
+  }
+
+  /**
+   * DANGER ZONE — disconnect every channel for the organization.
+   * Irreversible: removes all connected social accounts (and their posts).
+   */
+  @Post('/disconnect-all-channels')
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  async disconnectAllChannels(@GetOrgFromRequest() org: Organization) {
+    const integrations = await this._integrationService.getIntegrationsList(
+      org.id
+    );
+    for (const integration of integrations) {
+      await this._integrationService.deleteChannel(org.id, integration.id);
+    }
+    return { disconnected: integrations.length };
+  }
+
+  /**
+   * DANGER ZONE — permanently delete the organization and the user account.
+   * Irreversible.
+   */
+  @Post('/delete-account')
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  async deleteAccount(
+    @GetOrgFromRequest() org: Organization,
+    @GetUserFromRequest() user: User,
+  ) {
+    return this._organizationService.deleteAccount(org.id, user.id);
   }
 }

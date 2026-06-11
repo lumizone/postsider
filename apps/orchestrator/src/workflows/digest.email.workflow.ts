@@ -5,8 +5,8 @@ import {
   setHandler,
   sleep,
 } from '@temporalio/workflow';
-import { Email, emailSignal } from '@gitroom/orchestrator/signals/email.signal';
-import { EmailActivity } from '@gitroom/orchestrator/activities/email.activity';
+import { Email, emailSignal } from '@postsider/orchestrator/signals/email.signal';
+import { EmailActivity } from '@postsider/orchestrator/activities/email.activity';
 
 const { getUserOrgs, sendEmailAsync } = proxyActivities<EmailActivity>({
   startToCloseTimeout: '10 minute',
@@ -40,7 +40,7 @@ export async function digestEmailWorkflow({
 
     const org = await getUserOrgs(organizationId);
 
-    for (const user of org.users) {
+    for (const user of org!.users) {
       const allowFailure = user.user.sendFailureEmails ? 'fail' : null;
       const allowSuccess = user.user.sendSuccessEmails ? 'success' : null;
 
@@ -56,7 +56,7 @@ export async function digestEmailWorkflow({
       await sendEmailAsync(
         user.user.email,
         toSend.length === 1
-          ? toSend[0].title
+          ? toSend[0].title!
           : `[Postsider] Your latest notifications`,
         toSend.map((p) => p.message).join('<br/>'),
         'bottom'

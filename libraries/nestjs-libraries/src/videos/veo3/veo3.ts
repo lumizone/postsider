@@ -2,8 +2,8 @@ import {
   URL,
   Video,
   VideoAbstract,
-} from '@gitroom/nestjs-libraries/videos/video.interface';
-import { timer } from '@gitroom/helpers/utils/timer';
+} from '@postsider/nestjs-libraries/videos/video.interface';
+import { timer } from '@postsider/helpers/utils/timer';
 import { ArrayMaxSize, IsArray, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 

@@ -1,11 +1,12 @@
 import { Ability, AbilityBuilder, AbilityClass } from '@casl/ability';
 import { Injectable } from '@nestjs/common';
-import { pricing } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing';
-import { SubscriptionService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/subscription.service';
-import { PostsService } from '@gitroom/nestjs-libraries/database/prisma/posts/posts.service';
-import { IntegrationService } from '@gitroom/nestjs-libraries/database/prisma/integrations/integration.service';
+import { pricing } from '@postsider/nestjs-libraries/database/prisma/subscriptions/pricing';
+import { SubscriptionService } from '@postsider/nestjs-libraries/database/prisma/subscriptions/subscription.service';
+import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
+import { PostsService } from '@postsider/nestjs-libraries/database/prisma/posts/posts.service';
+import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
 import dayjs from 'dayjs';
-import { WebhooksService } from '@gitroom/nestjs-libraries/database/prisma/webhooks/webhooks.service';
+import { WebhooksService } from '@postsider/nestjs-libraries/database/prisma/webhooks/webhooks.service';
 import { AuthorizationActions, Sections } from './permission.exception.class';
 
 export type AppAbility = Ability<[AuthorizationActions, Sections]>;
@@ -24,7 +25,7 @@ export class PermissionsService {
 
     const tier =
       subscription?.subscriptionTier ||
-      (!process.env.STRIPE_PUBLISHABLE_KEY ? 'PRO' : 'FREE');
+      (!isBillingEnabled() ? 'PRO' : 'FREE');
 
     const { channel, ...all } = pricing[tier];
     return {
@@ -49,7 +50,7 @@ export class PermissionsService {
 
     if (
       requestedPermission.length === 0 ||
-      !process.env.STRIPE_PUBLISHABLE_KEY
+      !isBillingEnabled()
     ) {
       for (const [action, section] of requestedPermission) {
         can(action, section);
@@ -143,8 +144,8 @@ export class PermissionsService {
       }
 
       if (
-        section === Sections.FEATURED_BY_GITROOM &&
-        options.featured_by_gitroom
+        section === Sections.FEATURED_BY_POSTSIDER &&
+        options.featured_by_postsider
       ) {
         can(action, section);
         continue;

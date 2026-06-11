@@ -27,7 +27,7 @@ export class OpenaiService {
         model: 'chatgpt-image-latest',
         size: isVertical ? '1024x1536' : '1024x1024',
       })
-    ).data[0];
+    ).data![0];
 
     return generate.b64_json;
   }

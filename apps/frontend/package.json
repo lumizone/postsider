@@ -1,18 +1,27 @@
 {
   "name": "postsider-frontend",
   "version": "1.0.0",
-  "description": "",
-  "type": "module",
+  "private": true,
+  "description": "PostSider dashboard UI",
   "scripts": {
+    "predev": "node ./scripts/dedupe-react.cjs",
+    "prebuild": "node ./scripts/dedupe-react.cjs",
     "dev": "dotenv -e ../../.env -- next dev -p 4200",
-    "fetch-gtm": "node scripts/fetch-gtm.mjs",
-    "postinstall": "node scripts/fetch-gtm.mjs",
     "build": "next build",
-    "build:sentry": "dotenv -e ../../.env -- next build",
     "start": "dotenv -e ../../.env -- next start -p 4200",
-    "pm2": "pm2 start pnpm --name frontend -- start"
+    "pm2": "pm2 start pnpm --name frontend -- start",
+    "lint": "next lint"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+  "dependencies": {
+    "next": "15.5.19",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "simple-icons": "^16.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "18.16.9",
+    "@types/react": "19.0.7",
+    "@types/react-dom": "19.0.3",
+    "typescript": "5.5.4"
+  }
 }

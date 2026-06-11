@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { EmailInterface } from '@gitroom/nestjs-libraries/emails/email.interface';
-import { ResendProvider } from '@gitroom/nestjs-libraries/emails/resend.provider';
-import { EmptyProvider } from '@gitroom/nestjs-libraries/emails/empty.provider';
-import { NodeMailerProvider } from '@gitroom/nestjs-libraries/emails/node.mailer.provider';
+import { EmailInterface } from '@postsider/nestjs-libraries/emails/email.interface';
+import { ResendProvider } from '@postsider/nestjs-libraries/emails/resend.provider';
+import { EmptyProvider } from '@postsider/nestjs-libraries/emails/empty.provider';
+import { NodeMailerProvider } from '@postsider/nestjs-libraries/emails/node.mailer.provider';
 import { TemporalService } from 'nestjs-temporal-core';
-import { timer } from '@gitroom/helpers/utils/timer';
+import { timer } from '@postsider/helpers/utils/timer';
 
 @Injectable()
 export class EmailService {
@@ -71,57 +71,66 @@ export class EmailService {
     }
 
     const modifiedHtml = `
-    <div style="
-        background: linear-gradient(to bottom right, #e6f2ff, #f0e6ff);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 2rem;
-    ">
-        <div style="
-            background-color: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(4px);
-            border-radius: 0.5rem;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-            max-width: 48rem;
-            width: 100%;
-            padding: 2rem;
-        ">
-            <h1 style="
-                font-size: 1.875rem;
-                font-weight: bold;
-                margin-bottom: 1.5rem;
-                text-align: left;
-                color: #1f2937;
-            ">${subject}</h1>
-            
-            <div style="
-                margin-bottom: 2rem;
-                color: #374151;
-            ">
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; background-color: #f5f5f7; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="min-height: 100vh; background-color: #f5f5f7;">
+    <tr>
+      <td align="center" style="padding: 48px 24px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 520px; background-color: #ffffff; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); overflow: hidden;">
+          <!-- Logo -->
+          <tr>
+            <td align="center" style="padding: 36px 40px 0 40px;">
+              <img src="${process.env.FRONTEND_URL || 'https://app.postsider.com'}/brand/postsider-logo.png" alt="PostSider" width="48" height="48" style="width: 48px; height: 48px; border-radius: 12px; display: block;">
+              <p style="margin: 10px 0 0 0; font-size: 24px; font-weight: 700; color: #1d1d1f; letter-spacing: 0.5px; font-family: 'Changa One', Impact, 'Arial Black', sans-serif;">PostSider</p>
+            </td>
+          </tr>
+          <!-- Content -->
+          <tr>
+            <td style="padding: 24px 40px 0 40px;">
+              <h1 style="margin: 0 0 16px 0; font-size: 22px; font-weight: 600; color: #1d1d1f; letter-spacing: -0.3px; line-height: 1.3;">${subject}</h1>
+              <div style="font-size: 15px; line-height: 1.6; color: #424245;">
                 ${html}
-            </div>
-            
-            <div style="
-                display: flex;
-                align-items: center;
-                border-top: 1px solid #e5e7eb;
-                padding-top: 1.5rem;
-            ">
-                <div>
-                    <h2 style="
-                        font-size: 1.25rem;
-                        font-weight: 600;
-                        color: #1f2937;
-                        margin: 0;
-                    ">${process.env.EMAIL_FROM_NAME}</h2>
-                    <div style="font-size: 12px">
-                      You can change your notification preferences in your <a href="${process.env.FRONTEND_URL}/settings">account settings.</a>
-                     </div>
-                </div>
-            </div>
-        </div>
-    </div>
+              </div>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 32px 40px 36px 40px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td style="border-top: 1px solid #e8e8ed; padding-top: 20px;">
+                    <p style="margin: 0 0 4px 0; font-size: 13px; color: #86868b; line-height: 1.4;">
+                      Sent by <span style="color: #1d1d1f; font-weight: 500;">PostSider</span>
+                    </p>
+                    <p style="margin: 0; font-size: 12px; color: #86868b; line-height: 1.4;">
+                      <a href="${process.env.FRONTEND_URL}/settings/general" style="color: #86868b; text-decoration: underline;">Manage notifications</a>
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+        <!-- Sub-footer -->
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 520px;">
+          <tr>
+            <td style="padding: 20px 40px; text-align: center;">
+              <p style="margin: 0; font-size: 11px; color: #86868b;">
+                © ${new Date().getFullYear()} PostSider · <a href="https://postsider.com" style="color: #86868b; text-decoration: none;">postsider.com</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
     `;
 
     let lastErr: unknown;

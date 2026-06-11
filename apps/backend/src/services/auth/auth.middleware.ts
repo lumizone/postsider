@@ -1,12 +1,11 @@
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
-import { AuthService } from '@gitroom/helpers/auth/auth.service';
+import { AuthService } from '@postsider/helpers/auth/auth.service';
 import { User } from '@prisma/client';
-import { OrganizationService } from '@gitroom/nestjs-libraries/database/prisma/organizations/organization.service';
-import { UsersService } from '@gitroom/nestjs-libraries/database/prisma/users/users.service';
-import { getCookieUrlFromDomain } from '@gitroom/helpers/subdomain/subdomain.management';
-import { HttpForbiddenException } from '@gitroom/nestjs-libraries/services/exception.filter';
-import { MastraService } from '@gitroom/nestjs-libraries/chat/mastra.service';
+import { OrganizationService } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.service';
+import { UsersService } from '@postsider/nestjs-libraries/database/prisma/users/users.service';
+import { getCookieUrlFromDomain } from '@postsider/helpers/subdomain/subdomain.management';
+import { HttpForbiddenException } from '@postsider/nestjs-libraries/services/exception.filter';
 
 export const removeAuth = (res: Response) => {
   res.cookie('auth', '', {
@@ -65,7 +64,7 @@ export class AuthMiddleware implements NestMiddleware {
         if (loadImpersonate) {
           user = loadImpersonate.user;
           user.isSuperAdmin = true;
-          delete user.password;
+          delete (user as any).password;
 
           // eslint-disable-next-line @typescript-eslint/ban-ts-comment
           // @ts-expect-error
@@ -74,7 +73,7 @@ export class AuthMiddleware implements NestMiddleware {
           // @ts-ignore
           loadImpersonate.organization.users =
             loadImpersonate.organization.users.filter(
-              (f) => f.userId === user.id
+              (f) => f.userId === user!.id
             );
           // eslint-disable-next-line @typescript-eslint/ban-ts-comment
           // @ts-expect-error
@@ -84,16 +83,17 @@ export class AuthMiddleware implements NestMiddleware {
         }
       }
 
-      delete user.password;
+      delete (user as any).password;
       const organization = (
         await this._organizationService.getOrgsByUserId(user.id)
       ).filter((f) => !f.users[0].disabled);
-      const setOrg =
-        organization.find((org) => org.id === orgHeader) || organization[0];
 
-      if (!organization) {
+      if (!organization || organization.length === 0) {
         throw new HttpForbiddenException();
       }
+
+      const setOrg =
+        organization.find((org) => org.id === orgHeader) || organization[0];
 
       if (!setOrg.apiKey) {
         await this._organizationService.updateApiKey(setOrg.id);

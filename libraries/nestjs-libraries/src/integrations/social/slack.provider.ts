@@ -3,13 +3,13 @@ import {
   PostDetails,
   PostResponse,
   SocialProvider,
-} from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
-import { SocialAbstract } from '@gitroom/nestjs-libraries/integrations/social.abstract';
+} from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
+import { SocialAbstract } from '@postsider/nestjs-libraries/integrations/social.abstract';
 import dayjs from 'dayjs';
 import { Integration } from '@prisma/client';
-import { SlackDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/slack.dto';
-import { Tool } from '@gitroom/nestjs-libraries/integrations/tool.decorator';
+import { SlackDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/slack.dto';
+import { Tool } from '@postsider/nestjs-libraries/integrations/tool.decorator';
 
 export class SlackProvider extends SocialAbstract implements SocialProvider {
   override maxConcurrentJob = 3; // Slack has moderate API limits

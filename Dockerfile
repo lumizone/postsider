@@ -1,0 +1,143 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# PostSider — Production Multi-Stage Dockerfile
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 1: Install dependencies + build
+# Stage 2: Minimal runtime image (no build tools, no devDependencies)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# === Stage 1: Builder ────────────────────────────────────────────────────────
+FROM node:22.20-bookworm-slim AS builder
+
+# Next.js inlines NEXT_PUBLIC_* variables into the client bundle at BUILD time.
+# They must be present here, not just at runtime, otherwise the browser falls
+# back to http://localhost:3000 and every API call from the dashboard fails.
+ARG NEXT_PUBLIC_VERSION
+ARG NEXT_PUBLIC_BACKEND_URL
+ARG NEXT_PUBLIC_SELF_HOSTED="true"
+ENV NEXT_PUBLIC_VERSION=$NEXT_PUBLIC_VERSION
+ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
+ENV NEXT_PUBLIC_SELF_HOSTED=$NEXT_PUBLIC_SELF_HOSTED
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    g++ \
+    make \
+    python3-pip \
+    bash \
+    openssl \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN npm --no-update-notifier --no-fund --global install pnpm@10.6.1
+
+WORKDIR /build
+
+# Copy package files first for better layer caching. All workspace packages
+# must be present so `pnpm install --frozen-lockfile` matches the lockfile
+# importers (apps/backend, apps/commands, apps/frontend, apps/orchestrator,
+# apps/sdk). The libraries/* dirs are not pnpm packages (no package.json) —
+# they are shared source consumed via TS path aliases and arrive with COPY . .
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY apps/backend/package.json apps/backend/
+COPY apps/frontend/package.json apps/frontend/
+COPY apps/commands/package.json apps/commands/
+COPY apps/orchestrator/package.json apps/orchestrator/
+COPY apps/sdk/package.json apps/sdk/
+
+# The root postinstall hook runs `prisma generate`, which needs the schema.
+# Copy it before install so the hook succeeds (and native deps like bcrypt
+# still build — so we can't use --ignore-scripts here).
+COPY libraries/nestjs-libraries/src/database/prisma libraries/nestjs-libraries/src/database/prisma
+
+# Install all dependencies (including dev for build)
+RUN pnpm install --frozen-lockfile
+
+# Copy source code
+COPY . .
+
+# Generate Prisma client
+RUN pnpm run prisma-generate
+
+# Build everything (backend + orchestrator)
+RUN NODE_OPTIONS="--max-old-space-size=4096" pnpm run build
+
+# Build the commands app (CLI used by `pnpm bootstrap` to create the first admin)
+RUN NODE_OPTIONS="--max-old-space-size=4096" pnpm --filter ./apps/commands run build
+
+# Build frontend
+RUN pnpm --filter ./apps/frontend run build
+
+# Prune devDependencies
+RUN pnpm prune --prod
+
+
+# === Stage 2: Runtime ────────────────────────────────────────────────────────
+FROM node:22.20-bookworm-slim AS runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    nginx \
+    openssl \
+    wget \
+    tini \
+  && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN addgroup --system postsider \
+  && adduser --system --ingroup postsider --home /app --shell /usr/sbin/nologin postsider \
+  && mkdir -p /uploads /var/log/nginx /var/lib/nginx /run \
+  && chown -R postsider:postsider /uploads /var/log/nginx /var/lib/nginx /run
+
+RUN npm --no-update-notifier --no-fund --global install pnpm@10.6.1 pm2
+
+WORKDIR /app
+
+# Copy built application from builder
+COPY --from=builder --chown=postsider:postsider /build/node_modules ./node_modules
+COPY --from=builder --chown=postsider:postsider /build/package.json ./package.json
+COPY --from=builder --chown=postsider:postsider /build/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY --from=builder --chown=postsider:postsider /build/pnpm-workspace.yaml ./pnpm-workspace.yaml
+
+# Backend
+COPY --from=builder --chown=postsider:postsider /build/apps/backend/dist ./apps/backend/dist
+COPY --from=builder --chown=postsider:postsider /build/apps/backend/package.json ./apps/backend/package.json
+
+# Frontend (built Next.js)
+COPY --from=builder --chown=postsider:postsider /build/apps/frontend/.next ./apps/frontend/.next
+COPY --from=builder --chown=postsider:postsider /build/apps/frontend/public ./apps/frontend/public
+COPY --from=builder --chown=postsider:postsider /build/apps/frontend/package.json ./apps/frontend/package.json
+COPY --from=builder --chown=postsider:postsider /build/apps/frontend/next.config.mjs ./apps/frontend/next.config.mjs
+COPY --from=builder --chown=postsider:postsider /build/apps/frontend/node_modules ./apps/frontend/node_modules
+
+# Orchestrator (Temporal worker: scheduled publishing + token refresh)
+COPY --from=builder --chown=postsider:postsider /build/apps/orchestrator/dist ./apps/orchestrator/dist
+COPY --from=builder --chown=postsider:postsider /build/apps/orchestrator/package.json ./apps/orchestrator/package.json
+
+# Commands app
+COPY --from=builder --chown=postsider:postsider /build/apps/commands/dist ./apps/commands/dist
+COPY --from=builder --chown=postsider:postsider /build/apps/commands/package.json ./apps/commands/package.json
+
+# Libraries (needed at runtime for Prisma schema + shared modules)
+COPY --from=builder --chown=postsider:postsider /build/libraries ./libraries
+
+# Prisma generated client
+COPY --from=builder --chown=postsider:postsider /build/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder --chown=postsider:postsider /build/node_modules/@prisma ./node_modules/@prisma
+
+# Nginx config
+COPY --chown=postsider:postsider var/docker/nginx.conf /etc/nginx/nginx.conf
+
+# Prisma migrations (for prisma migrate deploy)
+COPY --from=builder --chown=postsider:postsider /build/libraries/nestjs-libraries/src/database/prisma/migrations ./libraries/nestjs-libraries/src/database/prisma/migrations
+
+# Scripts
+COPY --from=builder --chown=postsider:postsider /build/scripts ./scripts
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=60s \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:5000/api/health || exit 1
+
+# Use tini as init process for proper signal handling
+ENTRYPOINT ["tini", "--"]
+
+# Start nginx + application via pm2
+CMD ["sh", "-c", "nginx && pnpm run pm2"]
+
+EXPOSE 5000

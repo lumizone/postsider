@@ -4,22 +4,22 @@ import {
   PostDetails,
   PostResponse,
   SocialProvider,
-} from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
+} from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import { google, youtube_v3 } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library/build/src/auth/oauth2client';
 import axios from 'axios';
-import { YoutubeSettingsDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/youtube.settings.dto';
+import { YoutubeSettingsDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/youtube.settings.dto';
 import {
   BadBody,
   SocialAbstract,
   ValidityMedia,
-} from '@gitroom/nestjs-libraries/integrations/social.abstract';
+} from '@postsider/nestjs-libraries/integrations/social.abstract';
 import * as process from 'node:process';
 import dayjs from 'dayjs';
 import { GaxiosResponse } from 'gaxios/build/src/common';
 import Schema$Video = youtube_v3.Schema$Video;
-import { Rules } from '@gitroom/nestjs-libraries/chat/rules.description.decorator';
+import { Rules } from '@postsider/nestjs-libraries/chat/rules.description.decorator';
 
 const clientAndYoutube = () => {
   const client = new google.auth.OAuth2({
@@ -318,7 +318,11 @@ export class YoutubeProvider extends SocialAbstract implements SocialProvider {
       accessToken: tokens.access_token!,
       expiresIn: unixTimestamp,
       refreshToken: tokens.refresh_token!,
-      id: data.id!,
+      // Prefix the temporary id with the provider so a two-step YouTube
+      // connection doesn't collide with another Google-based integration
+      // (e.g. GMB) that shares the same Google account id. fetchPageInformation
+      // replaces this with the real channel id once the user picks a channel.
+      id: `youtube-${data.id!}`,
       name: data.name!,
       picture: data?.picture || '',
       username: '',
@@ -356,15 +360,20 @@ export class YoutubeProvider extends SocialAbstract implements SocialProvider {
     }
   }
 
-  async fetchPageInformation(accessToken: string, data: { id: string }) {
+  async fetchPageInformation(accessToken: string, data: { id?: string; page?: string }) {
     const { client, youtube } = clientAndYoutube();
     client.setCredentials({ access_token: accessToken });
     const youtubeClient = youtube(client);
 
+    const channelId = data.id || data.page;
+    if (!channelId) {
+      throw new Error('No channel ID provided');
+    }
+
     try {
       const response = await youtubeClient.channels.list({
         part: ['snippet', 'contentDetails', 'statistics'],
-        id: [data.id],
+        id: [channelId],
       });
 
       const channel = response.data.items?.[0];

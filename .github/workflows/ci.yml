@@ -1,0 +1,134 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  rebrand-gate:
+    name: Rebrand Verification Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run rebrand check
+        run: node scripts/rebrand-check.mjs
+
+  typecheck:
+    name: TypeScript & Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm prisma-generate
+
+      - name: Typecheck backend
+        run: npx tsc --noEmit --project apps/backend/tsconfig.json
+
+      - name: Typecheck orchestrator
+        run: npx tsc --noEmit --project apps/orchestrator/tsconfig.json
+
+      - name: Typecheck commands
+        run: npx tsc --noEmit --project apps/commands/tsconfig.json
+
+      - name: Typecheck frontend
+        run: npx tsc --noEmit --project apps/frontend/tsconfig.json
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: typecheck
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm prisma-generate
+
+      - name: Build backend
+        run: pnpm build:backend
+
+      - name: Build orchestrator
+        run: pnpm build:orchestrator
+
+      - name: Build frontend
+        run: pnpm --filter ./apps/frontend run build
+
+  docker:
+    name: Docker Image Build
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: postsider/postsider-app:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  test:
+    name: Unit & Property Tests
+    runs-on: ubuntu-latest
+    needs: typecheck
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm prisma-generate
+
+      - name: Verify Prisma schema is in sync with migrations
+        run: pnpm dlx prisma@6.5.0 migrate diff --from-migrations ./libraries/nestjs-libraries/src/database/prisma/migrations --to-schema-datamodel ./libraries/nestjs-libraries/src/database/prisma/schema.prisma --exit-code
+
+      - name: Run tests
+        run: npx jest --ci --runInBand

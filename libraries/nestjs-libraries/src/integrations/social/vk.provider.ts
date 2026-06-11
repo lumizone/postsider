@@ -3,16 +3,16 @@ import {
   PostDetails,
   PostResponse,
   SocialProvider,
-} from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
+} from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import dayjs from 'dayjs';
-import { SocialAbstract } from '@gitroom/nestjs-libraries/integrations/social.abstract';
+import { SocialAbstract } from '@postsider/nestjs-libraries/integrations/social.abstract';
 import { createHash, randomBytes } from 'crypto';
 import axios from 'axios';
 import FormDataNew from 'form-data';
 import mime from 'mime-types';
 import { Integration } from '@prisma/client';
-import { hasExtension } from '@gitroom/helpers/utils/has.extension';
+import { hasExtension } from '@postsider/helpers/utils/has.extension';
 
 export class VkProvider extends SocialAbstract implements SocialProvider {
   override maxConcurrentJob = 2; // VK has moderate API limits

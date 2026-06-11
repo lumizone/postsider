@@ -1,9 +1,9 @@
-import { PrismaRepository } from '@gitroom/nestjs-libraries/database/prisma/prisma.service';
+import { PrismaRepository } from '@postsider/nestjs-libraries/database/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
 import { Provider } from '@prisma/client';
-import { AuthService } from '@gitroom/helpers/auth/auth.service';
-import { UserDetailDto } from '@gitroom/nestjs-libraries/dtos/users/user.details.dto';
-import { EmailNotificationsDto } from '@gitroom/nestjs-libraries/dtos/users/email-notifications.dto';
+import { AuthService } from '@postsider/helpers/auth/auth.service';
+import { UserDetailDto } from '@postsider/nestjs-libraries/dtos/users/user.details.dto';
+import { EmailNotificationsDto } from '@postsider/nestjs-libraries/dtos/users/email-notifications.dto';
 
 @Injectable()
 export class UsersRepository {
@@ -115,7 +115,9 @@ export class UsersRepository {
       select: {
         id: true,
         name: true,
+        lastName: true,
         bio: true,
+        timezone: true,
         picture: {
           select: {
             id: true,
@@ -129,24 +131,27 @@ export class UsersRepository {
   }
 
   async changePersonal(userId: string, body: UserDetailDto) {
-    await this._user.model.user.update({
-      where: {
-        id: userId,
-      },
-      data: {
-        name: body.fullname,
-        bio: body.bio,
-        picture: body.picture
-          ? {
-              connect: {
-                id: body.picture.id,
-              },
-            }
-          : {
-              disconnect: true,
-            },
-      },
-    });
+    const data: Record<string, any> = {};
+
+    // Support both "fullname" (legacy) and "name"/"lastName" (new frontend).
+    if (body.fullname) data.name = body.fullname;
+    if (body.name !== undefined) data.name = body.name;
+    if (body.lastName !== undefined) data.lastName = body.lastName;
+    if (body.bio !== undefined) data.bio = body.bio;
+    if (body.timezone !== undefined) data.timezone = body.timezone;
+
+    if (body.picture) {
+      data.picture = { connect: { id: body.picture.id } };
+    } else if (body.picture === null) {
+      data.picture = { disconnect: true };
+    }
+
+    if (Object.keys(data).length > 0) {
+      await this._user.model.user.update({
+        where: { id: userId },
+        data,
+      });
+    }
   }
 
   async getEmailNotifications(userId: string) {

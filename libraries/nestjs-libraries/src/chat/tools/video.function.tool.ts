@@ -1,10 +1,10 @@
-import { AgentToolInterface } from '@gitroom/nestjs-libraries/chat/agent.tool.interface';
+import { AgentToolInterface } from '@postsider/nestjs-libraries/chat/agent.tool.interface';
 import { createTool } from '@mastra/core/tools';
 import { Injectable } from '@nestjs/common';
-import { VideoManager } from '@gitroom/nestjs-libraries/videos/video.manager';
+import { VideoManager } from '@postsider/nestjs-libraries/videos/video.manager';
 import z from 'zod';
 import { ModuleRef } from '@nestjs/core';
-import { checkAuth } from '@gitroom/nestjs-libraries/chat/auth.context';
+import { checkAuth } from '@postsider/nestjs-libraries/chat/auth.context';
 
 @Injectable()
 export class VideoFunctionTool implements AgentToolInterface {

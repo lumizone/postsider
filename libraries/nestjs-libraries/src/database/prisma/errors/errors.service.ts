@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ErrorsRepository } from '@gitroom/nestjs-libraries/database/prisma/errors/errors.repository';
+import { ErrorsRepository } from '@postsider/nestjs-libraries/database/prisma/errors/errors.repository';
 
 @Injectable()
 export class ErrorsService {

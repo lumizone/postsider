@@ -19,7 +19,9 @@ export class ExtractContentService {
     const dom = new JSDOM(load);
 
     // only element that has a title
-    const allTitles = Array.from(dom.window.document.querySelectorAll('*'))
+    const allTitles = (
+      Array.from(dom.window.document.querySelectorAll('*')) as Element[]
+    )
       .filter((f) => {
         return (
           f.querySelector('h1') ||
@@ -32,7 +34,11 @@ export class ExtractContentService {
       })
       .reverse();
 
-    const findTheOneWithMostTitles = allTitles.reduce(
+    const findTheOneWithMostTitles = allTitles.reduce<{
+      total: number;
+      depth: number;
+      element: Element | null;
+    }>(
       (all, current) => {
         const depth = findDepth(current);
         const calculate = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].reduce(
@@ -55,7 +61,7 @@ export class ExtractContentService {
 
         return all;
       },
-      { total: 0, depth: 0, element: null as Element | null }
+      { total: 0, depth: 0, element: null }
     );
 
     return findTheOneWithMostTitles?.element?.textContent

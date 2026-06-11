@@ -3,11 +3,11 @@ import { Reflector } from '@nestjs/core';
 import {
   AppAbility,
   PermissionsService,
-} from '@gitroom/backend/services/auth/permissions/permissions.service';
+} from '@postsider/backend/services/auth/permissions/permissions.service';
 import {
   AbilityPolicy,
   CHECK_POLICIES_KEY,
-} from '@gitroom/backend/services/auth/permissions/permissions.ability';
+} from '@postsider/backend/services/auth/permissions/permissions.ability';
 import { Organization } from '@prisma/client';
 import { Request } from 'express';
 import { SubscriptionException } from './permission.exception.class';
@@ -22,10 +22,10 @@ export class PoliciesGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request: Request = context.switchToHttp().getRequest();
     if (
-      request.path.indexOf('/auth') > -1 ||
-      request.path.indexOf('/auth') > -1 ||
-      request.path.indexOf('/integrations/social-connect') > -1 ||
-      request.path.indexOf('/integrations/provider') > -1
+      request.path.startsWith('/auth') ||
+      request.path.startsWith('/public') ||
+      request.path.startsWith('/integrations/social-connect') ||
+      request.path.startsWith('/integrations/provider/')
     ) {
       return true;
     }

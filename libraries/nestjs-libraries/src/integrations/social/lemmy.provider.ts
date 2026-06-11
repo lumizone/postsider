@@ -3,17 +3,17 @@ import {
   PostDetails,
   PostResponse,
   SocialProvider,
-} from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
+} from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import {
   SocialAbstract,
   ValidityMedia,
-} from '@gitroom/nestjs-libraries/integrations/social.abstract';
+} from '@postsider/nestjs-libraries/integrations/social.abstract';
 import dayjs from 'dayjs';
 import { Integration } from '@prisma/client';
-import { AuthService } from '@gitroom/helpers/auth/auth.service';
-import { LemmySettingsDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/lemmy.dto';
-import { Tool } from '@gitroom/nestjs-libraries/integrations/tool.decorator';
+import { AuthService } from '@postsider/helpers/auth/auth.service';
+import { LemmySettingsDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/lemmy.dto';
+import { Tool } from '@postsider/nestjs-libraries/integrations/tool.decorator';
 
 export class LemmyProvider extends SocialAbstract implements SocialProvider {
   override maxConcurrentJob = 3; // Lemmy instances typically have moderate limits
@@ -141,7 +141,7 @@ export class LemmyProvider extends SocialAbstract implements SocialProvider {
 
   private async getJwtAndService(integration: Integration): Promise<{ jwt: string; service: string }> {
     const body = JSON.parse(
-      AuthService.fixedDecryption(integration.customInstanceDetails!)
+      AuthService.decryptSecret(integration.customInstanceDetails!)
     );
 
     const { jwt } = await (
@@ -172,16 +172,6 @@ export class LemmyProvider extends SocialAbstract implements SocialProvider {
     const valueArray: PostResponse[] = [];
 
     for (const lemmy of firstPost.settings.subreddit) {
-      console.log({
-        community_id: +lemmy.value.id,
-        name: lemmy.value.title,
-        body: firstPost.message,
-        ...(lemmy.value.url ? { url: lemmy.value.url } : {}),
-        ...(firstPost.media?.length
-          ? { custom_thumbnail: firstPost.media[0].path }
-          : {}),
-        nsfw: false,
-      });
       const { post_view } = await (
         await fetch(service + '/api/v3/post', {
           body: JSON.stringify({

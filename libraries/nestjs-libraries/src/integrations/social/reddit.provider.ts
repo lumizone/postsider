@@ -3,21 +3,21 @@ import {
   PostDetails,
   PostResponse,
   SocialProvider,
-} from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
-import { RedditSettingsDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/reddit.dto';
-import { timer } from '@gitroom/helpers/utils/timer';
+} from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
+import { RedditSettingsDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/reddit.dto';
+import { timer } from '@postsider/helpers/utils/timer';
 import { groupBy } from 'lodash';
 import {
   SocialAbstract,
   ValidityMedia,
-} from '@gitroom/nestjs-libraries/integrations/social.abstract';
+} from '@postsider/nestjs-libraries/integrations/social.abstract';
 import { lookup } from 'mime-types';
 import axios from 'axios';
 import WebSocket from 'ws';
-import { Tool } from '@gitroom/nestjs-libraries/integrations/tool.decorator';
+import { Tool } from '@postsider/nestjs-libraries/integrations/tool.decorator';
 import { Integration } from '@prisma/client';
-import { hasExtension } from '@gitroom/helpers/utils/has.extension';
+import { hasExtension } from '@postsider/helpers/utils/has.extension';
 
 // @ts-ignore
 global.WebSocket = WebSocket;
@@ -156,7 +156,7 @@ export class RedditProvider extends SocialAbstract implements SocialProvider {
   private async uploadFileToReddit(accessToken: string, path: string) {
     const mimeType = lookup(path);
     const formData = new FormData();
-    formData.append('filepath', path.split('/').pop());
+    formData.append('filepath', path.split('/').pop()!);
     formData.append('mimetype', mimeType || 'application/octet-stream');
 
     const {
@@ -213,7 +213,7 @@ export class RedditProvider extends SocialAbstract implements SocialProvider {
     for (const firstPostSettings of post.settings.subreddit) {
       const kind =
         firstPostSettings.value.type === 'media'
-          ? hasExtension(post.media[0].path, 'mp4')
+          ? hasExtension(post.media![0].path, 'mp4')
             ? 'video'
             : 'image'
           : firstPostSettings.value.type;
@@ -236,13 +236,13 @@ export class RedditProvider extends SocialAbstract implements SocialProvider {
           ? {
               url: await this.uploadFileToReddit(
                 accessToken,
-                post.media[0].path
+                post.media![0].path
               ),
-              ...(hasExtension(post.media[0].path, 'mp4')
+              ...(hasExtension(post.media![0].path, 'mp4')
                 ? {
                     video_poster_url: await this.uploadFileToReddit(
                       accessToken,
-                      post.media[0].thumbnail
+                      post.media![0].thumbnail!
                     ),
                   }
                 : {}),
@@ -409,7 +409,7 @@ export class RedditProvider extends SocialAbstract implements SocialProvider {
   }
 
   private getPermissions(submissionType: string, allow_images: string) {
-    const permissions = [];
+    const permissions: string[] = [];
     if (['any', 'self'].indexOf(submissionType) > -1) {
       permissions.push('self');
     }

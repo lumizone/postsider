@@ -1,17 +1,17 @@
 import { HttpException, Injectable } from '@nestjs/common';
-import { MediaRepository } from '@gitroom/nestjs-libraries/database/prisma/media/media.repository';
-import { OpenaiService } from '@gitroom/nestjs-libraries/openai/openai.service';
-import { SubscriptionService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/subscription.service';
+import { MediaRepository } from '@postsider/nestjs-libraries/database/prisma/media/media.repository';
+import { OpenaiService } from '@postsider/nestjs-libraries/openai/openai.service';
+import { SubscriptionService } from '@postsider/nestjs-libraries/database/prisma/subscriptions/subscription.service';
 import { Organization } from '@prisma/client';
-import { SaveMediaInformationDto } from '@gitroom/nestjs-libraries/dtos/media/save.media.information.dto';
-import { VideoManager } from '@gitroom/nestjs-libraries/videos/video.manager';
-import { VideoDto } from '@gitroom/nestjs-libraries/dtos/videos/video.dto';
-import { UploadFactory } from '@gitroom/nestjs-libraries/upload/upload.factory';
+import { SaveMediaInformationDto } from '@postsider/nestjs-libraries/dtos/media/save.media.information.dto';
+import { VideoManager } from '@postsider/nestjs-libraries/videos/video.manager';
+import { VideoDto } from '@postsider/nestjs-libraries/dtos/videos/video.dto';
+import { UploadFactory } from '@postsider/nestjs-libraries/upload/upload.factory';
 import {
   AuthorizationActions,
   Sections,
   SubscriptionException,
-} from '@gitroom/backend/services/auth/permissions/permission.exception.class';
+} from '@postsider/backend/services/auth/permissions/permission.exception.class';
 
 @Injectable()
 export class MediaService {
@@ -24,12 +24,95 @@ export class MediaService {
     private _videoManager: VideoManager
   ) {}
 
+  /**
+   * Soft-delete the DB row and best-effort permanently remove the underlying
+   * blob from storage so the bucket / disk does not accumulate orphan files.
+   *
+   * The blob is removed only when the soft-delete actually persisted (i.e.
+   * the row exists and belongs to the org). Storage failures are logged but
+   * not propagated: we prefer a successful logical delete over a 500 that
+   * leaves the user unable to clean up their library.
+   */
   async deleteMedia(org: string, id: string) {
-    return this._mediaRepository.deleteMedia(org, id);
+    const existing = await this._mediaRepository.getMediaById(id);
+    const result = await this._mediaRepository.deleteMedia(org, id);
+
+    if (existing?.path && existing.organizationId === org) {
+      try {
+        await this.storage.removeFile(existing.path);
+      } catch (err) {
+        console.error('Failed to remove physical file for media', id, err);
+      }
+    }
+
+    return result;
   }
 
   getMediaById(id: string) {
     return this._mediaRepository.getMediaById(id);
+  }
+
+  /**
+   * Delete every media file that is not referenced by any post (by path,
+   * filename, or id). Soft-deletes the DB rows and best-effort removes the
+   * underlying blobs. Returns how many were removed.
+   */
+  async deleteUnusedMedia(org: string) {
+    const all = await this._mediaRepository.listAllForOrg(org);
+    if (all.length === 0) {
+      return { deleted: 0 };
+    }
+
+    const posts = await this._mediaRepository.getPostMediaReferences(org);
+    const haystack = posts
+      .map((p) => `${p.content ?? ''}\n${p.image ?? ''}`)
+      .join('\n');
+
+    const unused = all.filter((m) => {
+      if (m.path && haystack.includes(m.path)) return false;
+      const base = m.path?.split('/').pop();
+      if (base && haystack.includes(base)) return false;
+      if (m.id && haystack.includes(m.id)) return false;
+      return true;
+    });
+
+    if (unused.length === 0) {
+      return { deleted: 0 };
+    }
+
+    await this._mediaRepository.softDeleteByIds(
+      org,
+      unused.map((m) => m.id)
+    );
+    await this.removeBlobs(unused);
+    return { deleted: unused.length };
+  }
+
+  /**
+   * Permanently clears the media library for an organization: soft-deletes all
+   * rows and best-effort removes the underlying blobs. Destructive — guarded by
+   * a typed confirmation in the UI and an admin check in the controller.
+   */
+  async deleteAllMedia(org: string) {
+    const all = await this._mediaRepository.listAllForOrg(org);
+    if (all.length === 0) {
+      return { deleted: 0 };
+    }
+    await this._mediaRepository.softDeleteAllForOrg(org);
+    await this.removeBlobs(all);
+    return { deleted: all.length };
+  }
+
+  /** Best-effort physical removal of a set of media blobs. */
+  private async removeBlobs(items: { id: string; path: string }[]) {
+    for (const m of items) {
+      if (!m.path) continue;
+      try {
+        await this.storage.removeFile(m.path);
+      } catch (err) {
+        console.error('Failed to remove physical file for media', m.id, err);
+      }
+    }
   }
 
   async generateImage(
@@ -43,7 +126,6 @@ export class MediaService {
       async () => {
         if (generatePromptFirst) {
           prompt = await this._openAi.generatePromptForPicture(prompt);
-          console.log('Prompt:', prompt);
         }
         return this._openAi.generateImage(prompt);
       }
@@ -52,8 +134,20 @@ export class MediaService {
     return generating;
   }
 
-  saveFile(org: string, fileName: string, filePath: string, originalName?: string) {
-    return this._mediaRepository.saveFile(org, fileName, filePath, originalName);
+  saveFile(
+    org: string,
+    fileName: string,
+    filePath: string,
+    originalName?: string,
+    type: 'image' | 'video' | 'audio' = 'image'
+  ) {
+    return this._mediaRepository.saveFile(
+      org,
+      fileName,
+      filePath,
+      originalName,
+      type
+    );
   }
 
   getMedia(org: string, page: number, search?: string) {
@@ -103,9 +197,7 @@ export class MediaService {
       throw new HttpException('This video is not available in trial mode', 406);
     }
 
-    console.log(body.customParams);
     await video.instance.processAndValidate(body.customParams);
-    console.log('no err');
 
     return await this._subscriptionService.useCredit(
       org,
@@ -117,7 +209,13 @@ export class MediaService {
         );
 
         const file = await this.storage.uploadSimple(loadedData);
-        return this.saveFile(org.id, file.split('/').pop(), file);
+        return this.saveFile(
+          org.id,
+          file.split('/').pop()!,
+          file,
+          undefined,
+          'video'
+        );
       }
     );
   }

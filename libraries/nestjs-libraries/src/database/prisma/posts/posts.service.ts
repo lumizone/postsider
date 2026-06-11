@@ -3,10 +3,10 @@ import {
   Injectable,
   ValidationPipe,
 } from '@nestjs/common';
-import { PostsRepository } from '@gitroom/nestjs-libraries/database/prisma/posts/posts.repository';
-import { CreatePostDto } from '@gitroom/nestjs-libraries/dtos/posts/create.post.dto';
+import { PostsRepository } from '@postsider/nestjs-libraries/database/prisma/posts/posts.repository';
+import { CreatePostDto } from '@postsider/nestjs-libraries/dtos/posts/create.post.dto';
 import dayjs from 'dayjs';
-import { IntegrationManager } from '@gitroom/nestjs-libraries/integrations/integration.manager';
+import { IntegrationManager } from '@postsider/nestjs-libraries/integrations/integration.manager';
 import {
   Integration,
   Post,
@@ -15,25 +15,25 @@ import {
   CreationMethod,
   State,
 } from '@prisma/client';
-import { GetPostsDto } from '@gitroom/nestjs-libraries/dtos/posts/get.posts.dto';
-import { GetPostsListDto } from '@gitroom/nestjs-libraries/dtos/posts/get.posts.list.dto';
+import { GetPostsDto } from '@postsider/nestjs-libraries/dtos/posts/get.posts.dto';
+import { GetPostsListDto } from '@postsider/nestjs-libraries/dtos/posts/get.posts.list.dto';
 import { shuffle } from 'lodash';
-import { CreateGeneratedPostsDto } from '@gitroom/nestjs-libraries/dtos/generator/create.generated.posts.dto';
-import { IntegrationService } from '@gitroom/nestjs-libraries/database/prisma/integrations/integration.service';
-import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
+import { CreateGeneratedPostsDto } from '@postsider/nestjs-libraries/dtos/generator/create.generated.posts.dto';
+import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import utc from 'dayjs/plugin/utc';
-import { MediaService } from '@gitroom/nestjs-libraries/database/prisma/media/media.service';
-import { ShortLinkService } from '@gitroom/nestjs-libraries/short-linking/short.link.service';
-import { CreateTagDto } from '@gitroom/nestjs-libraries/dtos/posts/create.tag.dto';
+import { MediaService } from '@postsider/nestjs-libraries/database/prisma/media/media.service';
+import { ShortLinkService } from '@postsider/nestjs-libraries/short-linking/short.link.service';
+import { CreateTagDto } from '@postsider/nestjs-libraries/dtos/posts/create.tag.dto';
 import {
   minifyPostsList,
   minifyPosts,
-} from '@gitroom/helpers/utils/posts.list.minify';
+} from '@postsider/helpers/utils/posts.list.minify';
 import axios from 'axios';
 import sharp from 'sharp';
-import { UploadFactory } from '@gitroom/nestjs-libraries/upload/upload.factory';
+import { UploadFactory } from '@postsider/nestjs-libraries/upload/upload.factory';
 import { Readable } from 'stream';
-import { OpenaiService } from '@gitroom/nestjs-libraries/openai/openai.service';
+import { OpenaiService } from '@postsider/nestjs-libraries/openai/openai.service';
 dayjs.extend(utc);
 import * as Sentry from '@sentry/nestjs';
 import { TemporalService } from 'nestjs-temporal-core';
@@ -41,18 +41,18 @@ import { TypedSearchAttributes } from '@temporalio/common';
 import {
   organizationId,
   postId as postIdSearchParam,
-} from '@gitroom/nestjs-libraries/temporal/temporal.search.attribute';
-import { AnalyticsData } from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
-import { timer } from '@gitroom/helpers/utils/timer';
-import { ioRedis } from '@gitroom/nestjs-libraries/redis/redis.service';
-import { RefreshToken } from '@gitroom/nestjs-libraries/integrations/social.abstract';
-import { RefreshIntegrationService } from '@gitroom/nestjs-libraries/integrations/refresh.integration.service';
-import { hasExtension } from '@gitroom/helpers/utils/has.extension';
-import { stripLinks } from '@gitroom/helpers/utils/strip.links';
+} from '@postsider/nestjs-libraries/temporal/temporal.search.attribute';
+import { AnalyticsData } from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { timer } from '@postsider/helpers/utils/timer';
+import { ioRedis } from '@postsider/nestjs-libraries/redis/redis.service';
+import { RefreshToken } from '@postsider/nestjs-libraries/integrations/social.abstract';
+import { RefreshIntegrationService } from '@postsider/nestjs-libraries/integrations/refresh.integration.service';
+import { hasExtension } from '@postsider/helpers/utils/has.extension';
+import { stripLinks } from '@postsider/helpers/utils/strip.links';
 import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
-import { stripHtmlValidation } from '@gitroom/helpers/utils/strip.html.validation';
-import { weightedLength } from '@gitroom/helpers/utils/count.length';
+import { stripHtmlValidation } from '@postsider/helpers/utils/strip.html.validation';
+import { weightedLength } from '@postsider/helpers/utils/count.length';
 
 type PostWithConditionals = Post & {
   integration?: Integration;
@@ -84,7 +84,8 @@ export class PostsService {
   async getMissingContent(
     orgId: string,
     postId: string,
-    forceRefresh = false
+    forceRefresh = false,
+    _retryCount = 0
   ): Promise<{ id: string; url: string }[]> {
     const post = await this._postRepository.getPostById(postId, orgId);
     if (!post || post.releaseId !== 'missing') {
@@ -133,8 +134,8 @@ export class PostsService {
       );
     } catch (e) {
       console.log(e);
-      if (e instanceof RefreshToken) {
-        return this.getMissingContent(orgId, postId, true);
+      if (e instanceof RefreshToken && _retryCount < 3) {
+        return this.getMissingContent(orgId, postId, true, _retryCount + 1);
       }
     }
 
@@ -153,7 +154,8 @@ export class PostsService {
     orgId: string,
     postId: string,
     date: number,
-    forceRefresh = false
+    forceRefresh = false,
+    _retryCount = 0
   ): Promise<AnalyticsData[] | { missing: true }> {
     const post = await this._postRepository.getPostById(postId, orgId);
     if (!post || !post.releaseId) {
@@ -199,12 +201,13 @@ export class PostsService {
       }
     }
 
-    // const getIntegrationData = await ioRedis.get(
-    //   `integration:${orgId}:${post.id}:${date}`
-    // );
-    // if (getIntegrationData) {
-    //   return JSON.parse(getIntegrationData);
-    // }
+    const cacheKey = `integration:${orgId}:${post.id}:${date}`;
+    const getIntegrationData = await ioRedis.get(cacheKey);
+    if (getIntegrationData) {
+      try {
+        return JSON.parse(getIntegrationData);
+      } catch {}
+    }
 
     try {
       const loadAnalytics = await integrationProvider.postAnalytics(
@@ -214,7 +217,7 @@ export class PostsService {
         date
       );
       await ioRedis.set(
-        `integration:${orgId}:${post.id}:${date}`,
+        cacheKey,
         JSON.stringify(loadAnalytics),
         'EX',
         !process.env.NODE_ENV || process.env.NODE_ENV === 'development'
@@ -224,8 +227,8 @@ export class PostsService {
       return loadAnalytics;
     } catch (e) {
       console.log(e);
-      if (e instanceof RefreshToken) {
-        return this.checkPostAnalytics(orgId, postId, date, true);
+      if (e instanceof RefreshToken && _retryCount < 3) {
+        return this.checkPostAnalytics(orgId, postId, date, true, _retryCount + 1);
       }
     }
 
@@ -492,6 +495,10 @@ export class PostsService {
     const loadAll = await this._postRepository.getPostsByGroup(orgId, group);
     const posts = this.arrangePostsByGroup(loadAll, undefined);
 
+    if (!posts?.length) {
+      throw new BadRequestException('Post not found');
+    }
+
     return {
       group: posts?.[0]?.group,
       posts: await Promise.all(
@@ -510,26 +517,34 @@ export class PostsService {
     };
   }
 
-  arrangePostsByGroup(all: any, parent?: string): PostWithConditionals[] {
+  arrangePostsByGroup(all: any, parent?: string, _visited = new Set<string>()): PostWithConditionals[] {
     const findAll = all
       .filter((p: any) =>
         !parent ? !p.parentPostId : p.parentPostId === parent
       )
+      .filter((p: any) => !_visited.has(p.id))
       .map(({ integration, ...all }: any) => ({
         ...all,
         ...(!parent ? { integration } : {}),
       }));
 
+    for (const p of findAll) {
+      _visited.add(p.id);
+    }
+
     return [
       ...findAll,
       ...(findAll.length
-        ? findAll.flatMap((p: any) => this.arrangePostsByGroup(all, p.id))
+        ? findAll.flatMap((p: any) => this.arrangePostsByGroup(all, p.id, _visited))
         : []),
     ];
   }
 
   async getPost(orgId: string, id: string, convertToJPEG = false) {
     const posts = await this.getPostsRecursively(id, true, orgId, true);
+    if (!posts?.length) {
+      throw new BadRequestException('Post not found');
+    }
     const list = {
       group: posts?.[0]?.group,
       posts: await Promise.all(
@@ -663,7 +678,7 @@ export class PostsService {
             query: `postId="${post.id}" AND ExecutionStatus="Running"`,
           });
 
-        for await (const executionInfo of workflows) {
+        for await (const executionInfo of workflows!) {
           try {
             const workflow =
               await this._temporalService.client.getWorkflowHandle(
@@ -680,7 +695,7 @@ export class PostsService {
       } catch (err) {}
     }
 
-    return { error: true };
+    return { success: true };
   }
 
   async countPostsFromDay(orgId: string, date: Date) {
@@ -704,7 +719,7 @@ export class PostsService {
           query: `postId="${postId}" AND ExecutionStatus="Running"`,
         });
 
-      for await (const executionInfo of workflows) {
+      for await (const executionInfo of workflows!) {
         try {
           const workflow = await this._temporalService.client.getWorkflowHandle(
             executionInfo.workflowId
@@ -878,7 +893,7 @@ export class PostsService {
     body: CreatePostDto,
     creationMethod: CreationMethod
   ): Promise<any[]> {
-    const postList = [];
+    const postList: any[] = [];
     for (const post of body.posts) {
       const provider = this._integrationManager.getSocialIntegration(
         (post.settings as any)?.__type
@@ -911,7 +926,10 @@ export class PostsService {
       );
 
       if (!posts?.length) {
-        return [] as any[];
+        // This channel produced no posts (e.g. nothing to persist) — skip it
+        // and keep processing the remaining channels instead of aborting the
+        // whole batch and silently discarding posts already created.
+        continue;
       }
 
       if (body.type !== 'update') {
@@ -935,6 +953,67 @@ export class PostsService {
 
   async separatePosts(content: string, len: number) {
     return this._openaiService.separatePosts(content, len);
+  }
+
+  /**
+   * Duplicate a post group as a new draft.
+   * Copies all content and media. Optionally re-targets to a different channel.
+   */
+  async duplicatePost(
+    orgId: string,
+    group: string,
+    targetIntegrationId?: string,
+    date?: string,
+  ) {
+    const loadAll = await this._postRepository.getPostsByGroup(orgId, group);
+    if (!loadAll?.length) {
+      throw new BadRequestException('Post group not found');
+    }
+
+    const source = this.arrangePostsByGroup(loadAll, undefined);
+    const firstPost = source[0];
+
+    // Resolve target integration (same channel or different)
+    const integrationId = targetIntegrationId || firstPost.integrationId;
+    const integration = await this._integrationService.getIntegrationById(
+      orgId,
+      integrationId,
+    );
+    if (!integration) {
+      throw new BadRequestException('Target channel not found');
+    }
+
+    // Build the payload in the same shape createPost expects
+    const value = source.map((p) => ({
+      content: p.content || '',
+      image: JSON.parse(p.image || '[]'),
+    }));
+
+    const postPayload = {
+      type: 'draft' as const,
+      date: date || dayjs().add(1, 'day').format('YYYY-MM-DDTHH:mm:00'),
+      shortLink: false,
+      tags: [] as any[],
+      posts: [
+        {
+          integration: { id: integrationId },
+          value,
+          settings: {
+            __type: integration.providerIdentifier,
+          },
+          group: '',
+        },
+      ],
+    };
+
+    const mapped = await this.mapTypeToPost(postPayload as any, orgId);
+    const result = await this.createPost(orgId, mapped, 'WEB');
+
+    return {
+      duplicated: true,
+      source: { group, integration: firstPost.integrationId },
+      target: { group: result[0]?.postId, integration: integrationId },
+    };
   }
 
   async changeState(id: string, state: State, err?: any, body?: any) {
@@ -973,6 +1052,10 @@ export class PostsService {
     action: 'schedule' | 'update' = 'schedule'
   ) {
     const getPostById = await this._postRepository.getPostById(id, orgId);
+
+    if (!getPostById) {
+      throw new BadRequestException('Post not found');
+    }
 
     // schedule: Set status to QUEUE and change date (reschedule the post)
     // update: Just change the date without changing the status
@@ -1163,12 +1246,19 @@ export class PostsService {
     return this._postRepository.deleteTag(id, orgId);
   }
 
-  createComment(
+  async createComment(
     orgId: string,
     userId: string,
     postId: string,
     comment: string
   ) {
+    // Make sure the post actually belongs to this organization before
+    // attaching a comment — otherwise a user could comment on posts by id
+    // across organizations.
+    const post = await this._postRepository.getPostById(postId, orgId);
+    if (!post) {
+      throw new BadRequestException('Post not found');
+    }
     return this._postRepository.createComment(orgId, userId, postId, comment);
   }
 }

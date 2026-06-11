@@ -1,16 +1,16 @@
-import { AgentToolInterface } from '@gitroom/nestjs-libraries/chat/agent.tool.interface';
+import { AgentToolInterface } from '@postsider/nestjs-libraries/chat/agent.tool.interface';
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import { Injectable } from '@nestjs/common';
 import {
   IntegrationManager,
   socialIntegrationList,
-} from '@gitroom/nestjs-libraries/integrations/integration.manager';
-import { IntegrationService } from '@gitroom/nestjs-libraries/database/prisma/integrations/integration.service';
-import { RefreshToken } from '@gitroom/nestjs-libraries/integrations/social.abstract';
-import { timer } from '@gitroom/helpers/utils/timer';
-import { checkAuth } from '@gitroom/nestjs-libraries/chat/auth.context';
-import { RefreshIntegrationService } from '@gitroom/nestjs-libraries/integrations/refresh.integration.service';
+} from '@postsider/nestjs-libraries/integrations/integration.manager';
+import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
+import { RefreshToken } from '@postsider/nestjs-libraries/integrations/social.abstract';
+import { timer } from '@postsider/helpers/utils/timer';
+import { checkAuth } from '@postsider/nestjs-libraries/chat/auth.context';
+import { RefreshIntegrationService } from '@postsider/nestjs-libraries/integrations/refresh.integration.service';
 
 @Injectable()
 export class IntegrationTriggerTool implements AgentToolInterface {
