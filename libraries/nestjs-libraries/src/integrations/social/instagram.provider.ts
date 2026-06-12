@@ -546,24 +546,38 @@ export class InstagramProvider
       pageId: p.pageId,
       id: p.id,
       name: p.name,
-      picture: { data: { url: p.profile_picture_url } },
+      picture: p.profile_picture_url,
     }));
   }
 
   async fetchPageInformation(
     token: string,
-    data: { pageId: string; id: string }
+    data: { page?: string; id?: string; pageId?: string }
   ) {
     const [accessToken, userToken] = token.split('___');
+
+    // The page picker posts { page: <instagram account id> }; reConnect posts
+    // { id, pageId }. Support both: derive the Instagram account id, and resolve
+    // its parent Facebook page id (needed for the page-scoped token) when the
+    // caller only knows the Instagram id.
+    const instagramId = data.id || data.page!;
+    let pageId = data.pageId;
+    if (!pageId) {
+      const match = (await this.pages(accessToken)).find(
+        (p) => p.id === instagramId
+      );
+      pageId = match?.pageId;
+    }
+
     const { access_token, ...all } = await (
       await fetch(
-        `https://graph.facebook.com/v20.0/${data.pageId}?fields=access_token,name,picture.type(large)&access_token=${accessToken}`
+        `https://graph.facebook.com/v20.0/${pageId}?fields=access_token,name,picture.type(large)&access_token=${accessToken}`
       )
     ).json();
 
     const { id, name, profile_picture_url, username } = await (
       await fetch(
-        `https://graph.facebook.com/v20.0/${data.id}?fields=username,name,profile_picture_url&access_token=${accessToken}`
+        `https://graph.facebook.com/v20.0/${instagramId}?fields=username,name,profile_picture_url&access_token=${accessToken}`
       )
     ).json();
 

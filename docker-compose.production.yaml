@@ -30,9 +30,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1280M
+          memory: 2560M
         reservations:
-          memory: 512M
+          memory: 1024M
     volumes:
       - postsider-config:/config/
     ports:

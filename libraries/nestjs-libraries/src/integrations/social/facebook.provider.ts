@@ -384,7 +384,12 @@ export class FacebookProvider extends SocialAbstract implements SocialProvider {
       // Business Manager API not available for all users
     }
 
-    return allPages;
+    // Flatten the Graph API picture object to a plain URL so the channel picker
+    // (which renders <img src={picture}>) shows the avatar instead of breaking.
+    return allPages.map((p: any) => ({
+      ...p,
+      picture: p.picture?.data?.url || '',
+    }));
   }
 
   async fetchPageInformation(accessToken: string, data: { page: string }) {

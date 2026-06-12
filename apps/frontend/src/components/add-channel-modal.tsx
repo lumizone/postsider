@@ -43,7 +43,7 @@ const ALL_PLATFORMS: PlatformOption[] = [
 
   // Tier 3 — video / streaming
   { id: "twitch", label: "Twitch", iconKey: "Twitch" },
-  { id: "kick", label: "Kick", iconKey: "Kick" },
+  // Kick hidden until the integration works — re-add when fixed.
   { id: "rumble", label: "Rumble", iconKey: "Rumble" },
 
   // Tier 4 — alt / federated social

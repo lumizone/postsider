@@ -238,7 +238,7 @@ export class GmbProvider extends SocialAbstract implements SocialProvider {
     const allLocations: Array<{
       id: string;
       name: string;
-      picture: { data: { url: string } };
+      picture: string;
       accountName: string;
       locationName: string;
     }> = [];
@@ -307,7 +307,7 @@ export class GmbProvider extends SocialAbstract implements SocialProvider {
                 // id is the full resource path for the v4 API: accounts/{accountId}/locations/{locationId}
                 id: fullResourceName,
                 name: location.title || 'Unnamed Location',
-                picture: { data: { url: photoUrl } },
+                picture: photoUrl,
                 accountName: accountName,
                 locationName: location.name,
               });
@@ -329,13 +329,32 @@ export class GmbProvider extends SocialAbstract implements SocialProvider {
 
   async fetchPageInformation(
     accessToken: string,
-    data: { id: string; accountName: string; locationName: string }
+    data: {
+      id?: string;
+      page?: string;
+      accountName?: string;
+      locationName?: string;
+    }
   ) {
-    // data.id is the full resource path: accounts/{accountId}/locations/{locationId}
-    // data.locationName is the v1 API format: locations/{locationId}
+    // The page picker posts { page: <full resource path> } and nothing else;
+    // reConnect posts { id, accountName, locationName }. Support both: derive the
+    // full resource path, and resolve accountName/locationName via pages() when
+    // the caller (the picker) didn't supply them.
+    const fullResourceName = data.id || data.page!;
+    let { accountName, locationName } = data;
+    if (!locationName) {
+      const match = (await this.pages(accessToken)).find(
+        (p) => p.id === fullResourceName
+      );
+      accountName = match?.accountName;
+      locationName = match?.locationName;
+    }
+
+    // fullResourceName is the full path: accounts/{accountId}/locations/{locationId}
+    // locationName is the v1 API format: locations/{locationId}
     // Fetch location details using the v1 API format
     const locationResponse = await fetch(
-      `https://mybusinessbusinessinformation.googleapis.com/v1/${data.locationName}?readMask=name,title,storefrontAddress,metadata`,
+      `https://mybusinessbusinessinformation.googleapis.com/v1/${locationName}?readMask=name,title,storefrontAddress,metadata`,
       {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -348,7 +367,7 @@ export class GmbProvider extends SocialAbstract implements SocialProvider {
     let photoUrl = '';
     try {
       const mediaResponse = await fetch(
-        `https://mybusinessbusinessinformation.googleapis.com/v1/${data.locationName}/media`,
+        `https://mybusinessbusinessinformation.googleapis.com/v1/${locationName}/media`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -374,7 +393,7 @@ export class GmbProvider extends SocialAbstract implements SocialProvider {
 
     return {
       // Return the full resource path as id (for v4 Local Posts API)
-      id: data.id,
+      id: fullResourceName,
       name: locationData.title || 'Unnamed Location',
       access_token: accessToken,
       picture: photoUrl,

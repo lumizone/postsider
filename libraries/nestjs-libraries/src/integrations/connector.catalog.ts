@@ -52,8 +52,8 @@ const EMAIL_CONNECTORS: ConnectorDefinition[] = [
     identifier: 'gmail',
     label: 'Gmail',
     iconUrl: '/icons/connectors/gmail.png',
-    capabilities: ['PUBLISH', 'SOURCE'],
-    requiredScopes: ['https://www.googleapis.com/auth/gmail.send'],
+    capabilities: ['PUBLISH'],
+    requiredScopes: [],
   },
   {
     identifier: 'smtp',

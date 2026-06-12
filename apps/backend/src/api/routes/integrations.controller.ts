@@ -372,7 +372,8 @@ export class IntegrationsController {
       twitch: { TWITCH_CLIENT_ID: 'clientId', TWITCH_CLIENT_SECRET: 'clientSecret' },
       mastodon: { MASTODON_CLIENT_ID: 'clientId', MASTODON_CLIENT_SECRET: 'clientSecret' },
       vk: { VK_ID: 'clientId' },
-      gmail: { GOOGLE_GMAIL_CLIENT_ID: 'clientId', GOOGLE_GMAIL_CLIENT_SECRET: 'clientSecret' },
+      // gmail uses SMTP + App Password (customFields), not OAuth — no env mapping.
+      // whop: client id = Whop App ID, client secret = Whop API key.
       whop: { WHOP_CLIENT_ID: 'clientId', WHOP_CLIENT_SECRET: 'clientSecret' },
     };
     return mappings[integration] || {};
