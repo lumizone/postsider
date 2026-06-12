@@ -337,17 +337,20 @@ export class GmbProvider extends SocialAbstract implements SocialProvider {
     }
   ) {
     // The page picker posts { page: <full resource path> } and nothing else;
-    // reConnect posts { id, accountName, locationName }. Support both: derive the
-    // full resource path, and resolve accountName/locationName via pages() when
-    // the caller (the picker) didn't supply them.
-    const fullResourceName = data.id || data.page!;
-    let { accountName, locationName } = data;
-    if (!locationName) {
-      const match = (await this.pages(accessToken)).find(
-        (p) => p.id === fullResourceName
+    // reConnect posts { id, locationName }. Support both. The v1 locationName
+    // (`locations/{locationId}`) is a suffix of the full resource path
+    // (`accounts/{accountId}/locations/{locationId}`), so derive it directly
+    // instead of crawling pages() — avoids a multi-call API round-trip and a
+    // silent `undefined` in the request URL on a lookup miss.
+    const fullResourceName = data.id || data.page;
+    const locationName =
+      data.locationName || fullResourceName?.match(/locations\/[^/]+$/)?.[0];
+    if (!fullResourceName || !locationName) {
+      throw new Error(
+        `GMB fetchPageInformation: cannot resolve locationName from ${JSON.stringify(
+          data
+        )}`
       );
-      accountName = match?.accountName;
-      locationName = match?.locationName;
     }
 
     // fullResourceName is the full path: accounts/{accountId}/locations/{locationId}

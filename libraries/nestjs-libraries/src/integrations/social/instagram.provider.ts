@@ -560,13 +560,22 @@ export class InstagramProvider
     // { id, pageId }. Support both: derive the Instagram account id, and resolve
     // its parent Facebook page id (needed for the page-scoped token) when the
     // caller only knows the Instagram id.
-    const instagramId = data.id || data.page!;
+    const instagramId = data.id || data.page;
     let pageId = data.pageId;
-    if (!pageId) {
+    if (instagramId && !pageId) {
       const match = (await this.pages(accessToken)).find(
         (p) => p.id === instagramId
       );
       pageId = match?.pageId;
+    }
+    if (!instagramId || !pageId) {
+      // Without both ids the Graph calls below would request `/undefined` and
+      // silently finalize a broken channel — fail loudly instead.
+      throw new Error(
+        `Instagram fetchPageInformation: could not resolve account/page for ${JSON.stringify(
+          data
+        )}`
+      );
     }
 
     const { access_token, ...all } = await (

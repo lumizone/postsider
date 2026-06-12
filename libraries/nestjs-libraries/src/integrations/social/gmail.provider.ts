@@ -168,8 +168,11 @@ export class GmailProvider extends SocialAbstract implements SocialProvider {
     const creds = this.parseCredentials(accessToken);
     const settings = postDetails[0].settings;
 
+    // m.path is a public storage URL; nodemailer fetches http(s) `path` itself.
+    // Strip any query string / fragment so the attachment name isn't e.g.
+    // "photo.jpg?token=abc" in the recipient's inbox.
     const attachments = (postDetails[0].media || []).map((m) => ({
-      filename: m.path.split('/').pop() || 'attachment',
+      filename: m.path.split('/').pop()?.split(/[?#]/)[0] || 'attachment',
       path: m.path,
     }));
 
