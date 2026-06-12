@@ -922,7 +922,7 @@ export class InstagramProvider
     );
 
     analytics.push(
-      ...data2.map((d: any) => ({
+      ...(data2?.map((d: any) => ({
         label: this.setTitle(d.name),
         percentageChange: 5,
         data: [
@@ -931,7 +931,7 @@ export class InstagramProvider
             date: dayjs().format('YYYY-MM-DD'),
           },
         ],
-      }))
+      })) || [])
     );
 
     return analytics;

@@ -119,10 +119,6 @@ export function LoginForm() {
           {loading ? t("auth.signingIn") : t("auth.signIn")}
         </button>
       </form>
-
-      <div className={styles.forgotLink}>
-        <Link href="/forgot">{t("auth.forgotPassword")}</Link>
-      </div>
     </AuthShell>
   );
 }

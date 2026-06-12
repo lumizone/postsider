@@ -117,7 +117,10 @@ export class GmailProvider extends SocialAbstract implements SocialProvider {
       {
         key: 'password',
         label: 'App Password (16 characters)',
-        validation: `/^[a-z]{4}\\s?[a-z]{4}\\s?[a-z]{4}\\s?[a-z]{4}$/i`,
+        // 16 letters, any whitespace allowed between them (Google shows it as
+        // 4×4 groups, but users paste it spaced/unspaced). The backend strips all
+        // whitespace, so the form must not reject otherwise-valid spacing.
+        validation: `/^[a-z](\\s*[a-z]){15}$/i`,
         type: 'password' as const,
       },
     ];
