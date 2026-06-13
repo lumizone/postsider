@@ -272,6 +272,12 @@ const en = {
     resetDoneSubtitle: "Your password has been reset. You can now sign in.",
     resetError:
       "Could not reset your password. The link may have expired — request a new one.",
+    activateChecking: "Activating your account…",
+    activateDoneTitle: "Account activated",
+    activateDoneSubtitle: "Your account is ready — taking you in…",
+    activateErrorTitle: "Activation failed",
+    activateErrorSubtitle:
+      "This activation link is invalid or has expired. Try signing in, or register again.",
   },
   onboarding: {
     welcomeTitle: "Welcome{name}!",
