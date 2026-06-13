@@ -41,6 +41,8 @@ ssh -L 8082:127.0.0.1:8082 -L 8080:127.0.0.1:8080 -L 9001:127.0.0.1:9001 <host>
 ```
 DbGate `:8082` (Postgres UI, password = `DBGATE_PASSWORD`), Temporal UI `:8080`
 (no auth), MinIO console `:9001` (`MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY`).
+A public nginx vhost for DbGate (`obsidian-26899d.postsider.com`) was removed —
+keep these SSH-tunnel only; do not re-add a public reverse-proxy vhost.
 
 ## Architecture
 
@@ -75,24 +77,49 @@ finalized via `fetchPageInformation()`. **Convention:** the picker posts
 `pages()`/`companies()` must return `picture` as a plain string URL (the frontend
 renders `<img src={picture}>`).
 
-## Local modifications vs upstream (NOT yet pushed to GitHub)
+## Local modifications vs upstream
 
-These diverge from the fork and are easy to lose — preserve them:
+These diverge from the fork. **All pushed to `lumizone/postsider_app` (main).**
 
 - **Gmail → SMTP.** `gmail.provider.ts` rewritten from OAuth to SMTP + App
   Password (nodemailer, `smtp.gmail.com:465`), via customFields (email + 16-char
   App Password). Removed from `getEnvMapping`. Requires 2FA + App Password on the
-  Google account. `GmailDto` (subject/to/cc/bcc) unchanged.
+  Google account. `GmailDto` (subject/to/cc/bcc) unchanged. Gmail is PUBLISH-only:
+  removed from `SOURCE_CAPABLE_CONNECTORS` in `connector.catalog.ts` (editing the
+  static `EMAIL_CONNECTORS` entry alone is dead code — runtime caps come from the
+  social provider via `deriveCapabilities`).
 - **Provider bug fixes** (page-pick + avatar) in `instagram`, `gmb`, `facebook`,
-  `youtube`: `fetchPageInformation` now reads `data.page`/`data.id`; list
-  functions return `picture` as a string. Frontend `oauth-callback.tsx`: explicit
+  `youtube`: `fetchPageInformation` now reads `data.page`/`data.id` and throws on
+  an unresolvable page/location instead of fetching `/undefined`; list functions
+  return `picture` as a string. GMB derives the v1 `locationName` from the
+  resource path (no `pages()` crawl). Frontend `oauth-callback.tsx`: explicit
   `color: var(--fg)` on picker name/avatar; provider-specific "no pages" message.
 - **Whop** OAuth wired: `WHOP_CLIENT_ID` = App ID, `WHOP_CLIENT_SECRET` = API
   key; provider sends `client_secret` in the token exchange (confidential app).
+  `uploadMediaToWhop` poll is bounded (no infinite loop) and skips media whose
+  file-record create failed (no phantom `{ id: undefined }` attachment).
 - **Kick** hidden in `apps/frontend/src/components/add-channel-modal.tsx`
   (integration not working). `reddit` and `vk` are unconfigured (no keys).
 - `docker-compose.production.yaml`: `postsider-app` memory limit raised
   1280M → 2560M (backend/orchestrator OOM-looped at the default).
+
+### Auth flows (built here; backend was upstream, frontend pages were missing)
+
+- **Password reset** — `/forgot` (request, `POST /auth/forgot`) + reset page at
+  `/auth/forgot/[token]` (`POST /auth/forgot-return`); the email links to
+  `${FRONTEND_URL}/auth/forgot/<token>`. Works now (Resend email is configured).
+- **Account activation** — `/auth/activate/[token]` (`POST /auth/activate`, then
+  refresh session → `/onboarding`); email links to `/auth/activate/<jwt>`.
+  **Dormant**: only triggers when `REQUIRE_EMAIL_ACTIVATION="true"` AND an email
+  provider is set. Currently `REQUIRE_EMAIL_ACTIVATION` is unset + registration is
+  closed, so it never fires — page is ready for when it's enabled.
+- Both email-link targets (`/auth/forgot`, `/auth/activate`) are in
+  `PUBLIC_PATHS` in `app-root.tsx` — otherwise they bounce to `/login` pre-auth.
+- **Onboarding connect fix**: `onboarding-flow.tsx` buttons resolve the real
+  OAuth URL via `getOauthUrl()` first (navigating straight to
+  `/integrations/social/<id>` hits the callback route with no code → error).
+- New i18n keys (`auth.forgot*`/`auth.reset*`/`auth.activate*`) live in `en` only;
+  other locales fall back to `en` (`MessageKey` is derived from `en`).
 
 ## Gotchas
 
