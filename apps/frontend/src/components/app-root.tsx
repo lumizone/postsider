@@ -12,6 +12,8 @@ const PUBLIC_PATHS = [
   "/forgot-return",
   "/activate",
   "/auth/oauth",
+  // Password reset link target from the email: /auth/forgot/<token>
+  "/auth/forgot",
   // OAuth callbacks
   "/integrations/social",
 ];
