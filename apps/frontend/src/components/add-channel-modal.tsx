@@ -34,8 +34,7 @@ const ALL_PLATFORMS: PlatformOption[] = [
     iconKey: "InstagramStandalone",
   },
   { id: "pinterest", label: "Pinterest", iconKey: "Pinterest" },
-  // Reddit hidden for now — re-add when we get to it.
-  // { id: "reddit", label: "Reddit", iconKey: "Reddit" },
+  { id: "reddit", label: "Reddit", iconKey: "Reddit" },
 
   // Tier 2 — chat / community
   { id: "discord", label: "Discord", iconKey: "Discord" },
