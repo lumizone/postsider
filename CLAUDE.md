@@ -101,7 +101,18 @@ These diverge from the fork. **All pushed to `lumizone/postsider_app` (main).**
 - **Kick** hidden in `apps/frontend/src/components/add-channel-modal.tsx`
   (integration not working). `reddit` and `vk` are unconfigured (no keys).
 - `docker-compose.production.yaml`: `postsider-app` memory limit raised
-  1280M → 2560M (backend/orchestrator OOM-looped at the default).
+  1280M → 2560M → **3072M**. The orchestrator runs ~40 Temporal workers (one per
+  platform task-queue) in a single node process; at startup each worker bundles
+  the (identical) 2.95MB workflow code and steady-state sits at ~2.6G. At 2560M
+  it OOM-killed (exit 137) mid-startup and crash-looped (`pm2` restart_time in the
+  thousands), so **scheduled posts never published — they sat in QUEUE forever**
+  (looked like "can't post to Threads" but affected every platform). 3072M clears
+  the startup peak. `--max-old-space-size=1024` is also set on the orchestrator
+  node (Temporal's rec) but the real fix was the limit — the pressure is native
+  (Rust core), not V8 heap. **Durable follow-up:** bundle the workflow once
+  (`bundleWorkflowCode` + `workflowBundle` via `registerAsync` in
+  `temporal.module.ts`) instead of 40× — would cut startup memory and give margin
+  (host is RAM-tight: 11G total, ~2.4G free).
 
 ### Auth flows (built here; backend was upstream, frontend pages were missing)
 
