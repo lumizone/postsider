@@ -52,7 +52,8 @@ const ALL_PLATFORMS: PlatformOption[] = [
   { id: "wrapcast", label: "Farcaster", iconKey: "Farcaster" },
   { id: "nostr", label: "Nostr", iconKey: "Nostr" },
   { id: "lemmy", label: "Lemmy", iconKey: "Lemmy" },
-  { id: "vk", label: "VK", iconKey: "VK" },
+  // VK hidden for now — re-add when we get to it.
+  // { id: "vk", label: "VK", iconKey: "VK" },
   { id: "mewe", label: "MeWe", iconKey: "MeWe" },
 
   // Tier 5 — productivity / business
