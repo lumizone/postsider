@@ -4,7 +4,6 @@ import { PrismaRepository } from '@postsider/nestjs-libraries/database/prisma/pr
 
 export interface AuditEntry {
   organizationId: string;
-  agentTokenId?: string | null;
   operation: string;
   connectorId?: string | null;
   correlationId: string;
@@ -41,7 +40,6 @@ export class AuditLogger {
       await this._auditLog.model.auditLog.create({
         data: {
           organizationId: entry.organizationId,
-          agentTokenId: entry.agentTokenId ?? null,
           operation: entry.operation,
           connectorId: entry.connectorId ?? null,
           correlationId: entry.correlationId,
@@ -59,7 +57,6 @@ export class AuditLogger {
   query(
     organizationId: string,
     filters: {
-      agentTokenId?: string;
       connectorId?: string;
       from?: Date;
       to?: Date;
@@ -72,7 +69,6 @@ export class AuditLogger {
     return this._auditLog.model.auditLog.findMany({
       where: {
         organizationId,
-        ...(filters.agentTokenId ? { agentTokenId: filters.agentTokenId } : {}),
         ...(filters.connectorId ? { connectorId: filters.connectorId } : {}),
         ...(filters.from || filters.to
           ? {

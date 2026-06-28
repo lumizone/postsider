@@ -682,7 +682,6 @@ export class OrganizationRepository {
 
       // Misc org-scoped data
       await tx.webhooks.deleteMany({ where: { organizationId: orgId } });
-      await tx.autoPost.deleteMany({ where: { organizationId: orgId } });
       await tx.sets.deleteMany({ where: { organizationId: orgId } });
       await tx.thirdParty.deleteMany({ where: { organizationId: orgId } });
       await tx.signatures.deleteMany({ where: { organizationId: orgId } });
