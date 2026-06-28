@@ -27,6 +27,17 @@ ENV_FILE=".env.production"
 COMPOSE_FILE="docker-compose.production.yaml"
 COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
 
+# Suppress the host uptime monitor (if one is installed) for the duration of the
+# deploy: during a rebuild the app container restarts and briefly goes
+# unhealthy / endpoints flap, which would otherwise fire false alerts. The flag
+# is removed on exit — success OR failure — via the trap. No-op if the monitor
+# directory does not exist (e.g. a plain self-host install).
+MAINT_FLAG="${MONITOR_MAINTENANCE_FLAG:-/home/ubuntu/monitoring/MAINTENANCE}"
+if [[ -d "$(dirname "$MAINT_FLAG")" ]]; then
+  touch "$MAINT_FLAG" 2>/dev/null || true
+  trap 'rm -f "$MAINT_FLAG" 2>/dev/null || true' EXIT
+fi
+
 BOOTSTRAP=false
 DO_BUILD=true
 for arg in "$@"; do
