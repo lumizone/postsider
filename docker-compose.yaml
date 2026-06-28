@@ -87,12 +87,12 @@ services:
       NEXT_PUBLIC_POLOTNO: ''
       API_LIMIT: 30
 
-      # === Payment / Stripe Settings
+      # === Payment / Billing (Polar.sh)
       FEE_AMOUNT: 0.05
-      STRIPE_PUBLISHABLE_KEY: ''
-      STRIPE_SECRET_KEY: ''
-      STRIPE_SIGNING_KEY: ''
-      STRIPE_SIGNING_KEY_CONNECT: ''
+      POLAR_ACCESS_TOKEN: ''
+      POLAR_SERVER: 'production'
+      POLAR_WEBHOOK_SECRET: ''
+      POLAR_ORGANIZATION_ID: ''
 
       # === Short Link Service Settings (Optional - leave blank if unused)
       # DUB_TOKEN: ""

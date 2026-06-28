@@ -27,6 +27,12 @@ services:
     container_name: postsider-app
     restart: always
     env_file: .env.production
+    environment:
+      # Infra invariants: nginx (inside the image) listens on 5000 and proxies to
+      # the backend on 3000 and the frontend on 4200, so the backend PORT MUST be
+      # 3000. Force it (and prod mode) regardless of what .env.production contains.
+      PORT: "3000"
+      NODE_ENV: "production"
     deploy:
       resources:
         limits:

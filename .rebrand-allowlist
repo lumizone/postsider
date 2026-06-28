@@ -18,10 +18,6 @@ CHANGELOG.md
 # check itself, so it references the legacy names by design (Requirement 22.1).
 docs/MIGRATION.md
 
-# Spec & steering docs intentionally describe the migration from the source
-# project, so they reference the legacy names by design.
-.kiro/**
-
 # The check tooling itself and its allowlist contain the patterns as literals.
 .rebrand-allowlist
 scripts/rebrand-check.mjs
