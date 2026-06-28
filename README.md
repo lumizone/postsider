@@ -175,38 +175,68 @@ Each platform requires its own OAuth credentials. Refer to `.env.example` for th
 
 ### Docker Compose (production)
 
-The included `docker-compose.yaml` runs the full stack:
+`docker-compose.production.yaml` runs the full stack in a single command:
 
-- **PostSider** app (backend + frontend in one container)
+- **PostSider** app (backend + frontend in one container, port 5000)
 - **PostgreSQL 17** (app database)
 - **Redis 7** (caching + rate limiting)
+- **MinIO** (S3-compatible object storage, port 9000)
 - **Temporal** (workflow engine + its own Postgres + Elasticsearch)
 - **Temporal UI** (workflow monitoring, port 8080)
+- **DbGate** (database admin UI, port 8082, optional)
+
+Migrations run automatically at startup via `prisma migrate deploy` before the app starts.
+
+**Steps:**
 
 ```bash
-# Generate a secure JWT secret
-export JWT_SECRET=$(openssl rand -base64 32)
+# 1. Copy the env template
+cp .env.example .env.production
 
-# Start everything
-docker compose up -d
+# 2. Fill in required values: DATABASE_URL, REDIS_URL, JWT_SECRET,
+#    FRONTEND_URL, NEXT_PUBLIC_BACKEND_URL, BACKEND_INTERNAL_URL,
+#    MINIO_ACCESS_KEY, MINIO_SECRET_KEY, POSTGRES_PASSWORD.
+#    Leave POLAR_ACCESS_TOKEN and OPENAI_API_KEY blank for self-host
+#    (billing becomes unlimited; AI features use user-supplied BYO keys).
+#    For each social platform you want, register an OAuth app on the
+#    provider's developer portal and fill in the matching CLIENT_ID /
+#    CLIENT_SECRET vars (see the "Social platform OAuth credentials"
+#    section in .env.example).
+#    Set NEXT_PUBLIC_BACKEND_URL=https://app.yourdomain.com and build
+#    the image (NEXT_PUBLIC_BACKEND_URL is baked into the JS bundle).
+nano .env.production
 
-# Check logs
-docker compose logs -f postsider
+# 3. Build the image (NEXT_PUBLIC_* vars are build-time ARGs)
+source .env.production && docker compose -f docker-compose.production.yaml build \
+  --build-arg NEXT_PUBLIC_BACKEND_URL="$NEXT_PUBLIC_BACKEND_URL"
+
+# 4. Start everything
+docker compose -f docker-compose.production.yaml up -d
+
+# 5. Create the first admin account
+docker exec -it postsider-app pnpm bootstrap
+
+# 6. Check logs
+docker compose -f docker-compose.production.yaml logs -f postsider
 ```
+
+The app is then available on port 5000 (put nginx or a reverse proxy in front for HTTPS).
 
 ### Updating
 
 ```bash
-docker compose pull
-docker compose up -d
+docker compose -f docker-compose.production.yaml pull
+docker compose -f docker-compose.production.yaml up -d
 ```
+
+Migrations run automatically on each restart.
 
 ### Backups
 
 The critical data lives in PostgreSQL. Back up the `postsider-postgres` volume regularly:
 
 ```bash
-docker exec postsider-postgres pg_dump -U postsider-user postsider-db-local > backup.sql
+docker exec postsider-postgres pg_dump -U postsider postsider_prod > backup.sql
 ```
 
 ---
