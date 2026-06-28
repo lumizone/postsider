@@ -84,53 +84,6 @@ export default class Postsider {
     ).json();
   }
 
-  /** Agent Bridge: list connectors with capabilities and authorization status. */
-  async listConnectors() {
-    return (
-      await fetch(`${this._path}/public/v1/connectors`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: this._apiKey,
-        },
-      })
-    ).json();
-  }
-
-  /** Agent Bridge: start authorization for a connector (returns an OAuth URL or { authorized: true }). */
-  async authorizeConnector(connectorId: string) {
-    return (
-      await fetch(
-        `${this._path}/public/v1/connectors/${connectorId}/authorize`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: this._apiKey,
-          },
-        }
-      )
-    ).json();
-  }
-
-  /** Agent Bridge: analytics for a connector over a date range. */
-  async connectorAnalytics(connectorId: string, date: string) {
-    return (
-      await fetch(
-        `${this._path}/public/v1/connectors/${connectorId}/analytics?date=${encodeURIComponent(
-          date
-        )}`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: this._apiKey,
-          },
-        }
-      )
-    ).json();
-  }
-
   /**
    * Verify an inbound webhook HMAC signature (Requirement 19.3).
    * `signature` is the value of the `X-Postsider-Signature` header
