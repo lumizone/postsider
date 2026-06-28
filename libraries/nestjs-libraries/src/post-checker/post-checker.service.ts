@@ -33,11 +33,11 @@ export class PostCheckerService {
   constructor(
     private _openai: OpenaiService,
     private _creds: ProviderCredentialsService,
-    private _openaiByo: OpenaiCheckProvider,
-    private _deepseek: DeepseekCheckProvider,
-    private _gemini: GeminiCheckProvider
+    openaiByo: OpenaiCheckProvider,
+    deepseek: DeepseekCheckProvider,
+    gemini: GeminiCheckProvider
   ) {
-    this.providers = [this._openaiByo, this._deepseek, this._gemini];
+    this.providers = [openaiByo, deepseek, gemini];
   }
 
   // ---- self-host BYO config (no-op surface when platform AI is on) ----
