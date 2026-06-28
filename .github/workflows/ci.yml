@@ -62,6 +62,8 @@ jobs:
         run: pnpm --filter ./apps/frontend run build
       - name: Tests
         run: pnpm test
+      - name: MCP server tests
+        run: NODE_OPTIONS=--experimental-vm-modules pnpm exec jest -c apps/mcp/jest.config.cjs
 
   audit:
     name: Dependency audit

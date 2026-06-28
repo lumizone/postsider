@@ -18,6 +18,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { PostsiderClient } from './client.js';
+import { buildCreatePostBody } from './post-body.js';
 
 const apiKey = process.env.POSTSIDER_API_KEY;
 const baseUrl = process.env.POSTSIDER_API_URL || 'https://api.postsider.com';
@@ -343,18 +344,7 @@ server.registerTool(
   },
   async ({ type, date, shortLink, posts, tags }) => {
     try {
-      const body = {
-        type,
-        date,
-        shortLink,
-        tags: tags ?? [],
-        posts: posts.map((p) => ({
-          integration: { id: p.channelId },
-          value: [{ content: p.content, image: p.images ?? [] }],
-          ...(p.firstComment ? { firstComment: p.firstComment } : {}),
-          settings: p.settings ?? {},
-        })),
-      };
+      const body = buildCreatePostBody({ type, date, shortLink, posts, tags });
       return ok(await client.post('/posts', body));
     } catch (e) {
       return fail(e);
