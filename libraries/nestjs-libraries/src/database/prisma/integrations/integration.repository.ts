@@ -495,6 +495,26 @@ export class IntegrationRepository {
     });
   }
 
+  // All live integrations (every org) eligible to have their token-refresh
+  // workflow (re-)armed on boot. Excludes deleted/disabled/already-broken
+  // (refreshNeeded) and half-connected (inBetweenSteps) channels.
+  getAllForRefreshArming() {
+    return this._integration.model.integration.findMany({
+      where: {
+        deletedAt: null,
+        disabled: false,
+        refreshNeeded: false,
+        inBetweenSteps: false,
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        providerIdentifier: true,
+        refreshToken: true,
+      },
+    });
+  }
+
   async disableChannel(org: string, id: string) {
     await this._integration.model.integration.update({
       where: {

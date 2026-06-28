@@ -1,4 +1,9 @@
-import { forwardRef, Inject, Injectable } from '@nestjs/common';
+import {
+  forwardRef,
+  Inject,
+  Injectable,
+  OnApplicationBootstrap,
+} from '@nestjs/common';
 import { Integration } from '@prisma/client';
 import { IntegrationManager } from '@postsider/nestjs-libraries/integrations/integration.manager';
 import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
@@ -9,7 +14,7 @@ import {
 import { TemporalService } from 'nestjs-temporal-core';
 
 @Injectable()
-export class RefreshIntegrationService {
+export class RefreshIntegrationService implements OnApplicationBootstrap {
   constructor(
     private _integrationManager: IntegrationManager,
     @Inject(forwardRef(() => IntegrationService))
@@ -66,6 +71,66 @@ export class RefreshIntegrationService {
         taskQueue: 'main',
         workflowIdConflictPolicy: 'TERMINATE_EXISTING',
       });
+  }
+
+  // On boot, (re-)arm the per-integration token-refresh workflow for every live
+  // channel. Revives any that previously exited (e.g. a token expired while the
+  // orchestrator was down) and makes auto-refresh survive redeploys. USE_EXISTING
+  // leaves already-running workflows untouched and is safe even if both the
+  // backend and orchestrator run this hook.
+  async onApplicationBootstrap(): Promise<void> {
+    // Fire-and-forget so a slow Temporal connection never blocks app startup.
+    this.reArmAllRefreshWorkflows().catch((err) =>
+      console.log('[refresh re-arm] failed', err)
+    );
+  }
+
+  async reArmAllRefreshWorkflows(): Promise<void> {
+    // The Temporal raw client is not necessarily ready the instant the app
+    // boots — poll for it (up to ~30s) instead of silently bailing.
+    let raw = this._temporalService.client?.getRawClient();
+    for (let i = 0; i < 30 && !raw; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      raw = this._temporalService.client?.getRawClient();
+    }
+    if (!raw) {
+      console.log('[refresh re-arm] Temporal client unavailable, skipped');
+      return;
+    }
+
+    const integrations = await this._integrationService.getAllForRefreshArming();
+    let armed = 0;
+    for (const integration of integrations) {
+      try {
+        // Arm any channel that actually has a refresh token. (We intentionally
+        // do NOT gate on the provider's `refreshCron` flag — most providers
+        // leave it false yet still expose a working refreshToken(), so gating
+        // on it left their tokens to silently expire when idle.)
+        if (!integration.refreshToken) {
+          continue;
+        }
+
+        await raw.workflow.start('refreshTokenWorkflow', {
+          workflowId: `refresh_${integration.id}`,
+          args: [
+            {
+              integrationId: integration.id,
+              organizationId: integration.organizationId,
+            },
+          ],
+          taskQueue: 'main',
+          // Leave a running refresh untouched; allow restarting a closed one.
+          workflowIdConflictPolicy: 'USE_EXISTING',
+          workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+        });
+        armed++;
+      } catch (err) {
+        // unknown provider / transient Temporal error — skip this one
+      }
+    }
+    console.log(
+      `[refresh re-arm] armed ${armed} integration refresh workflow(s)`
+    );
   }
 
   private async refreshProcess(

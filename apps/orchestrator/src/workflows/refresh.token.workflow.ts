@@ -18,6 +18,11 @@ export async function refreshTokenWorkflow({
   integrationId: string;
   organizationId: string;
 }) {
+  // Refresh slightly BEFORE expiry so the access token never actually lapses.
+  const REFRESH_BUFFER_MS = 5 * 60 * 1000;
+  // Floor between iterations so a persistently-failing refresh cannot hot-loop.
+  const MIN_RETRY_MS = 60 * 1000;
+
   while (true) {
     let integration = await getIntegrationsById(integrationId, organizationId);
     if (
@@ -29,17 +34,21 @@ export async function refreshTokenWorkflow({
       return false;
     }
 
-    const today = new Date();
-    const endDate = new Date(integration.tokenExpiration!);
+    const waitMs =
+      new Date(integration.tokenExpiration!).getTime() -
+      Date.now() -
+      REFRESH_BUFFER_MS;
 
-    const minMax = Math.max(0, endDate.getTime() - today.getTime());
-    if (!minMax) {
-      return false;
+    // Only sleep while the token is still good. If it has ALREADY expired (the
+    // orchestrator was down past expiry, or a short-lived token missed a cycle)
+    // fall straight through and refresh NOW instead of giving up. The previous
+    // `if (!minMax) return false` left such integrations permanently
+    // un-refreshed until a manual reconnect — the root cause of "dead" channels.
+    if (waitMs > 0) {
+      await sleep(waitMs as number);
     }
 
-    await sleep(minMax as number);
-
-    // while we were sleeping, the integration might have been deleted
+    // The integration might have changed while we slept.
     integration = await getIntegrationsById(integrationId, organizationId);
     if (
       !integration ||
@@ -51,5 +60,9 @@ export async function refreshTokenWorkflow({
     }
 
     await refreshToken(integration);
+
+    // Guard against a tight loop if a refresh somehow does not advance
+    // tokenExpiration (a healthy refresh pushes it far into the future).
+    await sleep(MIN_RETRY_MS);
   }
 }
