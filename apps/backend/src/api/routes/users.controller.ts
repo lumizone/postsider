@@ -12,7 +12,6 @@ import { GetUserFromRequest } from '@postsider/nestjs-libraries/user/user.from.r
 import { Organization, User } from '@prisma/client';
 import { SubscriptionService } from '@postsider/nestjs-libraries/database/prisma/subscriptions/subscription.service';
 import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
-import { StripeService } from '@postsider/nestjs-libraries/services/stripe.service';
 import { PolarService } from '@postsider/nestjs-libraries/services/polar.service';
 import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
 import { isPlatformAiEnabled } from '@postsider/nestjs-libraries/services/ai.flag';
@@ -40,7 +39,6 @@ import { AuthorizationActions, Sections } from '@postsider/backend/services/auth
 export class UsersController {
   constructor(
     private _subscriptionService: SubscriptionService,
-    private _stripeService: StripeService,
     private _polarService: PolarService,
     private _authService: AuthService,
     private _orgService: OrganizationService,
@@ -252,9 +250,7 @@ export class UsersController {
   @Get('/subscription/tiers')
   @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
   async tiers() {
-    return PolarService.isEnabled()
-      ? this._polarService.getPackages()
-      : this._stripeService.getPackages();
+    return this._polarService.getPackages();
   }
 
   @Post('/join-org')

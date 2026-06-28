@@ -1,7 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthService } from '@postsider/backend/services/auth/auth.service';
-import { StripeService } from '@postsider/nestjs-libraries/services/stripe.service';
 import { PoliciesGuard } from '@postsider/backend/services/auth/permissions/permissions.guard';
 import { PermissionsService } from '@postsider/backend/services/auth/permissions/permissions.service';
 import { IntegrationManager } from '@postsider/nestjs-libraries/integrations/integration.manager';
@@ -20,7 +19,6 @@ const authenticatedController = [PublicIntegrationsController];
   controllers: [...authenticatedController],
   providers: [
     AuthService,
-    StripeService,
     OpenaiService,
     ExtractContentService,
     PoliciesGuard,
@@ -36,7 +34,6 @@ const authenticatedController = [PublicIntegrationsController];
   exports: [
     UploadModule,
     AuthService,
-    StripeService,
     OpenaiService,
     ExtractContentService,
     PoliciesGuard,

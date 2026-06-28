@@ -3,8 +3,6 @@ import { AuthController } from '@postsider/backend/api/routes/auth.controller';
 import { AuthService } from '@postsider/backend/services/auth/auth.service';
 import { UsersController } from '@postsider/backend/api/routes/users.controller';
 import { AuthMiddleware } from '@postsider/backend/services/auth/auth.middleware';
-import { StripeController } from '@postsider/backend/api/routes/stripe.controller';
-import { StripeService } from '@postsider/nestjs-libraries/services/stripe.service';
 import { PolarController } from '@postsider/backend/api/routes/polar.controller';
 import { PolarService } from '@postsider/nestjs-libraries/services/polar.service';
 import { AnalyticsController } from '@postsider/backend/api/routes/analytics.controller';
@@ -74,7 +72,6 @@ const authenticatedController = [
   imports: [UploadModule],
   controllers: [
     RootController,
-    StripeController,
     PolarController,
     AuthController,
     PublicController,
@@ -86,7 +83,6 @@ const authenticatedController = [
   ],
   providers: [
     AuthService,
-    StripeService,
     PolarService,
     OpenaiService,
     ExtractContentService,

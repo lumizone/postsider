@@ -7,7 +7,7 @@ import { api } from "./api";
  *
  * Only `channels`, `postsPerMonth` and `teamMembers` are enforced today; the
  * other product features are intentionally not advertised because they aren't
- * built yet. Prices here are for display only — Stripe/Polar hold the source
+ * built yet. Prices here are for display only — Polar holds the source
  * of truth and the backend validates against its own pricing table.
  */
 export type TierName = "STANDARD" | "TEAM" | "PRO" | "ULTIMATE";
@@ -150,10 +150,10 @@ export async function getCurrentBilling(): Promise<CurrentSubscription | null> {
 }
 
 interface SubscribeResponse {
-  // Polar / Stripe redirect checkout
+  // Polar redirect checkout
   url?: string;
   id?: string;
-  // Stripe in-place upgrade returns just { id }
+  // in-place upgrade returns just { id }
   portal?: string;
 }
 

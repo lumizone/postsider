@@ -16,7 +16,6 @@ import { MediaService } from '@postsider/nestjs-libraries/database/prisma/media/
 import { MediaRepository } from '@postsider/nestjs-libraries/database/prisma/media/media.repository';
 import { NotificationsRepository } from '@postsider/nestjs-libraries/database/prisma/notifications/notifications.repository';
 import { EmailService } from '@postsider/nestjs-libraries/services/email.service';
-import { StripeService } from '@postsider/nestjs-libraries/services/stripe.service';
 import { ExtractContentService } from '@postsider/nestjs-libraries/openai/extract.content.service';
 import { OpenaiService } from '@postsider/nestjs-libraries/openai/openai.service';
 import { AgenciesService } from '@postsider/nestjs-libraries/database/prisma/agencies/agencies.service';
@@ -75,7 +74,6 @@ import { InboundSourceRegistry } from '@postsider/nestjs-libraries/integrations/
     IntegrationRepository,
     PostsService,
     PostsRepository,
-    StripeService,
     SignatureRepository,
     SignatureService,
     MediaService,
