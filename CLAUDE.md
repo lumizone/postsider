@@ -4,8 +4,8 @@ The PostSider product app (NestJS backend + Next 15/React 19 frontend + Temporal
 
 ## Status
 
-- **No longer "frozen."** As of 2026-06-28 the OSS differentiator features were ported here on branch **`feat/port-oss-features`** (commits `6e0e0b1`, `b8bdd4b`). Cross-repo plan: `../PORT-TO-CLOUD-PLAN.md`.
-- Ported features (all 11): composer helpers (hashtag groups / caption templates / UTM), posting queue (day-aware find-slot), bulk CSV import, approval workflow, per-platform preview, AI caption rewrite, API request generator, Post Checker, Evergreen, Smart Slots, first-comment.
+- **Single env-gated repo, Postiz AI stripped (2026-06-28).** Merged into `feat/port-oss-features` (`25c20be`). Cloud + self-host run from one build (see "Run modes"); all inherited Postiz AI removed (see "No other AI"). Verified: backend/orchestrator/frontend/commands builds + AI unit tests green; runtime boot green (DI composes, `:3000`, removed AI routes 404). Plans at workspace root: `UNIFY-SINGLE-REPO-PLAN.md`, `UNIFY-SINGLE-REPO-IMPL-PLAN.md`, `STRIP-POSTIZ-AI-PLAN.md`, `PORT-TO-CLOUD-PLAN.md`.
+- The 11 differentiator features: composer helpers (hashtag groups / caption templates / UTM), posting queue (day-aware find-slot), bulk CSV import, approval workflow, per-platform preview, AI caption rewrite, API request generator, Post Checker, Evergreen, Smart Slots, first-comment.
 
 ## Commands
 
@@ -13,7 +13,7 @@ The PostSider product app (NestJS backend + Next 15/React 19 frontend + Temporal
 pnpm run build:backend            # nest build (full typecheck)
 pnpm --filter ./apps/frontend run build
 pnpm run build:orchestrator
-pnpm test                         # root jest (real config; 23 suites / 136 tests green)
+pnpm test                         # root jest (real config); AI units: jest.ai-flag/.post-checker.config.cjs
 pnpm run prisma-generate          # after schema.prisma changes
 pnpm run dev:docker               # Postgres/Redis/Temporal containers
 pnpm run dev                      # backend (:3000) + orchestrator (:3002) in parallel
@@ -26,6 +26,7 @@ Cloud and self-host are the SAME build; env vars switch behavior. Helpers: `isBi
 
 - **Billing is Polar-only.** `isBillingEnabled()` returns `!!process.env.POLAR_ACCESS_TOKEN`. Set (cloud): plans gated, 402 responses carry a `section` for plan-limit messaging. Absent (self-host): every org is unlimited. Stripe controllers/service remain in-tree but **dormant and unused** (no gate reads Stripe).
 - **AI is platform key OR BYO key.** `OPENAI_API_KEY` set (cloud): Post Checker + rewrite use `OpenaiService.complete()`. Absent (self-host): they fall back to a per-org BYO key stored in `ProviderCredentials` (`post-checker` namespace); `/settings/post-checker` page + config endpoints appear only in self-host; `/posts/check` + `/posts/rewrite` return 409 until a key is saved.
+- **No other AI (Postiz AI stripped).** All inherited Postiz AI was removed: agent (LangGraph), agent-bridge, MCP/chat server + tools (`/settings/mcp`), copilot, autopost, AI image/video/slides gen (fal, veo3, heygen), voice, `agent-media.ai` SSO. `OpenaiService` exposes ONE method (`complete()`). The two non-AI `chat/` helpers (`@Rules` decorator, `validation.schemas.helper.ts`) stay. Orphaned Prisma models (autopost, agent-tokens) remain until a cleanup migration. Do not re-add inherited AI.
 - **Social OAuth via per-provider env.** Each `integrations/social/*.provider.ts` reads its app id/secret from env. Cloud sets PostSider's; self-host operators set their own (see `.env.example`). There is no paste-in-UI modal.
 - **Migrations, NOT `db push`.** Ships Prisma **migration files** (`libraries/nestjs-libraries/src/database/prisma/migrations/`); the server (cloud and self-host Docker) runs `prisma migrate deploy` on boot. Generate new ones with `migrate dev`. Never commit a `db push`-only schema change.
 
