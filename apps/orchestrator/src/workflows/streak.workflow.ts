@@ -15,7 +15,11 @@ export async function streakWorkflow({
   await setStreak(organizationId, 'start');
   await sleep(79200000);
   const userOrgs = await getUserOrgs(organizationId);
-  for (const user of userOrgs!.users) {
+  // Org may be null for stale/deleted organizations — exit instead of crashing.
+  if (!userOrgs) {
+    return;
+  }
+  for (const user of userOrgs.users) {
     if (!user.user.sendStreakEmails) {
       continue;
     }

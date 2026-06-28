@@ -40,7 +40,6 @@ async function start() {
       ],
       origin: [
         process.env.FRONTEND_URL || '',
-        'http://localhost:6274',
         ...(process.env.MAIN_URL ? [process.env.MAIN_URL] : []),
       ],
     },

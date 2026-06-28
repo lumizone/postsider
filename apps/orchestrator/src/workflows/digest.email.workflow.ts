@@ -39,8 +39,13 @@ export async function digestEmailWorkflow({
     queue = [];
 
     const org = await getUserOrgs(organizationId);
+    // Org may be null for stale/deleted organizations — skip this batch instead
+    // of crashing, and restart the long-running workflow cleanly.
+    if (!org) {
+      return await continueAsNew({ organizationId, queue });
+    }
 
-    for (const user of org!.users) {
+    for (const user of org.users) {
       const allowFailure = user.user.sendFailureEmails ? 'fail' : null;
       const allowSuccess = user.user.sendSuccessEmails ? 'success' : null;
 

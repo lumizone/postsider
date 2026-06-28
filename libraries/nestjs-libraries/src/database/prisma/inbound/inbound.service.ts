@@ -6,6 +6,7 @@ import {
   WEBHOOK_SIGNATURE_HEADER,
 } from '@postsider/nestjs-libraries/services/webhook.signature';
 import { AuditLogger } from '@postsider/nestjs-libraries/database/prisma/audit/audit.logger';
+import { ssrfSafeDispatcher } from '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
 
 const MAX_DELIVERY_ATTEMPTS = 3;
 
@@ -75,6 +76,10 @@ export class InboundService {
                 'X-Webhook-Attempt': String(attempt + 1),
               },
               body,
+              // Block SSRF to internal / link-local addresses (parity with the
+              // outbound webhooks controller). undici option, not in fetch types.
+              // @ts-ignore
+              dispatcher: ssrfSafeDispatcher,
               signal: AbortSignal.timeout(10000),
             });
             status = res.ok ? 'ok' : `http_${res.status}`;
