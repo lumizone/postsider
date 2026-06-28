@@ -14,6 +14,11 @@ ATTRIBUTION.md
 CHANGELOG.md
 **/CHANGELOG.md
 
+# Docs that reference the upstream project (Postiz) by name for attribution /
+# fork context. These are intentional and must keep the credit.
+README.md
+CLAUDE.md
+
 # Migration guide intentionally documents legacy env var names and the rebrand
 # check itself, so it references the legacy names by design (Requirement 22.1).
 docs/MIGRATION.md

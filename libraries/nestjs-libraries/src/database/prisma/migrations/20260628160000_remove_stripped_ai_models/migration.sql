@@ -1,4 +1,4 @@
--- Remove orphaned data left over from the stripped Postiz AI / agent-bridge:
+-- Remove orphaned data left over from the stripped inherited AI / agent bridge:
 --   * AutoPost (RSS auto-post feature, removed)
 --   * AgentToken + its AuditLog relation (agent bridge, removed)
 --   * mastra_* tables (Mastra agent memory/tracing, removed)
