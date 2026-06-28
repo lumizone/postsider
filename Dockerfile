@@ -105,7 +105,11 @@ COPY --from=builder --chown=postsider:postsider /build/apps/frontend/.next ./app
 COPY --from=builder --chown=postsider:postsider /build/apps/frontend/public ./apps/frontend/public
 COPY --from=builder --chown=postsider:postsider /build/apps/frontend/package.json ./apps/frontend/package.json
 COPY --from=builder --chown=postsider:postsider /build/apps/frontend/next.config.mjs ./apps/frontend/next.config.mjs
-COPY --from=builder --chown=postsider:postsider /build/apps/frontend/node_modules ./apps/frontend/node_modules
+# NOTE: apps/frontend/node_modules is intentionally NOT copied. With
+# node-linker=hoisted (.npmrc) and no workspace: deps in the frontend, pnpm
+# places all third-party deps (next, react, ...) in the ROOT node_modules
+# (copied above). apps/frontend/node_modules is never created; next start
+# resolves deps from the root via Node's upward module resolution.
 
 # Orchestrator (Temporal worker: scheduled publishing + token refresh)
 COPY --from=builder --chown=postsider:postsider /build/apps/orchestrator/dist ./apps/orchestrator/dist
