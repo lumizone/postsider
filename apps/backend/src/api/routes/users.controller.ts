@@ -16,6 +16,7 @@ import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.req
 import { StripeService } from '@postsider/nestjs-libraries/services/stripe.service';
 import { PolarService } from '@postsider/nestjs-libraries/services/polar.service';
 import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
+import { isPlatformAiEnabled } from '@postsider/nestjs-libraries/services/ai.flag';
 import { Response, Request } from 'express';
 import { AuthService } from '@postsider/backend/services/auth/auth.service';
 import { AuthService as AuthChecker } from '@postsider/helpers/auth/auth.service';
@@ -107,6 +108,7 @@ export class UsersController {
       streakSince: organization?.streakSince || null,
       // @ts-ignore
       publicApi: organization?.users[0]?.role === 'SUPERADMIN' || organization?.users[0]?.role === 'ADMIN' ? organization?.apiKey : '',
+      isPlatformAi: isPlatformAiEnabled(),
     };
   }
 
