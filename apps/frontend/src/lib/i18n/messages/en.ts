@@ -58,6 +58,7 @@ const en = {
     captionTemplates: "Caption Templates",
     utmBuilder: "UTM Builder",
     queuePlan: "Queue Plan",
+    postChecker: "AI Post Checker",
   },
   billing: {
     title: "Billing",

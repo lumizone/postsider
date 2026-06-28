@@ -32,5 +32,16 @@ export function rewritePost(body: {
   return api.post<RewriteResult>("/posts/rewrite", body);
 }
 
-// Cloud build: Post Checker + rewrite use the platform OpenAI key, so there is
-// no per-org checker config endpoint (the OSS BYO-key flow was removed).
+// BYO-key config — only used when platform AI is absent (self-host mode).
+// The backend routes GET/POST/DELETE /settings/post-checker are live (Phase 2c).
+export function getCheckerConfig(): Promise<{ provider: string | null; model: string | null }> {
+  return api.get<{ provider: string | null; model: string | null }>("/settings/post-checker");
+}
+
+export function saveCheckerConfig(body: { provider: string; model: string; apiKey: string }) {
+  return api.post("/settings/post-checker", body);
+}
+
+export function deleteCheckerConfig() {
+  return api.del("/settings/post-checker");
+}
