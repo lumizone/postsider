@@ -1,6 +1,6 @@
 # PostSider Cloud (PostSider_APP)
 
-The **cloud** product app at `app.postsider.com` (NestJS backend + Next 15/React 19 frontend + Temporal orchestrator, pnpm monorepo, Postiz fork). Sibling of `../PostSider_OSS` (the lean self-host build). Has billing (Polar/Stripe) + platform AI; OSS does not.
+The PostSider product app (NestJS backend + Next 15/React 19 frontend + Temporal orchestrator, pnpm monorepo, Postiz fork). **This is now the single repo** for both managed cloud (`app.postsider.com`) and closed-source self-host (a Docker image), switched entirely by env vars (see "Run modes" below). The former lean sibling `../PostSider_OSS` is archived (tag `oss-final`); reference-only, do not edit.
 
 ## Status
 
@@ -20,12 +20,14 @@ pnpm run dev                      # backend (:3000) + orchestrator (:3002) in pa
 pnpm run dev:frontend             # :4200
 ```
 
-## Cloud vs OSS — the differences that matter
+## Run modes (one codebase, env-gated)
 
-- **Migrations, NOT `db push`.** Cloud ships Prisma **migration files** (`libraries/nestjs-libraries/src/database/prisma/migrations/`); the server runs `prisma migrate deploy`. Generate new ones with `migrate dev` (or `migrate diff --from-schema-datamodel <old> --to-schema-datamodel <new> --script` for a clean delta). Never commit a `db push`-only schema change. (OSS uses `db push`.)
-- **AI is the platform key.** Post Checker + caption rewrite reuse `OpenaiService.complete()` (env `OPENAI_API_KEY`), NOT the OSS bring-your-own-key path. There is no `/settings/post-checker` page or config endpoint here, and `/posts/check` + `/posts/rewrite` never 409.
-- **Billing exists** (Polar/Stripe, `billing.controller`, `polar.controller`, `/billing` page, `isBillingEnabled()`); 402 responses carry a `section` for plan-limit messaging in the composer.
-- **Platform OAuth apps** are configured, so cloud has no self-host "paste your own OAuth creds" modal (`connect-method-modal` is OSS-only).
+Cloud and self-host are the SAME build; env vars switch behavior. Helpers: `isBillingEnabled()` (`services/billing.flag.ts`), `isPlatformAiEnabled()` (`services/ai.flag.ts`).
+
+- **Billing is Polar-only.** `isBillingEnabled()` returns `!!process.env.POLAR_ACCESS_TOKEN`. Set (cloud): plans gated, 402 responses carry a `section` for plan-limit messaging. Absent (self-host): every org is unlimited. Stripe controllers/service remain in-tree but **dormant and unused** (no gate reads Stripe).
+- **AI is platform key OR BYO key.** `OPENAI_API_KEY` set (cloud): Post Checker + rewrite use `OpenaiService.complete()`. Absent (self-host): they fall back to a per-org BYO key stored in `ProviderCredentials` (`post-checker` namespace); `/settings/post-checker` page + config endpoints appear only in self-host; `/posts/check` + `/posts/rewrite` return 409 until a key is saved.
+- **Social OAuth via per-provider env.** Each `integrations/social/*.provider.ts` reads its app id/secret from env. Cloud sets PostSider's; self-host operators set their own (see `.env.example`). There is no paste-in-UI modal.
+- **Migrations, NOT `db push`.** Ships Prisma **migration files** (`libraries/nestjs-libraries/src/database/prisma/migrations/`); the server (cloud and self-host Docker) runs `prisma migrate deploy` on boot. Generate new ones with `migrate dev`. Never commit a `db push`-only schema change.
 
 ## Conventions (shared with OSS)
 
