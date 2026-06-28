@@ -5,6 +5,7 @@ import {
   Delete,
   Get,
   HttpException,
+  HttpStatus,
   Param,
   Post,
   Put,
@@ -16,7 +17,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { SmartSlotsService } from '@postsider/nestjs-libraries/smart-slots/smart-slots.service';
 import { CsvImportService } from '@postsider/nestjs-libraries/csv-import/csv-import.service';
-import { PostCheckerService } from '@postsider/nestjs-libraries/post-checker/post-checker.service';
+import { PostCheckerService, NoCheckerConfigError } from '@postsider/nestjs-libraries/post-checker/post-checker.service';
 import { CheckPostDto } from '@postsider/nestjs-libraries/dtos/post-checker/check.post.dto';
 import { RewritePostDto } from '@postsider/nestjs-libraries/dtos/post-checker/rewrite.post.dto';
 import { COMMENT_PROVIDERS } from '@postsider/nestjs-libraries/integrations/social/comment.capability';
@@ -57,15 +58,22 @@ export class PostsController {
     @GetOrgFromRequest() org: Organization,
     @Body() body: CheckPostDto
   ) {
-    return this._postChecker.check(
-      org.id,
-      {
-        content: body.content,
-        hasMedia: body.hasMedia,
-        mediaType: body.mediaType,
-      },
-      body.platforms
-    );
+    try {
+      return await this._postChecker.check(
+        org.id,
+        {
+          content: body.content,
+          hasMedia: body.hasMedia,
+          mediaType: body.mediaType,
+        },
+        body.platforms
+      );
+    } catch (e) {
+      if (e instanceof NoCheckerConfigError) {
+        throw new HttpException('No AI key configured', HttpStatus.CONFLICT);
+      }
+      throw e;
+    }
   }
 
   @Post('/rewrite')
@@ -73,12 +81,19 @@ export class PostsController {
     @GetOrgFromRequest() org: Organization,
     @Body() body: RewritePostDto
   ) {
-    return this._postChecker.rewrite(org.id, {
-      content: body.content,
-      tone: body.tone as any,
-      count: body.count,
-      platform: body.platform,
-    });
+    try {
+      return await this._postChecker.rewrite(org.id, {
+        content: body.content,
+        tone: body.tone as any,
+        count: body.count,
+        platform: body.platform,
+      });
+    } catch (e) {
+      if (e instanceof NoCheckerConfigError) {
+        throw new HttpException('No AI key configured', HttpStatus.CONFLICT);
+      }
+      throw e;
+    }
   }
 
   @Get('/:id/statistics')
