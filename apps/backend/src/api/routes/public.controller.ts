@@ -18,7 +18,6 @@ import { TrackEnum } from '@postsider/nestjs-libraries/user/track.enum';
 import { Request, Response } from 'express';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import { getCookieUrlFromDomain } from '@postsider/helpers/subdomain/subdomain.management';
-import { AgentGraphInsertService } from '@postsider/nestjs-libraries/agent/agent.graph.insert.service';
 import { SubscriptionService } from '@postsider/nestjs-libraries/database/prisma/subscriptions/subscription.service';
 import { AuthService } from '@postsider/helpers/auth/auth.service';
 import { pricing } from '@postsider/nestjs-libraries/database/prisma/subscriptions/pricing';
@@ -35,21 +34,9 @@ const pump = promisify(pipeline);
 export class PublicController {
   constructor(
     private _trackService: TrackService,
-    private _agentGraphInsertService: AgentGraphInsertService,
     private _postsService: PostsService,
     private _subscriptionService: SubscriptionService
   ) {}
-  @Post('/agent')
-  async createAgent(@Body() body: { text: string; apiKey: string }) {
-    if (
-      !body.apiKey ||
-      !process.env.AGENT_API_KEY ||
-      body.apiKey !== process.env.AGENT_API_KEY
-    ) {
-      return;
-    }
-    return this._agentGraphInsertService.newPost(body.text);
-  }
 
   @Get(`/posts/:id`)
   async getPreview(@Param('id') id: string) {

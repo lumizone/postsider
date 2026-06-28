@@ -6,12 +6,8 @@ import { PoliciesGuard } from '@postsider/backend/services/auth/permissions/perm
 import { PublicApiModule } from '@postsider/backend/public-api/public.api.module';
 import { ThrottlerBehindProxyGuard } from '@postsider/nestjs-libraries/throttler/throttler.provider';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { AgentModule } from '@postsider/nestjs-libraries/agent/agent.module';
-import { ThirdPartyModule } from '@postsider/nestjs-libraries/3rdparties/thirdparty.module';
-import { VideoModule } from '@postsider/nestjs-libraries/videos/video.module';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { FILTER } from '@postsider/nestjs-libraries/sentry/sentry.exception';
-import { ChatModule } from '@postsider/nestjs-libraries/chat/chat.module';
 import { PostCheckerModule } from '@postsider/nestjs-libraries/post-checker/post-checker.module';
 import { SmartSlotsModule } from '@postsider/nestjs-libraries/smart-slots/smart-slots.module';
 import { CsvImportModule } from '@postsider/nestjs-libraries/csv-import/csv-import.module';
@@ -28,10 +24,6 @@ import { ioRedis } from '@postsider/nestjs-libraries/redis/redis.service';
     DatabaseModule,
     ApiModule,
     PublicApiModule,
-    AgentModule,
-    ThirdPartyModule,
-    VideoModule,
-    ChatModule,
     PostCheckerModule,
     SmartSlotsModule,
     CsvImportModule,
@@ -64,9 +56,7 @@ import { ioRedis } from '@postsider/nestjs-libraries/redis/redis.service';
     DatabaseModule,
     ApiModule,
     PublicApiModule,
-    AgentModule,
     ThrottlerModule,
-    ChatModule,
   ],
 })
 export class AppModule {}

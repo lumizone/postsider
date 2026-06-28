@@ -22,7 +22,6 @@ import { UploadFactory } from '@postsider/nestjs-libraries/upload/upload.factory
 import { PlugDto } from '@postsider/nestjs-libraries/dtos/plugs/plug.dto';
 import { difference } from 'lodash';
 import utc from 'dayjs/plugin/utc';
-import { AutopostRepository } from '@postsider/nestjs-libraries/database/prisma/autopost/autopost.repository';
 import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
 import { RefreshIntegrationService } from '@postsider/nestjs-libraries/integrations/refresh.integration.service';
 import { TemporalService } from 'nestjs-temporal-core';
@@ -34,7 +33,6 @@ export class IntegrationService {
   private storage = UploadFactory.createStorage();
   constructor(
     private _integrationRepository: IntegrationRepository,
-    private _autopostsRepository: AutopostRepository,
     private _integrationManager: IntegrationManager,
     private _notificationService: NotificationService,
     @Inject(forwardRef(() => RefreshIntegrationService))
@@ -42,15 +40,7 @@ export class IntegrationService {
     private _temporalService: TemporalService
   ) {}
 
-  async changeActiveCron(orgId: string) {
-    const data = await this._autopostsRepository.getAutoposts(orgId);
-
-    for (const item of data.filter((f) => f.active)) {
-      try {
-        await this._temporalService.terminateWorkflow(`autopost-${item.id}`);
-      } catch (err) {}
-    }
-
+  async changeActiveCron(_orgId: string) {
     return true;
   }
 

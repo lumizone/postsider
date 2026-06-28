@@ -24,16 +24,13 @@ import { NotificationsController } from '@postsider/backend/api/routes/notificat
 import { OpenaiService } from '@postsider/nestjs-libraries/openai/openai.service';
 import { ExtractContentService } from '@postsider/nestjs-libraries/openai/extract.content.service';
 import { CodesService } from '@postsider/nestjs-libraries/services/codes.service';
-import { CopilotController } from '@postsider/backend/api/routes/copilot.controller';
 import { PublicController } from '@postsider/backend/api/routes/public.controller';
 import { RootController } from '@postsider/backend/api/routes/root.controller';
 import { TrackService } from '@postsider/nestjs-libraries/track/track.service';
 import { ShortLinkService } from '@postsider/nestjs-libraries/short-linking/short.link.service';
 import { WebhookController } from '@postsider/backend/api/routes/webhooks.controller';
 import { SignatureController } from '@postsider/backend/api/routes/signature.controller';
-import { AutopostController } from '@postsider/backend/api/routes/autopost.controller';
 import { SetsController } from '@postsider/backend/api/routes/sets.controller';
-import { ThirdPartyController } from '@postsider/backend/api/routes/third-party.controller';
 import { MonitorController } from '@postsider/backend/api/routes/monitor.controller';
 import { NoAuthIntegrationsController } from '@postsider/backend/api/routes/no.auth.integrations.controller';
 import { EnterpriseController } from '@postsider/backend/api/routes/enterprise.controller';
@@ -61,12 +58,9 @@ const authenticatedController = [
   MediaController,
   BillingController,
   NotificationsController,
-  CopilotController,
   WebhookController,
   SignatureController,
-  AutopostController,
   SetsController,
-  ThirdPartyController,
   OAuthAppController,
   ApprovedAppsController,
   OAuthAuthorizedController,

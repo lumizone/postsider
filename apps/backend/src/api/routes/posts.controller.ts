@@ -28,9 +28,6 @@ import { GetPostsDto } from '@postsider/nestjs-libraries/dtos/posts/get.posts.dt
 import { GetPostsListDto } from '@postsider/nestjs-libraries/dtos/posts/get.posts.list.dto';
 import { CheckPolicies } from '@postsider/backend/services/auth/permissions/permissions.ability';
 import { ApiTags } from '@nestjs/swagger';
-import { GeneratorDto } from '@postsider/nestjs-libraries/dtos/generator/generator.dto';
-import { CreateGeneratedPostsDto } from '@postsider/nestjs-libraries/dtos/generator/create.generated.posts.dto';
-import { AgentGraphService } from '@postsider/nestjs-libraries/agent/agent.graph.service';
 import { Response } from 'express';
 import { GetUserFromRequest } from '@postsider/nestjs-libraries/user/user.from.request';
 import { ShortLinkService } from '@postsider/nestjs-libraries/short-linking/short.link.service';
@@ -46,7 +43,6 @@ import { PostValidationException } from '@postsider/backend/api/routes/posts.val
 export class PostsController {
   constructor(
     private _postsService: PostsService,
-    private _agentGraphService: AgentGraphService,
     private _shortLinkService: ShortLinkService,
     private _smartSlots: SmartSlotsService,
     private _csvImport: CsvImportService,
@@ -331,30 +327,6 @@ export class PostsController {
     return this._postsService.createPost(org.id, body, 'WEB');
   }
 
-  @Post('/generator/draft')
-  @CheckPolicies([AuthorizationActions.Create, Sections.POSTS_PER_MONTH])
-  generatePostsDraft(
-    @GetOrgFromRequest() org: Organization,
-    @Body() body: CreateGeneratedPostsDto
-  ) {
-    return this._postsService.generatePostsDraft(org.id, body);
-  }
-
-  @Post('/generator')
-  @CheckPolicies([AuthorizationActions.Create, Sections.POSTS_PER_MONTH])
-  async generatePosts(
-    @GetOrgFromRequest() org: Organization,
-    @Body() body: GeneratorDto,
-    @Res({ passthrough: false }) res: Response
-  ) {
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    for await (const event of this._agentGraphService.start(org.id, body)) {
-      res.write(JSON.stringify(event) + '\n');
-    }
-
-    res.end();
-  }
-
   @Delete('/:group')
   deletePost(
     @GetOrgFromRequest() org: Organization,
@@ -371,14 +343,6 @@ export class PostsController {
     @Body('action') action: 'schedule' | 'update' = 'schedule'
   ) {
     return this._postsService.changeDate(org.id, id, date, action);
-  }
-
-  @Post('/separate-posts')
-  async separatePosts(
-    @GetOrgFromRequest() org: Organization,
-    @Body() body: { content: string; len: number }
-  ) {
-    return this._postsService.separatePosts(body.content, body.len);
   }
 
   /**

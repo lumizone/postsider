@@ -1,27 +1,333 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="jest tests" tests="11" failures="0" errors="0" time="31.615">
-  <testsuite name="PermissionsService" errors="0" failures="0" skipped="0" timestamp="2025-03-24T05:53:33" time="31.496" tests="11">
-    <testcase classname="PermissionsService check() Verification Bypass (64) Bypass for Empty List" name="PermissionsService check() Verification Bypass (64) Bypass for Empty List" time="0.01">
+<testsuites name="jest tests" tests="140" failures="0" errors="0" time="3.87">
+  <testsuite name="AgentBridgeService" errors="0" failures="0" skipped="0" timestamp="2026-06-28T10:00:24" time="1.587" tests="4">
+    <testcase classname="AgentBridgeService Property 6: idempotency replay returns the same publication id" name="AgentBridgeService Property 6: idempotency replay returns the same publication id" time="0.01">
     </testcase>
-    <testcase classname="PermissionsService check() Verification Bypass (64) Bypass for Missing Stripe" name="PermissionsService check() Verification Bypass (64) Bypass for Missing Stripe" time="0.003">
+    <testcase classname="AgentBridgeService no idempotency key means no replay lookup" name="AgentBridgeService no idempotency key means no replay lookup" time="0">
     </testcase>
-    <testcase classname="PermissionsService check() Verification Bypass (64) No Bypass" name="PermissionsService check() Verification Bypass (64) No Bypass" time="0.002">
+    <testcase classname="AgentBridgeService Property 5: a denied guard writes exactly one audit entry with the correlation id" name="AgentBridgeService Property 5: a denied guard writes exactly one audit entry with the correlation id" time="0.01">
     </testcase>
-    <testcase classname="PermissionsService check() Channel Permission (82/87) All Conditions True" name="PermissionsService check() Channel Permission (82/87) All Conditions True" time="0.003">
+    <testcase classname="AgentBridgeService guard allows when scope and rate limit pass (no denial)" name="AgentBridgeService guard allows when scope and rate limit pass (no denial)" time="0.001">
     </testcase>
-    <testcase classname="PermissionsService check() Channel Permission (82/87) Channel With Option Limit" name="PermissionsService check() Channel Permission (82/87) Channel With Option Limit" time="0.003">
+  </testsuite>
+  <testsuite name="scrubSecrets (Sentry redaction)" errors="0" failures="0" skipped="0" timestamp="2026-06-28T10:00:26" time="0.503" tests="3">
+    <testcase classname="scrubSecrets (Sentry redaction) redacts agent/oauth/api token values in strings" name="scrubSecrets (Sentry redaction) redacts agent/oauth/api token values in strings" time="0.001">
     </testcase>
-    <testcase classname="PermissionsService check() Channel Permission (82/87) Channel With Subscription Limit" name="PermissionsService check() Channel Permission (82/87) Channel With Subscription Limit" time="0.002">
+    <testcase classname="scrubSecrets (Sentry redaction) redacts sensitive object keys regardless of value" name="scrubSecrets (Sentry redaction) redacts sensitive object keys regardless of value" time="0.001">
     </testcase>
-    <testcase classname="PermissionsService check() Channel Permission (82/87) Channel Without Available Limits" name="PermissionsService check() Channel Permission (82/87) Channel Without Available Limits" time="0.003">
+    <testcase classname="scrubSecrets (Sentry redaction) handles nested arrays and null safely" name="scrubSecrets (Sentry redaction) handles nested arrays and null safely" time="0">
     </testcase>
-    <testcase classname="PermissionsService check() Channel Permission (82/87) Section Different from Channel" name="PermissionsService check() Channel Permission (82/87) Section Different from Channel" time="0.003">
+  </testsuite>
+  <testsuite name="InboundSourceRegistry" errors="0" failures="0" skipped="0" timestamp="2026-06-28T10:00:26" time="0.408" tests="3">
+    <testcase classname="InboundSourceRegistry Property 4: every SOURCE-capable connector has a registered handler" name="InboundSourceRegistry Property 4: every SOURCE-capable connector has a registered handler" time="0.001">
     </testcase>
-    <testcase classname="PermissionsService check() Monthly Posts Permission (97/110) Posts Within Limit" name="PermissionsService check() Monthly Posts Permission (97/110) Posts Within Limit" time="0.008">
+    <testcase classname="InboundSourceRegistry returns an empty page for a source with no connected integration" name="InboundSourceRegistry returns an empty page for a source with no connected integration" time="0.001">
     </testcase>
-    <testcase classname="PermissionsService check() Monthly Posts Permission (97/110) Posts Exceed Limit" name="PermissionsService check() Monthly Posts Permission (97/110) Posts Exceed Limit" time="0.003">
+    <testcase classname="InboundSourceRegistry throws for an unregistered source" name="InboundSourceRegistry throws for an unregistered source" time="0.001">
     </testcase>
-    <testcase classname="PermissionsService check() Monthly Posts Permission (97/110) Section Different with Posts Within Limit" name="PermissionsService check() Monthly Posts Permission (97/110) Section Different with Posts Within Limit" time="0.003">
+  </testsuite>
+  <testsuite name="ConnectorCatalogService" errors="0" failures="0" skipped="0" timestamp="2026-06-28T10:00:27" time="0.319" tests="4">
+    <testcase classname="ConnectorCatalogService Property 3: every connector declares at least one capability" name="ConnectorCatalogService Property 3: every connector declares at least one capability" time="0.002">
+    </testcase>
+    <testcase classname="ConnectorCatalogService Property 4: every SOURCE connector is registered as source-capable" name="ConnectorCatalogService Property 4: every SOURCE connector is registered as source-capable" time="0.001">
+    </testcase>
+    <testcase classname="ConnectorCatalogService includes email connectors with capabilities" name="ConnectorCatalogService includes email connectors with capabilities" time="0">
+    </testcase>
+    <testcase classname="ConnectorCatalogService listForOrganization marks authorization status" name="ConnectorCatalogService listForOrganization marks authorization status" time="0">
+    </testcase>
+  </testsuite>
+  <testsuite name="AuthService secret encryption" errors="0" failures="0" skipped="0" timestamp="2026-06-28T10:00:27" time="0.194" tests="11">
+    <testcase classname="AuthService secret encryption GCM round-trips arbitrary strings" name="AuthService secret encryption GCM round-trips arbitrary strings" time="0.014">
+    </testcase>
+    <testcase classname="AuthService secret encryption GCM uses a random IV (ciphertext differs each call)" name="AuthService secret encryption GCM uses a random IV (ciphertext differs each call)" time="0.001">
+    </testcase>
+    <testcase classname="AuthService secret encryption encryptSecret uses GCM when ENCRYPTION_KEY is set" name="AuthService secret encryption encryptSecret uses GCM when ENCRYPTION_KEY is set" time="0.001">
+    </testcase>
+    <testcase classname="AuthService secret encryption encryptSecret falls back to legacy CBC when ENCRYPTION_KEY is unset" name="AuthService secret encryption encryptSecret falls back to legacy CBC when ENCRYPTION_KEY is unset" time="0.001">
+    </testcase>
+    <testcase classname="AuthService secret encryption decryptSecret reads legacy CBC ciphertext regardless of ENCRYPTION_KEY" name="AuthService secret encryption decryptSecret reads legacy CBC ciphertext regardless of ENCRYPTION_KEY" time="0.001">
+    </testcase>
+    <testcase classname="AuthService secret encryption GCM detects tampering via the auth tag" name="AuthService secret encryption GCM detects tampering via the auth tag" time="0.001">
+    </testcase>
+    <testcase classname="AuthService JWT &amp; password signs and verifies a JWT round-trip" name="AuthService JWT &amp; password signs and verifies a JWT round-trip" time="0.001">
+    </testcase>
+    <testcase classname="AuthService JWT &amp; password rejects a tampered JWT" name="AuthService JWT &amp; password rejects a tampered JWT" time="0.003">
+    </testcase>
+    <testcase classname="AuthService JWT &amp; password session JWT carries an expiry claim" name="AuthService JWT &amp; password session JWT carries an expiry claim" time="0">
+    </testcase>
+    <testcase classname="AuthService JWT &amp; password hashes and verifies a password" name="AuthService JWT &amp; password hashes and verifies a password" time="0.145">
+    </testcase>
+    <testcase classname="AuthService JWT &amp; password legacy CBC encryption is deterministic (required for lookups)" name="AuthService JWT &amp; password legacy CBC encryption is deterministic (required for lookups)" time="0.001">
+    </testcase>
+  </testsuite>
+  <testsuite name="isPlatformAiEnabled" errors="0" failures="0" skipped="0" timestamp="2026-06-28T10:00:27" time="0.011" tests="2">
+    <testcase classname="isPlatformAiEnabled is true when OPENAI_API_KEY is set" name="isPlatformAiEnabled is true when OPENAI_API_KEY is set" time="0.001">
+    </testcase>
+    <testcase classname="isPlatformAiEnabled is false when OPENAI_API_KEY is empty/unset" name="isPlatformAiEnabled is false when OPENAI_API_KEY is empty/unset" time="0">
+    </testcase>
+  </testsuite>
+  <testsuite name="CsrfMiddleware" errors="0" failures="0" skipped="0" timestamp="2026-06-28T10:00:27" time="0.117" tests="9">
+    <testcase classname="CsrfMiddleware allows safe methods regardless of origin" name="CsrfMiddleware allows safe methods regardless of origin" time="0.001">
+    </testcase>
+    <testcase classname="CsrfMiddleware allows cookie POST from an allowed origin" name="CsrfMiddleware allows cookie POST from an allowed origin" time="0">
+    </testcase>
+    <testcase classname="CsrfMiddleware blocks cookie POST from a foreign origin" name="CsrfMiddleware blocks cookie POST from a foreign origin" time="0.001">
+    </testcase>
+    <testcase classname="CsrfMiddleware blocks cookie POST with no origin/referer" name="CsrfMiddleware blocks cookie POST with no origin/referer" time="0">
+    </testcase>
+    <testcase classname="CsrfMiddleware allows header-token POST (not CSRF-able) even cross-origin" name="CsrfMiddleware allows header-token POST (not CSRF-able) even cross-origin" time="0">
+    </testcase>
+    <testcase classname="CsrfMiddleware allows bearer/agent-token POST cross-origin" name="CsrfMiddleware allows bearer/agent-token POST cross-origin" time="0.001">
+    </testcase>
+    <testcase classname="CsrfMiddleware skips enforcement in NOT_SECURED mode" name="CsrfMiddleware skips enforcement in NOT_SECURED mode" time="0">
+    </testcase>
+    <testcase classname="CsrfMiddleware accepts a Referer when Origin is absent" name="CsrfMiddleware accepts a Referer when Origin is absent" time="0">
+    </testcase>
+    <testcase classname="CsrfMiddleware passes through when there is no cookie auth to protect" name="CsrfMiddleware passes through when there is no cookie auth to protect" time="0.001">
+    </testcase>
+  </testsuite>
+  <testsuite name="AgentTokenService" errors="0" failures="0" skipped="0" timestamp="2026-06-28T10:00:27" time="0.076" tests="6">
+    <testcase classname="AgentTokenService Property 7: round-trips the token scope (issue → verify preserves scope)" name="AgentTokenService Property 7: round-trips the token scope (issue → verify preserves scope)" time="0.019">
+    </testcase>
+    <testcase classname="AgentTokenService Property 8: authorization verdict is independent of revoked/expired ordering" name="AgentTokenService Property 8: authorization verdict is independent of revoked/expired ordering" time="0.009">
+    </testcase>
+    <testcase classname="AgentTokenService authorize() denies capability not in scope" name="AgentTokenService authorize() denies capability not in scope" time="0.001">
+    </testcase>
+    <testcase classname="AgentTokenService authorize() denies connector not in non-empty scope" name="AgentTokenService authorize() denies connector not in non-empty scope" time="0">
+    </testcase>
+    <testcase classname="AgentTokenService authorize() allows when capability present and connector scope empty" name="AgentTokenService authorize() allows when capability present and connector scope empty" time="0">
+    </testcase>
+    <testcase classname="AgentTokenService verify() rejects tokens without the agt_ prefix" name="AgentTokenService verify() rejects tokens without the agt_ prefix" time="0">
+    </testcase>
+  </testsuite>
+  <testsuite name="AgentRateLimiter" errors="0" failures="0" skipped="0" timestamp="2026-06-28T10:00:27" time="0.047" tests="3">
+    <testcase classname="AgentRateLimiter Property 13: exactly min(N, limit) calls are allowed within a window" name="AgentRateLimiter Property 13: exactly min(N, limit) calls are allowed within a window" time="0.011">
+    </testcase>
+    <testcase classname="AgentRateLimiter returns minute exceeded with a retryAfter" name="AgentRateLimiter returns minute exceeded with a retryAfter" time="0.001">
+    </testcase>
+    <testcase classname="AgentRateLimiter enforces per-connector daily quota independently" name="AgentRateLimiter enforces per-connector daily quota independently" time="0">
+    </testcase>
+  </testsuite>
+  <testsuite name="pickProvider" errors="0" failures="0" skipped="0" timestamp="2026-06-28T10:00:27" time="0.015" tests="2">
+    <testcase classname="pickProvider returns the provider matching the name" name="pickProvider returns the provider matching the name" time="0.001">
+    </testcase>
+    <testcase classname="pickProvider throws on an unknown provider" name="pickProvider throws on an unknown provider" time="0.001">
+    </testcase>
+  </testsuite>
+  <testsuite name="assertRequestable" errors="0" failures="0" skipped="0" timestamp="2026-06-28T10:00:27" time="0.037" tests="9">
+    <testcase classname="assertRequestable throws when the post does not exist" name="assertRequestable throws when the post does not exist" time="0.002">
+    </testcase>
+    <testcase classname="assertRequestable throws when the post is not a DRAFT" name="assertRequestable throws when the post is not a DRAFT" time="0.001">
+    </testcase>
+    <testcase classname="assertRequestable throws for a child (thread) post" name="assertRequestable throws for a child (thread) post" time="0.001">
+    </testcase>
+    <testcase classname="assertRequestable passes for a top-level DRAFT" name="assertRequestable passes for a top-level DRAFT" time="0">
+    </testcase>
+    <testcase classname="assertCanApprove forbids a regular USER" name="assertCanApprove forbids a regular USER" time="0.001">
+    </testcase>
+    <testcase classname="assertCanApprove allows ADMIN and SUPERADMIN" name="assertCanApprove allows ADMIN and SUPERADMIN" time="0">
+    </testcase>
+    <testcase classname="assertPending throws when the approval is missing" name="assertPending throws when the approval is missing" time="0.001">
+    </testcase>
+    <testcase classname="assertPending throws when already resolved" name="assertPending throws when already resolved" time="0">
+    </testcase>
+    <testcase classname="assertPending passes when still pending" name="assertPending passes when still pending" time="0.001">
+    </testcase>
+  </testsuite>
+  <testsuite name="parseCSV" errors="0" failures="0" skipped="0" timestamp="2026-06-28T10:00:27" time="0.027" tests="16">
+    <testcase classname="parseCSV parses simple comma-separated rows" name="parseCSV parses simple comma-separated rows" time="0.001">
+    </testcase>
+    <testcase classname="parseCSV keeps commas inside quoted fields" name="parseCSV keeps commas inside quoted fields" time="0">
+    </testcase>
+    <testcase classname="parseCSV unescapes doubled quotes" name="parseCSV unescapes doubled quotes" time="0.001">
+    </testcase>
+    <testcase classname="parseCSV handles CRLF line endings and a trailing newline" name="parseCSV handles CRLF line endings and a trailing newline" time="0.001">
+    </testcase>
+    <testcase classname="parseCSV drops fully empty rows" name="parseCSV drops fully empty rows" time="0">
+    </testcase>
+    <testcase classname="rowsToRecords maps cells to lowercased headers" name="rowsToRecords maps cells to lowercased headers" time="0.001">
+    </testcase>
+    <testcase classname="CsvRowSchema rejects an empty content" name="CsvRowSchema rejects an empty content" time="0.001">
+    </testcase>
+    <testcase classname="CsvRowSchema accepts a row with only content + channels" name="CsvRowSchema accepts a row with only content + channels" time="0">
+    </testcase>
+    <testcase classname="resolveChannels matches case-insensitively" name="resolveChannels matches case-insensitively" time="0.001">
+    </testcase>
+    <testcase classname="resolveChannels reports unmatched names" name="resolveChannels reports unmatched names" time="0">
+    </testcase>
+    <testcase classname="parseDateTime normalizes &quot;YYYY-MM-DD HH:mm&quot;" name="parseDateTime normalizes &quot;YYYY-MM-DD HH:mm&quot;" time="0.001">
+    </testcase>
+    <testcase classname="parseDateTime accepts ISO datetimes" name="parseDateTime accepts ISO datetimes" time="0">
+    </testcase>
+    <testcase classname="parseDateTime returns null for garbage" name="parseDateTime returns null for garbage" time="0.001">
+    </testcase>
+    <testcase classname="parseDateTime returns null for blank" name="parseDateTime returns null for blank" time="0">
+    </testcase>
+    <testcase classname="splitThread splits on the ||| delimiter and trims" name="splitThread splits on the ||| delimiter and trims" time="0">
+    </testcase>
+    <testcase classname="splitThread returns an empty array for blank" name="splitThread returns an empty array for blank" time="0.001">
+    </testcase>
+  </testsuite>
+  <testsuite name="webhook HMAC signature" errors="0" failures="0" skipped="0" timestamp="2026-06-28T10:00:27" time="0.028" tests="4">
+    <testcase classname="webhook HMAC signature Property 9: verify(sign(B,S),B,S) is true and verify(sign(B,S),B′,S) is false" name="webhook HMAC signature Property 9: verify(sign(B,S),B,S) is true and verify(sign(B,S),B′,S) is false" time="0.013">
+    </testcase>
+    <testcase classname="webhook HMAC signature rejects a signature made with a different secret" name="webhook HMAC signature rejects a signature made with a different secret" time="0">
+    </testcase>
+    <testcase classname="webhook HMAC signature rejects an empty signature" name="webhook HMAC signature rejects an empty signature" time="0.001">
+    </testcase>
+    <testcase classname="webhook HMAC signature produces the sha256=&lt;hex&gt; format" name="webhook HMAC signature produces the sha256=&lt;hex&gt; format" time="0">
+    </testcase>
+  </testsuite>
+  <testsuite name="OpenAPI document round-trip" errors="0" failures="0" skipped="0" timestamp="2026-06-28T10:00:28" time="0.024" tests="2">
+    <testcase classname="OpenAPI document round-trip parse→serialize preserves logical structure up to key order" name="OpenAPI document round-trip parse→serialize preserves logical structure up to key order" time="0.01">
+    </testcase>
+    <testcase classname="OpenAPI document round-trip normalization is order-independent for a representative spec fragment" name="OpenAPI document round-trip normalization is order-independent for a representative spec fragment" time="0.001">
+    </testcase>
+  </testsuite>
+  <testsuite name="EnvCompat.readEnv" errors="0" failures="0" skipped="0" timestamp="2026-06-28T10:00:28" time="0.022" tests="4">
+    <testcase classname="EnvCompat.readEnv Property 10: canonical value always wins when both are set" name="EnvCompat.readEnv Property 10: canonical value always wins when both are set" time="0.005">
+    </testcase>
+    <testcase classname="EnvCompat.readEnv falls back to legacy only when canonical is unset/empty" name="EnvCompat.readEnv falls back to legacy only when canonical is unset/empty" time="0">
+    </testcase>
+    <testcase classname="EnvCompat.readEnv emits a deprecation warning at most once per legacy variable" name="EnvCompat.readEnv emits a deprecation warning at most once per legacy variable" time="0.001">
+    </testcase>
+    <testcase classname="EnvCompat.readEnv does not warn when only the canonical name is used" name="EnvCompat.readEnv does not warn when only the canonical name is used" time="0">
+    </testcase>
+  </testsuite>
+  <testsuite name="buildRewritePrompt" errors="0" failures="0" skipped="0" timestamp="2026-06-28T10:00:28" time="0.018" tests="9">
+    <testcase classname="buildRewritePrompt includes the content, count and JSON instruction" name="buildRewritePrompt includes the content, count and JSON instruction" time="0.001">
+    </testcase>
+    <testcase classname="buildRewritePrompt mentions the platform when provided" name="buildRewritePrompt mentions the platform when provided" time="0">
+    </testcase>
+    <testcase classname="buildRewritePrompt describes the shorten tone as reducing characters" name="buildRewritePrompt describes the shorten tone as reducing characters" time="0.001">
+    </testcase>
+    <testcase classname="parseRewriteResult parses clean JSON" name="parseRewriteResult parses clean JSON" time="0">
+    </testcase>
+    <testcase classname="parseRewriteResult extracts JSON from surrounding prose" name="parseRewriteResult extracts JSON from surrounding prose" time="0.001">
+    </testcase>
+    <testcase classname="parseRewriteResult slices to the requested count" name="parseRewriteResult slices to the requested count" time="0">
+    </testcase>
+    <testcase classname="parseRewriteResult drops non-string and empty entries" name="parseRewriteResult drops non-string and empty entries" time="0">
+    </testcase>
+    <testcase classname="parseRewriteResult throws on non-JSON" name="parseRewriteResult throws on non-JSON" time="0.002">
+    </testcase>
+    <testcase classname="parseRewriteResult throws when the variants array is missing" name="parseRewriteResult throws when the variants array is missing" time="0">
+    </testcase>
+  </testsuite>
+  <testsuite name="familyFor" errors="0" failures="0" skipped="0" timestamp="2026-06-28T10:00:28" time="0.016" tests="10">
+    <testcase classname="familyFor maps known microblog/video/instagram/article providers" name="familyFor maps known microblog/video/instagram/article providers" time="0">
+    </testcase>
+    <testcase classname="familyFor maps provider variants by base segment" name="familyFor maps provider variants by base segment" time="0.001">
+    </testcase>
+    <testcase classname="familyFor falls back to community for unknown / empty" name="familyFor falls back to community for unknown / empty" time="0">
+    </testcase>
+    <testcase classname="truncateBody does not truncate under the limit" name="truncateBody does not truncate under the limit" time="0">
+    </testcase>
+    <testcase classname="truncateBody truncates over the limit" name="truncateBody truncates over the limit" time="0.001">
+    </testcase>
+    <testcase classname="truncateBody treats max &lt;= 0 as no limit" name="truncateBody treats max &lt;= 0 as no limit" time="0">
+    </testcase>
+    <testcase classname="mediaAspectRatio uses 9/16 for vertical video" name="mediaAspectRatio uses 9/16 for vertical video" time="0">
+    </testcase>
+    <testcase classname="mediaAspectRatio uses 1/1 for an instagram feed post and 9/16 for a story" name="mediaAspectRatio uses 1/1 for an instagram feed post and 9/16 for a story" time="0.001">
+    </testcase>
+    <testcase classname="mediaAspectRatio uses 16/9 for linkedin/article" name="mediaAspectRatio uses 16/9 for linkedin/article" time="0">
+    </testcase>
+    <testcase classname="previewFold returns platform folds" name="previewFold returns platform folds" time="0">
+    </testcase>
+  </testsuite>
+  <testsuite name="scoreSlots" errors="0" failures="0" skipped="0" timestamp="2026-06-28T10:00:28" time="0.015" tests="4">
+    <testcase classname="scoreSlots ranks a heuristic peak hour above an off hour" name="scoreSlots ranks a heuristic peak hour above an off hour" time="0.001">
+    </testcase>
+    <testcase classname="scoreSlots returns at most `count` results" name="scoreSlots returns at most `count` results" time="0">
+    </testcase>
+    <testcase classname="scoreSlots boosts hours that match the click histogram" name="scoreSlots boosts hours that match the click histogram" time="0.001">
+    </testcase>
+    <testcase classname="scoreSlots scores in the local timezone when an offset is given" name="scoreSlots scores in the local timezone when an offset is given" time="0">
+    </testcase>
+  </testsuite>
+  <testsuite name="appendUtmParams" errors="0" failures="0" skipped="0" timestamp="2026-06-28T10:00:28" time="0.015" tests="8">
+    <testcase classname="appendUtmParams appends params with ? when the URL has no query string" name="appendUtmParams appends params with ? when the URL has no query string" time="0.001">
+    </testcase>
+    <testcase classname="appendUtmParams appends params with &amp; when the URL already has a query string" name="appendUtmParams appends params with &amp; when the URL already has a query string" time="0">
+    </testcase>
+    <testcase classname="appendUtmParams leaves a URL that already has utm_source untouched" name="appendUtmParams leaves a URL that already has utm_source untouched" time="0.001">
+    </testcase>
+    <testcase classname="appendUtmParams tags every URL in the body" name="appendUtmParams tags every URL in the body" time="0">
+    </testcase>
+    <testcase classname="appendUtmParams leaves text without URLs unchanged" name="appendUtmParams leaves text without URLs unchanged" time="0">
+    </testcase>
+    <testcase classname="appendUtmParams returns empty body unchanged" name="appendUtmParams returns empty body unchanged" time="0.001">
+    </testcase>
+    <testcase classname="appendUtmParams includes optional content/term only when present" name="appendUtmParams includes optional content/term only when present" time="0">
+    </testcase>
+    <testcase classname="appendUtmParams keeps trailing sentence punctuation outside the params" name="appendUtmParams keeps trailing sentence punctuation outside the params" time="0">
+    </testcase>
+  </testsuite>
+  <testsuite name="parseCheckResult" errors="0" failures="0" skipped="0" timestamp="2026-06-28T10:00:28" time="0.015" tests="4">
+    <testcase classname="parseCheckResult parses clean JSON" name="parseCheckResult parses clean JSON" time="0.001">
+    </testcase>
+    <testcase classname="parseCheckResult extracts JSON from a fenced code block" name="parseCheckResult extracts JSON from a fenced code block" time="0">
+    </testcase>
+    <testcase classname="parseCheckResult clamps out-of-range scores to 0..100" name="parseCheckResult clamps out-of-range scores to 0..100" time="0.001">
+    </testcase>
+    <testcase classname="parseCheckResult throws on non-JSON" name="parseCheckResult throws on non-JSON" time="0.001">
+    </testcase>
+  </testsuite>
+  <testsuite name="buildPostBody" errors="0" failures="0" skipped="0" timestamp="2026-06-28T10:00:28" time="0.014" tests="8">
+    <testcase classname="buildPostBody wraps content in &lt;p&gt; and escapes HTML" name="buildPostBody wraps content in &lt;p&gt; and escapes HTML" time="0.001">
+    </testcase>
+    <testcase classname="buildPostBody defaults type to schedule and carries group/valueId/date" name="buildPostBody defaults type to schedule and carries group/valueId/date" time="0">
+    </testcase>
+    <testcase classname="buildPostBody emits an empty image array when no image" name="buildPostBody emits an empty image array when no image" time="0.001">
+    </testcase>
+    <testcase classname="buildPostBody embeds the image with id + path when provided" name="buildPostBody embeds the image with id + path when provided" time="0">
+    </testcase>
+    <testcase classname="buildPostBody passes through provider settings" name="buildPostBody passes through provider settings" time="0.001">
+    </testcase>
+    <testcase classname="buildCurl targets the public posts endpoint at the base url" name="buildCurl targets the public posts endpoint at the base url" time="0">
+    </testcase>
+    <testcase classname="buildCurl uses a raw Authorization header (no Bearer)" name="buildCurl uses a raw Authorization header (no Bearer)" time="0">
+    </testcase>
+    <testcase classname="buildCurl escapes single quotes inside the -d payload" name="buildCurl escapes single quotes inside the -d payload" time="0.001">
+    </testcase>
+  </testsuite>
+  <testsuite name="slotsForDay" errors="0" failures="0" skipped="0" timestamp="2026-06-28T10:00:28" time="0.013" tests="5">
+    <testcase classname="slotsForDay includes a slot only on its configured weekdays" name="slotsForDay includes a slot only on its configured weekdays" time="0.001">
+    </testcase>
+    <testcase classname="slotsForDay treats a slot with no days as every day (backward compatible)" name="slotsForDay treats a slot with no days as every day (backward compatible)" time="0">
+    </testcase>
+    <testcase classname="slotsForDay treats an empty days array as every day" name="slotsForDay treats an empty days array as every day" time="0">
+    </testcase>
+    <testcase classname="slotsForDay returns every applicable slot for the same day" name="slotsForDay returns every applicable slot for the same day" time="0.001">
+    </testcase>
+    <testcase classname="slotsForDay returns an empty list when no slot matches the day" name="slotsForDay returns an empty list when no slot matches the day" time="0">
+    </testcase>
+  </testsuite>
+  <testsuite name="buildCheckPrompt" errors="0" failures="0" skipped="0" timestamp="2026-06-28T10:00:28" time="0.012" tests="2">
+    <testcase classname="buildCheckPrompt includes the content, platform, and a strict JSON instruction" name="buildCheckPrompt includes the content, platform, and a strict JSON instruction" time="0">
+    </testcase>
+    <testcase classname="buildCheckPrompt mentions media when present" name="buildCheckPrompt mentions media when present" time="0.001">
+    </testcase>
+  </testsuite>
+  <testsuite name="pickNextEvergreen" errors="0" failures="0" skipped="0" timestamp="2026-06-28T10:00:28" time="0.013" tests="4">
+    <testcase classname="pickNextEvergreen returns null when there are no candidates" name="pickNextEvergreen returns null when there are no candidates" time="0">
+    </testcase>
+    <testcase classname="pickNextEvergreen prefers a never-recycled post" name="pickNextEvergreen prefers a never-recycled post" time="0.001">
+    </testcase>
+    <testcase classname="pickNextEvergreen skips posts recycled within intervalDays" name="pickNextEvergreen skips posts recycled within intervalDays" time="0">
+    </testcase>
+    <testcase classname="pickNextEvergreen among eligible, picks the least-recently recycled" name="pickNextEvergreen among eligible, picks the least-recently recycled" time="0">
+    </testcase>
+  </testsuite>
+  <testsuite name="supportsComment" errors="0" failures="0" skipped="0" timestamp="2026-06-28T10:00:28" time="0.013" tests="4">
+    <testcase classname="supportsComment true for a known capable provider" name="supportsComment true for a known capable provider" time="0.001">
+    </testcase>
+    <testcase classname="supportsComment false for unknown" name="supportsComment false for unknown" time="0">
+    </testcase>
+    <testcase classname="supportsComment case-insensitive" name="supportsComment case-insensitive" time="0">
+    </testcase>
+    <testcase classname="supportsComment includes wrapcast (farcaster) and linkedin-page" name="supportsComment includes wrapcast (farcaster) and linkedin-page" time="0.001">
     </testcase>
   </testsuite>
 </testsuites>

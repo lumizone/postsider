@@ -18,7 +18,6 @@ import { SubscriptionExceptionFilter } from '@postsider/backend/services/auth/pe
 import { PostValidationExceptionFilter } from '@postsider/backend/api/routes/posts.validation.exception';
 import { HttpExceptionFilter } from '@postsider/nestjs-libraries/services/exception.filter';
 import { ConfigurationChecker } from '@postsider/helpers/configuration/configuration.checker';
-import { startMcp } from '@postsider/nestjs-libraries/chat/start.mcp';
 
 async function start() {
   assertRequiredSecrets();
@@ -67,8 +66,6 @@ async function start() {
       fallthrough: false,
     }));
   }
-
-  await startMcp(app);
 
   app.useGlobalPipes(
     new ValidationPipe({

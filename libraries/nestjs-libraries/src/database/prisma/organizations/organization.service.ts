@@ -7,7 +7,6 @@ import { AuthService } from '@postsider/helpers/auth/auth.service';
 import dayjs from 'dayjs';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import { Organization, ShortLinkPreference } from '@prisma/client';
-import { AutopostService } from '@postsider/nestjs-libraries/database/prisma/autopost/autopost.service';
 import { teamInviteEmail } from '@postsider/nestjs-libraries/emails/email.templates';
 
 @Injectable()
