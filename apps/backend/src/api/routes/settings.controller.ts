@@ -31,6 +31,7 @@ export class SettingsController {
   }
 
   @Post('/post-checker')
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
   async saveCheckerConfig(
     @GetOrgFromRequest() org: Organization,
     @Body() body: SaveCheckerConfigDto,
@@ -44,6 +45,7 @@ export class SettingsController {
   }
 
   @Delete('/post-checker')
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
   async deleteCheckerConfig(@GetOrgFromRequest() org: Organization) {
     await this._postChecker.deleteConfig(org.id);
     return { success: true };
