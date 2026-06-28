@@ -59,7 +59,10 @@ claude mcp add postsider \
 }
 ```
 
-For a self-hosted instance, set `POSTSIDER_API_URL` to your own backend URL.
+For a self-hosted instance, point `POSTSIDER_API_URL` at where the public API is
+served. Behind the bundled nginx the API lives under `/api`, so use your domain
+plus `/api`, e.g. `https://social.example.com/api`. The server appends
+`/public/v1` to whatever you set.
 
 ## Configuration
 
