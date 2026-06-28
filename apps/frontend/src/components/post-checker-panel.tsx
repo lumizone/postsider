@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useT } from "@/lib/i18n";
 import { checkPost, type CheckResults } from "@/lib/post-checker-api";
 import styles from "./post-checker-panel.module.css";
@@ -9,7 +8,7 @@ type Props = { content: string; hasMedia: boolean; mediaType?: "image" | "video"
 
 export function PostCheckerPanel({ content, hasMedia, mediaType, platforms, onClose }: Props) {
   const t = useT();
-  const [state, setState] = useState<"loading" | "done" | "error" | "nokey">("loading");
+  const [state, setState] = useState<"loading" | "done" | "error">("loading");
   const [results, setResults] = useState<CheckResults>({});
   const [active, setActive] = useState(platforms[0]);
 
@@ -17,7 +16,7 @@ export function PostCheckerPanel({ content, hasMedia, mediaType, platforms, onCl
     let cancelled = false;
     checkPost({ content, hasMedia, mediaType, platforms })
       .then((r) => { if (!cancelled) { setResults(r); setState("done"); } })
-      .catch((e: any) => { if (!cancelled) setState(e?.status === 409 ? "nokey" : "error"); });
+      .catch(() => { if (!cancelled) setState("error"); });
     return () => { cancelled = true; };
   }, []);
 
@@ -28,9 +27,6 @@ export function PostCheckerPanel({ content, hasMedia, mediaType, platforms, onCl
         <button onClick={onClose} aria-label={t("common.close" as any)}>×</button>
       </div>
       {state === "loading" && <p className={styles.muted}>{t("postChecker.analysing" as any)}</p>}
-      {state === "nokey" && (
-        <p className={styles.muted}>{t("postChecker.noKey" as any)} <Link href="/settings/post-checker">{t("postChecker.connectKey" as any)}</Link></p>
-      )}
       {state === "error" && <p className={styles.muted}>{t("postChecker.error" as any)}</p>}
       {state === "done" && (
         <>
@@ -68,7 +64,7 @@ function Result({ r, t }: { r: any; t: (k: string) => string }) {
         {bar(t("postChecker.platformFit" as any), r.dimensions.platformFit)}
       </div>
       <ul className={styles.good}>{r.positives.map((p: string, i: number) => <li key={i}>+ {p}</li>)}</ul>
-      <ul className={styles.bad}>{r.negatives.map((n: string, i: number) => <li key={i}>– {n}</li>)}</ul>
+      <ul className={styles.bad}>{r.negatives.map((n: string, i: number) => <li key={i}>- {n}</li>)}</ul>
     </div>
   );
 }
