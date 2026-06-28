@@ -1,0 +1,137 @@
+"use client";
+
+import { useRef, useState } from "react";
+import Link from "next/link";
+import { uploadCsv, CsvImportResult } from "@/lib/csv-import-api";
+
+const primaryBtn: React.CSSProperties = {
+  padding: "10px 18px",
+  borderRadius: 10,
+  border: "none",
+  background: "var(--fg)",
+  color: "var(--bg)",
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
+};
+const ghostBtn: React.CSSProperties = {
+  padding: "9px 14px",
+  borderRadius: 8,
+  border: "1px solid var(--line-soft)",
+  background: "var(--bg)",
+  color: "var(--fg)",
+  fontSize: 13,
+  cursor: "pointer",
+  textDecoration: "none",
+  display: "inline-block",
+};
+
+export default function CsvImportPage() {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [results, setResults] = useState<CsvImportResult[] | null>(null);
+
+  const pick = (f: File | null | undefined) => {
+    if (!f) return;
+    if (!/\.csv$/i.test(f.name)) {
+      setError("Only .csv files are accepted.");
+      return;
+    }
+    setError(null);
+    setResults(null);
+    setFile(f);
+  };
+
+  const onImport = async () => {
+    if (!file || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setResults(await uploadCsv(file));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Import failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const okCount = results?.filter((r) => r.ok).length ?? 0;
+  const errCount = results?.filter((r) => !r.ok).length ?? 0;
+
+  return (
+    <div style={{ maxWidth: 760, margin: "0 auto", padding: "32px 20px", display: "flex", flexDirection: "column", gap: 20 }}>
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)" }}>Posts</div>
+        <h1 style={{ fontSize: 24, fontWeight: 700, margin: "4px 0 6px" }}>Bulk import</h1>
+        <p style={{ margin: 0, fontSize: 14, color: "var(--muted)" }}>Upload a CSV to schedule posts across channels in bulk. One post per row.</p>
+      </div>
+
+      {error && (
+        <div style={{ padding: "10px 12px", borderRadius: 8, background: "rgba(192,57,43,0.08)", color: "#c0392b", fontSize: 13 }}>{error}</div>
+      )}
+
+      <div
+        onClick={() => inputRef.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => { e.preventDefault(); setDragging(false); pick(e.dataTransfer.files?.[0]); }}
+        style={{
+          border: `2px dashed ${dragging ? "var(--fg)" : "var(--line-soft)"}`,
+          borderRadius: 14,
+          padding: "40px 20px",
+          textAlign: "center",
+          cursor: "pointer",
+          background: dragging ? "rgba(0,0,0,0.02)" : "transparent",
+        }}
+      >
+        <input ref={inputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={(e) => pick(e.target.files?.[0])} />
+        <div style={{ fontSize: 14, fontWeight: 600 }}>{file ? file.name : "Drop your CSV here, or click to browse"}</div>
+        <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>{file ? `${(file.size / 1024).toFixed(1)} KB` : "Max 2 MB"}</div>
+      </div>
+
+      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+        <button type="button" style={{ ...primaryBtn, opacity: file && !busy ? 1 : 0.5, cursor: file && !busy ? "pointer" : "default" }} onClick={onImport} disabled={!file || busy}>
+          {busy ? "Importing…" : "Import"}
+        </button>
+        <a style={ghostBtn} href="/csv-template.csv" download>Download template CSV</a>
+        <Link style={ghostBtn} href="/posts">Back to posts</Link>
+      </div>
+
+      <details style={{ fontSize: 13, color: "var(--muted)" }}>
+        <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--fg)" }}>Column reference</summary>
+        <ul style={{ margin: "10px 0 0", paddingLeft: 18, lineHeight: 1.7 }}>
+          <li><b>content</b> (required) the post body.</li>
+          <li><b>channels</b> (required) comma-separated channel names, matched to your connected channels.</li>
+          <li><b>datetime</b> format YYYY-MM-DD HH:mm in <b>UTC</b>. Leave blank to drop the post into the channel&apos;s next free queue slot.</li>
+          <li><b>first_comment</b> (optional) posted as the first comment on supported channels.</li>
+          <li><b>thread</b> (optional) extra parts separated by <code>|||</code>.</li>
+        </ul>
+      </details>
+
+      {results && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>
+            {okCount} scheduled{errCount ? `, ${errCount} with errors` : ""}.
+          </div>
+          <div style={{ border: "1px solid var(--line-soft)", borderRadius: 10, overflow: "hidden" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "56px 1fr 1.4fr", gap: 8, padding: "10px 12px", borderBottom: "1px solid var(--line-soft)", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted)" }}>
+              <span>Row</span>
+              <span>Status</span>
+              <span>Detail</span>
+            </div>
+            {results.map((r) => (
+              <div key={r.row} style={{ display: "grid", gridTemplateColumns: "56px 1fr 1.4fr", gap: 8, padding: "10px 12px", borderBottom: "1px solid rgba(0,0,0,0.05)", fontSize: 13, alignItems: "center" }}>
+                <span style={{ color: "var(--muted)" }}>{r.row}</span>
+                <span style={{ fontWeight: 600, color: r.ok ? "#15803d" : "#DC2626" }}>{r.ok ? "Scheduled" : "Error"}</span>
+                <span style={{ color: "var(--muted)" }}>{r.ok ? `${r.channels ?? ""}${r.scheduledFor ? ` · ${r.scheduledFor.replace("T", " ")}` : ""}` : r.error}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

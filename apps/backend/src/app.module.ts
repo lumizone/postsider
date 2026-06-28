@@ -12,6 +12,9 @@ import { VideoModule } from '@postsider/nestjs-libraries/videos/video.module';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { FILTER } from '@postsider/nestjs-libraries/sentry/sentry.exception';
 import { ChatModule } from '@postsider/nestjs-libraries/chat/chat.module';
+import { PostCheckerModule } from '@postsider/nestjs-libraries/post-checker/post-checker.module';
+import { SmartSlotsModule } from '@postsider/nestjs-libraries/smart-slots/smart-slots.module';
+import { CsvImportModule } from '@postsider/nestjs-libraries/csv-import/csv-import.module';
 import { getTemporalModule } from '@postsider/nestjs-libraries/temporal/temporal.module';
 import { TemporalRegisterMissingSearchAttributesModule } from '@postsider/nestjs-libraries/temporal/temporal.register';
 import { InfiniteWorkflowRegisterModule } from '@postsider/nestjs-libraries/temporal/infinite.workflow.register';
@@ -29,6 +32,9 @@ import { ioRedis } from '@postsider/nestjs-libraries/redis/redis.service';
     ThirdPartyModule,
     VideoModule,
     ChatModule,
+    PostCheckerModule,
+    SmartSlotsModule,
+    CsvImportModule,
     getTemporalModule(false),
     TemporalRegisterMissingSearchAttributesModule,
     InfiniteWorkflowRegisterModule,

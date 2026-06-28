@@ -542,6 +542,11 @@ export class PostsRepository {
           : {}),
         content: value.content,
         delay: value.delay || 0,
+        // First comment is an optional text published as a comment right after
+        // the main post. Persist it only on the first/main post row of the group.
+        ...(posts.length === 0
+          ? { firstComment: body.firstComment ?? null }
+          : {}),
         group: uuid,
         intervalInDays: inter ? +inter : null,
         approvedSubmitForOrder: APPROVED_SUBMIT_FOR_ORDER.NO,

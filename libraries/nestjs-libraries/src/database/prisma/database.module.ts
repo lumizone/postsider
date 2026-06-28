@@ -46,6 +46,12 @@ import { AdminStatsRepository } from '@postsider/nestjs-libraries/database/prism
 import { AdminStatsService } from '@postsider/nestjs-libraries/database/prisma/admin-stats/admin-stats.service';
 import { ProviderCredentialsRepository } from '@postsider/nestjs-libraries/database/prisma/integrations/provider-credentials.repository';
 import { ProviderCredentialsService } from '@postsider/nestjs-libraries/database/prisma/integrations/provider-credentials.service';
+import { EvergreenRepository } from '@postsider/nestjs-libraries/database/prisma/evergreen/evergreen.repository';
+import { EvergreenService } from '@postsider/nestjs-libraries/database/prisma/evergreen/evergreen.service';
+import { ComposerHelpersRepository } from '@postsider/nestjs-libraries/database/prisma/composer-helpers/composer-helpers.repository';
+import { ComposerHelpersService } from '@postsider/nestjs-libraries/database/prisma/composer-helpers/composer-helpers.service';
+import { ApprovalRepository } from '@postsider/nestjs-libraries/database/prisma/approval/approval.repository';
+import { ApprovalService } from '@postsider/nestjs-libraries/database/prisma/approval/approval.service';
 import { ProviderEnvHelper } from '@postsider/nestjs-libraries/integrations/provider-env.helper';
 import { AgentTokenRepository } from '@postsider/nestjs-libraries/database/prisma/agent-tokens/agent-token.repository';
 import { AgentTokenService } from '@postsider/nestjs-libraries/database/prisma/agent-tokens/agent-token.service';
@@ -121,6 +127,12 @@ import { InboundSourceRegistry } from '@postsider/nestjs-libraries/integrations/
     InboundSubscriptionRepository,
     InboundService,
     InboundSourceRegistry,
+    EvergreenRepository,
+    EvergreenService,
+    ComposerHelpersRepository,
+    ComposerHelpersService,
+    ApprovalRepository,
+    ApprovalService,
   ],
   get exports() {
     return this.providers;

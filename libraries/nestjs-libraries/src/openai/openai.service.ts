@@ -18,6 +18,16 @@ const VoicePrompt = z.object({
 
 @Injectable()
 export class OpenaiService {
+  // Generic single-prompt completion used by data-driven AI helpers
+  // (Post Checker, caption rewrite). Returns the raw text; callers parse it.
+  async complete(prompt: string, model = 'gpt-4.1'): Promise<string> {
+    const res = await openai.chat.completions.create({
+      model,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    return res.choices[0]?.message?.content || '';
+  }
+
   async generateImage(prompt: string, isVertical = false) {
     // gpt-image models always return base64 (b64_json) and do not accept the
     // `response_format` parameter, unlike the deprecated dall-e-3.

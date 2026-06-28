@@ -110,6 +110,21 @@ const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
+    href: "/approval",
+    labelKey: "nav.approval",
+    icon: (
+      <svg viewBox="0 0 16 16" fill="none" aria-hidden>
+        <path
+          d="M3.5 8.5l2.5 2.5 6-6"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
     href: "/settings",
     labelKey: "nav.settings",
     icon: (

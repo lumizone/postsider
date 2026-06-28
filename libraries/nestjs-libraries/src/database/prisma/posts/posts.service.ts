@@ -6,6 +6,7 @@ import {
 import { PostsRepository } from '@postsider/nestjs-libraries/database/prisma/posts/posts.repository';
 import { CreatePostDto } from '@postsider/nestjs-libraries/dtos/posts/create.post.dto';
 import dayjs from 'dayjs';
+import { slotsForDay } from './queue-slots';
 import { IntegrationManager } from '@postsider/nestjs-libraries/integrations/integration.manager';
 import {
   Integration,
@@ -1181,15 +1182,12 @@ export class PostsService {
   }
 
   async findFreeDateTime(orgId: string, integrationId?: string) {
-    const findTimes = await this._integrationService.findFreeDateTime(
+    const slots = await this._integrationService.findFreeDateTime(
       orgId,
       integrationId
     );
-    return this.findFreeDateTimeRecursive(
-      orgId,
-      findTimes,
-      dayjs.utc().startOf('day')
-    );
+    const start = dayjs.utc().startOf('day');
+    return this.findFreeDateTimeRecursive(orgId, slots, start, start);
   }
 
   async createPopularPosts(post: {
@@ -1203,9 +1201,29 @@ export class PostsService {
 
   private async findFreeDateTimeRecursive(
     orgId: string,
-    times: number[],
-    date: dayjs.Dayjs
+    slots: { time: number; days?: number[] }[],
+    date: dayjs.Dayjs,
+    start: dayjs.Dayjs
   ): Promise<string> {
+    // Safety guard: never loop forever when a channel has no posting times.
+    if (date.diff(start, 'day') > 365) {
+      throw new BadRequestException(
+        'No free posting slot found. Configure posting times for this channel.'
+      );
+    }
+
+    // Only the slots scheduled for this weekday apply (see slotsForDay).
+    const times = slotsForDay(slots, date.day());
+
+    if (!times.length) {
+      return this.findFreeDateTimeRecursive(
+        orgId,
+        slots,
+        date.add(1, 'day'),
+        start
+      );
+    }
+
     const list = await this._postRepository.getPostsCountsByDates(
       orgId,
       times,
@@ -1213,7 +1231,12 @@ export class PostsService {
     );
 
     if (!list.length) {
-      return this.findFreeDateTimeRecursive(orgId, times, date.add(1, 'day'));
+      return this.findFreeDateTimeRecursive(
+        orgId,
+        slots,
+        date.add(1, 'day'),
+        start
+      );
     }
 
     const num = list.reduce<null | number>((prev, curr) => {

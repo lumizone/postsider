@@ -1,0 +1,186 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { PageHeader, Card } from "@/components/settings-ui";
+import { useAuth } from "@/lib/auth-context";
+import { useT } from "@/lib/i18n";
+import {
+  CaptionTemplate,
+  getCaptionTemplates,
+  createCaptionTemplate,
+  updateCaptionTemplate,
+  deleteCaptionTemplate,
+} from "@/lib/composer-helpers-api";
+
+const inputStyle: React.CSSProperties = {
+  padding: "9px 12px",
+  borderRadius: 8,
+  border: "1px solid var(--line-soft)",
+  fontSize: 13,
+  background: "var(--bg)",
+  color: "var(--fg)",
+  width: "100%",
+};
+const primaryBtn: React.CSSProperties = {
+  padding: "9px 16px",
+  borderRadius: 8,
+  border: "none",
+  background: "var(--fg)",
+  color: "var(--bg)",
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: "pointer",
+};
+const ghostBtn: React.CSSProperties = {
+  padding: "9px 14px",
+  borderRadius: 8,
+  border: "1px solid var(--line-soft)",
+  background: "var(--bg)",
+  color: "var(--fg)",
+  fontSize: 13,
+  cursor: "pointer",
+};
+
+export default function CaptionTemplatesPage() {
+  const t = useT();
+  const { user } = useAuth();
+  const canManage = user?.role === "ADMIN" || user?.role === "SUPERADMIN";
+
+  const [items, setItems] = useState<CaptionTemplate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [editing, setEditing] = useState<string | "new" | null>(null);
+  const [name, setName] = useState("");
+  const [content, setContent] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const refresh = async () => {
+    try {
+      setItems((await getCaptionTemplates()) || []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load");
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    void refresh();
+  }, []);
+
+  const openNew = () => {
+    setEditing("new");
+    setName("");
+    setContent("");
+  };
+  const openEdit = (c: CaptionTemplate) => {
+    setEditing(c.id);
+    setName(c.name);
+    setContent(c.content);
+  };
+
+  const save = async () => {
+    if (!name.trim() || !content.trim() || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const body = { name: name.trim(), content };
+      if (editing === "new") await createCaptionTemplate(body);
+      else if (editing) await updateCaptionTemplate(editing, body);
+      setEditing(null);
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const [deleteTarget, setDeleteTarget] = useState<CaptionTemplate | null>(null);
+  const onDelete = async (id: string) => {
+    try {
+      await deleteCaptionTemplate(id);
+      setItems((p) => p.filter((x) => x.id !== id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setDeleteTarget(null);
+    }
+  };
+
+  if (!canManage) {
+    return (
+      <PageHeader
+        eyebrow={t("settings.eyebrow")}
+        title={t("settings.captionTemplates")}
+        subtitle="You don't have permission to manage caption templates."
+      />
+    );
+  }
+
+  return (
+    <>
+      <PageHeader
+        eyebrow={t("settings.eyebrow")}
+        title={t("settings.captionTemplates")}
+        subtitle="Save reusable captions, CTAs and signatures to insert into posts."
+      />
+      {error && (
+        <div style={{ margin: "0 0 16px", padding: "10px 12px", borderRadius: 8, background: "rgba(192,57,43,0.08)", color: "#c0392b", fontSize: 13 }}>{error}</div>
+      )}
+      <Card title="">
+        {loading ? (
+          <div style={{ padding: "30px 0", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>{t("common.loading")}</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {items.length === 0 && editing === null && (
+              <div style={{ padding: "30px 0", textAlign: "center", color: "var(--muted)", fontSize: 14 }}>No caption templates yet.</div>
+            )}
+            {items.map((c) => (
+              <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{c.name}</div>
+                  <div style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.content}</div>
+                </div>
+                <button type="button" style={ghostBtn} onClick={() => openEdit(c)}>Edit</button>
+                <button type="button" style={{ ...ghostBtn, color: "#DC2626", borderColor: "rgba(220,38,38,0.25)" }} onClick={() => setDeleteTarget(c)}>Delete</button>
+              </div>
+            ))}
+
+            {editing !== null && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "14px 0 4px" }}>
+                <input style={inputStyle} placeholder="Template name (e.g. Product CTA)" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+                <textarea style={{ ...inputStyle, minHeight: 100, resize: "vertical" }} placeholder="Your reusable caption text…" value={content} onChange={(e) => setContent(e.target.value)} />
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button type="button" style={primaryBtn} onClick={save} disabled={busy}>{busy ? "Saving…" : "Save"}</button>
+                  <button type="button" style={ghostBtn} onClick={() => setEditing(null)}>Cancel</button>
+                </div>
+              </div>
+            )}
+
+            {editing === null && (
+              <div style={{ marginTop: 6 }}>
+                <button type="button" style={ghostBtn} onClick={openNew}>+ New template</button>
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
+
+      {deleteTarget && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 9999, display: "grid", placeItems: "center", background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }} onClick={() => setDeleteTarget(null)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 400, background: "var(--bg)", borderRadius: 16, padding: "24px", display: "flex", flexDirection: "column", gap: 16, boxShadow: "0 24px 64px rgba(0,0,0,0.18)" }}>
+            <div>
+              <h2 style={{ fontSize: 17, fontWeight: 700, margin: "0 0 6px" }}>Delete template?</h2>
+              <p style={{ margin: 0, fontSize: 13, color: "var(--muted)" }}>Delete &quot;{deleteTarget.name}&quot;? This cannot be undone.</p>
+            </div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button type="button" style={ghostBtn} onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button type="button" style={{ ...primaryBtn, background: "#DC2626", color: "#fff" }} onClick={() => onDelete(deleteTarget.id)}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

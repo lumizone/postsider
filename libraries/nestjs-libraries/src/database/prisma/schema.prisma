@@ -49,6 +49,11 @@ model Organization {
   agentTokens         AgentToken[]
   auditLogs           AuditLog[]
   inboundSubscriptions InboundEventSubscription[]
+  evergreenSettings   EvergreenSettings?
+  hashtagGroups       HashtagGroup[]
+  captionTemplates    CaptionTemplate[]
+  utmPresets          UtmPreset[]
+  postApprovals       PostApproval[]
 
   @@index([apiKey])
   @@index([streakSince])
@@ -119,6 +124,8 @@ model User {
   sendFailureEmails     Boolean              @default(true)
   sendStreakEmails      Boolean              @default(true)
   oauthAuthorizations   OAuthAuthorization[]
+  approvalRequests      PostApproval[]       @relation("approvalRequester")
+  approvalResolutions   PostApproval[]       @relation("approvalResolver")
 
   @@unique([email, providerName])
   @@index([lastReadNotifications])
@@ -419,6 +426,9 @@ model Post {
   lastMessageId              String?
   intervalInDays             Int?
   error                      String?
+  evergreen                  Boolean                   @default(false)
+  lastRecycledAt             DateTime?
+  firstComment               String?
   createdAt                  DateTime                  @default(now())
   updatedAt                  DateTime                  @updatedAt
   deletedAt                  DateTime?
@@ -433,6 +443,7 @@ model Post {
   submittedForOrder          Orders?                   @relation(fields: [submittedForOrderId], references: [id])
   submittedForOrganization   Organization?             @relation("submittedForOrg", fields: [submittedForOrganizationId], references: [id])
   tags                       TagsPosts[]
+  approval                   PostApproval?
 
   @@index([group])
   @@index([deletedAt])
@@ -955,6 +966,7 @@ enum CreationMethod {
   API
   AUTOPOST
   CLI
+  CSV
 }
 
 enum ShortLinkPreference {
@@ -1088,4 +1100,86 @@ model InboundEventSubscription {
   organization   Organization @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId])
+}
+
+// ---- Ported from PostSider_OSS: composer helpers + approval + evergreen ----
+
+model HashtagGroup {
+  id             String       @id @default(uuid())
+  organizationId String
+  name           String
+  // JSON array of hashtag strings, e.g. ["#saas","#marketing"]
+  hashtags       String
+  // null = all platforms, otherwise a provider identifier filter
+  platform       String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+}
+
+model CaptionTemplate {
+  id             String       @id @default(uuid())
+  organizationId String
+  name           String
+  content        String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+}
+
+model UtmPreset {
+  id             String       @id @default(uuid())
+  organizationId String
+  name           String
+  utmSource      String
+  utmMedium      String
+  utmCampaign    String
+  utmContent     String?
+  utmTerm        String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model PostApproval {
+  id             String         @id @default(uuid())
+  postId         String         @unique
+  organizationId String
+  requestedById  String
+  approverId     String?
+  status         ApprovalStatus @default(PENDING)
+  note           String?
+  requestedAt    DateTime       @default(now())
+  resolvedAt     DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  post           Post           @relation(fields: [postId], references: [id])
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  requestedBy    User           @relation("approvalRequester", fields: [requestedById], references: [id])
+  approver       User?          @relation("approvalResolver", fields: [approverId], references: [id])
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([requestedById])
+}
+
+model EvergreenSettings {
+  organizationId String       @id
+  enabled        Boolean      @default(false)
+  intervalDays   Int          @default(7)
+  maxPerRun      Int          @default(1)
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id])
 }

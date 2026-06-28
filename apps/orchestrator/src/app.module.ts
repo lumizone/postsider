@@ -6,6 +6,7 @@ import { AutopostService } from '@postsider/nestjs-libraries/database/prisma/aut
 import { EmailActivity } from '@postsider/orchestrator/activities/email.activity';
 import { IntegrationsActivity } from '@postsider/orchestrator/activities/integrations.activity';
 import { MediaCleanupActivity } from '@postsider/orchestrator/activities/media.cleanup.activity';
+import { EvergreenActivity } from '@postsider/orchestrator/activities/evergreen.activity';
 import { HealthController } from '@postsider/orchestrator/health.controller';
 
 const activities = [
@@ -14,6 +15,7 @@ const activities = [
   EmailActivity,
   IntegrationsActivity,
   MediaCleanupActivity,
+  EvergreenActivity,
 ];
 @Module({
   imports: [

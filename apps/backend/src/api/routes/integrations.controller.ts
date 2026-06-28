@@ -606,6 +606,32 @@ export class IntegrationsController {
     return this._integrationService.setTimes(org.id, id, body);
   }
 
+  // Queue plan = the channel's recurring posting slots ({ time, days? }[]).
+  // Backed by the same postingTimes field used by Add to queue / find-slot.
+  @Get('/:id/queue-plan')
+  async getQueuePlan(
+    @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string
+  ) {
+    const integration = await this._integrationService.getIntegrationById(
+      org.id,
+      id
+    );
+    const slots = integration?.postingTimes
+      ? JSON.parse(integration.postingTimes)
+      : [];
+    return { slots };
+  }
+
+  @Put('/:id/queue-plan')
+  async setQueuePlan(
+    @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string,
+    @Body() body: IntegrationTimeDto
+  ) {
+    return this._integrationService.setTimes(org.id, id, body);
+  }
+
   @Post('/mentions')
   async mentions(
     @GetOrgFromRequest() org: Organization,

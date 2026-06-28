@@ -20,7 +20,7 @@ import { RefreshToken } from '@postsider/nestjs-libraries/integrations/social.ab
 import { IntegrationTimeDto } from '@postsider/nestjs-libraries/dtos/integrations/integration.time.dto';
 import { UploadFactory } from '@postsider/nestjs-libraries/upload/upload.factory';
 import { PlugDto } from '@postsider/nestjs-libraries/dtos/plugs/plug.dto';
-import { difference, uniq } from 'lodash';
+import { difference } from 'lodash';
 import utc from 'dayjs/plugin/utc';
 import { AutopostRepository } from '@postsider/nestjs-libraries/database/prisma/autopost/autopost.repository';
 import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
@@ -555,20 +555,31 @@ export class IntegrationService {
   async findFreeDateTime(
     orgId: string,
     integrationsId?: string
-  ): Promise<number[]> {
+  ): Promise<{ time: number; days?: number[] }[]> {
     const findTimes = await this._integrationRepository.getPostingTimes(
       orgId,
       integrationsId
     );
-    return uniq(
-      findTimes.reduce((all: any, current: any) => {
-        return [
-          ...all,
-          ...JSON.parse(current.postingTimes).map(
-            (p: { time: number }) => p.time
-          ),
-        ];
-      }, [] as number[])
+    const all = findTimes.reduce(
+      (acc: { time: number; days?: number[] }[], current: any) => {
+        const slots = JSON.parse(current.postingTimes) as {
+          time: number;
+          days?: number[];
+        }[];
+        return [...acc, ...slots.map((p) => ({ time: p.time, days: p.days }))];
+      },
+      [] as { time: number; days?: number[] }[]
     );
+    // De-duplicate by time + day fingerprint so the same slot from multiple
+    // channels is not counted twice.
+    const seen = new Map<string, { time: number; days?: number[] }>();
+    for (const slot of all) {
+      const key = `${slot.time}:${(slot.days ?? [])
+        .slice()
+        .sort((a, b) => a - b)
+        .join(',')}`;
+      if (!seen.has(key)) seen.set(key, slot);
+    }
+    return Array.from(seen.values());
   }
 }

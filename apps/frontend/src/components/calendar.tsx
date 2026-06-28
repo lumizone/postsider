@@ -487,6 +487,7 @@ export function Calendar({ year, month }: CalendarProps) {
       body: post.body,
       perChannelBody: post.perChannelBody,
       threadParts: post.threadParts,
+      firstComment: post.firstComment,
       media: uploadedMedia.map((m) => ({ id: m.id ?? "", path: m.path })),
       shortLink: false,
       tags: [],

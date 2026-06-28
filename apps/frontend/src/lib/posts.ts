@@ -120,6 +120,8 @@ export interface CreatePostInput {
   body: string;
   perChannelBody: Record<string, string>;
   threadParts: string[];
+  /** Optional comment posted right after the main post (provider-gated). */
+  firstComment?: string;
   media: { id: string; path: string }[];
   shortLink?: boolean;
   tags?: { value: string; label: string }[];
@@ -155,6 +157,9 @@ export async function createPost(input: CreatePostInput): Promise<unknown> {
     return {
       integration: { id: cid },
       value,
+      // Optional first comment rides along per post; the backend reads it
+      // per-post and only honors it for providers that support comments.
+      ...(input.firstComment ? { firstComment: input.firstComment } : {}),
       // Provider-specific settings (e.g. Discord channel) merged in per
       // channel. The backend resolves the __type discriminator server-side.
       settings: {

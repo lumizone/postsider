@@ -22,6 +22,7 @@
   flex-direction: column;
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.18);
   animation: scaleIn 180ms var(--ease);
+  overflow: hidden;
 }
 
 .head {
@@ -63,6 +64,19 @@
   gap: 0;
   flex: 1;
   min-height: 0;
+}
+
+/* When the Post Checker panel is open, add a third auto-width column for it. */
+.bodyWithChecker {
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) auto;
+}
+
+.checkerSlot {
+  padding: 22px 22px 16px;
+  overflow-y: auto;
+  border-left: 1px solid var(--line-soft);
+  display: flex;
+  min-width: 0;
 }
 
 .editor {
@@ -255,41 +269,43 @@
   border-color: var(--fg);
 }
 
-/* ---------- Channel picker (Discord/Slack sub-channel) ---------- */
-
-.channelPicker {
+/* Generic small field (used by the First comment field and provider fields). */
+.field {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-top: 12px;
+  margin-top: 14px;
 }
 
-.channelPickerLabel {
-  font-size: 13px;
-  color: var(--muted);
+.fieldLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg);
 }
 
-.channelPickerHint {
-  font-size: 13px;
-  color: var(--muted);
-  font-style: italic;
-}
-
-.channelPickerSelect {
+.fieldTextarea {
   font: inherit;
   font-size: 14px;
+  line-height: 1.5;
   color: var(--fg);
   background: var(--bg);
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-md);
   padding: 10px 12px;
   width: 100%;
+  resize: vertical;
+  min-height: 56px;
   transition: border-color 140ms var(--ease);
 }
 
-.channelPickerSelect:focus {
+.fieldTextarea:focus {
   outline: none;
   border-color: var(--fg);
+}
+
+.fieldHelp {
+  font-size: 11px;
+  color: var(--muted);
 }
 
 /* ---------- Toolbar ---------- */
@@ -571,12 +587,99 @@
 .footLeft {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-soft);
+  background: var(--bg);
+}
+
+.footIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg);
+}
+
+.footIcon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.dateInput,
+.timeInput {
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: -0.005em;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  padding: 0;
+}
+
+.dateInput:focus,
+.timeInput:focus {
+  outline: none;
 }
 
 .footRight {
   display: flex;
   gap: 8px;
+}
+
+.smartSlots {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.smartSlotsBtn {
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  opacity: 0.7;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  padding: 4px 0;
+  transition: opacity 140ms var(--ease);
+}
+
+.smartSlotsBtn:hover { opacity: 1; }
+.smartSlotsBtn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.smartSlotsChips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.smartSlotChip {
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--fg);
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  font-variant-numeric: tabular-nums;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: background 140ms var(--ease), color 140ms var(--ease);
+}
+
+.smartSlotChip:hover { background: var(--fg); color: var(--bg); }
+
+.smartSlotsHint {
+  font-size: 11px;
+  color: var(--fg);
+  opacity: 0.55;
+  letter-spacing: -0.005em;
 }
 
 .btnPrimary,
@@ -624,260 +727,4 @@
 @media (max-width: 800px) {
   .body { grid-template-columns: 1fr; }
   .editor { border-right: none; border-bottom: 1px solid var(--line-soft); }
-}
-
-/* ---------- Provider settings & warnings ---------- */
-
-.providerPanel {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 14px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--line-soft);
-  background: rgba(0, 0, 0, 0.015);
-}
-
-.providerPanelHead {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.providerPanelTitle {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-}
-
-.providerCounter {
-  margin-left: auto;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  color: var(--muted);
-}
-
-.providerCounterOver {
-  color: #dc2626;
-  font-weight: 700;
-}
-
-.providerHint {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  font-size: 13px;
-  line-height: 1.45;
-  color: var(--muted);
-}
-
-.providerHint svg {
-  flex-shrink: 0;
-  margin-top: 2px;
-  color: var(--muted);
-}
-
-.providerWarning {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  font-size: 13px;
-  line-height: 1.45;
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
-  background: rgba(220, 38, 38, 0.08);
-  border: 1px solid rgba(220, 38, 38, 0.25);
-  color: #b91c1c;
-}
-
-.providerWarning svg {
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.providerFields {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.fieldLabel {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  color: var(--fg);
-}
-
-.fieldRequired {
-  color: #dc2626;
-}
-
-.fieldHelp {
-  font-size: 11px;
-  color: var(--muted);
-  line-height: 1.4;
-}
-
-.fieldInput,
-.fieldSelect,
-.fieldTextarea {
-  font: inherit;
-  font-size: 14px;
-  color: var(--fg);
-  background: var(--bg);
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-md);
-  padding: 9px 12px;
-  width: 100%;
-  transition: border-color 140ms var(--ease);
-}
-
-.fieldTextarea {
-  resize: vertical;
-  min-height: 60px;
-}
-
-.fieldInput:focus,
-.fieldSelect:focus,
-.fieldTextarea:focus {
-  outline: none;
-  border-color: var(--fg);
-}
-
-.fieldCheckbox {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--fg);
-  cursor: pointer;
-}
-
-.fieldCheckbox input {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-}
-
-/* ---------- Submit error banner (system / backend) ---------- */
-
-.submitError {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: var(--radius-md);
-  background: rgba(220, 38, 38, 0.08);
-  border: 1px solid rgba(220, 38, 38, 0.28);
-  color: #b91c1c;
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.submitErrorIcon {
-  flex-shrink: 0;
-  margin-top: 1px;
-  display: inline-flex;
-}
-
-.submitErrorClose {
-  margin-left: auto;
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-  border: none;
-  background: transparent;
-  color: inherit;
-  border-radius: var(--radius-pill);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 140ms var(--ease);
-}
-
-.submitErrorClose:hover {
-  background: rgba(220, 38, 38, 0.12);
-}
-
-.submitErrorClose svg {
-  width: 12px;
-  height: 12px;
-}
-
-/* ---------- Validation summary (user-input gaps) ---------- */
-
-.validationSummary {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  border-radius: var(--radius-md);
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-}
-
-.validationSummaryHead {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: -0.005em;
-  color: #b45309;
-}
-
-.validationSummaryHead svg {
-  flex-shrink: 0;
-  color: #b45309;
-}
-
-.validationList {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.validationItem {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.validationChannel {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--fg);
-}
-
-.validationChannelPlatform {
-  font-weight: 400;
-  color: var(--muted);
-  text-transform: none;
-}
-
-.validationSubList {
-  margin: 0;
-  padding-left: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.validationSubList li {
-  font-size: 12px;
-  line-height: 1.45;
-  color: #92400e;
 }

@@ -14,6 +14,9 @@ import { IntegrationsController } from '@postsider/backend/api/routes/integratio
 import { IntegrationManager } from '@postsider/nestjs-libraries/integrations/integration.manager';
 import { SettingsController } from '@postsider/backend/api/routes/settings.controller';
 import { PostsController } from '@postsider/backend/api/routes/posts.controller';
+import { EvergreenController } from '@postsider/backend/api/routes/evergreen.controller';
+import { ComposerHelpersController } from '@postsider/backend/api/routes/composer-helpers.controller';
+import { ApprovalController } from '@postsider/backend/api/routes/approval.controller';
 import { MediaController } from '@postsider/backend/api/routes/media.controller';
 import { UploadModule } from '@postsider/nestjs-libraries/upload/upload.module';
 import { BillingController } from '@postsider/backend/api/routes/billing.controller';
@@ -69,6 +72,9 @@ const authenticatedController = [
   OAuthAuthorizedController,
   AnnouncementsController,
   AdminController,
+  EvergreenController,
+  ComposerHelpersController,
+  ApprovalController,
 ];
 @Module({
   imports: [UploadModule],
