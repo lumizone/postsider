@@ -355,7 +355,8 @@ export class IntegrationsController {
       x: { X_API_KEY: 'clientId', X_API_SECRET: 'clientSecret' },
       linkedin: { LINKEDIN_CLIENT_ID: 'clientId', LINKEDIN_CLIENT_SECRET: 'clientSecret' },
       'linkedin-page': { LINKEDIN_CLIENT_ID: 'clientId', LINKEDIN_CLIENT_SECRET: 'clientSecret' },
-      reddit: { REDDIT_CLIENT_ID: 'clientId', REDDIT_CLIENT_SECRET: 'clientSecret' },
+      // reddit uses per-user script-app credentials (customFields), not a shared
+      // OAuth app — no env mapping so the credential form is shown.
       facebook: { FACEBOOK_APP_ID: 'clientId', FACEBOOK_APP_SECRET: 'clientSecret' },
       instagram: { FACEBOOK_APP_ID: 'clientId', FACEBOOK_APP_SECRET: 'clientSecret' },
       'instagram-standalone': { INSTAGRAM_APP_ID: 'clientId', INSTAGRAM_APP_SECRET: 'clientSecret' },
@@ -372,7 +373,8 @@ export class IntegrationsController {
       twitch: { TWITCH_CLIENT_ID: 'clientId', TWITCH_CLIENT_SECRET: 'clientSecret' },
       mastodon: { MASTODON_CLIENT_ID: 'clientId', MASTODON_CLIENT_SECRET: 'clientSecret' },
       vk: { VK_ID: 'clientId' },
-      gmail: { GOOGLE_GMAIL_CLIENT_ID: 'clientId', GOOGLE_GMAIL_CLIENT_SECRET: 'clientSecret' },
+      // gmail uses SMTP + App Password (customFields), not OAuth — no env mapping.
+      // whop: client id = Whop App ID, client secret = Whop API key.
       whop: { WHOP_CLIENT_ID: 'clientId', WHOP_CLIENT_SECRET: 'clientSecret' },
     };
     return mappings[integration] || {};

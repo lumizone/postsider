@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useT } from "@/lib/i18n";
+import { getOauthUrl } from "@/lib/integrations";
 import styles from "./onboarding.module.css";
 
 type Step = "welcome" | "feature-write" | "feature-agent" | "feature-teams" | "feature-analytics" | "source" | "connect";
@@ -255,8 +256,22 @@ function ConnectStep({ onSkip }: { onSkip: () => void }) {
           <button
             key={p.id}
             className={styles.platformCard}
-            onClick={() => {
-              window.location.href = `/integrations/social/${p.id}`;
+            onClick={async () => {
+              // `/integrations/social/<id>` is the OAuth *callback* route on the
+              // frontend — navigating there directly (with no code/state) just
+              // renders an error. Resolve the real provider login URL first.
+              try {
+                const res = await getOauthUrl(p.id);
+                if (res?.oauthUrl) {
+                  window.location.href = res.oauthUrl;
+                  return;
+                }
+              } catch {
+                // fall through to the main app
+              }
+              // Credential-only (e.g. Bluesky) or unconfigured providers: finish
+              // onboarding into the app, where the add-channel flow handles them.
+              window.location.href = "/";
             }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}

@@ -23,7 +23,10 @@ export const SOURCE_CAPABLE_CONNECTORS = new Set<string>([
   'discord',
   'skool',
   // email connectors
-  'gmail',
+  // gmail is PUBLISH-only (SMTP send) — it has no inbound fetch, so it must not
+  // be advertised as a source. The runtime catalog derives gmail's caps from the
+  // social provider via deriveCapabilities(), so removing it here (not just from
+  // the static EMAIL_CONNECTORS entry) is what actually drops SOURCE.
   'mailgun',
   'resend',
   'smtp',
@@ -52,8 +55,8 @@ const EMAIL_CONNECTORS: ConnectorDefinition[] = [
     identifier: 'gmail',
     label: 'Gmail',
     iconUrl: '/icons/connectors/gmail.png',
-    capabilities: ['PUBLISH', 'SOURCE'],
-    requiredScopes: ['https://www.googleapis.com/auth/gmail.send'],
+    capabilities: ['PUBLISH'],
+    requiredScopes: [],
   },
   {
     identifier: 'smtp',

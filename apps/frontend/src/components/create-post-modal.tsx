@@ -375,16 +375,20 @@ export function CreatePostModal({
     };
   }, []);
 
-  // Clean up object URLs when modal closes.
+  // Clean up object URLs when modal closes. Track the latest media in a ref so
+  // the unmount cleanup revokes everything attached during the session — an
+  // empty-deps effect would close over the initial (empty) media array and leak
+  // every blob added afterwards.
+  const mediaRef = useRef<AttachedMedia[]>([]);
+  mediaRef.current = media;
   useEffect(() => {
     return () => {
-      for (const m of media) {
+      for (const m of mediaRef.current) {
         try {
           URL.revokeObjectURL(m.url);
         } catch {}
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const toggleChannel = (id: string) =>

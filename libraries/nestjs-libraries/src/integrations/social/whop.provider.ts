@@ -77,6 +77,9 @@ export class WhopProvider extends SocialAbstract implements SocialProvider {
           grant_type: 'refresh_token',
           refresh_token: refreshToken,
           client_id: process.env.WHOP_CLIENT_ID,
+          ...(process.env.WHOP_CLIENT_SECRET
+            ? { client_secret: process.env.WHOP_CLIENT_SECRET }
+            : {}),
         }),
       })
     ).json();
@@ -140,6 +143,9 @@ export class WhopProvider extends SocialAbstract implements SocialProvider {
           code: params.code,
           redirect_uri: redirectUri,
           client_id: process.env.WHOP_CLIENT_ID,
+          ...(process.env.WHOP_CLIENT_SECRET
+            ? { client_secret: process.env.WHOP_CLIENT_SECRET }
+            : {}),
           code_verifier: params.codeVerifier,
         }),
       })
@@ -246,35 +252,43 @@ export class WhopProvider extends SocialAbstract implements SocialProvider {
         )
       ).json();
 
-      if (createFileResponse.upload_url) {
-        await fetch(createFileResponse.upload_url, {
-          method: 'PUT',
-          headers: createFileResponse.upload_headers || {},
-          body: fileBuffer,
-        });
+      if (!createFileResponse.upload_url || !createFileResponse.id) {
+        // The create-file call failed (bad scope / error body). Skip this media
+        // rather than attaching a phantom `{ id: undefined }` to the post.
+        throw new Error('Whop file record creation failed');
+      }
 
-        let uploadStatus = 'pending';
-        while (uploadStatus !== 'ready') {
-          const fileStatus = await (
-            await this.fetch(
-              `https://api.whop.com/api/v1/files/${createFileResponse.id}`,
-              {
-                headers: {
-                  Authorization: `Bearer ${accessToken}`,
-                },
+      await fetch(createFileResponse.upload_url, {
+        method: 'PUT',
+        headers: createFileResponse.upload_headers || {},
+        body: fileBuffer,
+      });
+
+      let uploadStatus = 'pending';
+      // Cap the poll so a stuck/unknown status can't loop forever (60 × 5s = 5m).
+      for (let attempt = 0; uploadStatus !== 'ready'; attempt++) {
+        if (attempt >= 60) {
+          throw new Error('Whop file upload timed out');
+        }
+        const fileStatus = await (
+          await this.fetch(
+            `https://api.whop.com/api/v1/files/${createFileResponse.id}`,
+            {
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
               },
-              'check file status',
-              0,
-              true
-            )
-          ).json();
-          uploadStatus = fileStatus.upload_status;
-          if (uploadStatus === 'failed') {
-            throw new Error('File upload failed');
-          }
-          if (uploadStatus !== 'ready') {
-            await timer(5000);
-          }
+            },
+            'check file status',
+            0,
+            true
+          )
+        ).json();
+        uploadStatus = fileStatus.upload_status;
+        if (uploadStatus === 'failed') {
+          throw new Error('File upload failed');
+        }
+        if (uploadStatus !== 'ready') {
+          await timer(5000);
         }
       }
 

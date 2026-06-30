@@ -5,48 +5,37 @@ import {
   SocialProvider,
 } from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
-import { google } from 'googleapis';
-import { OAuth2Client } from 'google-auth-library/build/src/auth/oauth2client';
 import { SocialAbstract } from '@postsider/nestjs-libraries/integrations/social.abstract';
-import * as process from 'node:process';
 import dayjs from 'dayjs';
+import nodemailer from 'nodemailer';
 import { Rules } from '@postsider/nestjs-libraries/chat/rules.description.decorator';
 import { GmailDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/gmail.dto';
 import { Integration } from '@prisma/client';
 
-const clientAndGmail = () => {
-  const client = new google.auth.OAuth2({
-    clientId: process.env.GOOGLE_GMAIL_CLIENT_ID || process.env.YOUTUBE_CLIENT_ID,
-    clientSecret:
-      process.env.GOOGLE_GMAIL_CLIENT_SECRET || process.env.YOUTUBE_CLIENT_SECRET,
-    redirectUri: `${process.env.FRONTEND_URL}/integrations/social/gmail`,
-  });
+interface GmailCredentials {
+  email: string;
+  password: string;
+}
 
-  const oauth2 = (newClient: OAuth2Client) =>
-    google.oauth2({
-      version: 'v2',
-      auth: newClient,
-    });
-
-  const gmail = (newClient: OAuth2Client) =>
-    google.gmail({ version: 'v1', auth: newClient });
-
-  return { client, oauth2, gmail };
-};
-
+/**
+ * Gmail integration via SMTP with an App Password.
+ *
+ * Instead of OAuth, the user connects by entering their Gmail address and a
+ * 16-character App Password (Google Account → Security → 2-Step Verification →
+ * App passwords). Emails are sent through Gmail's SMTP server with nodemailer.
+ *
+ * The credentials are stored (encrypted at rest) as a base64 JSON blob in the
+ * integration token, the same convention other credential-based providers use.
+ */
 @Rules(
-  'Gmail "posts" are emails. Use the message body as the email body and provide subject + recipients via post settings.'
+  'Gmail "posts" are emails sent over SMTP. Use the message body as the email body and provide subject + recipients via post settings.'
 )
 export class GmailProvider extends SocialAbstract implements SocialProvider {
   override maxConcurrentJob = 5;
   identifier = 'gmail';
   name = 'Gmail';
   isBetweenSteps = false;
-  scopes = [
-    'https://www.googleapis.com/auth/userinfo.profile',
-    'https://www.googleapis.com/auth/userinfo.email',
-    'https://www.googleapis.com/auth/gmail.send',
-  ];
+  scopes = [] as string[];
   editor = 'html' as const;
   dto = GmailDto;
 
@@ -54,16 +43,38 @@ export class GmailProvider extends SocialAbstract implements SocialProvider {
     return 1_000_000;
   }
 
+  /** Gmail App Passwords are 16 letters, usually shown as 4 groups of 4. */
+  private parseCredentials(blob: string): GmailCredentials {
+    const { email, password } = JSON.parse(
+      Buffer.from(blob, 'base64').toString()
+    ) as GmailCredentials;
+    return { email, password: (password || '').replace(/\s+/g, '') };
+  }
+
+  private buildTransport(creds: GmailCredentials) {
+    return nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      auth: { user: creds.email, pass: creds.password },
+    });
+  }
+
   override handleErrors(body: string):
     | { type: 'refresh-token' | 'bad-body'; value: string }
     | undefined {
-    if (body.includes('invalid_grant') || body.includes('UNAUTHENTICATED')) {
+    if (
+      body.includes('Invalid login') ||
+      body.includes('Username and Password not accepted') ||
+      body.includes('535')
+    ) {
       return {
         type: 'refresh-token',
-        value: 'Please re-authenticate your Gmail account',
+        value:
+          'Gmail rejected the App Password — re-connect the channel with a fresh App Password.',
       };
     }
-    if (body.includes('Daily user sending quota exceeded')) {
+    if (body.includes('Daily user sending limit exceeded')) {
       return {
         type: 'bad-body',
         value: 'Gmail daily sending quota exceeded',
@@ -72,44 +83,47 @@ export class GmailProvider extends SocialAbstract implements SocialProvider {
     return undefined;
   }
 
-  async refreshToken(refresh_token: string): Promise<AuthTokenDetails> {
-    const { client, oauth2 } = clientAndGmail();
-    client.setCredentials({ refresh_token });
-    const { credentials } = await client.refreshAccessToken();
-    const user = oauth2(client);
-
-    const expiryDate = new Date(credentials.expiry_date!);
-    const expiresIn =
-      Math.floor(expiryDate.getTime() / 1000) -
-      Math.floor(Date.now() / 1000);
-
-    const { data } = await user.userinfo.get();
-
+  // Credential-based providers do not refresh — the App Password is long-lived.
+  async refreshToken(_refreshToken: string): Promise<AuthTokenDetails> {
     return {
-      accessToken: credentials.access_token!,
-      expiresIn,
-      refreshToken: credentials.refresh_token || refresh_token,
-      id: data.id!,
-      name: data.name!,
-      picture: data?.picture || '',
-      username: data.email || '',
+      refreshToken: '',
+      expiresIn: 0,
+      accessToken: '',
+      id: '',
+      name: '',
+      picture: '',
+      username: '',
     };
   }
 
+  // No OAuth — the connection is driven by the customFields credential form.
   async generateAuthUrl() {
-    const state = makeId(7);
-    const { client } = clientAndGmail();
+    const state = makeId(6);
     return {
-      url: client.generateAuthUrl({
-        access_type: 'offline',
-        prompt: 'consent',
-        state,
-        redirect_uri: `${process.env.FRONTEND_URL}/integrations/social/gmail`,
-        scope: this.scopes.slice(0),
-      }),
-      codeVerifier: makeId(11),
+      url: state,
+      codeVerifier: makeId(10),
       state,
     };
+  }
+
+  async customFields() {
+    return [
+      {
+        key: 'email',
+        label: 'Gmail address',
+        validation: `/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/`,
+        type: 'text' as const,
+      },
+      {
+        key: 'password',
+        label: 'App Password (16 characters)',
+        // 16 letters, any whitespace allowed between them (Google shows it as
+        // 4×4 groups, but users paste it spaced/unspaced). The backend strips all
+        // whitespace, so the form must not reject otherwise-valid spacing.
+        validation: `/^[a-z](\\s*[a-z]){15}$/i`,
+        type: 'password' as const,
+      },
+    ];
   }
 
   async authenticate(params: {
@@ -117,87 +131,70 @@ export class GmailProvider extends SocialAbstract implements SocialProvider {
     codeVerifier: string;
     refresh?: string;
   }) {
-    const { client, oauth2 } = clientAndGmail();
-    const { tokens } = await client.getToken(params.code);
-    client.setCredentials(tokens);
-    const { scopes } = await client.getTokenInfo(tokens.access_token!);
-    this.checkScopes(this.scopes, scopes);
+    let creds: GmailCredentials;
+    try {
+      creds = this.parseCredentials(params.code);
+    } catch {
+      return 'Invalid credentials';
+    }
 
-    const user = oauth2(client);
-    const { data } = await user.userinfo.get();
+    if (!creds.email || !creds.password) {
+      return 'Missing Gmail address or App Password';
+    }
 
-    const expiryDate = new Date(tokens.expiry_date!);
-    const expiresIn =
-      Math.floor(expiryDate.getTime() / 1000) -
-      Math.floor(Date.now() / 1000);
+    try {
+      // Verifying opens an authenticated SMTP session — fails fast on a wrong
+      // address or App Password before we ever store the credentials.
+      await this.buildTransport(creds).verify();
+    } catch (err) {
+      console.log('Gmail SMTP authenticate error', err);
+      return 'Gmail rejected the address or App Password. Make sure 2-Step Verification is on and the App Password is correct.';
+    }
 
     return {
-      accessToken: tokens.access_token!,
-      expiresIn,
-      refreshToken: tokens.refresh_token!,
-      id: data.id!,
-      name: data.name || data.email || '',
-      picture: data?.picture || '',
-      username: data.email || '',
+      refreshToken: '',
+      expiresIn: dayjs().add(100, 'years').unix() - dayjs().unix(),
+      accessToken: params.code,
+      id: Buffer.from(creds.email).toString('base64'),
+      name: creds.email,
+      picture: '',
+      username: creds.email,
     };
-  }
-
-  /** Build a base64url encoded RFC 5322 message ready for the Gmail API. */
-  private buildRawMessage(
-    fromEmail: string,
-    settings: GmailDto,
-    htmlBody: string
-  ): string {
-    const lines = [
-      `From: ${fromEmail}`,
-      `To: ${settings.to.join(', ')}`,
-      ...(settings.cc?.length ? [`Cc: ${settings.cc.join(', ')}`] : []),
-      ...(settings.bcc?.length ? [`Bcc: ${settings.bcc.join(', ')}`] : []),
-      `Subject: ${settings.subject}`,
-      'MIME-Version: 1.0',
-      'Content-Type: text/html; charset="UTF-8"',
-      'Content-Transfer-Encoding: 7bit',
-      '',
-      htmlBody,
-    ];
-
-    return Buffer.from(lines.join('\r\n'))
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
   }
 
   async post(
     id: string,
     accessToken: string,
     postDetails: PostDetails<GmailDto>[],
-    integration: Integration
+    _integration: Integration
   ): Promise<PostResponse[]> {
-    const { client, gmail, oauth2 } = clientAndGmail();
-    client.setCredentials({ access_token: accessToken });
-
-    const { data: profile } = await oauth2(client).userinfo.get();
-    const fromEmail = profile.email!;
-
+    const creds = this.parseCredentials(accessToken);
     const settings = postDetails[0].settings;
-    const raw = this.buildRawMessage(
-      fromEmail,
-      settings,
-      postDetails[0].message
-    );
 
-    const { data } = await gmail(client).users.messages.send({
-      userId: 'me',
-      requestBody: { raw },
+    // m.path is a public storage URL; nodemailer fetches http(s) `path` itself.
+    // Strip any query string / fragment so the attachment name isn't e.g.
+    // "photo.jpg?token=abc" in the recipient's inbox.
+    const attachments = (postDetails[0].media || []).map((m) => ({
+      filename: m.path.split('/').pop()?.split(/[?#]/)[0] || 'attachment',
+      path: m.path,
+    }));
+
+    const info = await this.buildTransport(creds).sendMail({
+      from: creds.email,
+      to: settings.to.join(', '),
+      ...(settings.cc?.length ? { cc: settings.cc.join(', ') } : {}),
+      ...(settings.bcc?.length ? { bcc: settings.bcc.join(', ') } : {}),
+      subject: settings.subject,
+      html: postDetails[0].message,
+      ...(attachments.length ? { attachments } : {}),
     });
 
     return [
       {
         id: postDetails[0].id,
         status: 'completed',
-        postId: String(data.id || makeId(12)),
-        releaseURL: `https://mail.google.com/mail/u/0/#sent/${data.id || ''}`,
+        postId: String(info.messageId || makeId(12)),
+        releaseURL: 'https://mail.google.com/mail/u/0/#sent',
       },
     ];
   }

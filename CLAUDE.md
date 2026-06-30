@@ -1,10 +1,10 @@
-# PostSider Cloud (PostSider_APP)
+# PostSider (PostSider_APP)
 
-The PostSider product app (NestJS backend + Next 15/React 19 frontend + Temporal orchestrator, pnpm monorepo, Postiz fork). **This is now the single open-source repo** (AGPL-3.0) for both our managed hosting (`app.postsider.com`) and self-hosting via Docker, switched entirely by env vars (see "Run modes" below).
+The PostSider product app (NestJS backend + Next 15/React 19 frontend + Temporal orchestrator, pnpm monorepo, fork of **Postiz** `gitroomhq/postiz-app`, AGPL-3.0). **This is the single open-source repo** for both our managed hosting (`app.postsider.com`) and self-hosting via Docker, switched entirely by env vars (see "Run modes" below).
 
 ## Status
 
-- **Release-ready & pushed (2026-06-28).** Single env-gated repo; all inherited Postiz AI stripped (see "No other AI"). Branch `feat/port-oss-features` pushed to `github.com/lumizone/postsider`. This session: removed Stripe (Polar-only), dropped orphaned stripped-AI Prisma models (migration `20260628160000`), added the lean MCP server (`apps/mcp`), `SECURITY.md`/`CODE_OF_CONDUCT.md`/CI, and dep CVE overrides (audit: **0 high**). Verified: backend/orchestrator/frontend/MCP builds + **127 root + 27 MCP tests** green; all migrations apply on a fresh real Postgres; backend boot (health + auth 401) + frontend `/login` e2e ok. Remaining (user): merge -> `main`, VPS deploy (`./deploy.sh --bootstrap`, set `ENCRYPTION_KEY`), register real social OAuth apps + live publish e2e.
+- **Released v1.0.0 (2026-06-30).** `feat/port-oss-features` merged to `main` together with the production/VPS fixes that had been pushed straight to `origin/main`. Single env-gated repo; all inherited Postiz AI stripped (see "No other AI"). Repo: `github.com/lumizone/postsider`.
 - The 11 differentiator features: composer helpers (hashtag groups / caption templates / UTM), posting queue (day-aware find-slot), bulk CSV import, approval workflow, per-platform preview, AI caption rewrite, API request generator, Post Checker, Evergreen, Smart Slots, first-comment.
 
 ## Commands
@@ -20,30 +20,94 @@ pnpm run prisma-generate          # after schema.prisma changes
 pnpm run dev:docker               # Postgres/Redis/Temporal containers
 pnpm run dev                      # backend (:3000) + orchestrator (:3002) in parallel
 pnpm run dev:frontend             # :4200
+npx tsc --noEmit --project apps/backend/tsconfig.json   # typecheck a backend change
 ```
 
 ## Run modes (one codebase, env-gated)
 
 Cloud and self-host are the SAME build; env vars switch behavior. Helpers: `isBillingEnabled()` (`services/billing.flag.ts`), `isPlatformAiEnabled()` (`services/ai.flag.ts`).
 
-- **Billing is Polar-only.** `isBillingEnabled()` returns `!!process.env.POLAR_ACCESS_TOKEN`. Set (cloud): plans gated, 402 responses carry a `section` for plan-limit messaging. Absent (self-host): every org is unlimited. Stripe was **fully removed** (this session); billing is Polar-only via `PolarService`.
+- **Billing is Polar-only.** `isBillingEnabled()` returns `!!process.env.POLAR_ACCESS_TOKEN`. Set (cloud): plans gated, 402 responses carry a `section` for plan-limit messaging. Absent (self-host): every org is unlimited. Stripe was **fully removed**; billing is Polar-only via `PolarService`. `POLAR_SERVER="sandbox"` = test mode; `production` for real charges.
 - **AI is platform key OR BYO key.** `OPENAI_API_KEY` set (cloud): Post Checker + rewrite use `OpenaiService.complete()`. Absent (self-host): they fall back to a per-org BYO key stored in `ProviderCredentials` (`post-checker` namespace); `/settings/post-checker` page + config endpoints appear only in self-host; `/posts/check` + `/posts/rewrite` return 409 until a key is saved.
-- **No other AI (Postiz AI stripped).** All inherited Postiz AI was removed: agent (LangGraph), agent-bridge, MCP/chat server + tools (`/settings/mcp`), copilot, autopost, AI image/video/slides gen (fal, veo3, heygen), voice, `agent-media.ai` SSO. `OpenaiService` exposes ONE method (`complete()`). The two non-AI `chat/` helpers (`@Rules` decorator, `validation.schemas.helper.ts`) stay. Orphaned stripped-AI Prisma models (`AutoPost`, `AgentToken`, `mastra_*`) + dead enum values + `Organization.hitlMode` were removed in migration `20260628160000_remove_stripped_ai_models`. Do not re-add the inherited Mastra agent. **MCP is back, but as a NEW lean server in `apps/mcp` (`@postsider/mcp`) wrapping the public `/public/v1` API for AI agents (only deps: `@modelcontextprotocol/sdk` + `zod`) — keep it; it is NOT the removed inherited Mastra MCP.**
-- **Social OAuth via per-provider env.** Each `integrations/social/*.provider.ts` reads its app id/secret from env. Cloud sets PostSider's; self-host operators set their own (see `.env.example`). There is no paste-in-UI modal.
-- **Migrations, NOT `db push`.** Ships Prisma **migration files** (`libraries/nestjs-libraries/src/database/prisma/migrations/`); the server (cloud and self-host Docker) runs `prisma migrate deploy` on boot. Generate new ones with `migrate dev`. Never commit a `db push`-only schema change.
+- **No other AI (Postiz AI stripped).** All inherited Postiz AI was removed: agent (LangGraph), agent-bridge, MCP/chat server + tools (`/settings/mcp`), copilot, autopost, AI image/video/slides gen (fal, veo3, heygen), voice, `agent-media.ai` SSO. `OpenaiService` exposes ONE method (`complete()`). The two non-AI `chat/` helpers (`@Rules` decorator, `validation.schemas.helper.ts`) stay. Orphaned stripped-AI Prisma models (`AutoPost`, `AgentToken`, `mastra_*`) + dead enum values + `Organization.hitlMode` removed in migration `20260628160000_remove_stripped_ai_models`. **MCP is back, but as a NEW lean server in `apps/mcp` (`@postsider/mcp`) wrapping the public `/public/v1` API for AI agents (only deps: `@modelcontextprotocol/sdk` + `zod`) — it is NOT the removed inherited Mastra MCP.**
+- **Social OAuth via per-provider env.** Each `integrations/social/*.provider.ts` reads its app id/secret from env. Cloud sets PostSider's; self-host operators set their own (see `.env.example`). No paste-in-UI modal.
+- **Migrations, NOT `db push`.** Ships Prisma **migration files** (`libraries/nestjs-libraries/src/database/prisma/migrations/`); the server runs `prisma migrate deploy` on boot. Generate new ones with `migrate dev`. Never commit a `db push`-only schema change.
 
-## Conventions (shared with OSS)
+## This deployment (production VPS)
 
-- Backend modules register in `apps/backend/src/app.module.ts` (global libs) / `apps/backend/src/api/api.module.ts` (`authenticatedController`); DB services in `database.module.ts` (`get exports()` mirrors `providers`). `OpenaiService` is provided by the global `DatabaseModule`.
+- **Host:** single VPS, public IP `51.75.70.123`. Full stack runs in Docker via `docker-compose.production.yaml`, behind **host nginx** (TLS via certbot).
+- **Domains** (split): dashboard `https://app.postsider.com`, API `https://api.postsider.com`, media `https://storage.postsider.com` (MinIO). DNS on **OVH** (nameservers `dns/ns109.ovh.net`).
+- **Config:** `.env.production` (chmod 600, gitignored). Secrets generated by `deploy.sh`.
+- **Do NOT touch** the other containers on this host: `twenty-*` (CRM), `umami`, `root-n8n-1`. Unrelated and important.
+
+### Deploy / operate
+
+```bash
+sudo ./deploy.sh              # build image + (re)start full stack, wait healthy
+sudo ./deploy.sh --no-build   # restart only — use after editing .env.production
+sudo ./deploy.sh --bootstrap  # first install: also create the first admin
+```
+
+- **Backend/library or frontend code change → full `sudo ./deploy.sh`** (Next.js bundle and NEXT_PUBLIC_* are baked at build time; ~10-15 min).
+- **`.env.production` change only → `sudo ./deploy.sh --no-build`** (fast).
+- Health: `https://api.postsider.com/health` returns 200 when backend is up. A fresh deploy shows a transient 502 for ~30-60s while pm2 boots.
+- Containers: `postsider-app` (nginx + pm2: backend/frontend/orchestrator), `postsider-postgres`, `postsider-redis`, `postsider-minio`, `postsider-temporal*`. All bound to `127.0.0.1` except via host nginx.
+
+### Admin UIs (SSH tunnel only — never exposed publicly)
+
+```bash
+ssh -L 8080:127.0.0.1:8080 -L 9001:127.0.0.1:9001 <host>
+```
+Temporal UI `:8080` (no auth), MinIO console `:9001` (`MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY`). A public DbGate vhost was removed — keep admin UIs SSH-tunnel only; do not re-add a public reverse-proxy vhost.
+
+## Architecture
+
+- `apps/backend` — NestJS REST API (auth, posts, integrations, billing). Modules register in `app.module.ts` (global libs) / `api/api.module.ts` (`authenticatedController`); DB services in `database.module.ts` (`get exports()` mirrors `providers`). `OpenaiService` provided by global `DatabaseModule`.
+- `apps/orchestrator` — Temporal worker (durable scheduled publishing, token refresh). Compiles a workflow bundle per platform task-queue on boot.
+- `apps/frontend` — Next.js 15 dashboard (App Router, CSS modules).
+- `apps/commands` — CLI (bootstrap first admin).
+- `apps/mcp` — lean MCP server (`@postsider/mcp`) wrapping the public API.
+- `libraries/nestjs-libraries` — Prisma, **social providers**, AI, uploads.
+- Path aliases: `@postsider/backend/*`, `@postsider/nestjs-libraries/*`, etc.
+
+### Social providers (`libraries/nestjs-libraries/src/integrations/social/`)
+
+Each platform is one class extending `SocialAbstract implements SocialProvider`. Two connection styles:
+
+- **OAuth** — `generateAuthUrl()` returns a real `http(s)` login URL. Whether the dashboard shows a popup depends on `getEnvMapping()` in `apps/backend/src/api/routes/integrations.controller.ts`: the provider must be listed there AND every mapped env var must be non-empty. Callback URL is `${FRONTEND_URL}/integrations/social/<identifier>` (on **app**, not api) — must be whitelisted in the provider's developer app.
+- **customFields** — `customFields()` returns a credential form; the frontend base64-encodes values into `authenticate()`'s `params.code`. Used for API-key/token providers (ghost, bluesky, gmail-via-SMTP, …). A provider with NO env mapping is treated as customFields.
+
+Two-step OAuth providers (facebook, instagram, gmb, linkedin-page, youtube) return a list from `pages()`/`companies()`; user picks one, finalized via `fetchPageInformation()`. **Convention:** the picker posts `{ page: <id> }`; `fetchPageInformation` must read `data.page`, and `pages()`/`companies()` must return `picture` as a plain string URL.
+
+## Local modifications vs upstream
+
+- **Gmail → SMTP.** `gmail.provider.ts` rewritten from OAuth to SMTP + App Password (nodemailer, `smtp.gmail.com:465`), via customFields (email + 16-char App Password). Removed from `getEnvMapping`. Requires 2FA + App Password. Gmail is PUBLISH-only: removed from `SOURCE_CAPABLE_CONNECTORS` in `connector.catalog.ts` (runtime caps come from the social provider via `deriveCapabilities`).
+- **Provider bug fixes** (page-pick + avatar) in `instagram`, `gmb`, `facebook`, `youtube`: `fetchPageInformation` reads `data.page`/`data.id` and throws on an unresolvable page/location instead of fetching `/undefined`; list functions return `picture` as a string. GMB derives the v1 `locationName` from the resource path. Frontend `oauth-callback.tsx`: explicit `color: var(--fg)` on picker name/avatar.
+- **Whop** OAuth wired: `WHOP_CLIENT_ID` = App ID, `WHOP_CLIENT_SECRET` = API key; provider sends `client_secret` in the token exchange (confidential app). `uploadMediaToWhop` poll is bounded.
+- **Kick** hidden in `add-channel-modal.tsx` (not working). `reddit` uses per-user script-app credentials; `vk` hidden (not ready).
+- `docker-compose.production.yaml`: `postsider-app` memory limit raised to **3072M**. The orchestrator runs ~40 Temporal workers in one node process; at 2560M it OOM-killed (exit 137) mid-startup and crash-looped, so **scheduled posts never published — they sat in QUEUE forever**. 3072M clears the startup peak. **Durable follow-up:** bundle the workflow once (`bundleWorkflowCode` + `workflowBundle` via `registerAsync` in `temporal.module.ts`) instead of 40×.
+
+### Auth flows (backend was upstream, frontend pages were added here)
+
+- **Password reset** — `/forgot` (`POST /auth/forgot`) + reset page `/auth/forgot/[token]` (`POST /auth/forgot-return`); email links to `${FRONTEND_URL}/auth/forgot/<token>`.
+- **Account activation** — `/auth/activate/[token]` (`POST /auth/activate`, then refresh session → `/onboarding`). **Dormant**: only triggers when `REQUIRE_EMAIL_ACTIVATION="true"` AND an email provider is set.
+- Both email-link targets are in `PUBLIC_PATHS` in `app-root.tsx` (else they bounce to `/login` pre-auth).
+- **Onboarding connect fix**: `onboarding-flow.tsx` buttons resolve the real OAuth URL via `getOauthUrl()` first.
+- New i18n keys (`auth.forgot*`/`auth.reset*`/`auth.activate*`) live in `en` only; other locales fall back.
+
+## Conventions
+
+- TypeScript strict (minus `strictNullChecks`). Prettier + ESLint at root.
 - Controllers use `@GetOrgFromRequest() org`; role on `org.users[0].role`.
-- **Scheduling is UTC.** `PostsService.findFreeDateTime(orgId, integrationId?)` returns a UTC wall-clock string without a zone; callers needing an instant append `'Z'`. `Integration.postingTimes` is `[{time, days?}]` minutes-from-midnight UTC; queue slot search is day-aware (`queue-slots.ts` `slotsForDay` + 365-day guard in `findFreeDateTimeRecursive`).
-- **Public API auth is the RAW `Authorization` header** (no `Bearer`); `getOrgByApiKey(auth)` on the whole value. Base `/public/v1`.
+- **Scheduling is UTC.** `PostsService.findFreeDateTime(orgId, integrationId?)` returns a UTC wall-clock string without a zone; callers needing an instant append `'Z'`. `Integration.postingTimes` is `[{time, days?}]` minutes-from-midnight UTC; queue slot search is day-aware (`queue-slots.ts`).
+- **Public API auth is the RAW `Authorization` header** (no `Bearer`); `getOrgByApiKey(auth)` on the whole value. Base `/public/v1`. MCP self-host base URL: served under `/api` behind nginx, so set `POSTSIDER_API_URL=https://<domain>/api`.
 - First comment: optional per-post `firstComment`, persisted on the main post row, published best-effort by the publish workflow (`post.workflow.v1.0.5`) for comment-capable providers (`integrations/social/comment.capability.ts`).
-- Recurring jobs (Temporal): activity class + self-looping workflow, registered in `apps/orchestrator/src/app.module.ts` `activities` + exported from `workflows/index.ts`, started in `InfiniteWorkflowRegister` gated by `process.env.RUN_CRON` (e.g. `evergreenWorkflow`).
-- Frontend: `@/lib/api` `api.{get,post,put,del}`; settings pages mirror `app/settings/api/page.tsx` and use `settings-ui` (`PageHeader`, `Card`, `settingsStyles`); nav in `settings-shell.tsx` / `dashboard-shell.tsx` `NAV_ITEMS`; i18n `lib/i18n` (`en.ts` authoritative, other locales fall back).
+- Recurring jobs (Temporal): activity class + self-looping workflow, registered in `apps/orchestrator/src/app.module.ts` `activities` + exported from `workflows/index.ts`, started in `InfiniteWorkflowRegister` gated by `process.env.RUN_CRON`. `streakWorkflow`/`digestEmailWorkflow` null-guard org (orphaned/deleted orgs).
+- Frontend: `@/lib/api` `api.{get,post,put,del}`; settings pages mirror `app/settings/api/page.tsx` and use `settings-ui` (`PageHeader`, `Card`, `settingsStyles`); nav in `settings-shell.tsx` / `dashboard-shell.tsx` `NAV_ITEMS`; i18n `lib/i18n` (`en.ts` authoritative).
 - Brand/copy: B&W Apple-minimal; **no em/en-dashes in rendered copy** (LLM-facing prompt text is exempt).
 
-## Notes
+## Gotchas
 
-- `streakWorkflow` / `digestEmailWorkflow` null-guard (org null for orphaned/deleted orgs) was **fixed this session** (`if (!org) ...` guards added).
-- MCP self-host base URL: the public API is served under `/api` behind nginx, so set `POSTSIDER_API_URL=https://<domain>/api` (default `https://api.postsider.com`).
+- **`NOT_SECURED` must be unset in production.** The code checks truthiness, so even `NOT_SECURED="false"` enables insecure mode (no session cookie → login fails). Keep it commented out in `.env.production`.
+- **`DISABLE_REGISTRATION="true"`** — public sign-up is closed; new users added manually. `User.password` is a bcrypt hash, so a raw DB insert won't authenticate.
+- Frontend changes require a **full rebuild** to appear (bundle is baked).

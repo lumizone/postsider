@@ -18,9 +18,17 @@ import WebSocket from 'ws';
 import { Tool } from '@postsider/nestjs-libraries/integrations/tool.decorator';
 import { Integration } from '@prisma/client';
 import { hasExtension } from '@postsider/helpers/utils/has.extension';
+import { AuthService } from '@postsider/helpers/auth/auth.service';
 
 // @ts-ignore
 global.WebSocket = WebSocket;
+
+interface RedditCredentials {
+  client_id: string;
+  client_secret: string;
+  username: string;
+  password: string;
+}
 
 export class RedditProvider extends SocialAbstract implements SocialProvider {
   override maxConcurrentJob = 1; // Reddit has strict rate limits (1 request per second)
@@ -58,98 +66,163 @@ export class RedditProvider extends SocialAbstract implements SocialProvider {
     return true;
   }
 
-  async refreshToken(refreshToken: string): Promise<AuthTokenDetails> {
-    const { access_token: accessToken, expires_in: expiresIn } = await (
+  /**
+   * Reddit via a user-owned "script" app (per-user credentials, no shared OAuth
+   * app). The user supplies their own client_id/secret + Reddit username/password
+   * (script app at reddit.com/prefs/apps); we mint user access tokens with the
+   * OAuth password grant. Tokens last ~1h and carry no refresh_token, so we keep
+   * the credentials (encrypted) and re-mint on expiry. 2FA accounts are not
+   * supported by this grant.
+   */
+  private storeCreds(creds: RedditCredentials): string {
+    return AuthService.fixedEncryption(JSON.stringify(creds));
+  }
+
+  private parseStoredCreds(blob: string): RedditCredentials {
+    return JSON.parse(AuthService.fixedDecryption(blob));
+  }
+
+  private async passwordGrant(creds: RedditCredentials) {
+    return (
       await this.fetch('https://www.reddit.com/api/v1/access_token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': `web:postsider:v1.0 (by /u/${creds.username})`,
           Authorization: `Basic ${Buffer.from(
-            `${process.env.REDDIT_CLIENT_ID}:${process.env.REDDIT_CLIENT_SECRET}`
+            `${creds.client_id}:${creds.client_secret}`
           ).toString('base64')}`,
         },
         body: new URLSearchParams({
-          grant_type: 'refresh_token',
-          refresh_token: refreshToken,
+          grant_type: 'password',
+          username: creds.username,
+          password: creds.password,
         }),
       })
     ).json();
+  }
 
-    const { name, id, icon_img } = await (
+  private async fetchMe(accessToken: string, username: string) {
+    return (
       await this.fetch('https://oauth.reddit.com/api/v1/me', {
         headers: {
           Authorization: `Bearer ${accessToken}`,
+          'User-Agent': `web:postsider:v1.0 (by /u/${username})`,
         },
       })
     ).json();
+  }
+
+  async refreshToken(refreshToken: string): Promise<AuthTokenDetails> {
+    // refreshToken holds the encrypted script-app credentials — re-mint a token.
+    const creds = this.parseStoredCreds(refreshToken);
+    const { access_token: accessToken, expires_in: expiresIn } =
+      await this.passwordGrant(creds);
+
+    const { name, id, icon_img } = await this.fetchMe(
+      accessToken,
+      creds.username
+    );
 
     return {
       id,
       name,
       accessToken,
-      refreshToken: refreshToken,
+      refreshToken, // keep the encrypted creds blob
       expiresIn,
       picture: icon_img?.split?.('?')?.[0] || '',
       username: name,
     };
   }
 
+  // No OAuth — the connection is driven by the customFields credential form.
   async generateAuthUrl() {
     const state = makeId(6);
-    const codeVerifier = makeId(30);
-    const url = `https://www.reddit.com/api/v1/authorize?client_id=${
-      process.env.REDDIT_CLIENT_ID
-    }&response_type=code&state=${state}&redirect_uri=${encodeURIComponent(
-      `${process.env.FRONTEND_URL}/integrations/social/reddit`
-    )}&duration=permanent&scope=${encodeURIComponent(this.scopes.join(' '))}`;
-    return {
-      url,
-      codeVerifier,
-      state,
-    };
+    return { url: state, codeVerifier: makeId(10), state };
+  }
+
+  async customFields() {
+    return [
+      {
+        key: 'client_id',
+        label: 'Reddit app ID (create a "script" app at reddit.com/prefs/apps)',
+        validation: `/^.{4,}$/`,
+        type: 'text' as const,
+      },
+      {
+        key: 'client_secret',
+        label: 'Reddit app secret',
+        validation: `/^.{4,}$/`,
+        type: 'password' as const,
+      },
+      {
+        key: 'username',
+        label: 'Reddit username (without u/)',
+        validation: `/^[A-Za-z0-9_\\-]{3,20}$/`,
+        type: 'text' as const,
+      },
+      {
+        key: 'password',
+        label: 'Reddit password (account must NOT have 2-factor auth)',
+        validation: `/^.{6,}$/`,
+        type: 'password' as const,
+      },
+    ];
   }
 
   async authenticate(params: { code: string; codeVerifier: string }) {
-    const {
-      access_token: accessToken,
-      refresh_token: refreshToken,
-      expires_in: expiresIn,
-      scope,
-    } = await (
-      await this.fetch('https://www.reddit.com/api/v1/access_token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          Authorization: `Basic ${Buffer.from(
-            `${process.env.REDDIT_CLIENT_ID}:${process.env.REDDIT_CLIENT_SECRET}`
-          ).toString('base64')}`,
-        },
-        body: new URLSearchParams({
-          grant_type: 'authorization_code',
-          code: params.code,
-          redirect_uri: `${process.env.FRONTEND_URL}/integrations/social/reddit`,
-        }),
-      })
-    ).json();
+    let creds: RedditCredentials;
+    try {
+      const parsed = JSON.parse(Buffer.from(params.code, 'base64').toString());
+      creds = {
+        client_id: (parsed.client_id || '').trim(),
+        client_secret: (parsed.client_secret || '').trim(),
+        username: (parsed.username || '').trim().replace(/^\/?u\//, ''),
+        password: parsed.password || '',
+      };
+    } catch {
+      return 'Invalid credentials';
+    }
 
-    this.checkScopes(this.scopes, scope);
+    if (
+      !creds.client_id ||
+      !creds.client_secret ||
+      !creds.username ||
+      !creds.password
+    ) {
+      return 'Missing Reddit app ID, secret, username, or password';
+    }
 
-    const { name, id, icon_img } = await (
-      await this.fetch('https://oauth.reddit.com/api/v1/me', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      })
-    ).json();
+    let tokenRes: any;
+    try {
+      tokenRes = await this.passwordGrant(creds);
+    } catch {
+      tokenRes = null;
+    }
+    const accessToken = tokenRes?.access_token;
+    const expiresIn = tokenRes?.expires_in;
+    if (!accessToken) {
+      return 'Reddit rejected the credentials. Check the app ID/secret and username/password — accounts with 2-factor auth are not supported by this method.';
+    }
+
+    let me: any;
+    try {
+      me = await this.fetchMe(accessToken, creds.username);
+    } catch {
+      me = null;
+    }
+    if (!me?.id) {
+      return 'Could not load the Reddit account for these credentials.';
+    }
 
     return {
-      id,
-      name,
+      id: me.id,
+      name: me.name,
       accessToken,
-      refreshToken,
+      refreshToken: this.storeCreds(creds),
       expiresIn,
-      picture: icon_img?.split?.('?')?.[0] || '',
-      username: name,
+      picture: me.icon_img?.split?.('?')?.[0] || '',
+      username: me.name,
     };
   }
 
@@ -167,6 +240,7 @@ export class RedditProvider extends SocialAbstract implements SocialProvider {
         {
           method: 'POST',
           headers: {
+            'User-Agent': 'web:postsider:v1.0',
             Authorization: `Bearer ${accessToken}`,
           },
           body: formData,
@@ -256,6 +330,7 @@ export class RedditProvider extends SocialAbstract implements SocialProvider {
         await this.fetch('https://oauth.reddit.com/api/submit', {
           method: 'POST',
           headers: {
+            'User-Agent': 'web:postsider:v1.0',
             Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/x-www-form-urlencoded',
           },
@@ -346,6 +421,7 @@ export class RedditProvider extends SocialAbstract implements SocialProvider {
       await this.fetch('https://oauth.reddit.com/api/comment', {
         method: 'POST',
         headers: {
+          'User-Agent': 'web:postsider:v1.0',
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/x-www-form-urlencoded',
         },
@@ -386,6 +462,7 @@ export class RedditProvider extends SocialAbstract implements SocialProvider {
         {
           method: 'GET',
           headers: {
+            'User-Agent': 'web:postsider:v1.0',
             Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/x-www-form-urlencoded',
           },
@@ -445,6 +522,7 @@ export class RedditProvider extends SocialAbstract implements SocialProvider {
         {
           method: 'GET',
           headers: {
+            'User-Agent': 'web:postsider:v1.0',
             Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/x-www-form-urlencoded',
           },
@@ -463,6 +541,7 @@ export class RedditProvider extends SocialAbstract implements SocialProvider {
         {
           method: 'GET',
           headers: {
+            'User-Agent': 'web:postsider:v1.0',
             Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/x-www-form-urlencoded',
           },
@@ -483,7 +562,8 @@ export class RedditProvider extends SocialAbstract implements SocialProvider {
               {
                 method: 'GET',
                 headers: {
-                  Authorization: `Bearer ${accessToken}`,
+                  'User-Agent': 'web:postsider:v1.0',
+            Authorization: `Bearer ${accessToken}`,
                   'Content-Type': 'application/x-www-form-urlencoded',
                 },
               },

@@ -262,6 +262,28 @@ const en = {
     setupSubtitle: "Welcome! Choose your email and password — you'll use these to sign in from now on.",
     settingUp: "Setting up…",
     completeSetup: "Complete setup",
+    forgotTitle: "Reset your password",
+    forgotSubtitle: "Enter your email and we'll send you a reset link.",
+    forgotSubmit: "Send reset link",
+    forgotSending: "Sending…",
+    forgotSentTitle: "Check your email",
+    forgotSentSubtitle:
+      "If an account exists for that email, we've sent a link to reset your password.",
+    backToSignIn: "Back to sign in",
+    resetTitle: "Choose a new password",
+    resetSubtitle: "Enter a new password for your account.",
+    resetSubmit: "Reset password",
+    resetting: "Resetting…",
+    resetDoneTitle: "Password updated",
+    resetDoneSubtitle: "Your password has been reset. You can now sign in.",
+    resetError:
+      "Could not reset your password. The link may have expired — request a new one.",
+    activateChecking: "Activating your account…",
+    activateDoneTitle: "Account activated",
+    activateDoneSubtitle: "Your account is ready — taking you in…",
+    activateErrorTitle: "Activation failed",
+    activateErrorSubtitle:
+      "This activation link is invalid or has expired. Try signing in, or register again.",
   },
   onboarding: {
     welcomeTitle: "Welcome{name}!",
