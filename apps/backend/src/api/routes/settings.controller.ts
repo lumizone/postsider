@@ -11,6 +11,9 @@ import { GetUserFromRequest } from '@postsider/nestjs-libraries/user/user.from.r
 import { User } from '@prisma/client';
 import { ProviderCredentialsService } from '@postsider/nestjs-libraries/database/prisma/integrations/provider-credentials.service';
 import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
+import { PostCheckerService } from '@postsider/nestjs-libraries/post-checker/post-checker.service';
+import { SaveCheckerConfigDto } from '@postsider/nestjs-libraries/dtos/post-checker/save.checker.config.dto';
+import { isPlatformAiEnabled } from '@postsider/nestjs-libraries/services/ai.flag';
 
 @ApiTags('Settings')
 @Controller('/settings')
@@ -19,7 +22,34 @@ export class SettingsController {
     private _organizationService: OrganizationService,
     private _providerCredentialsService: ProviderCredentialsService,
     private _integrationService: IntegrationService,
+    private _postChecker: PostCheckerService,
   ) {}
+
+  @Get('/post-checker')
+  async getCheckerConfig(@GetOrgFromRequest() org: Organization) {
+    return (await this._postChecker.getConfig(org.id)) ?? { provider: null, model: null };
+  }
+
+  @Post('/post-checker')
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  async saveCheckerConfig(
+    @GetOrgFromRequest() org: Organization,
+    @Body() body: SaveCheckerConfigDto,
+  ) {
+    // Cloud uses the platform key — storing a BYO key here is meaningless.
+    if (isPlatformAiEnabled()) {
+      return { ignored: true };
+    }
+    await this._postChecker.saveConfig(org.id, body.provider, body.model, body.apiKey);
+    return { success: true };
+  }
+
+  @Delete('/post-checker')
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  async deleteCheckerConfig(@GetOrgFromRequest() org: Organization) {
+    await this._postChecker.deleteConfig(org.id);
+    return { success: true };
+  }
 
   @Get('/team')
   @CheckPolicies(

@@ -14,6 +14,11 @@ interface NavEntry {
   minRole?: "ADMIN" | "SUPERADMIN";
   /** If true, this item is hidden in SaaS mode (managed infrastructure). */
   selfHostedOnly?: boolean;
+  /**
+   * If true, this item is only shown when the platform AI key is absent
+   * (i.e. self-host BYO-key mode). Hidden when isPlatformAi is true.
+   */
+  byoAiOnly?: boolean;
 }
 
 const NAV_ITEMS: NavEntry[] = [
@@ -23,7 +28,12 @@ const NAV_ITEMS: NavEntry[] = [
   { href: "/settings/storage", labelKey: "settings.storage", minRole: "ADMIN", selfHostedOnly: true },
   { href: "/settings/api", labelKey: "settings.api", minRole: "ADMIN" },
   { href: "/settings/webhooks", labelKey: "settings.webhooks", minRole: "ADMIN" },
-  { href: "/settings/mcp", labelKey: "settings.mcp", minRole: "ADMIN" },
+{ href: "/settings/evergreen", labelKey: "settings.evergreen", minRole: "ADMIN" },
+  { href: "/settings/queue-plan", labelKey: "settings.queuePlan", minRole: "ADMIN" },
+  { href: "/settings/hashtag-groups", labelKey: "settings.hashtagGroups", minRole: "ADMIN" },
+  { href: "/settings/caption-templates", labelKey: "settings.captionTemplates", minRole: "ADMIN" },
+  { href: "/settings/utm-builder", labelKey: "settings.utmBuilder", minRole: "ADMIN" },
+  { href: "/settings/post-checker", labelKey: "settings.postChecker", minRole: "ADMIN", byoAiOnly: true },
 ];
 
 const ROLE_LEVEL: Record<string, number> = {
@@ -43,6 +53,8 @@ export function SettingsShell({ children }: { children: ReactNode }) {
     // SaaS mode = no NEXT_PUBLIC_SELF_HOSTED env var set.
     const isSaaS = !process.env.NEXT_PUBLIC_SELF_HOSTED;
     if (isSaaS && item.selfHostedOnly) return false;
+    // Hide BYO-AI pages when the platform AI key is present.
+    if (item.byoAiOnly && user?.isPlatformAi) return false;
     if (!item.minRole) return true;
     return myLevel >= (ROLE_LEVEL[item.minRole] ?? 0);
   });

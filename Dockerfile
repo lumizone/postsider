@@ -33,7 +33,7 @@ WORKDIR /build
 # Copy package files first for better layer caching. All workspace packages
 # must be present so `pnpm install --frozen-lockfile` matches the lockfile
 # importers (apps/backend, apps/commands, apps/frontend, apps/orchestrator,
-# apps/sdk). The libraries/* dirs are not pnpm packages (no package.json) —
+# apps/sdk, apps/mcp). The libraries/* dirs are not pnpm packages (no package.json) —
 # they are shared source consumed via TS path aliases and arrive with COPY . .
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps/backend/package.json apps/backend/
@@ -41,6 +41,7 @@ COPY apps/frontend/package.json apps/frontend/
 COPY apps/commands/package.json apps/commands/
 COPY apps/orchestrator/package.json apps/orchestrator/
 COPY apps/sdk/package.json apps/sdk/
+COPY apps/mcp/package.json apps/mcp/
 
 # The root postinstall hook runs `prisma generate`, which needs the schema.
 # Copy it before install so the hook succeeds (and native deps like bcrypt

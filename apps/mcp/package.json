@@ -1,0 +1,30 @@
+{
+  "name": "@postsider/mcp",
+  "version": "1.0.0",
+  "description": "PostSider MCP server - gives AI agents full access to the PostSider platform over its public API (list channels, schedule/publish posts, analytics, media).",
+  "license": "AGPL-3.0",
+  "type": "module",
+  "bin": {
+    "postsider-mcp": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsc -p tsconfig.json --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.22.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=20.17.0"
+  }
+}

@@ -8,7 +8,6 @@ import {
   Post,
   Put,
   Query,
-  Req,
   UploadedFile,
   UseInterceptors,
   UsePipes,
@@ -29,8 +28,6 @@ import {
   AuthorizationActions,
   Sections,
 } from '@postsider/backend/services/auth/permissions/permission.exception.class';
-import { VideoDto } from '@postsider/nestjs-libraries/dtos/videos/video.dto';
-import { VideoFunctionDto } from '@postsider/nestjs-libraries/dtos/videos/video.function.dto';
 import { UploadDto } from '@postsider/nestjs-libraries/dtos/media/upload.dto';
 import { NotificationService } from '@postsider/nestjs-libraries/database/prisma/notifications/notification.service';
 import { GetNotificationsDto } from '@postsider/nestjs-libraries/dtos/notifications/get.notifications.dto';
@@ -60,8 +57,6 @@ import { RefreshToken } from '@postsider/nestjs-libraries/integrations/social.ab
 import { PostValidationException } from '@postsider/backend/api/routes/posts.validation.exception';
 import { timer } from '@postsider/helpers/utils/timer';
 import { ioRedis } from '@postsider/nestjs-libraries/redis/redis.service';
-import { AgentBridgeService } from '@postsider/nestjs-libraries/agent-bridge/agent-bridge.service';
-import { Request } from 'express';
 
 @ApiTags('Public API')
 @Controller('/public/v1')
@@ -74,8 +69,7 @@ export class PublicIntegrationsController {
     private _mediaService: MediaService,
     private _notificationService: NotificationService,
     private _integrationManager: IntegrationManager,
-    private _refreshIntegrationService: RefreshIntegrationService,
-    private _agentBridge: AgentBridgeService
+    private _refreshIntegrationService: RefreshIntegrationService
   ) {}
 
   @Post('/upload')
@@ -169,22 +163,9 @@ export class PublicIntegrationsController {
   @CheckPolicies([AuthorizationActions.Create, Sections.POSTS_PER_MONTH])
   async createPost(
     @GetOrgFromRequest() org: Organization,
-    @Body() rawBody: any,
-    @Req() req: Request
+    @Body() rawBody: any
   ) {
     Sentry.metrics.count('public_api-request', 1);
-
-    // Idempotency (Requirement 14.10): replay returns the previously created
-    // publication id without enqueuing a duplicate.
-    const idempotencyKey =
-      (req.headers['idempotency-key'] as string) || undefined;
-    const replay = await this._agentBridge.lookupIdempotent(
-      org.id,
-      idempotencyKey
-    );
-    if (replay) {
-      return JSON.parse(replay);
-    }
 
     const body = await this._postsService.mapTypeToPost(
       rawBody,
@@ -256,28 +237,7 @@ export class PublicIntegrationsController {
       ? (rawBody.creationMethod as 'CLI' | 'API')
       : 'API';
 
-    // HITL gate (Requirement 15.4): when the org requires human approval and
-    // the request comes from an agent token, hold the publication as a draft
-    // (it is NOT enqueued to a publishing workflow) so a human can approve it.
-    // @ts-ignore — set by PublicAuthMiddleware for agt_ tokens
-    const isAgent = !!req.agentToken;
-    if (isAgent && this._agentBridge.isHitlEnabled(org) && body.type !== 'draft') {
-      body.type = 'draft';
-    }
-
-    const result = await this._postsService.createPost(
-      org.id,
-      body,
-      creationMethod
-    );
-
-    await this._agentBridge.rememberIdempotent(
-      org.id,
-      idempotencyKey,
-      JSON.stringify(result)
-    );
-
-    return result;
+    return this._postsService.createPost(org.id, body, creationMethod);
   }
 
   @Delete('/posts/:id')
@@ -394,25 +354,6 @@ export class PublicIntegrationsController {
     return this._notificationService.getNotificationsPaginated(
       org.id,
       query.page ?? 0
-    );
-  }
-
-  @Post('/generate-video')
-  generateVideo(
-    @GetOrgFromRequest() org: Organization,
-    @Body() body: VideoDto
-  ) {
-    Sentry.metrics.count('public_api-request', 1);
-    return this._mediaService.generateVideo(org, body);
-  }
-
-  @Post('/video/function')
-  videoFunction(@Body() body: VideoFunctionDto) {
-    Sentry.metrics.count('public_api-request', 1);
-    return this._mediaService.videoFunction(
-      body.identifier,
-      body.functionName,
-      body.params
     );
   }
 

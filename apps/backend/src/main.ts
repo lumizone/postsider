@@ -18,7 +18,6 @@ import { SubscriptionExceptionFilter } from '@postsider/backend/services/auth/pe
 import { PostValidationExceptionFilter } from '@postsider/backend/api/routes/posts.validation.exception';
 import { HttpExceptionFilter } from '@postsider/nestjs-libraries/services/exception.filter';
 import { ConfigurationChecker } from '@postsider/helpers/configuration/configuration.checker';
-import { startMcp } from '@postsider/nestjs-libraries/chat/start.mcp';
 
 async function start() {
   assertRequiredSecrets();
@@ -32,18 +31,15 @@ async function start() {
         'auth',
         'showorg',
         'impersonate',
-        'x-copilotkit-runtime-client-gql-version',
       ],
       exposedHeaders: [
         'reload',
         'onboarding',
         'activate',
-        'x-copilotkit-runtime-client-gql-version',
         ...(process.env.NOT_SECURED ? ['auth', 'showorg', 'impersonate'] : []),
       ],
       origin: [
         process.env.FRONTEND_URL || '',
-        'http://localhost:6274',
         ...(process.env.MAIN_URL ? [process.env.MAIN_URL] : []),
       ],
     },
@@ -68,15 +64,13 @@ async function start() {
     }));
   }
 
-  await startMcp(app);
-
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
     })
   );
 
-  app.use(['/copilot/{*splat}', '/posts'], (req: any, res: any, next: any) => {
+  app.use(['/posts'], (req: any, res: any, next: any) => {
     json({ limit: '50mb' })(req, res, next);
   });
 

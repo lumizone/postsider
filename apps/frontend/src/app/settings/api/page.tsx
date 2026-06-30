@@ -9,6 +9,7 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { useT } from "@/lib/i18n";
 import { api } from "@/lib/api";
+import { ApiRequestGenerator } from "@/components/api-request-generator";
 
 interface ApiKeyRow {
   id: string;
@@ -226,10 +227,12 @@ export default function ApiSettingsPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 13, color: "var(--muted)" }}>
           <span>Pass the key in the <code style={{ background: "rgba(0,0,0,0.04)", padding: "2px 5px", borderRadius: 4 }}>Authorization</code> header:</span>
           <pre className={s.codeBlock} style={{ fontSize: 12, lineHeight: 1.7, padding: "14px 16px", borderRadius: 10 }}>{`curl ${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000"}/public/v1/posts \\
-  -H "Authorization: Bearer ps_your_key_here" \\
+  -H "Authorization: ps_your_key_here" \\
   -H "Content-Type: application/json"`}</pre>
         </div>
       </Card>
+
+      <ApiRequestGenerator />
 
       {/* New key modal */}
       {showModal && (

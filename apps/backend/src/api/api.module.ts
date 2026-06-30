@@ -3,8 +3,6 @@ import { AuthController } from '@postsider/backend/api/routes/auth.controller';
 import { AuthService } from '@postsider/backend/services/auth/auth.service';
 import { UsersController } from '@postsider/backend/api/routes/users.controller';
 import { AuthMiddleware } from '@postsider/backend/services/auth/auth.middleware';
-import { StripeController } from '@postsider/backend/api/routes/stripe.controller';
-import { StripeService } from '@postsider/nestjs-libraries/services/stripe.service';
 import { PolarController } from '@postsider/backend/api/routes/polar.controller';
 import { PolarService } from '@postsider/nestjs-libraries/services/polar.service';
 import { AnalyticsController } from '@postsider/backend/api/routes/analytics.controller';
@@ -14,6 +12,9 @@ import { IntegrationsController } from '@postsider/backend/api/routes/integratio
 import { IntegrationManager } from '@postsider/nestjs-libraries/integrations/integration.manager';
 import { SettingsController } from '@postsider/backend/api/routes/settings.controller';
 import { PostsController } from '@postsider/backend/api/routes/posts.controller';
+import { EvergreenController } from '@postsider/backend/api/routes/evergreen.controller';
+import { ComposerHelpersController } from '@postsider/backend/api/routes/composer-helpers.controller';
+import { ApprovalController } from '@postsider/backend/api/routes/approval.controller';
 import { MediaController } from '@postsider/backend/api/routes/media.controller';
 import { UploadModule } from '@postsider/nestjs-libraries/upload/upload.module';
 import { BillingController } from '@postsider/backend/api/routes/billing.controller';
@@ -21,16 +22,13 @@ import { NotificationsController } from '@postsider/backend/api/routes/notificat
 import { OpenaiService } from '@postsider/nestjs-libraries/openai/openai.service';
 import { ExtractContentService } from '@postsider/nestjs-libraries/openai/extract.content.service';
 import { CodesService } from '@postsider/nestjs-libraries/services/codes.service';
-import { CopilotController } from '@postsider/backend/api/routes/copilot.controller';
 import { PublicController } from '@postsider/backend/api/routes/public.controller';
 import { RootController } from '@postsider/backend/api/routes/root.controller';
 import { TrackService } from '@postsider/nestjs-libraries/track/track.service';
 import { ShortLinkService } from '@postsider/nestjs-libraries/short-linking/short.link.service';
 import { WebhookController } from '@postsider/backend/api/routes/webhooks.controller';
 import { SignatureController } from '@postsider/backend/api/routes/signature.controller';
-import { AutopostController } from '@postsider/backend/api/routes/autopost.controller';
 import { SetsController } from '@postsider/backend/api/routes/sets.controller';
-import { ThirdPartyController } from '@postsider/backend/api/routes/third-party.controller';
 import { MonitorController } from '@postsider/backend/api/routes/monitor.controller';
 import { NoAuthIntegrationsController } from '@postsider/backend/api/routes/no.auth.integrations.controller';
 import { EnterpriseController } from '@postsider/backend/api/routes/enterprise.controller';
@@ -58,23 +56,22 @@ const authenticatedController = [
   MediaController,
   BillingController,
   NotificationsController,
-  CopilotController,
   WebhookController,
   SignatureController,
-  AutopostController,
   SetsController,
-  ThirdPartyController,
   OAuthAppController,
   ApprovedAppsController,
   OAuthAuthorizedController,
   AnnouncementsController,
   AdminController,
+  EvergreenController,
+  ComposerHelpersController,
+  ApprovalController,
 ];
 @Module({
   imports: [UploadModule],
   controllers: [
     RootController,
-    StripeController,
     PolarController,
     AuthController,
     PublicController,
@@ -86,7 +83,6 @@ const authenticatedController = [
   ],
   providers: [
     AuthService,
-    StripeService,
     PolarService,
     OpenaiService,
     ExtractContentService,

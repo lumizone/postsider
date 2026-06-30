@@ -6,6 +6,7 @@ import {
 import { PostsRepository } from '@postsider/nestjs-libraries/database/prisma/posts/posts.repository';
 import { CreatePostDto } from '@postsider/nestjs-libraries/dtos/posts/create.post.dto';
 import dayjs from 'dayjs';
+import { slotsForDay } from './queue-slots';
 import { IntegrationManager } from '@postsider/nestjs-libraries/integrations/integration.manager';
 import {
   Integration,
@@ -18,7 +19,6 @@ import {
 import { GetPostsDto } from '@postsider/nestjs-libraries/dtos/posts/get.posts.dto';
 import { GetPostsListDto } from '@postsider/nestjs-libraries/dtos/posts/get.posts.list.dto';
 import { shuffle } from 'lodash';
-import { CreateGeneratedPostsDto } from '@postsider/nestjs-libraries/dtos/generator/create.generated.posts.dto';
 import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import utc from 'dayjs/plugin/utc';
@@ -951,9 +951,6 @@ export class PostsService {
     return postList;
   }
 
-  async separatePosts(content: string, len: number) {
-    return this._openaiService.separatePosts(content, len);
-  }
 
   /**
    * Duplicate a post group as a new draft.
@@ -1083,91 +1080,6 @@ export class PostsService {
     return newDate;
   }
 
-  async generatePostsDraft(orgId: string, body: CreateGeneratedPostsDto) {
-    const getAllIntegrations = (
-      await this._integrationService.getIntegrationsList(orgId)
-    ).filter((f) => !f.disabled && f.providerIdentifier !== 'reddit');
-
-    // const posts = chunk(body.posts, getAllIntegrations.length);
-    const allDates = dayjs()
-      .isoWeek(body.week)
-      .year(body.year)
-      .startOf('isoWeek');
-
-    const dates = [...new Array(7)].map((_, i) => {
-      return allDates.add(i, 'day').format('YYYY-MM-DD');
-    });
-
-    const findTime = (): string => {
-      const totalMinutes = Math.floor(Math.random() * 144) * 10;
-
-      // Convert total minutes to hours and minutes
-      const hours = Math.floor(totalMinutes / 60);
-      const minutes = totalMinutes % 60;
-
-      // Format hours and minutes to always be two digits
-      const formattedHours = hours.toString().padStart(2, '0');
-      const formattedMinutes = minutes.toString().padStart(2, '0');
-      const randomDate =
-        shuffle(dates)[0] + 'T' + `${formattedHours}:${formattedMinutes}:00`;
-
-      if (dayjs(randomDate).isBefore(dayjs())) {
-        return findTime();
-      }
-
-      return randomDate;
-    };
-
-    for (const integration of getAllIntegrations) {
-      for (const toPost of body.posts) {
-        const group = makeId(10);
-        const randomDate = findTime();
-
-        await this.createPost(
-          orgId,
-          {
-            type: 'draft',
-            date: randomDate,
-            order: '',
-            shortLink: false,
-            tags: [],
-            posts: [
-              {
-                group,
-                integration: {
-                  id: integration.id,
-                },
-                settings: {
-                  __type: integration.providerIdentifier as any,
-                  title: '',
-                  tags: [],
-                  subreddit: [],
-                },
-                value: [
-                  ...toPost.list.map((l) => ({
-                    id: '',
-                    content: l.post,
-                    delay: 0,
-                    image: [],
-                  })),
-                  {
-                    id: '',
-                    delay: 0,
-                    content: `Check out the full story here:\n${
-                      body.postId || body.url
-                    }`,
-                    image: [],
-                  },
-                ],
-              },
-            ],
-          },
-          'WEB'
-        );
-      }
-    }
-  }
-
   findAllExistingCategories() {
     return this._postRepository.findAllExistingCategories();
   }
@@ -1181,15 +1093,12 @@ export class PostsService {
   }
 
   async findFreeDateTime(orgId: string, integrationId?: string) {
-    const findTimes = await this._integrationService.findFreeDateTime(
+    const slots = await this._integrationService.findFreeDateTime(
       orgId,
       integrationId
     );
-    return this.findFreeDateTimeRecursive(
-      orgId,
-      findTimes,
-      dayjs.utc().startOf('day')
-    );
+    const start = dayjs.utc().startOf('day');
+    return this.findFreeDateTimeRecursive(orgId, slots, start, start);
   }
 
   async createPopularPosts(post: {
@@ -1203,9 +1112,29 @@ export class PostsService {
 
   private async findFreeDateTimeRecursive(
     orgId: string,
-    times: number[],
-    date: dayjs.Dayjs
+    slots: { time: number; days?: number[] }[],
+    date: dayjs.Dayjs,
+    start: dayjs.Dayjs
   ): Promise<string> {
+    // Safety guard: never loop forever when a channel has no posting times.
+    if (date.diff(start, 'day') > 365) {
+      throw new BadRequestException(
+        'No free posting slot found. Configure posting times for this channel.'
+      );
+    }
+
+    // Only the slots scheduled for this weekday apply (see slotsForDay).
+    const times = slotsForDay(slots, date.day());
+
+    if (!times.length) {
+      return this.findFreeDateTimeRecursive(
+        orgId,
+        slots,
+        date.add(1, 'day'),
+        start
+      );
+    }
+
     const list = await this._postRepository.getPostsCountsByDates(
       orgId,
       times,
@@ -1213,7 +1142,12 @@ export class PostsService {
     );
 
     if (!list.length) {
-      return this.findFreeDateTimeRecursive(orgId, times, date.add(1, 'day'));
+      return this.findFreeDateTimeRecursive(
+        orgId,
+        slots,
+        date.add(1, 'day'),
+        start
+      );
     }
 
     const num = list.reduce<null | number>((prev, curr) => {

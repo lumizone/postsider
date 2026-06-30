@@ -1,7 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthService } from '@postsider/backend/services/auth/auth.service';
-import { StripeService } from '@postsider/nestjs-libraries/services/stripe.service';
 import { PoliciesGuard } from '@postsider/backend/services/auth/permissions/permissions.guard';
 import { PermissionsService } from '@postsider/backend/services/auth/permissions/permissions.service';
 import { IntegrationManager } from '@postsider/nestjs-libraries/integrations/integration.manager';
@@ -10,18 +9,16 @@ import { OpenaiService } from '@postsider/nestjs-libraries/openai/openai.service
 import { ExtractContentService } from '@postsider/nestjs-libraries/openai/extract.content.service';
 import { CodesService } from '@postsider/nestjs-libraries/services/codes.service';
 import { PublicIntegrationsController } from '@postsider/backend/public-api/routes/v1/public.integrations.controller';
-import { AgentBridgeController } from '@postsider/backend/public-api/routes/v1/agent-bridge.controller';
 import { PublicAuthMiddleware } from '@postsider/backend/services/auth/public.auth.middleware';
 import { ApiRateLimitGuard } from '@postsider/nestjs-libraries/services/api-rate-limit.guard';
 import { RequestIdMiddleware } from '@postsider/nestjs-libraries/services/request-id.middleware';
 
-const authenticatedController = [PublicIntegrationsController, AgentBridgeController];
+const authenticatedController = [PublicIntegrationsController];
 @Module({
   imports: [UploadModule],
   controllers: [...authenticatedController],
   providers: [
     AuthService,
-    StripeService,
     OpenaiService,
     ExtractContentService,
     PoliciesGuard,
@@ -37,7 +34,6 @@ const authenticatedController = [PublicIntegrationsController, AgentBridgeContro
   exports: [
     UploadModule,
     AuthService,
-    StripeService,
     OpenaiService,
     ExtractContentService,
     PoliciesGuard,

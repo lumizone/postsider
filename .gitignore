@@ -67,3 +67,7 @@ i18n.cache
 # Local uploads (user-generated media) — keep .gitkeep only
 /uploads/*
 !/uploads/.gitkeep
+
+# test/build artifacts
+reports/
+coverage/

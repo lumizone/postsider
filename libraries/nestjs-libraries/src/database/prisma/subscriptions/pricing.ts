@@ -14,7 +14,6 @@ export interface PricingInnerInterface {
   generate_videos: number;
   public_api: boolean;
   webhooks: number;
-  autoPost: boolean;
 }
 export interface PricingInterface {
   [key: string]: PricingInnerInterface;
@@ -22,7 +21,7 @@ export interface PricingInterface {
 
 // NOTE: Only `channel`, `posts_per_month` and `team_members` are actually
 // enforced right now. Every other feature flag (ai, image/video generation,
-// public_api, webhooks, autoPost, community_features, etc.) is disabled across
+// public_api, webhooks, community_features, etc.) is disabled across
 // all tiers because those features are not built/available yet. Re-enable them
 // per tier when the corresponding feature ships.
 export const pricing: PricingInterface = {
@@ -42,7 +41,6 @@ export const pricing: PricingInterface = {
     generate_videos: 0,
     public_api: false,
     webhooks: 0,
-    autoPost: false,
   },
   STANDARD: {
     current: 'STANDARD',
@@ -60,7 +58,6 @@ export const pricing: PricingInterface = {
     generate_videos: 0,
     public_api: false,
     webhooks: 0,
-    autoPost: false,
   },
   TEAM: {
     current: 'TEAM',
@@ -78,7 +75,6 @@ export const pricing: PricingInterface = {
     generate_videos: 0,
     public_api: false,
     webhooks: 0,
-    autoPost: false,
   },
   PRO: {
     current: 'PRO',
@@ -96,7 +92,6 @@ export const pricing: PricingInterface = {
     generate_videos: 0,
     public_api: false,
     webhooks: 0,
-    autoPost: false,
   },
   ULTIMATE: {
     current: 'ULTIMATE',
@@ -114,7 +109,6 @@ export const pricing: PricingInterface = {
     generate_videos: 0,
     public_api: false,
     webhooks: 0,
-    autoPost: false,
   },
   // SAMURAI — internal owner-only plan. Same access as ULTIMATE but free and
   // never charged. Not shown in checkout/pricing UI. Set manually in the DB
@@ -135,6 +129,5 @@ export const pricing: PricingInterface = {
     generate_videos: 0,
     public_api: false,
     webhooks: 0,
-    autoPost: false,
   },
 };

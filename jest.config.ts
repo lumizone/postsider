@@ -13,6 +13,9 @@ const config: Config = {
   rootDir: '.',
   roots: ['<rootDir>/apps', '<rootDir>/libraries'],
   testMatch: ['**/*.spec.ts'],
+  // apps/mcp ships ESM tests run via apps/mcp/jest.config.cjs (and the CI
+  // "MCP server tests" step); exclude them from this CommonJS root run.
+  testPathIgnorePatterns: ['/node_modules/', '<rootDir>/apps/mcp/'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'json'],
   // Several provider dependencies (nostr-tools, @noble/*, @scure/*) ship ESM
   // only. Allow ts-jest/babel to transform them instead of ignoring them.

@@ -16,7 +16,6 @@ import { MediaService } from '@postsider/nestjs-libraries/database/prisma/media/
 import { MediaRepository } from '@postsider/nestjs-libraries/database/prisma/media/media.repository';
 import { NotificationsRepository } from '@postsider/nestjs-libraries/database/prisma/notifications/notifications.repository';
 import { EmailService } from '@postsider/nestjs-libraries/services/email.service';
-import { StripeService } from '@postsider/nestjs-libraries/services/stripe.service';
 import { ExtractContentService } from '@postsider/nestjs-libraries/openai/extract.content.service';
 import { OpenaiService } from '@postsider/nestjs-libraries/openai/openai.service';
 import { AgenciesService } from '@postsider/nestjs-libraries/database/prisma/agencies/agencies.service';
@@ -27,14 +26,8 @@ import { WebhooksRepository } from '@postsider/nestjs-libraries/database/prisma/
 import { WebhooksService } from '@postsider/nestjs-libraries/database/prisma/webhooks/webhooks.service';
 import { SignatureRepository } from '@postsider/nestjs-libraries/database/prisma/signatures/signature.repository';
 import { SignatureService } from '@postsider/nestjs-libraries/database/prisma/signatures/signature.service';
-import { AutopostRepository } from '@postsider/nestjs-libraries/database/prisma/autopost/autopost.repository';
-import { AutopostService } from '@postsider/nestjs-libraries/database/prisma/autopost/autopost.service';
 import { SetsService } from '@postsider/nestjs-libraries/database/prisma/sets/sets.service';
 import { SetsRepository } from '@postsider/nestjs-libraries/database/prisma/sets/sets.repository';
-import { ThirdPartyRepository } from '@postsider/nestjs-libraries/database/prisma/third-party/third-party.repository';
-import { ThirdPartyService } from '@postsider/nestjs-libraries/database/prisma/third-party/third-party.service';
-import { VideoManager } from '@postsider/nestjs-libraries/videos/video.manager';
-import { FalService } from '@postsider/nestjs-libraries/openai/fal.service';
 import { RefreshIntegrationService } from '@postsider/nestjs-libraries/integrations/refresh.integration.service';
 import { OAuthRepository } from '@postsider/nestjs-libraries/database/prisma/oauth/oauth.repository';
 import { OAuthService } from '@postsider/nestjs-libraries/database/prisma/oauth/oauth.service';
@@ -46,13 +39,15 @@ import { AdminStatsRepository } from '@postsider/nestjs-libraries/database/prism
 import { AdminStatsService } from '@postsider/nestjs-libraries/database/prisma/admin-stats/admin-stats.service';
 import { ProviderCredentialsRepository } from '@postsider/nestjs-libraries/database/prisma/integrations/provider-credentials.repository';
 import { ProviderCredentialsService } from '@postsider/nestjs-libraries/database/prisma/integrations/provider-credentials.service';
+import { EvergreenRepository } from '@postsider/nestjs-libraries/database/prisma/evergreen/evergreen.repository';
+import { EvergreenService } from '@postsider/nestjs-libraries/database/prisma/evergreen/evergreen.service';
+import { ComposerHelpersRepository } from '@postsider/nestjs-libraries/database/prisma/composer-helpers/composer-helpers.repository';
+import { ComposerHelpersService } from '@postsider/nestjs-libraries/database/prisma/composer-helpers/composer-helpers.service';
+import { ApprovalRepository } from '@postsider/nestjs-libraries/database/prisma/approval/approval.repository';
+import { ApprovalService } from '@postsider/nestjs-libraries/database/prisma/approval/approval.service';
 import { ProviderEnvHelper } from '@postsider/nestjs-libraries/integrations/provider-env.helper';
-import { AgentTokenRepository } from '@postsider/nestjs-libraries/database/prisma/agent-tokens/agent-token.repository';
-import { AgentTokenService } from '@postsider/nestjs-libraries/database/prisma/agent-tokens/agent-token.service';
 import { AuditLogger } from '@postsider/nestjs-libraries/database/prisma/audit/audit.logger';
 import { ConnectorCatalogService } from '@postsider/nestjs-libraries/integrations/connector.catalog';
-import { AgentRateLimiter } from '@postsider/nestjs-libraries/services/agent-rate-limit.service';
-import { AgentBridgeService } from '@postsider/nestjs-libraries/agent-bridge/agent-bridge.service';
 import { InboundSubscriptionRepository } from '@postsider/nestjs-libraries/database/prisma/inbound/inbound-subscription.repository';
 import { InboundService } from '@postsider/nestjs-libraries/database/prisma/inbound/inbound.service';
 import { InboundSourceRegistry } from '@postsider/nestjs-libraries/integrations/inbound/inbound.registry';
@@ -79,10 +74,7 @@ import { InboundSourceRegistry } from '@postsider/nestjs-libraries/integrations/
     IntegrationRepository,
     PostsService,
     PostsRepository,
-    StripeService,
     SignatureRepository,
-    AutopostRepository,
-    AutopostService,
     SignatureService,
     MediaService,
     MediaRepository,
@@ -92,17 +84,13 @@ import { InboundSourceRegistry } from '@postsider/nestjs-libraries/integrations/
     RefreshIntegrationService,
     ExtractContentService,
     OpenaiService,
-    FalService,
     EmailService,
     TrackService,
     ShortLinkService,
     SetsService,
     SetsRepository,
-    ThirdPartyRepository,
-    ThirdPartyService,
     OAuthRepository,
     OAuthService,
-    VideoManager,
     AnnouncementsRepository,
     AnnouncementsService,
     ErrorsRepository,
@@ -112,15 +100,17 @@ import { InboundSourceRegistry } from '@postsider/nestjs-libraries/integrations/
     ProviderCredentialsRepository,
     ProviderCredentialsService,
     ProviderEnvHelper,
-    AgentTokenRepository,
-    AgentTokenService,
     AuditLogger,
     ConnectorCatalogService,
-    AgentRateLimiter,
-    AgentBridgeService,
     InboundSubscriptionRepository,
     InboundService,
     InboundSourceRegistry,
+    EvergreenRepository,
+    EvergreenService,
+    ComposerHelpersRepository,
+    ComposerHelpersService,
+    ApprovalRepository,
+    ApprovalService,
   ],
   get exports() {
     return this.providers;

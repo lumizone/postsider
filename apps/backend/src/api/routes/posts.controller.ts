@@ -1,15 +1,26 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
   HttpException,
+  HttpStatus,
   Param,
   Post,
   Put,
   Query,
   Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { SmartSlotsService } from '@postsider/nestjs-libraries/smart-slots/smart-slots.service';
+import { CsvImportService } from '@postsider/nestjs-libraries/csv-import/csv-import.service';
+import { PostCheckerService, NoCheckerConfigError } from '@postsider/nestjs-libraries/post-checker/post-checker.service';
+import { CheckPostDto } from '@postsider/nestjs-libraries/dtos/post-checker/check.post.dto';
+import { RewritePostDto } from '@postsider/nestjs-libraries/dtos/post-checker/rewrite.post.dto';
+import { COMMENT_PROVIDERS } from '@postsider/nestjs-libraries/integrations/social/comment.capability';
 import { PostsService } from '@postsider/nestjs-libraries/database/prisma/posts/posts.service';
 import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
 import { Organization, User } from '@prisma/client';
@@ -17,9 +28,6 @@ import { GetPostsDto } from '@postsider/nestjs-libraries/dtos/posts/get.posts.dt
 import { GetPostsListDto } from '@postsider/nestjs-libraries/dtos/posts/get.posts.list.dto';
 import { CheckPolicies } from '@postsider/backend/services/auth/permissions/permissions.ability';
 import { ApiTags } from '@nestjs/swagger';
-import { GeneratorDto } from '@postsider/nestjs-libraries/dtos/generator/generator.dto';
-import { CreateGeneratedPostsDto } from '@postsider/nestjs-libraries/dtos/generator/create.generated.posts.dto';
-import { AgentGraphService } from '@postsider/nestjs-libraries/agent/agent.graph.service';
 import { Response } from 'express';
 import { GetUserFromRequest } from '@postsider/nestjs-libraries/user/user.from.request';
 import { ShortLinkService } from '@postsider/nestjs-libraries/short-linking/short.link.service';
@@ -35,9 +43,54 @@ import { PostValidationException } from '@postsider/backend/api/routes/posts.val
 export class PostsController {
   constructor(
     private _postsService: PostsService,
-    private _agentGraphService: AgentGraphService,
-    private _shortLinkService: ShortLinkService
+    private _shortLinkService: ShortLinkService,
+    private _smartSlots: SmartSlotsService,
+    private _csvImport: CsvImportService,
+    private _postChecker: PostCheckerService
   ) {}
+
+  @Post('/check')
+  async checkPost(
+    @GetOrgFromRequest() org: Organization,
+    @Body() body: CheckPostDto
+  ) {
+    try {
+      return await this._postChecker.check(
+        org.id,
+        {
+          content: body.content,
+          hasMedia: body.hasMedia,
+          mediaType: body.mediaType,
+        },
+        body.platforms
+      );
+    } catch (e) {
+      if (e instanceof NoCheckerConfigError) {
+        throw new HttpException('No AI key configured', HttpStatus.CONFLICT);
+      }
+      throw e;
+    }
+  }
+
+  @Post('/rewrite')
+  async rewrite(
+    @GetOrgFromRequest() org: Organization,
+    @Body() body: RewritePostDto
+  ) {
+    try {
+      return await this._postChecker.rewrite(org.id, {
+        content: body.content,
+        tone: body.tone as any,
+        count: body.count,
+        platform: body.platform,
+      });
+    } catch (e) {
+      if (e instanceof NoCheckerConfigError) {
+        throw new HttpException('No AI key configured', HttpStatus.CONFLICT);
+      }
+      throw e;
+    }
+  }
 
   @Get('/:id/statistics')
   async getStatistics(
@@ -163,6 +216,57 @@ export class PostsController {
     return this._postsService.getPostsByGroup(org.id, group);
   }
 
+  @Get('/smart-slots')
+  async smartSlots(
+    @GetOrgFromRequest() org: Organization,
+    @Query('integration') integration: string,
+    @Query('platform') platform: string,
+    @Query('count') count?: string,
+    @Query('tz') tz?: string
+  ) {
+    return this._smartSlots.suggest(
+      org.id,
+      integration,
+      platform,
+      count ? Number(count) : 3,
+      tz ? Number(tz) : 0
+    );
+  }
+
+  @Post('/csv-import')
+  @CheckPolicies([AuthorizationActions.Create, Sections.POSTS_PER_MONTH])
+  @UseInterceptors(FileInterceptor('file'))
+  async csvImport(
+    @GetOrgFromRequest() org: Organization,
+    @UploadedFile()
+    file: {
+      originalname?: string;
+      mimetype?: string;
+      size?: number;
+      buffer?: Buffer;
+    }
+  ) {
+    if (!file?.buffer) {
+      throw new BadRequestException('No file uploaded.');
+    }
+    const isCsv =
+      /\.csv$/i.test(file.originalname || '') ||
+      file.mimetype === 'text/csv' ||
+      file.mimetype === 'application/vnd.ms-excel';
+    if (!isCsv) {
+      throw new BadRequestException('File must be a .csv');
+    }
+    if ((file.size ?? 0) > 2 * 1024 * 1024) {
+      throw new BadRequestException('CSV exceeds the 2 MB limit.');
+    }
+    return this._csvImport.importCSV(org.id, file.buffer);
+  }
+
+  @Get('/comment-providers')
+  commentProviders() {
+    return { providers: COMMENT_PROVIDERS };
+  }
+
   @Get('/:id')
   getPost(@GetOrgFromRequest() org: Organization, @Param('id') id: string) {
     return this._postsService.getPost(org.id, id);
@@ -223,30 +327,6 @@ export class PostsController {
     return this._postsService.createPost(org.id, body, 'WEB');
   }
 
-  @Post('/generator/draft')
-  @CheckPolicies([AuthorizationActions.Create, Sections.POSTS_PER_MONTH])
-  generatePostsDraft(
-    @GetOrgFromRequest() org: Organization,
-    @Body() body: CreateGeneratedPostsDto
-  ) {
-    return this._postsService.generatePostsDraft(org.id, body);
-  }
-
-  @Post('/generator')
-  @CheckPolicies([AuthorizationActions.Create, Sections.POSTS_PER_MONTH])
-  async generatePosts(
-    @GetOrgFromRequest() org: Organization,
-    @Body() body: GeneratorDto,
-    @Res({ passthrough: false }) res: Response
-  ) {
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    for await (const event of this._agentGraphService.start(org.id, body)) {
-      res.write(JSON.stringify(event) + '\n');
-    }
-
-    res.end();
-  }
-
   @Delete('/:group')
   deletePost(
     @GetOrgFromRequest() org: Organization,
@@ -263,14 +343,6 @@ export class PostsController {
     @Body('action') action: 'schedule' | 'update' = 'schedule'
   ) {
     return this._postsService.changeDate(org.id, id, date, action);
-  }
-
-  @Post('/separate-posts')
-  async separatePosts(
-    @GetOrgFromRequest() org: Organization,
-    @Body() body: { content: string; len: number }
-  ) {
-    return this._postsService.separatePosts(body.content, body.len);
   }
 
   /**

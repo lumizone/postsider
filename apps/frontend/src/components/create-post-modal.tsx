@@ -10,6 +10,13 @@ import {
 } from "react";
 import styles from "./create-post-modal.module.css";
 import { ChannelAvatar } from "./channel-avatar";
+import { PostPreviewPanel } from "./post-preview/post-preview-panel";
+import { PostCheckerPanel } from "./post-checker-panel";
+import { SnippetsPanel } from "./snippets-panel";
+import { RewritePanel } from "./rewrite-panel";
+import { type UtmPreset } from "@/lib/composer-helpers-api";
+import { appendUtmParams } from "@/lib/utm-utils";
+import { findNextSlot } from "@/lib/queue-plan-api";
 import { DatePicker, TimePicker } from "./date-picker";
 import { type Channel } from "@/lib/calendar-data";
 import {
@@ -26,6 +33,8 @@ import {
   type MediaLike,
 } from "@/lib/provider-requirements";
 import { useT } from "@/lib/i18n";
+import { suggestSlots, type SlotSuggestion } from "@/lib/smart-slots-api";
+import { getCommentProviders } from "@/lib/comment-providers";
 
 interface CreatePostModalProps {
   channels: Channel[];
@@ -71,6 +80,8 @@ export interface NewPostInput {
   perChannelBody: Record<string, string>;
   /** Threaded comments / chained posts. */
   threadParts: string[];
+  /** Optional first comment, posted right after the main post. */
+  firstComment?: string;
   /** Attached media (object URLs in this demo). */
   media: AttachedMedia[];
   /**
@@ -146,6 +157,16 @@ function formatBytes(b: number): string {
   if (b >= 1_048_576) return (b / 1_048_576).toFixed(1) + " MB";
   if (b >= 1024) return (b / 1024).toFixed(1) + " KB";
   return b + " B";
+}
+
+/** Format an ISO datetime as a readable local label, e.g. "Mon 29 Jun, 18:00". */
+function formatSlotLabel(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const day = d.toLocaleDateString(undefined, { weekday: "short" });
+  const month = d.toLocaleDateString(undefined, { month: "short" });
+  return `${day} ${d.getDate()} ${month}, ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 /** Resolve the backend provider identifier for a channel. */
@@ -271,6 +292,14 @@ export function CreatePostModal({
   );
   const [media, setMedia] = useState<AttachedMedia[]>([]);
 
+  // Optional first comment (posted right after the main post). Only shown when
+  // at least one selected channel's provider supports comments.
+  const [firstComment, setFirstComment] = useState("");
+  // Provider identifiers (lowercase) that support a first comment, fetched from
+  // the backend on mount. Defaults to empty so the field stays hidden until we
+  // know the capability set.
+  const [commentProviders, setCommentProviders] = useState<string[]>([]);
+
   // Per-channel provider settings (e.g. Discord requires a server channel).
   // Keyed by integration id → settings object.
   const [channelSettings, setChannelSettings] = useState<
@@ -294,6 +323,24 @@ export function CreatePostModal({
   // "what's missing" summary even before they fix things.
   const [showValidation, setShowValidation] = useState(false);
 
+  // Post Checker side panel toggle.
+  const [showChecker, setShowChecker] = useState(false);
+
+  // Snippets (hashtag groups / caption templates / UTM) side panel toggle.
+  const [showSnippets, setShowSnippets] = useState(false);
+
+  // BYO-key AI caption rewrite side panel toggle.
+  const [showRewrite, setShowRewrite] = useState(false);
+
+  // Add to queue: fetch the channel's next free slot, then schedule into it.
+  const [addingToQueue, setAddingToQueue] = useState(false);
+  const [queuePending, setQueuePending] = useState(false);
+
+  // Smart Slots: best-time suggestions for the first selected channel.
+  const [slotSuggestions, setSlotSuggestions] = useState<SlotSuggestion[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [slotsError, setSlotsError] = useState(false);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -306,6 +353,27 @@ export function CreatePostModal({
       document.body.style.overflow = prev;
     };
   }, [onClose]);
+
+  // Fetch which providers support a first comment. Errors stay quiet: the
+  // field simply doesn't appear if we can't load the capability list.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await getCommentProviders();
+        if (!cancelled) {
+          setCommentProviders(
+            (res?.providers ?? []).map((p) => p.toLowerCase()),
+          );
+        }
+      } catch {
+        // ignore — keep the field hidden
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Clean up object URLs when modal closes.
   useEffect(() => {
@@ -335,6 +403,44 @@ export function CreatePostModal({
     () => channels.filter((c) => selectedIds.has(c.id)),
     [channels, selectedIds],
   );
+
+  // True when at least one selected channel's provider supports a first
+  // comment. Compared case-insensitively against the fetched capability list.
+  const anySelectedSupportsComment = useMemo(() => {
+    if (commentProviders.length === 0) return false;
+    return selectedChannels.some((c) => {
+      const id = channelIdentifier(c);
+      return !!id && commentProviders.includes(id.toLowerCase());
+    });
+  }, [selectedChannels, commentProviders]);
+
+  // Smart Slots: fetch best-time suggestions for the first selected channel.
+  const fetchSlots = useCallback(async () => {
+    const channel = selectedChannels[0];
+    const platform = channel ? channelIdentifier(channel) : undefined;
+    if (!channel || !platform) return;
+    setSlotsLoading(true);
+    setSlotsError(false);
+    try {
+      const slots = await suggestSlots(channel.id, platform, 3);
+      setSlotSuggestions(Array.isArray(slots) ? slots : []);
+    } catch {
+      setSlotSuggestions([]);
+      setSlotsError(true);
+    } finally {
+      setSlotsLoading(false);
+    }
+  }, [selectedChannels]);
+
+  // Apply a suggestion: convert its ISO datetime to the local YYYY-MM-DD +
+  // HH:mm strings the pickers expect, reusing the existing date/time setters.
+  const applySlot = useCallback((slot: SlotSuggestion) => {
+    const d = new Date(slot.datetime);
+    if (Number.isNaN(d.getTime())) return;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    setPostDate(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
+    setPostTime(`${pad(d.getHours())}:${pad(d.getMinutes())}`);
+  }, []);
 
   // Provider requirement per selected channel (memoised by identifier).
   const requirementFor = useCallback(
@@ -430,6 +536,24 @@ export function CreatePostModal({
     setBodies((prev) => ({ ...prev, [activeTarget]: value }));
   };
 
+  // Snippets panel: append saved text, or apply a UTM preset to the body's URLs.
+  const insertSnippetText = (text: string) => {
+    setCurrentBody(currentBody ? `${currentBody.replace(/\s+$/, "")}\n\n${text}` : text);
+  };
+  const applyUtmPreset = (preset: UtmPreset) => {
+    setCurrentBody(appendUtmParams(currentBody, preset));
+  };
+  const openSnippets = () => {
+    setShowChecker(false);
+    setShowRewrite(false);
+    setShowSnippets(true);
+  };
+  const openRewrite = () => {
+    setShowChecker(false);
+    setShowSnippets(false);
+    setShowRewrite(true);
+  };
+
   const onPickMedia = () => fileInputRef.current?.click();
 
   const onFiles = (e: ChangeEvent<HTMLInputElement>) => {
@@ -493,6 +617,7 @@ export function CreatePostModal({
       body: globalBody || referenceBody,
       perChannelBody,
       threadParts: threadParts.filter((p) => p.trim().length > 0),
+      firstComment: firstComment.trim() || undefined,
       media,
       perChannelSettings: channelSettings,
     };
@@ -504,6 +629,7 @@ export function CreatePostModal({
     postDate,
     postTime,
     threadParts,
+    firstComment,
     media,
     channelSettings,
   ]);
@@ -524,6 +650,33 @@ export function CreatePostModal({
   );
 
   const commentsHaveMedia = false; // composer only attaches media to the main post
+
+  // --- Post Checker inputs (derived from existing composer state) ---
+  // Combined editor text: global body plus any thread parts.
+  const checkerContent = useMemo(() => {
+    const main = bodies[GLOBAL_KEY] ?? "";
+    return [main, ...threadParts].filter((p) => p.trim().length > 0).join("\n\n");
+  }, [bodies, threadParts]);
+
+  const checkerMediaType = useMemo<"image" | "video" | "mixed" | undefined>(() => {
+    if (media.length === 0) return undefined;
+    const hasImage = media.some((m) => m.kind === "image");
+    const hasVideo = media.some((m) => m.kind === "video");
+    if (hasImage && hasVideo) return "mixed";
+    return hasImage ? "image" : "video";
+  }, [media]);
+
+  const checkerPlatforms = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          selectedChannels
+            .map((c) => channelIdentifier(c))
+            .filter((id): id is string => Boolean(id)),
+        ),
+      ),
+    [selectedChannels],
+  );
 
   // Run each selected channel's provider validation. Returns a map of
   // channelId → list of human-readable problems (empty list = valid).
@@ -639,6 +792,41 @@ export function CreatePostModal({
     [buildPost, selectedIds.size, validationSummary.length],
   );
 
+  // Add to queue: drop the post into this channel's next free posting slot,
+  // then schedule it. Single-channel only for v1 (per-channel slots differ).
+  const addToQueue = useCallback(async () => {
+    if (selectedChannels.length !== 1) return;
+    setAddingToQueue(true);
+    setSubmitError(null);
+    try {
+      const { date } = await findNextSlot(selectedChannels[0].id);
+      // find-slot returns a UTC wall-clock string without a zone (same as the
+      // value Evergreen reuses with "+ 'Z'"). Treat it as UTC, then feed the
+      // pickers the LOCAL representation so the composer's local->UTC submit
+      // (new Date(`${date}T${time}`).toISOString()) round-trips to the slot.
+      const hasZone = /[zZ]|[+-]\d\d:?\d\d$/.test(date);
+      const d = new Date(hasZone ? date : date + "Z");
+      if (Number.isNaN(d.getTime())) throw new Error("Invalid slot");
+      const pad = (n: number) => String(n).padStart(2, "0");
+      setPostDate(
+        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+      );
+      setPostTime(`${pad(d.getHours())}:${pad(d.getMinutes())}`);
+      // Defer the submit so it runs after postDate/postTime have updated.
+      setQueuePending(true);
+    } catch (err) {
+      setSubmitError(humanizeSubmitError(err));
+      setAddingToQueue(false);
+    }
+  }, [selectedChannels]);
+
+  useEffect(() => {
+    if (!queuePending) return;
+    setQueuePending(false);
+    setAddingToQueue(false);
+    void runSubmit("schedule", onSchedule);
+  }, [queuePending, runSubmit, onSchedule]);
+
   // Preview: in global mode, every channel renders the same body. In per-channel,
   // each renders its own override.
   const previewContent = (channelId: string): string => {
@@ -676,7 +864,9 @@ export function CreatePostModal({
           </button>
         </header>
 
-        <div className={styles.body}>
+        <div
+          className={`${styles.body} ${showChecker || showSnippets || showRewrite ? styles.bodyWithChecker : ""}`}
+        >
           <section className={styles.editor}>
             {submitError && (
               <div className={styles.submitError} role="alert">
@@ -802,6 +992,24 @@ export function CreatePostModal({
               rows={8}
             />
 
+            {anySelectedSupportsComment && (
+              <div className={styles.field}>
+                <label className={styles.fieldLabel}>
+                  {t("firstComment.label" as any)}
+                </label>
+                <textarea
+                  value={firstComment}
+                  onChange={(e) => setFirstComment(e.target.value)}
+                  placeholder={t("firstComment.placeholder" as any)}
+                  className={styles.fieldTextarea}
+                  rows={2}
+                />
+                <span className={styles.fieldHelp}>
+                  {t("firstComment.hint" as any)}
+                </span>
+              </div>
+            )}
+
             {/*
               Provider-specific requirements & settings. In per-channel mode we
               show the active channel's panel; in global mode we show a panel
@@ -894,6 +1102,13 @@ export function CreatePostModal({
                 <CommentIcon />
                 Add comment / post
               </button>
+              <button
+                type="button"
+                className={styles.toolBtn}
+                onClick={openSnippets}
+              >
+                # Snippets
+              </button>
             </div>
 
             {threadParts.length > 0 && (
@@ -924,90 +1139,94 @@ export function CreatePostModal({
 
           <aside className={styles.preview}>
             <span className={styles.previewLabel}>Post preview</span>
-            {selectedChannels.length === 0 ? (
-              <span className={styles.previewEmpty}>
-                Select at least one channel.
-              </span>
-            ) : (
-              (() => {
-                const previewChannel =
-                  mode === "per-channel"
-                    ? selectedChannels.find((c) => c.id === activeTarget) ??
-                      selectedChannels[0]
-                    : selectedChannels[0];
-                const text = previewContent(previewChannel.id);
-                const isEmpty = text.trim().length === 0;
-                const visibleThread = threadParts.filter(
-                  (p) => p.trim().length > 0,
-                );
-                return (
-                  <article className={styles.previewCard}>
-                    <header className={styles.previewCardHead}>
-                      <ChannelAvatar
-                        channel={previewChannel}
-                        size={30}
-                        circular
-                        showPlatformBadge
-                      />
-                      <div className={styles.previewIdentity}>
-                        <span className={styles.previewName}>
-                          {previewChannel.name}
-                        </span>
-                        <span className={styles.previewPlatform}>
-                          {previewChannel.platform}
-                          {selectedChannels.length > 1 &&
-                            ` · 1 of ${selectedChannels.length}`}
-                        </span>
-                      </div>
-                    </header>
-                    {isEmpty ? (
-                      <p className={styles.previewEmptyBody}>
-                        {mode === "per-channel"
-                          ? "No content yet for this channel"
-                          : "Start writing for a preview"}
-                      </p>
-                    ) : (
-                      <p className={styles.previewBody}>{text}</p>
-                    )}
-                    {media.length > 0 && (
-                      <div className={styles.previewMedia}>
-                        {media.slice(0, 3).map((m) => (
-                          <span key={m.id} className={styles.previewMediaItem}>
-                            {m.kind === "image" ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={m.url} alt="" />
-                            ) : (
-                              <video src={m.url} muted playsInline />
-                            )}
-                          </span>
-                        ))}
-                        {media.length > 3 && (
-                          <span className={styles.previewMediaMore}>
-                            +{media.length - 3}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                    {visibleThread.length > 0 && (
-                      <div className={styles.previewThread}>
-                        {visibleThread.map((p, i) => (
-                          <p key={i} className={styles.previewThreadItem}>
-                            ↳ {p}
-                          </p>
-                        ))}
-                      </div>
-                    )}
-                  </article>
-                );
-              })()
-            )}
+            <PostPreviewPanel
+              channels={selectedChannels}
+              activeTarget={activeTarget}
+              bodyFor={previewContent}
+              media={media}
+              threadParts={threadParts}
+              maxLenFor={(c) =>
+                effectiveMaxLength(requirementFor(c), { verified: c.verified })
+              }
+              identifierFor={(c) => channelIdentifier(c)}
+            />
           </aside>
+
+          {showChecker && (
+            <div className={styles.checkerSlot}>
+              <PostCheckerPanel
+                content={checkerContent}
+                hasMedia={media.length > 0}
+                mediaType={checkerMediaType}
+                platforms={checkerPlatforms}
+                onClose={() => setShowChecker(false)}
+              />
+            </div>
+          )}
+
+          {showSnippets && (
+            <div className={styles.checkerSlot}>
+              <SnippetsPanel
+                selectedPlatforms={checkerPlatforms}
+                onInsertText={insertSnippetText}
+                onApplyUtm={applyUtmPreset}
+                onClose={() => setShowSnippets(false)}
+              />
+            </div>
+          )}
+
+          {showRewrite && (
+            <div className={styles.checkerSlot}>
+              <RewritePanel
+                content={currentBody}
+                platform={checkerPlatforms[0]}
+                onInsert={(v) => { setCurrentBody(v); setShowRewrite(false); }}
+                onClose={() => setShowRewrite(false)}
+              />
+            </div>
+          )}
         </div>
 
         <footer className={styles.foot}>
           <div className={styles.footLeft}>
             <DatePicker value={postDate} onChange={setPostDate} />
             <TimePicker value={postTime} onChange={setPostTime} />
+          </div>
+          <div className={styles.smartSlots}>
+            <button
+              type="button"
+              className={styles.smartSlotsBtn}
+              disabled={selectedChannels.length === 0 || slotsLoading}
+              onClick={fetchSlots}
+            >
+              {slotsLoading
+                ? t("smartSlots.suggesting" as any)
+                : `✦ ${t("smartSlots.suggest" as any)}`}
+            </button>
+            {!slotsLoading && slotSuggestions.length > 0 && (
+              <>
+                <div className={styles.smartSlotsChips}>
+                  {slotSuggestions.slice(0, 3).map((slot) => (
+                    <button
+                      key={slot.datetime}
+                      type="button"
+                      className={styles.smartSlotChip}
+                      onClick={() => applySlot(slot)}
+                    >
+                      {formatSlotLabel(slot.datetime)}
+                    </button>
+                  ))}
+                </div>
+                <span className={styles.smartSlotsHint}>
+                  {t("smartSlots.reason" as any)}
+                </span>
+              </>
+            )}
+            {!slotsLoading && slotsError && (
+              <span className={styles.smartSlotsHint}>
+                {t("smartSlots.none" as any)}
+              </span>
+            )}
           </div>
           <div className={styles.footRight}>
             {isEdit && onDelete && (
@@ -1038,6 +1257,32 @@ export function CreatePostModal({
                 onClick={() => runSubmit("now", onPublishNow)}
               >
                 {submitting === "now" ? "Publishing…" : t("createPost.publishNow" as any)}
+              </button>
+            )}
+            <button
+              type="button"
+              className={styles.btnSecondary}
+              disabled={submitting !== null || checkerPlatforms.length === 0}
+              onClick={() => { setShowSnippets(false); setShowRewrite(false); setShowChecker(true); }}
+            >
+              ✦ {t("postChecker.checkPost" as any)}
+            </button>
+            <button
+              type="button"
+              className={styles.btnSecondary}
+              disabled={submitting !== null || currentBody.trim().length === 0}
+              onClick={openRewrite}
+            >
+              ✎ Rewrite
+            </button>
+            {selectedChannels.length === 1 && (
+              <button
+                type="button"
+                className={styles.btnSecondary}
+                disabled={submitting !== null || addingToQueue}
+                onClick={addToQueue}
+              >
+                {addingToQueue ? "Adding…" : "Add to queue"}
               </button>
             )}
             <button

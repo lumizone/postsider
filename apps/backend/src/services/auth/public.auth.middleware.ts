@@ -4,14 +4,12 @@ import { OrganizationService } from '@postsider/nestjs-libraries/database/prisma
 import { OAuthService } from '@postsider/nestjs-libraries/database/prisma/oauth/oauth.service';
 import { HttpForbiddenException } from '@postsider/nestjs-libraries/services/exception.filter';
 import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
-import { AgentTokenService } from '@postsider/nestjs-libraries/database/prisma/agent-tokens/agent-token.service';
 
 @Injectable()
 export class PublicAuthMiddleware implements NestMiddleware {
   constructor(
     private _organizationService: OrganizationService,
-    private _oauthService: OAuthService,
-    private _agentTokenService: AgentTokenService
+    private _oauthService: OAuthService
   ) {}
   async use(req: Request, res: Response, next: NextFunction) {
     const auth = (req.headers.authorization ||
@@ -21,29 +19,7 @@ export class PublicAuthMiddleware implements NestMiddleware {
       return;
     }
     try {
-      if (auth.startsWith('agt_')) {
-        // Scoped agent token (Agent Bridge).
-        const verified = await this._agentTokenService.verify(auth);
-        if (!verified) {
-          res
-            .status(HttpStatus.UNAUTHORIZED)
-            .json({ msg: 'Invalid, revoked or expired agent token' });
-          return;
-        }
-
-        const org = verified.organization;
-        if (isBillingEnabled() && !org.subscription) {
-          res
-            .status(HttpStatus.UNAUTHORIZED)
-            .json({ msg: 'No subscription found' });
-          return;
-        }
-
-        // @ts-ignore
-        req.org = { ...org, users: [{ role: 'SUPERADMIN', disabled: false }] };
-        // @ts-ignore
-        req.agentToken = verified;
-      } else if (auth.startsWith('pos_')) {
+      if (auth.startsWith('pos_')) {
         const authorization = await this._oauthService.getOrgByOAuthToken(auth);
         if (!authorization) {
           res

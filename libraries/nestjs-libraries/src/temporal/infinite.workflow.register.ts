@@ -26,6 +26,16 @@ export class InfiniteWorkflowRegister implements OnModuleInit {
             workflowIdConflictPolicy: 'USE_EXISTING',
           });
       } catch (err) {}
+
+      try {
+        await this._temporalService.client
+          ?.getRawClient()
+          ?.workflow?.start('evergreenWorkflow', {
+            workflowId: 'evergreen-workflow',
+            taskQueue: 'main',
+            workflowIdConflictPolicy: 'USE_EXISTING',
+          });
+      } catch (err) {}
     }
   }
 }

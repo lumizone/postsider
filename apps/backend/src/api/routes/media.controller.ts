@@ -26,8 +26,6 @@ import { SubscriptionService } from '@postsider/nestjs-libraries/database/prisma
 import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
 import { UploadFactory } from '@postsider/nestjs-libraries/upload/upload.factory';
 import { SaveMediaInformationDto } from '@postsider/nestjs-libraries/dtos/media/save.media.information.dto';
-import { VideoDto } from '@postsider/nestjs-libraries/dtos/videos/video.dto';
-import { VideoFunctionDto } from '@postsider/nestjs-libraries/dtos/videos/video.function.dto';
 
 @ApiTags('Media')
 @Controller('/media')
@@ -69,49 +67,6 @@ export class MediaController {
       throw new HttpException('Not available in managed mode', 403);
     }
     return this._mediaService.deleteAllMedia(org.id);
-  }
-
-  @Post('/generate-video')
-  generateVideo(
-    @GetOrgFromRequest() org: Organization,
-    @Body() body: VideoDto
-  ) {
-    return this._mediaService.generateVideo(org, body);
-  }
-
-  @Post('/generate-image')
-  async generateImage(
-    @GetOrgFromRequest() org: Organization,
-    @Req() req: Request,
-    @Body('prompt') prompt: string,
-    isPicturePrompt = false
-  ) {
-    const total = await this._subscriptionService.checkCredits(org);
-    if (isBillingEnabled() && total.credits <= 0) {
-      return false;
-    }
-
-    return {
-      output:
-        'data:image/png;base64,' +
-        (await this._mediaService.generateImage(prompt, org, isPicturePrompt)),
-    };
-  }
-
-  @Post('/generate-image-with-prompt')
-  async generateImageFromText(
-    @GetOrgFromRequest() org: Organization,
-    @Req() req: Request,
-    @Body('prompt') prompt: string
-  ) {
-    const image = await this.generateImage(org, req, prompt, true);
-    if (!image) {
-      return false;
-    }
-
-    const file = await this.storage.uploadSimple(image.output);
-
-    return this._mediaService.saveFile(org.id, file.split('/').pop()!, file);
   }
 
   @Post('/upload-server')
@@ -219,23 +174,4 @@ export class MediaController {
     return this._mediaService.getMedia(org.id, page, search);
   }
 
-  @Get('/video-options')
-  getVideos() {
-    return this._mediaService.getVideoOptions();
-  }
-
-  @Post('/video/function')
-  videoFunction(
-    @Body() body: VideoFunctionDto
-  ) {
-    return this._mediaService.videoFunction(body.identifier, body.functionName, body.params);
-  }
-
-  @Get('/generate-video/:type/allowed')
-  generateVideoAllowed(
-    @GetOrgFromRequest() org: Organization,
-    @Param('type') type: string
-  ) {
-    return this._mediaService.generateVideoAllowed(org, type);
-  }
 }

@@ -212,6 +212,34 @@ export async function postWorkflowV105({
             true,
             true
           );
+
+          // best-effort: publish the post's first comment (if any) as a comment.
+          // Mirrors the thread postComment invocation above. Never fails the main publish.
+          const firstComment = (post as any).firstComment as
+            | string
+            | null
+            | undefined;
+          if (firstComment && firstComment.trim().length > 0) {
+            try {
+              if (await isCommentable(post.integration)) {
+                await postComment(
+                  postsResults[0].postId,
+                  undefined,
+                  post.integration,
+                  [
+                    {
+                      id: `${postsList[0].id}_first_comment`,
+                      content: firstComment,
+                      settings: '{}',
+                      image: '[]',
+                    } as any,
+                  ]
+                );
+              }
+            } catch (firstCommentErr) {
+              // swallow: first comment is best-effort and must not fail the publish
+            }
+          }
         }
 
         // break the current while to move to the next post

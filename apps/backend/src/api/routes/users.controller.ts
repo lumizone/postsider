@@ -9,13 +9,12 @@ import {
   Res,
 } from '@nestjs/common';
 import { GetUserFromRequest } from '@postsider/nestjs-libraries/user/user.from.request';
-import { sign } from 'jsonwebtoken';
 import { Organization, User } from '@prisma/client';
 import { SubscriptionService } from '@postsider/nestjs-libraries/database/prisma/subscriptions/subscription.service';
 import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
-import { StripeService } from '@postsider/nestjs-libraries/services/stripe.service';
 import { PolarService } from '@postsider/nestjs-libraries/services/polar.service';
 import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
+import { isPlatformAiEnabled } from '@postsider/nestjs-libraries/services/ai.flag';
 import { Response, Request } from 'express';
 import { AuthService } from '@postsider/backend/services/auth/auth.service';
 import { AuthService as AuthChecker } from '@postsider/helpers/auth/auth.service';
@@ -40,30 +39,12 @@ import { AuthorizationActions, Sections } from '@postsider/backend/services/auth
 export class UsersController {
   constructor(
     private _subscriptionService: SubscriptionService,
-    private _stripeService: StripeService,
     private _polarService: PolarService,
     private _authService: AuthService,
     private _orgService: OrganizationService,
     private _userService: UsersService,
     private _trackService: TrackService
   ) {}
-  @Get('/agent-media-sso')
-  async getAgentMediaSsoUrl(
-    @GetUserFromRequest() user: User,
-    @GetOrgFromRequest() organization: Organization
-  ) {
-    if (!process.env.AGENT_MEDIA_SSO_KEY) {
-      throw new HttpException('Agent Media SSO is not configured', 400);
-    }
-
-    const token = sign(
-      { id: organization.id, displayName: organization.name },
-      process.env.AGENT_MEDIA_SSO_KEY
-    );
-
-    return { url: `https://agent-media.ai/sso/${token}` };
-  }
-
   @Get('/self')
   async getSelf(
     @GetUserFromRequest() user: User,
@@ -107,6 +88,7 @@ export class UsersController {
       streakSince: organization?.streakSince || null,
       // @ts-ignore
       publicApi: organization?.users[0]?.role === 'SUPERADMIN' || organization?.users[0]?.role === 'ADMIN' ? organization?.apiKey : '',
+      isPlatformAi: isPlatformAiEnabled(),
     };
   }
 
@@ -268,9 +250,7 @@ export class UsersController {
   @Get('/subscription/tiers')
   @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
   async tiers() {
-    return PolarService.isEnabled()
-      ? this._polarService.getPackages()
-      : this._stripeService.getPackages();
+    return this._polarService.getPackages();
   }
 
   @Post('/join-org')

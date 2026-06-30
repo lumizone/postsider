@@ -14,6 +14,8 @@ import { fetchPostsList, duplicatePost, type BackendPost } from "@/lib/posts";
 import { backendPostToEvent } from "@/lib/use-calendar-data";
 import { EmptyState } from "./empty-state";
 import { useT } from "@/lib/i18n";
+import { toggleEvergreen, listEvergreen } from "@/lib/evergreen-api";
+import { requestApproval } from "@/lib/approval-api";
 
 type StatusFilter = "all" | PostStatus;
 
@@ -97,6 +99,20 @@ export function Posts() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [evergreenGroups, setEvergreenGroups] = useState<Set<string>>(new Set());
+
+  // Load which post groups are evergreen so each row's toggle shows the real state.
+  useEffect(() => {
+    let cancelled = false;
+    listEvergreen()
+      .then((rows) => {
+        if (!cancelled) setEvergreenGroups(new Set(rows.map((r) => r.group)));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const channelsById = useMemo(() => {
     const m = new Map<string, Channel>();
@@ -191,6 +207,16 @@ export function Posts() {
       });
   }, [allWithStatus, channelsById, filter, query]);
 
+  const handleRequestApproval = useCallback(async (postId: string) => {
+    try {
+      await requestApproval(postId);
+      setToast("Sent for approval");
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : "Could not request approval");
+    }
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+
   const handleDuplicate = useCallback(
     async (group: string, targetIntegrationId?: string) => {
       try {
@@ -240,6 +266,13 @@ export function Posts() {
           </p>
         </div>
         <div className={styles.headerControls}>
+          <button
+            type="button"
+            onClick={() => router.push("/posts/csv-import")}
+            style={{ padding: "9px 14px", borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--bg)", color: "var(--fg)", fontSize: 13, fontWeight: 500, cursor: "pointer", marginRight: 8 }}
+          >
+            Import CSV
+          </button>
           <button type="button" className={styles.newBtn} onClick={() => router.push("/calendar")}>
             + {t("posts.newPost" as any)}
           </button>
@@ -312,6 +345,8 @@ export function Posts() {
               channel={channelsById.get(ev.channelId)}
               onDuplicate={() => void handleDuplicate(ev.group)}
               onDuplicateTo={() => setDuplicateTargetGroup(ev.group)}
+              onRequestApproval={() => void handleRequestApproval(ev.id)}
+              initialEvergreen={evergreenGroups.has(ev.group)}
             />
           ))}
         </div>
@@ -326,12 +361,26 @@ interface PostRowProps {
   channel?: Channel;
   onDuplicate: () => void;
   onDuplicateTo: () => void;
+  onRequestApproval: () => void;
+  initialEvergreen?: boolean;
 }
 
-function PostRow({ ev, status, channel, onDuplicate, onDuplicateTo }: PostRowProps) {
+function PostRow({ ev, status, channel, onDuplicate, onDuplicateTo, onRequestApproval, initialEvergreen }: PostRowProps) {
   const date = parseDate(ev.date);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [evergreenOn, setEvergreenOn] = useState<boolean>(initialEvergreen ?? false);
   const t = useT();
+
+  // Reflect the evergreen state once the parent's async fetch resolves.
+  useEffect(() => {
+    if (initialEvergreen !== undefined) setEvergreenOn(initialEvergreen);
+  }, [initialEvergreen]);
+
+  const onToggleEvergreen = () => {
+    const next = !evergreenOn;
+    setEvergreenOn(next); // optimistic
+    void toggleEvergreen(ev.group, next).catch(() => setEvergreenOn(!next));
+  };
 
   const statusClass = `statusPill${status[0].toUpperCase()}${status.slice(1)}`;
 
@@ -422,6 +471,15 @@ function PostRow({ ev, status, channel, onDuplicate, onDuplicateTo }: PostRowPro
             <button type="button" className={styles.menuItem} onClick={onDuplicateTo} role="menuitem">
               {t("posts.duplicateTo" as any)}
             </button>
+            <button type="button" className={styles.menuItem} onClick={onToggleEvergreen} role="menuitem">
+              {"♻ "}
+              {evergreenOn ? t("evergreen.unmarkEvergreen" as any) : t("evergreen.markEvergreen" as any)}
+            </button>
+            {status === "draft" && (
+              <button type="button" className={styles.menuItem} onClick={onRequestApproval} role="menuitem">
+                {t("approval.requestBtn" as any)}
+              </button>
+            )}
           </div>
         )}
       </div>

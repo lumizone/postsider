@@ -5,17 +5,17 @@
 <h1 align="center">PostSider</h1>
 
 <p align="center">
-  Open-source publishing & communication bridge for AI agents.<br/>
-  Give Claude Code, Codex and other agents a standard surface (MCP / REST / SDK) to
-  publish across 40+ platforms — with a full scheduling dashboard for humans too.
+  Open-source social media scheduling for 40+ platforms.<br/>
+  Plan, compose, and publish from one calendar, with a public API and SDK for automation
+  and an optional AI assist for checking and rewriting captions.
 </p>
 
 <p align="center">
-  <a href="#quick-start">Quick Start</a> •
-  <a href="#features">Features</a> •
-  <a href="#architecture">Architecture</a> •
-  <a href="#self-hosting">Self-Hosting</a> •
-  <a href="#contributing">Contributing</a> •
+  <a href="#quick-start">Quick Start</a> &middot;
+  <a href="#features">Features</a> &middot;
+  <a href="#architecture">Architecture</a> &middot;
+  <a href="#self-hosting">Self-Hosting</a> &middot;
+  <a href="#contributing">Contributing</a> &middot;
   <a href="#license">License</a>
 </p>
 
@@ -23,23 +23,37 @@
 
 ## Features
 
-**Agent Bridge (primary surface)**
+**Scheduling and publishing**
 
-- **MCP server** — expose publishing, scheduling, analytics and channel management to AI agents (Claude Code, Codex, and compatible runtimes)
-- **Public REST API + SDK** — versioned `/public/v1` API and the `@postsider/sdk` package for programmatic and agent-driven automation
-- **40+ connectors** — X, LinkedIn, Facebook, Instagram, YouTube, TikTok, Threads, Bluesky, Mastodon, Reddit, Discord, Slack, Telegram, Pinterest, and many more
-- **Webhooks** — notify external systems and agents when posts are published
+- **Visual calendar** with drag and drop scheduling and time slot management
+- **Posting queue** with day-aware find-free-slot, plus Smart Slots suggestions
+- **Evergreen** recycling for content you want to repost on a cadence
+- **Per-platform preview** and per-platform validation before you publish
+- **First comment** posted automatically for platforms that support it
+- **40+ connectors**: X, LinkedIn, Facebook, Instagram, YouTube, TikTok, Threads, Bluesky, Mastodon, Reddit, Discord, Slack, Telegram, Pinterest, and many more
 
-**Scheduler UI (secondary, human-facing surface)**
+**Composer**
 
-- **Visual calendar** — drag-and-drop scheduling with time slot management
-- **AI assistant** — generate, refine, and split posts using OpenAI (optional)
-- **Team collaboration** — invite members with role-based access (Admin / User)
-- **Multi-organization** — separate workspaces per brand or client
-- **Media library** — upload, manage, and attach images/videos to posts
-- **Analytics** — per-post performance tracking (where supported by provider)
-- **Auto-post** — RSS-to-social automation
-- **Self-hostable** — run on your own infrastructure with Docker
+- **Hashtag groups**, **caption templates**, **UTM builder**, and reusable **snippets**
+- **Bulk CSV import** to schedule many posts at once
+- **Approval workflow** so posts can be reviewed before they go out
+
+**Optional AI** (off unless you provide a key)
+
+- **Post Checker** flags issues before publishing
+- **Caption rewrite** improves a draft on request
+- Uses the platform `OPENAI_API_KEY`, or a per-org key you bring yourself (BYO)
+
+**Collaboration and automation**
+
+- **Team collaboration** with role-based access (Admin / User)
+- **Multi-organization** workspaces, one per brand or client
+- **Media library** to upload, manage, and attach images and videos
+- **Analytics** with per-post performance tracking where the provider supports it
+- **Public REST API + SDK** (`/public/v1` and the `@postsider/node` package) for programmatic use
+- **MCP server** so AI agents (Claude, Codex) can drive the platform natively, via `@postsider/mcp`
+- **Webhooks** to notify external systems when posts are published
+- **Self-hostable** on your own infrastructure with Docker
 
 ---
 
@@ -47,7 +61,7 @@
 
 ### Prerequisites
 
-- **Node.js** >= 20.17 (recommended: use [Volta](https://volta.sh/) — it auto-picks the right version)
+- **Node.js** >= 20.17 (recommended: use [Volta](https://volta.sh/), it auto-picks the right version)
 - **pnpm** >= 10.6
 - **PostgreSQL** >= 15
 - **Redis** >= 7
@@ -61,7 +75,7 @@ cd postsider
 docker compose up -d
 ```
 
-Open `http://localhost:4007` in your browser. On first launch, create your admin account through the bootstrap flow.
+Open the app in your browser. On first launch, create your admin account through the bootstrap flow.
 
 ### Option B: Local development
 
@@ -73,10 +87,10 @@ pnpm install
 
 # 2. Set up environment
 cp .env.example .env
-# Edit .env — at minimum set DATABASE_URL, REDIS_URL, JWT_SECRET
+# Edit .env, at minimum set DATABASE_URL, REDIS_URL, JWT_SECRET
 
-# 3. Push database schema
-pnpm prisma-db-push
+# 3. Apply the database schema
+pnpm prisma-migrate-deploy
 
 # 4. Create your first admin user
 pnpm bootstrap
@@ -84,15 +98,15 @@ pnpm bootstrap
 # 5. Start development servers (backend + orchestrator)
 pnpm dev
 
-# 6. In another terminal — start frontend
+# 6. In another terminal, start the frontend
 pnpm dev:frontend
 ```
 
-The backend runs on `http://localhost:3000`, frontend on `http://localhost:4200`.
+The backend runs on `http://localhost:3000`, the frontend on `http://localhost:4200`.
 
 ### First login
 
-After running `pnpm bootstrap`, you'll receive a one-time password in the terminal. Sign in with `admin@setup.local` and that password — you'll be prompted to set your real email and password.
+After running `pnpm bootstrap`, you receive a one-time password in the terminal. Sign in with `admin@setup.local` and that password, then you are prompted to set your real email and password.
 
 ---
 
@@ -109,7 +123,7 @@ postsider/
 │   ├── commands/         # CLI utilities (bootstrap, config)
 │   └── sdk/              # Published npm package for the public API
 ├── libraries/
-│   ├── nestjs-libraries/ # Shared backend logic (Prisma, integrations, AI, uploads)
+│   ├── nestjs-libraries/ # Shared backend logic (Prisma, integrations, uploads)
 │   └── helpers/          # Lightweight utilities (auth, crypto, validation)
 ├── docker-compose.yaml   # Production-ready stack
 └── .env.example          # Configuration reference
@@ -121,20 +135,22 @@ postsider/
 |-------|-----------|
 | Backend API | NestJS 11, TypeScript 5.5 |
 | Frontend | Next.js 15, React 19, CSS Modules |
-| Database | PostgreSQL 17 + Prisma 6.5 |
+| Database | PostgreSQL + Prisma 6.5 |
 | Cache / Queue | Redis 7 |
 | Workflow Engine | Temporal (durable post scheduling, token refresh) |
-| AI | OpenAI, LangGraph, Mastra, CopilotKit |
+| AI (optional) | OpenAI (Post Checker and caption rewrite) |
+| Billing (optional) | Polar.sh (Merchant of Record) |
 | Storage | Local filesystem or Cloudflare R2 |
 | Auth | JWT + bcrypt, OAuth (GitHub, Google, Generic OIDC) |
 | Monitoring | Sentry |
 
 ### Key design decisions
 
-- **Temporal for scheduling** — posts are scheduled as durable workflows, surviving restarts and crashes. Token refresh runs on a cron workflow.
-- **Per-provider integration classes** — each social platform is a self-contained class implementing `SocialProvider`. Adding a new platform = adding one file.
-- **CASL-based permissions** — subscription tier determines what actions are allowed. Guards check abilities on every request.
-- **Public API with SDK** — the `@postsider/sdk` package wraps the public v1 endpoints for external consumers.
+- **Temporal for scheduling**: posts are scheduled as durable workflows, surviving restarts and crashes. Token refresh runs on a cron workflow.
+- **Per-provider integration classes**: each social platform is a self-contained class implementing `SocialProvider`. Adding a new platform means adding one file.
+- **CASL-based permissions**: subscription tier determines what actions are allowed. Guards check abilities on every request.
+- **Env-gated single build**: the same codebase runs as managed hosting or fully self-hosted. Billing is enabled only when `POLAR_ACCESS_TOKEN` is set; AI features are enabled only when an OpenAI key is present (platform or BYO). With neither, every org is unlimited and AI is simply hidden.
+- **Public API with SDK**: the `@postsider/sdk` package wraps the public v1 endpoints for external consumers.
 
 ---
 
@@ -175,38 +191,68 @@ Each platform requires its own OAuth credentials. Refer to `.env.example` for th
 
 ### Docker Compose (production)
 
-The included `docker-compose.yaml` runs the full stack:
+`docker-compose.production.yaml` runs the full stack in a single command:
 
-- **PostSider** app (backend + frontend in one container)
-- **PostgreSQL 17** (app database)
-- **Redis 7** (caching + rate limiting)
+- **PostSider** app (backend + frontend in one container, port 5000)
+- **PostgreSQL** (app database)
+- **Redis** (caching + rate limiting)
+- **MinIO** (S3-compatible object storage, port 9000)
 - **Temporal** (workflow engine + its own Postgres + Elasticsearch)
 - **Temporal UI** (workflow monitoring, port 8080)
+- **DbGate** (database admin UI, port 8082, optional)
+
+Migrations run automatically at startup via `prisma migrate deploy` before the app starts.
+
+**Steps:**
 
 ```bash
-# Generate a secure JWT secret
-export JWT_SECRET=$(openssl rand -base64 32)
+# 1. Copy the env template
+cp .env.example .env.production
 
-# Start everything
-docker compose up -d
+# 2. Fill in required values: DATABASE_URL, REDIS_URL, JWT_SECRET,
+#    FRONTEND_URL, NEXT_PUBLIC_BACKEND_URL, BACKEND_INTERNAL_URL,
+#    MINIO_ACCESS_KEY, MINIO_SECRET_KEY, POSTGRES_PASSWORD.
+#    Leave POLAR_ACCESS_TOKEN and OPENAI_API_KEY blank for self-host
+#    (billing becomes unlimited; AI features use user-supplied BYO keys).
+#    For each social platform you want, register an OAuth app on the
+#    provider's developer portal and fill in the matching CLIENT_ID /
+#    CLIENT_SECRET vars (see the "Social platform OAuth credentials"
+#    section in .env.example).
+#    Set NEXT_PUBLIC_BACKEND_URL=https://app.yourdomain.com and build
+#    the image (NEXT_PUBLIC_BACKEND_URL is baked into the JS bundle).
+nano .env.production
 
-# Check logs
-docker compose logs -f postsider
+# 3. Build the image (NEXT_PUBLIC_* vars are build-time ARGs)
+source .env.production && docker compose -f docker-compose.production.yaml build \
+  --build-arg NEXT_PUBLIC_BACKEND_URL="$NEXT_PUBLIC_BACKEND_URL"
+
+# 4. Start everything
+docker compose -f docker-compose.production.yaml up -d
+
+# 5. Create the first admin account
+docker exec -it postsider-app pnpm bootstrap
+
+# 6. Check logs
+docker compose -f docker-compose.production.yaml logs -f postsider
 ```
+
+The app is then available on port 5000 (put nginx or a reverse proxy in front for HTTPS).
 
 ### Updating
 
 ```bash
-docker compose pull
-docker compose up -d
+docker compose -f docker-compose.production.yaml pull
+docker compose -f docker-compose.production.yaml up -d
 ```
+
+Migrations run automatically on each restart.
 
 ### Backups
 
 The critical data lives in PostgreSQL. Back up the `postsider-postgres` volume regularly:
 
 ```bash
-docker exec postsider-postgres pg_dump -U postsider-user postsider-db-local > backup.sql
+docker exec postsider-postgres pg_dump -U postsider postsider_prod > backup.sql
 ```
 
 ---
@@ -228,11 +274,11 @@ pnpm dev:orchestrator
 # Generate Prisma client after schema changes
 pnpm prisma-generate
 
-# Push schema changes to database
-pnpm prisma-db-push
+# Create a migration after schema changes
+pnpm prisma-migrate-dev
 
-# Reset database (destructive!)
-pnpm prisma-reset
+# Apply pending migrations
+pnpm prisma-migrate-deploy
 
 # Build all apps
 pnpm build
@@ -243,10 +289,11 @@ pnpm build:sdk
 
 ### Project conventions
 
-- **Path aliases** — `@postsider/backend/*`, `@postsider/helpers/*`, `@postsider/nestjs-libraries/*`, etc.
-- **Global DatabaseModule** — all Prisma repositories and services are provided globally via `DatabaseModule`
-- **Integration pattern** — each social provider extends `SocialAbstract` and implements `SocialProvider`
-- **Temporal workflows** — defined in `apps/orchestrator/src/workflows/`
+- **Path aliases**: `@postsider/backend/*`, `@postsider/helpers/*`, `@postsider/nestjs-libraries/*`, and so on
+- **Global DatabaseModule**: all Prisma repositories and services are provided globally via `DatabaseModule`
+- **Integration pattern**: each social provider extends `SocialAbstract` and implements `SocialProvider`
+- **Temporal workflows**: defined in `apps/orchestrator/src/workflows/`
+- **Migrations, not db push**: commit Prisma migration files; the server runs `prisma migrate deploy` on boot
 
 ---
 
@@ -257,11 +304,11 @@ PostSider exposes a public REST API for programmatic access. Authenticate with y
 ### SDK
 
 ```bash
-npm install @postsider/sdk
+npm install @postsider/node
 ```
 
 ```typescript
-import Postsider from '@postsider/sdk';
+import Postsider from '@postsider/node';
 
 const client = new Postsider('your-api-key', 'https://your-instance.com');
 
@@ -281,14 +328,32 @@ const channels = await client.integrations();
 
 ---
 
+## AI agents (MCP)
+
+PostSider ships an MCP server so AI agents (Claude Code, Claude Desktop, Codex,
+and any MCP-compatible client) can drive the platform directly: list channels,
+schedule and publish posts, upload media, and read analytics. It is a thin,
+dependency-light wrapper over the public API.
+
+```bash
+pnpm --filter @postsider/mcp build
+```
+
+Then point your agent at `apps/mcp/dist/index.js` with `POSTSIDER_API_KEY` (and
+`POSTSIDER_API_URL` for a self-hosted instance). See
+[`apps/mcp/README.md`](apps/mcp/README.md) for client config snippets and the
+full tool list.
+
+---
+
 ## Contributing
 
-Contributions are welcome! Here's how to get started:
+Contributions are welcome. Here is how to get started:
 
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/my-feature`
 3. Make your changes
-4. Ensure TypeScript compiles: `npx tsc --noEmit --project apps/backend/tsconfig.json`
+4. Ensure TypeScript compiles: `pnpm run build:backend`
 5. Commit with a clear message
 6. Open a Pull Request
 
@@ -298,24 +363,23 @@ Contributions are welcome! Here's how to get started:
 - New social platform integrations
 - Documentation improvements
 - Performance optimizations
-- Test coverage (we're actively building this out)
+- Test coverage
 
 ### Code style
 
-- TypeScript strict mode (excluding `strictNullChecks` for now — PRs to fix null-safety are welcome)
+- TypeScript strict mode (excluding `strictNullChecks` for now; PRs to fix null-safety are welcome)
 - Prettier for formatting (`.prettierrc` in root)
-- ESLint for linting (`.eslintignore` in root)
+- ESLint for linting
 
 ---
 
 ## Roadmap
 
-- [ ] Test coverage for core flows (auth, posts, integrations)
+- [ ] Broaden test coverage for core flows (auth, posts, integrations)
 - [ ] Enable `strictNullChecks` across the codebase
 - [ ] GitHub Actions CI (lint + typecheck + build)
 - [ ] Mobile app (React Native)
 - [ ] Plugin system for custom integrations
-- [ ] Bulk scheduling / CSV import
 - [ ] Advanced analytics dashboard
 
 ---
@@ -324,4 +388,6 @@ Contributions are welcome! Here's how to get started:
 
 PostSider is licensed under the [GNU Affero General Public License v3.0](LICENSE).
 
-This means you can use, modify, and distribute PostSider freely — but if you run a modified version as a network service, you must make your source code available to users of that service.
+This means you can use, modify, and distribute PostSider freely, but if you run a modified version as a network service, you must make your source code available to users of that service.
+
+PostSider is a fork of [Postiz](https://github.com/gitroomhq/postiz-app); see [ATTRIBUTION.md](ATTRIBUTION.md).

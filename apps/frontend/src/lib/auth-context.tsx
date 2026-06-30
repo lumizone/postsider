@@ -33,6 +33,7 @@ export interface SelfUser {
   onTrial: boolean;
   trialDaysLeft: number | null;
   publicApi: string;
+  isPlatformAi: boolean;
   // Other fields exist on the backend but aren't used here yet.
 }
 

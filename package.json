@@ -1,11 +1,11 @@
 {
   "name": "postsider",
   "version": "1.0.0",
-  "description": "PostSider — publishing/communication bridge for AI agents (backend monorepo)",
+  "description": "PostSider - open-source social media scheduler for 40+ platforms (backend monorepo)",
   "main": "index.js",
   "license": "AGPL-3.0",
   "keywords": [],
-  "author": "",
+  "author": "Lumi Zone Łukasz Blania <lukasz@postsider.com>",
   "engines": {
     "node": ">=20.17.0 <23.0.0"
   },
@@ -16,7 +16,6 @@
     "pm2": "pnpm run pm2-run",
     "publish-sdk": "pnpm run --filter ./apps/sdk publish",
     "pm2-run": "pm2 delete all || true && pnpm run prisma-migrate-deploy && pnpm run --parallel pm2 && pm2 logs",
-    "dev:stripe": "pnpm dlx concurrently \"stripe listen --forward-to localhost:3000/stripe\" \"pnpm run dev\"",
     "build": "pnpm -r --workspace-concurrency=1 --filter ./apps/backend --filter ./apps/orchestrator run build",
     "build:backend": "rm -rf apps/backend/dist && pnpm --filter ./apps/backend run build",
     "build:orchestrator": "rm -rf apps/orchestrator/dist && pnpm --filter ./apps/orchestrator run build",
@@ -43,23 +42,10 @@
     "test": "jest --coverage --detectOpenHandles --reporters=default --reporters=jest-junit"
   },
   "dependencies": {
-    "@ag-ui/mastra": "^1.0.1",
-    "@ai-sdk/openai": "^2.0.52",
     "@atproto/api": "^0.15.15",
     "@aws-sdk/client-s3": "^3.787.0",
     "@aws-sdk/s3-request-presigner": "^3.787.0",
     "@casl/ability": "^6.5.0",
-    "@copilotkit/runtime": "1.10.6",
-    "@langchain/community": "^1.1.27",
-    "@langchain/core": "^1.1.39",
-    "@langchain/langgraph": "^1.2.8",
-    "@langchain/openai": "^1.4.3",
-    "@langchain/tavily": "^1.2.0",
-    "@mastra/core": "^1.21.0",
-    "@mastra/mcp": "^1.4.1",
-    "@mastra/memory": "^1.13.0",
-    "@mastra/pg": "^1.8.5",
-    "@modelcontextprotocol/sdk": "^1.22.0",
     "@nest-lab/throttler-storage-redis": "^1.2.0",
     "@nestjs/cli": "^11.0.21",
     "@nestjs/common": "^11.1.21",
@@ -118,7 +104,6 @@
     "json-to-graphql-query": "^2.2.5",
     "jsonwebtoken": "^9.0.2",
     "lodash": "^4.17.21",
-    "mastra": "^1.3.19",
     "mime": "^3.0.0",
     "mime-types": "^2.1.35",
     "multer": "^1.4.5-lts.1",
@@ -128,7 +113,7 @@
     "nestjs-temporal-core": "^3.2.0",
     "node-fetch": "^3.3.2",
     "node-telegram-bot-api": "^0.66.0",
-    "nodemailer": "^8.0.11",
+    "nodemailer": "^9.0.1",
     "nostr-tools": "^2.18.2",
     "openai": "^6.2.0",
     "p-limit": "^3.1.0",
@@ -140,7 +125,6 @@
     "rxjs": "^7.8.0",
     "sharp": "^0.33.4",
     "slugify": "^1.6.6",
-    "stripe": "^20.4.0",
     "striptags": "^3.2.0",
     "subtitle": "4.2.2-alpha.0",
     "tldts": "^6.1.47",
@@ -151,7 +135,7 @@
     "twitter-text": "^3.1.0",
     "utf-8-validate": "^5.0.10",
     "uuid": "^10.0.0",
-    "ws": "^8.18.0",
+    "ws": "^8.21.0",
     "yargs": "^17.7.2",
     "yup": "^1.4.0",
     "zod": "^3.25.76"
@@ -200,18 +184,5 @@
   "jest-junit": {
     "outputDirectory": "./reports",
     "outputName": "junit.xml"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "bcrypt"
-    ],
-    "overrides": {
-      "protobufjs": ">=7.5.6",
-      "tar": ">=7.5.11",
-      "cross-spawn": ">=7.0.6",
-      "form-data": ">=4.0.2",
-      "postcss": ">=8.5.3",
-      "langsmith": ">=0.6.0"
-    }
   }
 }
