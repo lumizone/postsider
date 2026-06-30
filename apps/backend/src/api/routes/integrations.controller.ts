@@ -355,7 +355,6 @@ export class IntegrationsController {
       x: { X_API_KEY: 'clientId', X_API_SECRET: 'clientSecret' },
       linkedin: { LINKEDIN_CLIENT_ID: 'clientId', LINKEDIN_CLIENT_SECRET: 'clientSecret' },
       'linkedin-page': { LINKEDIN_CLIENT_ID: 'clientId', LINKEDIN_CLIENT_SECRET: 'clientSecret' },
-      reddit: { REDDIT_CLIENT_ID: 'clientId', REDDIT_CLIENT_SECRET: 'clientSecret' },
       facebook: { FACEBOOK_APP_ID: 'clientId', FACEBOOK_APP_SECRET: 'clientSecret' },
       instagram: { FACEBOOK_APP_ID: 'clientId', FACEBOOK_APP_SECRET: 'clientSecret' },
       'instagram-standalone': { INSTAGRAM_APP_ID: 'clientId', INSTAGRAM_APP_SECRET: 'clientSecret' },
@@ -368,11 +367,8 @@ export class IntegrationsController {
       dribbble: { DRIBBBLE_CLIENT_ID: 'clientId', DRIBBBLE_CLIENT_SECRET: 'clientSecret' },
       discord: { DISCORD_CLIENT_ID: 'clientId', DISCORD_CLIENT_SECRET: 'clientSecret' },
       slack: { SLACK_ID: 'clientId', SLACK_SECRET: 'clientSecret' },
-      kick: { KICK_CLIENT_ID: 'clientId', KICK_SECRET: 'clientSecret' },
       twitch: { TWITCH_CLIENT_ID: 'clientId', TWITCH_CLIENT_SECRET: 'clientSecret' },
       mastodon: { MASTODON_CLIENT_ID: 'clientId', MASTODON_CLIENT_SECRET: 'clientSecret' },
-      vk: { VK_ID: 'clientId' },
-      gmail: { GOOGLE_GMAIL_CLIENT_ID: 'clientId', GOOGLE_GMAIL_CLIENT_SECRET: 'clientSecret' },
       whop: { WHOP_CLIENT_ID: 'clientId', WHOP_CLIENT_SECRET: 'clientSecret' },
     };
     return mappings[integration] || {};
@@ -389,10 +385,6 @@ export class IntegrationsController {
         { key: 'clientSecret', label: 'Client Secret', type: 'password' },
       ],
       'linkedin-page': [
-        { key: 'clientId', label: 'Client ID', type: 'text' },
-        { key: 'clientSecret', label: 'Client Secret', type: 'password' },
-      ],
-      reddit: [
         { key: 'clientId', label: 'Client ID', type: 'text' },
         { key: 'clientSecret', label: 'Client Secret', type: 'password' },
       ],
@@ -440,10 +432,6 @@ export class IntegrationsController {
         { key: 'clientId', label: 'Client ID', type: 'text' },
         { key: 'clientSecret', label: 'Client Secret', type: 'password' },
       ],
-      kick: [
-        { key: 'clientId', label: 'Client ID', type: 'text' },
-        { key: 'clientSecret', label: 'Client Secret', type: 'password' },
-      ],
       twitch: [
         { key: 'clientId', label: 'Client ID', type: 'text' },
         { key: 'clientSecret', label: 'Client Secret', type: 'password' },
@@ -451,10 +439,6 @@ export class IntegrationsController {
       mastodon: [
         { key: 'clientId', label: 'Client ID', type: 'text' },
         { key: 'clientSecret', label: 'Client Secret', type: 'password' },
-      ],
-      gmail: [
-        { key: 'clientId', label: 'Google Client ID', type: 'text' },
-        { key: 'clientSecret', label: 'Google Client Secret', type: 'password' },
       ],
       whop: [
         { key: 'clientId', label: 'Client ID', type: 'text' },
@@ -483,10 +467,6 @@ export class IntegrationsController {
         { key: 'accessToken', label: 'Access Token', validation: '/^.{3,}$/', type: 'password' },
         { key: 'pageId', label: 'Organization ID (numeric)', validation: '/^\\d+$/', type: 'text' },
         { key: 'name', label: 'Page Name', validation: '/^.{1,}$/', type: 'text' },
-      ],
-      reddit: [
-        { key: 'accessToken', label: 'Access Token', validation: '/^.{3,}$/', type: 'password' },
-        { key: 'username', label: 'Reddit Username', validation: '/^.{1,}$/', type: 'text' },
       ],
       instagram: [
         { key: 'accessToken', label: 'Page Access Token (long-lived)', validation: '/^.{3,}$/', type: 'password' },
@@ -542,11 +522,6 @@ export class IntegrationsController {
         { key: 'teamId', label: 'Workspace ID (Team ID)', validation: '/^.{3,}$/', type: 'text' },
         { key: 'name', label: 'Bot Name', validation: '/^.{1,}$/', type: 'text' },
       ],
-      kick: [
-        { key: 'accessToken', label: 'Access Token', validation: '/^.{3,}$/', type: 'password' },
-        { key: 'userId', label: 'User ID (numeric)', validation: '/^\\d+$/', type: 'text' },
-        { key: 'username', label: 'Channel Name', validation: '/^.{1,}$/', type: 'text' },
-      ],
       twitch: [
         { key: 'accessToken', label: 'Access Token', validation: '/^.{3,}$/', type: 'password' },
         { key: 'userId', label: 'User ID (numeric)', validation: '/^\\d+$/', type: 'text' },
@@ -562,33 +537,15 @@ export class IntegrationsController {
         { key: 'instanceUrl', label: 'Instance URL', validation: '/^https?:\\/\\/.+/', type: 'text' },
         { key: 'username', label: 'Username', validation: '/^.{1,}$/', type: 'text' },
       ],
-      vk: [
-        { key: 'accessToken', label: 'Access Token', validation: '/^.{3,}$/', type: 'password' },
-        { key: 'userId', label: 'User ID (numeric)', validation: '/^\\d+$/', type: 'text' },
-        { key: 'name', label: 'Display Name', validation: '/^.{1,}$/', type: 'text' },
-      ],
-      mewe: [
-        { key: 'accessToken', label: 'Access Token', validation: '/^.{3,}$/', type: 'password' },
-        { key: 'userId', label: 'User ID', validation: '/^.{3,}$/', type: 'text' },
-        { key: 'username', label: 'Username', validation: '/^.{1,}$/', type: 'text' },
-      ],
       whop: [
         { key: 'accessToken', label: 'Access Token', validation: '/^.{3,}$/', type: 'password' },
         { key: 'userId', label: 'User ID (sub)', validation: '/^.{3,}$/', type: 'text' },
         { key: 'username', label: 'Username', validation: '/^.{1,}$/', type: 'text' },
       ],
-      gmail: [
-        { key: 'accessToken', label: 'Google OAuth Access Token (gmail.send scope)', validation: '/^.{3,}$/', type: 'password' },
-        { key: 'userId', label: 'Google User ID', validation: '/^.{3,}$/', type: 'text' },
-        { key: 'name', label: 'Email Address', validation: '/^.+@.+/', type: 'text' },
-      ],
       wrapcast: [
         { key: 'signerUuid', label: 'Signer UUID (from Neynar)', validation: '/^.{3,}$/', type: 'password' },
         { key: 'fid', label: 'Farcaster FID', validation: '/^\\d+$/', type: 'text' },
         { key: 'username', label: 'Username', validation: '/^.{1,}$/', type: 'text' },
-      ],
-      skool: [
-        { key: 'cookies', label: 'Session Cookie', validation: '/^.{3,}$/', type: 'password' },
       ],
     };
 

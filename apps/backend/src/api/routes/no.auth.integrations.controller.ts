@@ -137,11 +137,6 @@ export class NoAuthIntegrationsController {
                 odId = decoded.fid || '';
               }
 
-              // Skool: cookies as token
-              if (integration === 'skool') {
-                token = decoded.cookies || '';
-              }
-
               // LinkedIn Page: id is the org ID
               if (integration === 'linkedin-page') {
                 odId = decoded.pageId || '';

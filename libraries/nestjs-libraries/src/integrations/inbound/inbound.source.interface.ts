@@ -23,7 +23,7 @@ export interface InboundSourcePage {
  * org's stored integration credentials.
  */
 export interface InboundSourceHandler {
-  /** Connector identifier this handler serves (e.g. "reddit"). */
+  /** Connector identifier this handler serves (e.g. "discord"). */
   readonly source: string;
   /**
    * Fetch a page of items. `cursor` is the opaque value returned as
