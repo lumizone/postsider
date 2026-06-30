@@ -12,10 +12,12 @@ export class EvergreenService {
   saveSettings(orgId: string, data: { enabled: boolean; intervalDays: number; maxPerRun: number }) { return this._repo.upsertSettings(orgId, data); }
   async recycleOnce(orgId: string): Promise<string | null> {
     const settings = await this.getSettings(orgId);
-    const candidates = (await this._repo.listEvergreen(orgId)).map((p) => ({ id: p.id, group: p.group, lastRecycledAt: p.lastRecycledAt }));
+    const candidates = (await this._repo.listEvergreen(orgId)).map((p) => ({ id: p.id, group: p.group, integrationId: p.integrationId, lastRecycledAt: p.lastRecycledAt }));
     const pick = pickNextEvergreen(candidates, settings.intervalDays, new Date());
     if (!pick) return null;
-    const date = await this._posts.findFreeDateTime(orgId);
+    // Use the post's own channel so the recycled slot respects that channel's
+    // queue plan, not the org default.
+    const date = await this._posts.findFreeDateTime(orgId, pick.integrationId);
     // duplicatePost creates the copy as a DRAFT (it won't publish on its own),
     // so flip the new post to a scheduled (QUEUE) state to actually re-publish it.
     const dup = await this._posts.duplicatePost(orgId, pick.group, undefined, date + 'Z');

@@ -32,8 +32,26 @@ export function appendUtmParams(body: string, preset: UtmPresetInput): string {
     .join('&');
 
   return body.replace(URL_RE, (url) => {
-    const trailing = url.match(/[).,!?]+$/)?.[0] ?? '';
-    const clean = trailing ? url.slice(0, -trailing.length) : url;
+    // Peel trailing sentence punctuation, but KEEP a ')' that closes a '(' in
+    // the URL path itself (e.g. wikipedia .../Foo_(bar)). Only an unbalanced
+    // ')' is punctuation (e.g. "(see https://x.com)").
+    let clean = url;
+    let trailing = '';
+    for (;;) {
+      const last = clean[clean.length - 1];
+      if (last === '.' || last === ',' || last === '!' || last === '?') {
+        trailing = last + trailing;
+        clean = clean.slice(0, -1);
+      } else if (last === ')') {
+        const opens = (clean.match(/\(/g) || []).length;
+        const closes = (clean.match(/\)/g) || []).length;
+        if (closes <= opens) break; // balanced — part of the URL
+        trailing = last + trailing;
+        clean = clean.slice(0, -1);
+      } else {
+        break;
+      }
+    }
     if (/[?&]utm_source=/.test(clean)) return url; // already tagged
     const sep = clean.includes('?') ? '&' : '?';
     return clean + sep + query + trailing;

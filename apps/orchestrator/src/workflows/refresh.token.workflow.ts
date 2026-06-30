@@ -34,8 +34,17 @@ export async function refreshTokenWorkflow({
       return false;
     }
 
+    // A null tokenExpiration means a non-expiring token — nothing to refresh on
+    // a schedule. Re-check daily instead of hot-looping: without this guard
+    // `new Date(null)` is epoch 0, so waitMs is hugely negative, the sleep is
+    // skipped, and the provider's token endpoint gets hammered every MIN_RETRY.
+    if (!integration.tokenExpiration) {
+      await sleep(24 * 60 * 60 * 1000);
+      continue;
+    }
+
     const waitMs =
-      new Date(integration.tokenExpiration!).getTime() -
+      new Date(integration.tokenExpiration).getTime() -
       Date.now() -
       REFRESH_BUFFER_MS;
 

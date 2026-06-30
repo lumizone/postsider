@@ -1097,8 +1097,16 @@ export class PostsService {
       orgId,
       integrationId
     );
+    // A channel with no posting times configured would otherwise recurse 365
+    // days and throw a 400. Fall back to sensible default hours (every day) so
+    // quick-scheduling always returns a slot; the 365-day guard stays a true
+    // safety net.
+    const effective =
+      slots?.length > 0
+        ? slots
+        : [9, 12, 15, 18].map((h) => ({ time: h * 60 }));
     const start = dayjs.utc().startOf('day');
-    return this.findFreeDateTimeRecursive(orgId, slots, start, start);
+    return this.findFreeDateTimeRecursive(orgId, effective, start, start);
   }
 
   async createPopularPosts(post: {
