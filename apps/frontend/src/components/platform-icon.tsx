@@ -1,9 +1,7 @@
 import type { CSSProperties } from "react";
 import {
   siGhost,
-  siGmail,
   siNotion,
-  siRumble,
 } from "simple-icons";
 
 interface PlatformIconProps {
@@ -30,7 +28,6 @@ const ICON_PATHS: Record<string, string> = {
   Hashnode: "/platforms/hashnode.png",
   Instagram: "/platforms/instagram.png",
   InstagramStandalone: "/platforms/instagram-standalone.png",
-  Kick: "/platforms/kick.png",
   Lemmy: "/platforms/lemmy.png",
   LinkedIn: "/platforms/linkedin.png",
   LinkedInPage: "/platforms/linkedin-page.png",
@@ -38,18 +35,14 @@ const ICON_PATHS: Record<string, string> = {
   Mastodon: "/platforms/mastodon.png",
   MastodonCustom: "/platforms/mastodon-custom.png",
   Medium: "/platforms/medium.png",
-  MeWe: "/platforms/mewe.png",
   Moltbook: "/platforms/moltbook.png",
   Nostr: "/platforms/nostr.png",
   Pinterest: "/platforms/pinterest.png",
-  Reddit: "/platforms/reddit.png",
-  Skool: "/platforms/skool.png",
   Slack: "/platforms/slack.png",
   Telegram: "/platforms/telegram.png",
   Threads: "/platforms/threads.png",
   TikTok: "/platforms/tiktok.png",
   Twitch: "/platforms/twitch.png",
-  VK: "/platforms/vk.png",
   Whop: "/platforms/whop.png",
   WordPress: "/platforms/wordpress.png",
   X: "/platforms/x.png",
@@ -64,17 +57,8 @@ const SVG_FALLBACKS: Record<
   string,
   { path: string; bg: string; fg: string }
 > = {
-  Gmail: { path: siGmail.path, bg: "#fff", fg: "#EA4335" },
   Notion: { path: siNotion.path, bg: "#fff", fg: "#000" },
   Ghost: { path: siGhost.path, bg: "#15171A", fg: "#fff" },
-  Rumble: { path: siRumble.path, bg: "#85C742", fg: "#fff" },
-  BearBlog: {
-    // Bear face — fallback because there is no `simple-icons` entry.
-    path:
-      "M5 8a3 3 0 0 1 3-3 3 3 0 0 1 1.5.4 4.5 4.5 0 0 1 5 0A3 3 0 0 1 16 5a3 3 0 0 1 3 3v.5a5.5 5.5 0 1 1-14 0V8Zm6 5a1 1 0 0 0 2 0 1 1 0 0 0-2 0Z",
-    bg: "#FFD60A",
-    fg: "#000",
-  },
   Mataroa: {
     path: "M4 19V6l4 5h2l4-5v13",
     bg: "#fff",

@@ -31,7 +31,6 @@ const PLATFORMS = [
   { id: "threads", name: "Threads", icon: "/platforms/threads.png" },
   { id: "bluesky", name: "Bluesky", icon: "/platforms/bluesky.png" },
   { id: "pinterest", name: "Pinterest", icon: "/platforms/pinterest.png" },
-  { id: "reddit", name: "Reddit", icon: "/platforms/reddit.png" },
   { id: "telegram", name: "Telegram", icon: "/platforms/telegram.png" },
   { id: "discord", name: "Discord", icon: "/platforms/discord.png" },
 ];

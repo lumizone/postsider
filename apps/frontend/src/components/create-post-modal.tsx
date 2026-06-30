@@ -461,13 +461,30 @@ export function CreatePostModal({
       const req = requirementFor(c);
       for (const field of req.fields) {
         if (field.type !== "remote-select" || !field.remoteFn) continue;
-        const key = `${c.id}::${field.remoteFn}`;
+        // Dependent remote-selects (e.g. the Whop forum depends on the chosen
+        // company) pass the parent field's value as the `id` param. Skip until
+        // the parent value exists; the param-aware key means changing it
+        // triggers a fresh fetch and switching back reuses the cached list.
+        const paramVal = field.remoteParam
+          ? (channelSettings[c.id]?.[field.remoteParam] as string | undefined)
+          : undefined;
+        if (field.remoteParam && !paramVal) continue;
+        const key = `${c.id}::${field.remoteFn}::${paramVal ?? ""}`;
         if (fetchedKeysRef.current.has(key)) continue;
         fetchedKeysRef.current.add(key);
+        const remoteFn = field.remoteFn;
         void (async () => {
-          const list = await getIntegrationChannels(c.id, field.remoteFn);
+          const list = await getIntegrationChannels(
+            c.id,
+            remoteFn,
+            paramVal ? { id: paramVal } : {},
+          );
           if (!cancelled) {
             setRemoteOptions((prev) => ({ ...prev, [key]: list }));
+          } else {
+            // Effect re-ran before this resolved; drop the key so a later run
+            // re-fetches instead of stranding the dropdown on "Loading…".
+            fetchedKeysRef.current.delete(key);
           }
         })();
       }
@@ -475,7 +492,7 @@ export function CreatePostModal({
     return () => {
       cancelled = true;
     };
-  }, [selectedChannels, requirementFor]);
+  }, [selectedChannels, requirementFor, channelSettings]);
 
   // Seed default provider settings for selected channels so required DTO
   // fields (e.g. TikTok privacy_level, Instagram post_type) are always present
@@ -503,10 +520,21 @@ export function CreatePostModal({
     key: string,
     value: unknown,
   ) => {
-    setChannelSettings((prev) => ({
-      ...prev,
-      [integrationId]: { ...(prev[integrationId] ?? {}), [key]: value },
-    }));
+    setChannelSettings((prev) => {
+      const next = { ...(prev[integrationId] ?? {}), [key]: value };
+      // Drop any dependent remote-select whose parent (`remoteParam`) just
+      // changed, so a stale child (e.g. a forum from a different Whop company)
+      // isn't kept selected.
+      const channel = selectedChannels.find((c) => c.id === integrationId);
+      if (channel) {
+        for (const f of requirementFor(channel).fields) {
+          if (f.type === "remote-select" && f.remoteParam === key) {
+            delete next[f.key];
+          }
+        }
+      }
+      return { ...prev, [integrationId]: next };
+    });
   };
 
   // When entering per-channel mode, seed empty per-channel bodies from the global body.
@@ -1461,6 +1489,11 @@ function ProviderSettingsPanel({
               channelId={channel.id}
               field={field}
               value={settings[field.key]}
+              remoteParamValue={
+                field.remoteParam
+                  ? (settings[field.remoteParam] as string | undefined)
+                  : undefined
+              }
               remoteOptions={remoteOptions}
               onChange={(value) => onChange(field.key, value)}
             />
@@ -1475,6 +1508,8 @@ interface ProviderFieldProps {
   channelId: string;
   field: SettingsField;
   value: unknown;
+  /** For a dependent remote-select: the current value of its `remoteParam`. */
+  remoteParamValue?: string;
   remoteOptions: Record<string, IntegrationChannel[] | undefined>;
   onChange: (value: unknown) => void;
 }
@@ -1483,6 +1518,7 @@ function ProviderField({
   channelId,
   field,
   value,
+  remoteParamValue,
   remoteOptions,
   onChange,
 }: ProviderFieldProps) {
@@ -1531,7 +1567,7 @@ function ProviderField({
   }
 
   if (field.type === "remote-select") {
-    const key = `${channelId}::${field.remoteFn ?? ""}`;
+    const key = `${channelId}::${field.remoteFn ?? ""}::${remoteParamValue ?? ""}`;
     const options = remoteOptions[key];
     return (
       <div className={styles.field}>

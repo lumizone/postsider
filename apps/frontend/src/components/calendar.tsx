@@ -7,6 +7,7 @@ import { ChannelAvatar } from "./channel-avatar";
 import { ChannelDetailModal } from "./channel-detail-modal";
 import { AddChannelModal } from "./add-channel-modal";
 import { CustomFieldsModal } from "./custom-fields-modal";
+import { TelegramConnectModal } from "./telegram-connect-modal";
 import { DayPopup } from "./day-popup";
 import { ConfirmDialog } from "./confirm-dialog";
 import { EmptyState } from "./empty-state";
@@ -216,6 +217,10 @@ export function Calendar({ year, month }: CalendarProps) {
   } | null>(null);
   const [customFieldsSubmitting, setCustomFieldsSubmitting] = useState(false);
   const [customFieldsError, setCustomFieldsError] = useState<string | null>(null);
+  // Telegram uses a dedicated "/connect <code>" flow instead of a manual field.
+  const [telegramConnect, setTelegramConnect] = useState<{
+    state: string;
+  } | null>(null);
   // Surfaced when a plan limit (e.g. channel cap) or other error blocks adding
   // a channel. Shown as a dismissible banner.
   const [channelError, setChannelError] = useState<string | null>(null);
@@ -320,6 +325,13 @@ export function Calendar({ year, month }: CalendarProps) {
       // OAuth provider — configured and ready: redirect immediately.
       if (hasOAuth) {
         window.location.href = res.oauthUrl!;
+        return;
+      }
+
+      // Telegram — dedicated "/connect <code>" flow (auto-detects the chat via
+      // the shared bot) instead of the manual chat-ID field.
+      if (platformId === "telegram") {
+        setTelegramConnect({ state: res.url || "" });
         return;
       }
 
@@ -844,6 +856,17 @@ export function Calendar({ year, month }: CalendarProps) {
           onSubmit={handleCustomFieldsSubmit}
           submitting={customFieldsSubmitting}
           error={customFieldsError}
+        />
+      )}
+
+      {telegramConnect && (
+        <TelegramConnectModal
+          state={telegramConnect.state}
+          onClose={() => setTelegramConnect(null)}
+          onConnected={() => {
+            setTelegramConnect(null);
+            void refreshChannels();
+          }}
         />
       )}
 

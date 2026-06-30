@@ -61,6 +61,13 @@ export interface SettingsField {
    * /integrations/function to populate the options (e.g. "boards").
    */
   remoteFn?: string;
+  /**
+   * For a dependent `remote-select`: the settings key whose value is passed as
+   * the `id` param to `remoteFn` (e.g. Whop forum options depend on the chosen
+   * company, so `remoteParam: "company"`). Options are re-fetched when it
+   * changes; the field stays empty until the parent value is set.
+   */
+  remoteParam?: string;
   /** Only show this field when `predicate(settings)` is true. */
   showIf?: (settings: Record<string, unknown>) => boolean;
 }
@@ -631,33 +638,6 @@ const REGISTRY: Record<string, ProviderRequirement> = {
     },
   },
 
-  reddit: {
-    identifier: "reddit",
-    label: "Reddit",
-    maxLength: 10000,
-    editor: "normal",
-    media: "optional",
-    mediaNote: "Pick at least one subreddit. Media posts need exactly one file; videos need a thumbnail.",
-    fields: [
-      {
-        key: "subreddit",
-        label: "Subreddits",
-        type: "remote-select",
-        required: true,
-        remoteFn: "subreddits",
-        help: "Choose at least one subreddit to post to.",
-      },
-    ],
-    validate: ({ settings }) => {
-      const problems: string[] = [];
-      const subs = settings.subreddit;
-      if (!Array.isArray(subs) || subs.length === 0) {
-        problems.push("Pick at least one subreddit.");
-      }
-      return problems;
-    },
-  },
-
   lemmy: {
     identifier: "lemmy",
     label: "Lemmy",
@@ -696,42 +676,6 @@ const REGISTRY: Record<string, ProviderRequirement> = {
     validate: ({ media }) => {
       const problems: string[] = [];
       if (hasVideo(media)) problems.push("Farcaster can only accept images.");
-      return problems;
-    },
-  },
-
-  mewe: {
-    identifier: "mewe",
-    label: "MeWe",
-    maxLength: 63206,
-    editor: "normal",
-    media: "optional",
-    fields: [
-      {
-        key: "postType",
-        label: "Post to",
-        type: "select",
-        required: true,
-        defaultValue: "timeline",
-        options: [
-          { value: "timeline", label: "My timeline" },
-          { value: "group", label: "A group" },
-        ],
-      },
-      {
-        key: "group",
-        label: "Group",
-        type: "remote-select",
-        remoteFn: "groups",
-        required: true,
-        showIf: (s) => s.postType === "group",
-      },
-    ],
-    validate: ({ settings }) => {
-      const problems: string[] = [];
-      if (settings.postType === "group" && !String(settings.group ?? "").trim()) {
-        problems.push("Pick a group to post to.");
-      }
       return problems;
     },
   },
@@ -818,30 +762,6 @@ const REGISTRY: Record<string, ProviderRequirement> = {
     },
   },
 
-  skool: {
-    identifier: "skool",
-    label: "Skool",
-    maxLength: 5000,
-    editor: "normal",
-    media: "optional",
-    fields: [
-      {
-        key: "group",
-        label: "Group",
-        type: "remote-select",
-        required: true,
-        remoteFn: "groups",
-      },
-      { key: "title", label: "Title", type: "text", required: true },
-    ],
-    validate: ({ settings }) => {
-      const problems: string[] = [];
-      if (!String(settings.group ?? "").trim()) problems.push("Pick a Skool group.");
-      if (!String(settings.title ?? "").trim()) problems.push("A title is required.");
-      return problems;
-    },
-  },
-
   whop: {
     identifier: "whop",
     label: "Whop",
@@ -862,6 +782,7 @@ const REGISTRY: Record<string, ProviderRequirement> = {
         type: "remote-select",
         required: true,
         remoteFn: "experiences",
+        remoteParam: "company",
         showIf: (s) => !!s.company,
       },
       { key: "title", label: "Title", type: "text" },
@@ -874,17 +795,6 @@ const REGISTRY: Record<string, ProviderRequirement> = {
     },
   },
 
-  kick: {
-    identifier: "kick",
-    label: "Kick",
-    maxLength: 500,
-    editor: "normal",
-    media: "none",
-    fields: [],
-    validate: () => [],
-  },
-
-  /* ------------------------------ Article / blog --------------------------- */
   medium: {
     identifier: "medium",
     label: "Medium",
@@ -1027,25 +937,6 @@ const REGISTRY: Record<string, ProviderRequirement> = {
     },
   },
 
-  "bear-blog": {
-    identifier: "bear-blog",
-    label: "Bear Blog",
-    maxLength: 100000,
-    editor: "markdown",
-    media: "optional",
-    fields: [
-      { key: "title", label: "Title", type: "text", required: true },
-      { key: "slug", label: "Slug", type: "text" },
-      { key: "tags", label: "Tags", type: "tags" },
-      { key: "publish", label: "Publish immediately", type: "checkbox", defaultValue: true },
-    ],
-    validate: ({ settings }) => {
-      const problems: string[] = [];
-      if (!String(settings.title ?? "").trim()) problems.push("A title is required.");
-      return problems;
-    },
-  },
-
   mataroa: {
     identifier: "mataroa",
     label: "Mataroa",
@@ -1088,57 +979,6 @@ const REGISTRY: Record<string, ProviderRequirement> = {
       },
     ],
     validate: () => [],
-  },
-
-  rumble: {
-    identifier: "rumble",
-    label: "Rumble",
-    maxLength: 5000,
-    editor: "normal",
-    media: "optional",
-    fields: [
-      { key: "title", label: "Title", type: "text", required: true, help: "Min 2 characters." },
-      { key: "description", label: "Description", type: "textarea" },
-      {
-        key: "visibility",
-        label: "Visibility",
-        type: "select",
-        defaultValue: "public",
-        options: [
-          { value: "public", label: "Public" },
-          { value: "unlisted", label: "Unlisted" },
-          { value: "private", label: "Private" },
-        ],
-      },
-    ],
-    validate: ({ settings }) => {
-      const problems: string[] = [];
-      if (String(settings.title ?? "").trim().length < 2) problems.push("A title (min 2 chars) is required.");
-      return problems;
-    },
-  },
-
-  /* -------------------------------- Email ---------------------------------- */
-  gmail: {
-    identifier: "gmail",
-    label: "Gmail",
-    maxLength: 1000000,
-    editor: "html",
-    media: "optional",
-    mediaNote: "Gmail posts are emails. Attachments are sent as email attachments.",
-    fields: [
-      { key: "subject", label: "Subject", type: "text", required: true },
-      { key: "to", label: "To", type: "emails", required: true, help: "Comma-separated email addresses." },
-      { key: "cc", label: "Cc", type: "emails" },
-      { key: "bcc", label: "Bcc", type: "emails" },
-    ],
-    validate: ({ settings }) => {
-      const problems: string[] = [];
-      if (!String(settings.subject ?? "").trim()) problems.push("A subject is required.");
-      const to = settings.to;
-      if (!Array.isArray(to) || to.length === 0) problems.push("At least one recipient is required.");
-      return problems;
-    },
   },
 
   listmonk: {
@@ -1263,20 +1103,6 @@ const REGISTRY: Record<string, ProviderRequirement> = {
     },
   },
 
-  vk: {
-    identifier: "vk",
-    label: "VK",
-    maxLength: 2048,
-    editor: "normal",
-    media: "optional",
-    mediaNote: "VK allows up to 10 attachments per post.",
-    fields: [],
-    validate: ({ media }) => {
-      const problems: string[] = [];
-      if (media.length > 10) problems.push("VK allows a maximum of 10 attachments.");
-      return problems;
-    },
-  },
 };
 
 /** Providers with no special settings: text post, optional media, max lengths. */
@@ -1332,12 +1158,10 @@ export function identifierFromPlatform(platform: string): string | undefined {
     Instagram: "instagram",
     Threads: "threads",
     Pinterest: "pinterest",
-    Reddit: "reddit",
     Discord: "discord",
     Slack: "slack",
     Telegram: "telegram",
     Twitch: "twitch",
-    Kick: "kick",
     Bluesky: "bluesky",
     Mastodon: "mastodon",
   };

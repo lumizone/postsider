@@ -39,8 +39,8 @@ describe('ConnectorCatalogService', () => {
     const authorized = new Set<string>(['linkedin']);
     const list = service.listForOrganization(authorized);
     const linkedin = list.find((c) => c.identifier === 'linkedin');
-    const reddit = list.find((c) => c.identifier === 'reddit');
+    const discord = list.find((c) => c.identifier === 'discord');
     expect(linkedin?.authorized).toBe(true);
-    expect(reddit?.authorized).toBe(false);
+    expect(discord?.authorized).toBe(false);
   });
 });

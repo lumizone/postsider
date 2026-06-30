@@ -1,4 +1,3 @@
-import { RedditSettingsDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/reddit.dto';
 import { PinterestSettingsDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/pinterest.dto';
 import { YoutubeSettingsDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/youtube.settings.dto';
 import { TikTokDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/tiktok.dto';
@@ -7,7 +6,6 @@ import { LemmySettingsDto } from '@postsider/nestjs-libraries/dtos/posts/provide
 import { DribbbleDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/dribbble.dto';
 import { DiscordDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/discord.dto';
 import { SlackDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/slack.dto';
-import { KickDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/kick.dto';
 import { TwitchDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/twitch.dto';
 import { InstagramDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/instagram.dto';
 import { LinkedinDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/linkedin.dto';
@@ -21,20 +19,14 @@ import { GmbSettingsDto } from '@postsider/nestjs-libraries/dtos/posts/providers
 import { FarcasterDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/farcaster.dto';
 import { FacebookDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/facebook.dto';
 import { MoltbookDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/moltbook.dto';
-import { SkoolDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/skool.dto';
 import { WhopDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/whop.dto';
-import { MeweDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/mewe.dto';
-import { RumbleDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/rumble.dto';
 import { GhostDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/ghost.dto';
 import { NotionDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/notion.dto';
-import { BearBlogDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/bear.blog.dto';
 import { MataroaDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/mataroa.dto';
 import { WriteAsDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/writeas.dto';
-import { GmailDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/gmail.dto';
 
 export type ProviderExtension<T extends string, M> = { __type: T } & M;
 export type AllProvidersSettings =
-  | ProviderExtension<'reddit', RedditSettingsDto>
   | ProviderExtension<'lemmy', LemmySettingsDto>
   | ProviderExtension<'youtube', YoutubeSettingsDto>
   | ProviderExtension<'pinterest', PinterestSettingsDto>
@@ -42,7 +34,6 @@ export type AllProvidersSettings =
   | ProviderExtension<'tiktok', TikTokDto>
   | ProviderExtension<'discord', DiscordDto>
   | ProviderExtension<'slack', SlackDto>
-  | ProviderExtension<'kick', KickDto>
   | ProviderExtension<'twitch', TwitchDto>
   | ProviderExtension<'x', XDto>
   | ProviderExtension<'linkedin', LinkedinDto>
@@ -63,23 +54,16 @@ export type AllProvidersSettings =
   | ProviderExtension<'telegram', None>
   | ProviderExtension<'nostr', None>
   | ProviderExtension<'moltbook', MoltbookDto>
-  | ProviderExtension<'vk', None>
-  | ProviderExtension<'skool', SkoolDto>
-  | ProviderExtension<'mewe', MeweDto>
   | ProviderExtension<'whop', WhopDto>
-  | ProviderExtension<'rumble', RumbleDto>
   | ProviderExtension<'ghost', GhostDto>
   | ProviderExtension<'notion', NotionDto>
-  | ProviderExtension<'bear-blog', BearBlogDto>
   | ProviderExtension<'mataroa', MataroaDto>
-  | ProviderExtension<'writeas', WriteAsDto>
-  | ProviderExtension<'gmail', GmailDto>;
+  | ProviderExtension<'writeas', WriteAsDto>;
 
 type None = NonNullable<unknown>;
 
 export const allProviders = (setEmpty?: any) => {
   return [
-    { value: RedditSettingsDto, name: 'reddit' },
     { value: LemmySettingsDto, name: 'lemmy' },
     { value: YoutubeSettingsDto, name: 'youtube' },
     { value: PinterestSettingsDto, name: 'pinterest' },
@@ -87,7 +71,6 @@ export const allProviders = (setEmpty?: any) => {
     { value: TikTokDto, name: 'tiktok' },
     { value: DiscordDto, name: 'discord' },
     { value: SlackDto, name: 'slack' },
-    { value: KickDto, name: 'kick' },
     { value: TwitchDto, name: 'twitch' },
     { value: XDto, name: 'x' },
     { value: LinkedinDto, name: 'linkedin' },
@@ -107,18 +90,12 @@ export const allProviders = (setEmpty?: any) => {
     { value: setEmpty, name: 'bluesky' },
     { value: setEmpty, name: 'telegram' },
     { value: setEmpty, name: 'nostr' },
-    { value: setEmpty, name: 'vk' },
     { value: MoltbookDto, name: 'moltbook' },
-    { value: SkoolDto, name: 'skool' },
     { value: WhopDto, name: 'whop' },
-    { value: MeweDto, name: 'mewe' },
-    { value: RumbleDto, name: 'rumble' },
     { value: GhostDto, name: 'ghost' },
     { value: NotionDto, name: 'notion' },
-    { value: BearBlogDto, name: 'bear-blog' },
     { value: MataroaDto, name: 'mataroa' },
     { value: WriteAsDto, name: 'writeas' },
-    { value: GmailDto, name: 'gmail' },
   ].filter((f) => f.value);
 };
 

@@ -19,11 +19,8 @@ export interface ConnectorDefinition {
  * MUST have a registered handler in the InboundSourceRegistry.
  */
 export const SOURCE_CAPABLE_CONNECTORS = new Set<string>([
-  'reddit',
   'discord',
-  'skool',
   // email connectors
-  'gmail',
   'mailgun',
   'resend',
   'smtp',
@@ -47,13 +44,6 @@ const EMAIL_CONNECTORS: ConnectorDefinition[] = [
     iconUrl: '/icons/connectors/mailgun.png',
     capabilities: ['PUBLISH', 'SOURCE'],
     requiredScopes: [],
-  },
-  {
-    identifier: 'gmail',
-    label: 'Gmail',
-    iconUrl: '/icons/connectors/gmail.png',
-    capabilities: ['PUBLISH', 'SOURCE'],
-    requiredScopes: ['https://www.googleapis.com/auth/gmail.send'],
   },
   {
     identifier: 'smtp',

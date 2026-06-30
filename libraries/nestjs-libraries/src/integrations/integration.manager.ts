@@ -4,7 +4,6 @@ import { Injectable } from '@nestjs/common';
 import { XProvider } from '@postsider/nestjs-libraries/integrations/social/x.provider';
 import { SocialProvider } from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
 import { LinkedinProvider } from '@postsider/nestjs-libraries/integrations/social/linkedin.provider';
-import { RedditProvider } from '@postsider/nestjs-libraries/integrations/social/reddit.provider';
 import { DevToProvider } from '@postsider/nestjs-libraries/integrations/social/dev.to.provider';
 import { HashnodeProvider } from '@postsider/nestjs-libraries/integrations/social/hashnode.provider';
 import { MediumProvider } from '@postsider/nestjs-libraries/integrations/social/medium.provider';
@@ -25,31 +24,23 @@ import { InstagramStandaloneProvider } from '@postsider/nestjs-libraries/integra
 import { FarcasterProvider } from '@postsider/nestjs-libraries/integrations/social/farcaster.provider';
 import { TelegramProvider } from '@postsider/nestjs-libraries/integrations/social/telegram.provider';
 import { NostrProvider } from '@postsider/nestjs-libraries/integrations/social/nostr.provider';
-import { VkProvider } from '@postsider/nestjs-libraries/integrations/social/vk.provider';
 import { WordpressProvider } from '@postsider/nestjs-libraries/integrations/social/wordpress.provider';
 import { ListmonkProvider } from '@postsider/nestjs-libraries/integrations/social/listmonk.provider';
 import { GmbProvider } from '@postsider/nestjs-libraries/integrations/social/gmb.provider';
-import { KickProvider } from '@postsider/nestjs-libraries/integrations/social/kick.provider';
 import { TwitchProvider } from '@postsider/nestjs-libraries/integrations/social/twitch.provider';
 import { SocialAbstract } from '@postsider/nestjs-libraries/integrations/social.abstract';
 import { MoltbookProvider } from '@postsider/nestjs-libraries/integrations/social/moltbook.provider';
-import { SkoolProvider } from '@postsider/nestjs-libraries/integrations/social/skool.provider';
 import { WhopProvider } from '@postsider/nestjs-libraries/integrations/social/whop.provider';
-import { MeweProvider } from '@postsider/nestjs-libraries/integrations/social/mewe.provider';
-import { RumbleProvider } from '@postsider/nestjs-libraries/integrations/social/rumble.provider';
 import { GhostProvider } from '@postsider/nestjs-libraries/integrations/social/ghost.provider';
 import { BloggerProvider } from '@postsider/nestjs-libraries/integrations/social/blogger.provider';
 import { NotionProvider } from '@postsider/nestjs-libraries/integrations/social/notion.provider';
-import { BearBlogProvider } from '@postsider/nestjs-libraries/integrations/social/bear.blog.provider';
 import { MataroaProvider } from '@postsider/nestjs-libraries/integrations/social/mataroa.provider';
 import { WriteAsProvider } from '@postsider/nestjs-libraries/integrations/social/writeas.provider';
-import { GmailProvider } from '@postsider/nestjs-libraries/integrations/social/gmail.provider';
 
 export const socialIntegrationList: Array<SocialAbstract & SocialProvider> = [
   new XProvider(),
   new LinkedinProvider(),
   new LinkedinPageProvider(),
-  new RedditProvider(),
   new InstagramProvider(),
   new InstagramStandaloneProvider(),
   new FacebookProvider(),
@@ -62,7 +53,6 @@ export const socialIntegrationList: Array<SocialAbstract & SocialProvider> = [
   new DribbbleProvider(),
   new DiscordProvider(),
   new SlackProvider(),
-  // new KickProvider(), // hidden — low priority
   new TwitchProvider(),
   new MastodonProvider(),
   new BlueskyProvider(),
@@ -70,7 +60,6 @@ export const socialIntegrationList: Array<SocialAbstract & SocialProvider> = [
   new FarcasterProvider(),
   new TelegramProvider(),
   new NostrProvider(),
-  new VkProvider(),
   new MediumProvider(),
   new DevToProvider(),
   new HashnodeProvider(),
@@ -78,15 +67,10 @@ export const socialIntegrationList: Array<SocialAbstract & SocialProvider> = [
   new ListmonkProvider(),
   new MoltbookProvider(),
   new WhopProvider(),
-  new SkoolProvider(),
-  new MeweProvider(),
-  new RumbleProvider(),
   new GhostProvider(),
   new NotionProvider(),
-  new BearBlogProvider(),
   new MataroaProvider(),
   new WriteAsProvider(),
-  new GmailProvider(),
   // MastodonCustomProvider disabled — use Mastodon with custom instance URL instead
 ];
 
