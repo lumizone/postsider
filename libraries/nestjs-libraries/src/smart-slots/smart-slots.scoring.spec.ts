@@ -28,4 +28,16 @@ describe('scoreSlots', () => {
     const r = scoreSlots(tzSlots, 'linkedin', null, 2, 120);
     expect(r[0].datetime.getUTCHours()).toBe(6); // 08:00 local peak wins
   });
+
+  it('ranks a shoulder hour between the peak and an off-peak hour (gradient)', () => {
+    const s = [
+      new Date('2026-06-29T08:00:00Z'), // peak (linkedin 08:00)
+      new Date('2026-06-29T09:00:00Z'), // shoulder, 1h from peak
+      new Date('2026-06-29T03:00:00Z'), // off-peak
+    ];
+    const r = scoreSlots(s, 'linkedin', null, 3);
+    expect(r.map((x) => x.datetime.getUTCHours())).toEqual([8, 9, 3]);
+    expect(r[0].score).toBeGreaterThan(r[1].score);
+    expect(r[1].score).toBeGreaterThan(r[2].score);
+  });
 });
