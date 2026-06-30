@@ -232,6 +232,13 @@ export class PostActivity {
         const getIntegration = this._integrationManager.getSocialIntegration(
           integration.providerIdentifier
         );
+        // Orphaned integration for a provider that no longer exists — fail this
+        // post cleanly (workflow marks it ERROR) instead of crashing on undefined.
+        if (!getIntegration) {
+          throw new Error(
+            `Provider "${integration.providerIdentifier}" is no longer supported`
+          );
+        }
 
         const newPosts = await this._postService.updateTags(
           integration.organizationId,

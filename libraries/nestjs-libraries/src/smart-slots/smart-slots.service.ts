@@ -104,8 +104,11 @@ export class SmartSlotsService {
       histogram = h;
     }
 
-    // 3) Score every (free) candidate, then diversify down to `count`.
-    const pool = free.length >= count ? free : candidates;
+    // 3) Score the collision-free candidates, then diversify down to `count`.
+    // Prefer free slots even if fewer than `count` remain (returning fewer
+    // suggestions beats double-booking a queued slot); only when EVERY candidate
+    // collides — a fully-saturated channel — fall back to the full grid.
+    const pool = free.length > 0 ? free : candidates;
     const ranked = scoreSlots(pool, platform, histogram, pool.length, tzOffsetMinutes);
     const picked = this.diversify(ranked, count, offsetMs);
 

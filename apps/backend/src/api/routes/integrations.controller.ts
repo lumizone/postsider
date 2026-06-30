@@ -91,13 +91,17 @@ export class IntegrationsController {
   @Get('/list')
   async getIntegrationList(@GetOrgFromRequest() org: Organization) {
     return {
-      integrations: await Promise.all(
+      integrations: (await Promise.all(
         (
           await this._integrationService.getIntegrationsList(org.id)
         ).map(async (p) => {
           const findIntegration = this._integrationManager.getSocialIntegration(
             p.providerIdentifier
           );
+          // Orphaned row for a provider no longer in socialIntegrationList
+          // (e.g. a removed provider) — skip it so the whole channel list
+          // doesn't 500 on `findIntegration.editor`.
+          if (!findIntegration) return null;
           return {
             name: p.name,
             id: p.id,
@@ -122,7 +126,7 @@ export class IntegrationsController {
             additionalSettings: p.additionalSettings || '[]',
           };
         })
-      ),
+      )).filter(Boolean),
     };
   }
 
