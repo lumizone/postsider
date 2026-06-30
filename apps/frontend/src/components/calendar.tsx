@@ -8,6 +8,7 @@ import { ChannelDetailModal } from "./channel-detail-modal";
 import { AddChannelModal } from "./add-channel-modal";
 import { CustomFieldsModal } from "./custom-fields-modal";
 import { TelegramConnectModal } from "./telegram-connect-modal";
+import { FarcasterConnectModal } from "./farcaster-connect-modal";
 import { DayPopup } from "./day-popup";
 import { ConfirmDialog } from "./confirm-dialog";
 import { EmptyState } from "./empty-state";
@@ -221,6 +222,11 @@ export function Calendar({ year, month }: CalendarProps) {
   const [telegramConnect, setTelegramConnect] = useState<{
     state: string;
   } | null>(null);
+  // Farcaster connects via the Sign In With Neynar widget.
+  const [farcasterConnect, setFarcasterConnect] = useState<{
+    clientId: string;
+    state: string;
+  } | null>(null);
   // Surfaced when a plan limit (e.g. channel cap) or other error blocks adding
   // a channel. Shown as a dismissible banner.
   const [channelError, setChannelError] = useState<string | null>(null);
@@ -332,6 +338,13 @@ export function Calendar({ year, month }: CalendarProps) {
       // the shared bot) instead of the manual chat-ID field.
       if (platformId === "telegram") {
         setTelegramConnect({ state: res.url || "" });
+        return;
+      }
+
+      // Farcaster — Sign In With Neynar widget (auto-creates the signer) instead
+      // of the manual signer-UUID field.
+      if (platformId === "wrapcast" && res.neynarClientId) {
+        setFarcasterConnect({ clientId: res.neynarClientId, state: res.url || "" });
         return;
       }
 
@@ -865,6 +878,18 @@ export function Calendar({ year, month }: CalendarProps) {
           onClose={() => setTelegramConnect(null)}
           onConnected={() => {
             setTelegramConnect(null);
+            void refreshChannels();
+          }}
+        />
+      )}
+
+      {farcasterConnect && (
+        <FarcasterConnectModal
+          clientId={farcasterConnect.clientId}
+          state={farcasterConnect.state}
+          onClose={() => setFarcasterConnect(null)}
+          onConnected={() => {
+            setFarcasterConnect(null);
             void refreshChannels();
           }}
         />

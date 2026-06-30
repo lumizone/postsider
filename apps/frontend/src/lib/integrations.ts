@@ -184,6 +184,8 @@ export interface OauthLinkResponse {
   oauthUrl?: string;
   /** Whether OAuth is already configured for this provider. */
   oauthConfigured?: boolean;
+  /** Sign In With Neynar client id — present for Farcaster (wrapcast). */
+  neynarClientId?: string;
 }
 
 export async function getOauthUrl(

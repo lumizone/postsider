@@ -343,6 +343,11 @@ export class IntegrationsController {
         url: state,
         ...(customFields ? { customFields } : {}),
         ...(oauthUrl ? { oauthUrl } : {}),
+        // Farcaster connects via the Sign In With Neynar widget (client-side),
+        // which needs the SIWN client id; `url` (above) carries the validated state.
+        ...(integration === 'wrapcast' && process.env.NEYNAR_CLIENT_ID
+          ? { neynarClientId: process.env.NEYNAR_CLIENT_ID }
+          : {}),
         oauthConfigured,
       };
     } catch (err) {
