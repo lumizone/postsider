@@ -15,10 +15,23 @@ export class SubscriptionService {
     private readonly _organizationService: OrganizationService
   ) {}
 
-  getSubscriptionByOrganizationId(organizationId: string) {
-    return this._subscriptionRepository.getSubscriptionByOrganizationId(
-      organizationId
-    );
+  async getSubscriptionByOrganizationId(organizationId: string) {
+    const subscription =
+      await this._subscriptionRepository.getSubscriptionByOrganizationId(
+        organizationId
+      );
+    // A local free trial whose cancelAt has passed has ended — treat the org as
+    // having no active plan (it drops to FREE) so trial limits stop applying.
+    // Scoped to `identifier === 'trial'` so Polar-managed subscriptions are left
+    // entirely to Polar's own webhook lifecycle.
+    if (
+      subscription?.identifier === 'trial' &&
+      subscription.cancelAt &&
+      subscription.cancelAt.getTime() < Date.now()
+    ) {
+      return null;
+    }
+    return subscription;
   }
 
   useCredit<T>(
