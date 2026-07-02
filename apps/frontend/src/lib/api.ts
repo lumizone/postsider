@@ -163,20 +163,22 @@ async function request<T>(
       parsed = text;
     }
 
+    // Only an UNAUTHENTICATED response (401 = no/expired session) logs the user
+    // out. A 403 is a permission/plan gate on an already-authenticated user
+    // (e.g. a superadmin-only storage endpoint, an admin-only API-keys list, a
+    // paid-feature route) — it must NOT log them out; the calling page shows the
+    // error. Logging out on any 403 wrongly kicked users off gated settings
+    // pages. Session revocation still surfaces as a 401 on the next request.
     if (
       !silent &&
-      (res.status === 401 || res.status === 403) &&
+      res.status === 401 &&
       typeof window !== "undefined" &&
       !window.location.pathname.startsWith("/login") &&
       !window.location.pathname.startsWith("/register")
     ) {
       setAuthToken(null);
       setOrgId(null);
-      // A 403 after being authenticated usually means access was revoked
-      // (e.g. a plan downgrade disabled a team member). Hint the reason so
-      // the login screen can explain it.
-      window.location.href =
-        res.status === 403 ? "/login?reason=access" : "/login";
+      window.location.href = "/login";
     }
 
     const message =
