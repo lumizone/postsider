@@ -39,7 +39,6 @@ const ko = {
     storage: "저장소",
     api: "API",
     webhooks: "Webhook",
-    mcp: "MCP",
   },
   billing: {
     title: "결제",
@@ -317,10 +316,6 @@ const ko = {
     deleteConfirmTitle: "Webhook을 삭제하시겠습니까?",
     deleteConfirmBody: "Webhook \"{name}\"을(를) 삭제하시겠습니까? 이벤트가 더 이상 이 엔드포인트로 전달되지 않습니다.",
     deleteBtn: "Webhook 삭제",
-  },
-  settingsMcp: {
-    title: "MCP 서버",
-    subtitle: "Model Context Protocol을 통해 AI 에이전트를 PostSider에 연결합니다.",
   },
   settingsStorage: {
     title: "저장소",

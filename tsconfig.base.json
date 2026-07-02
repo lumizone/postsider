@@ -25,7 +25,6 @@
     "noFallthroughCasesInSwitch": true,
     "strict": true,
     "paths": {
-      "@langchain/langgraph/prebuilt": ["node_modules/@langchain/langgraph/dist/prebuilt/index.d.ts"],
       "@polar-sh/sdk/webhooks": ["node_modules/@polar-sh/sdk/dist/commonjs/webhooks.d.ts"],
       "@postsider/backend/*": ["apps/backend/src/*"],
       "@postsider/frontend/*": ["apps/frontend/src/*"],

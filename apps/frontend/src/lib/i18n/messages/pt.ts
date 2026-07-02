@@ -39,7 +39,6 @@ const pt = {
     storage: "Armazenamento",
     api: "API",
     webhooks: "Webhooks",
-    mcp: "MCP",
   },
   billing: {
     title: "Faturamento",
@@ -317,10 +316,6 @@ const pt = {
     deleteConfirmTitle: "Excluir webhook?",
     deleteConfirmBody: "Excluir o webhook \"{name}\"? Eventos não serão mais entregues a este endpoint.",
     deleteBtn: "Excluir webhook",
-  },
-  settingsMcp: {
-    title: "Servidor MCP",
-    subtitle: "Conecte seu agente IA ao PostSider via Model Context Protocol.",
   },
   settingsStorage: {
     title: "Armazenamento",

@@ -39,7 +39,6 @@ const ja = {
     storage: "ストレージ",
     api: "API",
     webhooks: "Webhook",
-    mcp: "MCP",
   },
   billing: {
     title: "請求",
@@ -317,10 +316,6 @@ const ja = {
     deleteConfirmTitle: "Webhook を削除しますか？",
     deleteConfirmBody: "Webhook \"{name}\" を削除しますか？イベントはこのエンドポイントに配信されなくなります。",
     deleteBtn: "Webhook を削除",
-  },
-  settingsMcp: {
-    title: "MCP サーバー",
-    subtitle: "Model Context Protocol を通じて AI エージェントを PostSider に接続します。",
   },
   settingsStorage: {
     title: "ストレージ",
