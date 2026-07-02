@@ -135,13 +135,18 @@
 }
 
 .channelChipOn > :global(span):first-child {
-  box-shadow: 0 0 0 2.5px var(--fg);
+  /* white gap ring hugging the avatar, then the solid dark ring — a "halo"
+     selection marker (both adapt to the theme via --bg / --fg). */
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--fg);
 }
 
 .channelChipActive > :global(span):first-child {
   box-shadow:
-    0 0 0 2.5px var(--fg),
-    0 0 0 5px rgba(0, 0, 0, 0.1);
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--fg),
+    0 0 0 6.5px rgba(0, 0, 0, 0.1);
 }
 
 .channelChipName {
