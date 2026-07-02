@@ -11,6 +11,7 @@ import {
   buildCurl,
   RequestImage,
 } from "@/lib/api-request-builder";
+import styles from "./api-request-generator.module.css";
 
 type IntegrationRow = { id: string; name: string; identifier: string };
 
@@ -20,28 +21,16 @@ const BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000";
 function nowLocal(): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}`;
 }
 
-const input: React.CSSProperties = {
-  padding: "9px 12px",
-  borderRadius: 8,
-  border: "1px solid var(--line-soft)",
-  fontSize: 13,
-  background: "var(--bg)",
-  color: "var(--fg)",
-  width: "100%",
-};
-const ghost: React.CSSProperties = {
-  padding: "8px 14px",
-  borderRadius: 8,
-  border: "1px solid var(--line-soft)",
-  background: "var(--bg)",
-  color: "var(--fg)",
-  fontSize: 13,
-  cursor: "pointer",
-};
-
+/**
+ * Settings -> API "Request generator". A composer-style two-panel form (compose
+ * on the left, live request on the right) that produces the ready-to-send
+ * `POST /public/v1/posts` curl/JSON instead of publishing.
+ */
 export function ApiRequestGenerator() {
   const [rows, setRows] = useState<IntegrationRow[]>([]);
   const [integrationId, setIntegrationId] = useState("");
@@ -60,7 +49,11 @@ export function ApiRequestGenerator() {
   useEffect(() => {
     listChannels()
       .then(({ raw }) => {
-        const mapped = (raw || []).map((i) => ({ id: i.id, name: i.name, identifier: i.identifier }));
+        const mapped = (raw || []).map((i) => ({
+          id: i.id,
+          name: i.name,
+          identifier: i.identifier,
+        }));
         setRows(mapped);
         if (mapped[0]) setIntegrationId(mapped[0].id);
       })
@@ -75,7 +68,9 @@ export function ApiRequestGenerator() {
       content,
       date: datetime ? `${datetime}:00` : nowLocal() + ":00",
       type,
-      settings: selected ? (defaultSettingsFor(selected.identifier) as Record<string, unknown>) : {},
+      settings: selected
+        ? (defaultSettingsFor(selected.identifier) as Record<string, unknown>)
+        : {},
       image,
       group: ids.group,
       valueId: ids.valueId,
@@ -106,68 +101,130 @@ export function ApiRequestGenerator() {
 
   return (
     <Card title="Request generator">
-      <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
-        Build a ready-to-use request for <code style={{ background: "rgba(0,0,0,0.04)", padding: "1px 5px", borderRadius: 4 }}>POST /public/v1/posts</code>. Pick a channel, write your post, attach an image, then copy the curl or JSON. Paste your API key (from the card above) in place of <code>ps_YOUR_API_KEY</code>.
+      <p className={styles.intro}>
+        Compose a post just like the calendar, then copy the ready-to-send{" "}
+        <code className={styles.codeInline}>POST /public/v1/posts</code> request
+        instead of publishing. Replace{" "}
+        <code className={styles.codeInline}>ps_YOUR_API_KEY</code> with your key
+        from the card above.
       </p>
 
-      <div style={{ display: "grid", gap: 12 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 160px", gap: 10 }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12, color: "var(--muted)" }}>
-            Channel
-            <select style={input} value={integrationId} onChange={(e) => setIntegrationId(e.target.value)}>
-              {rows.length === 0 && <option value="">No channels connected</option>}
-              {rows.map((r) => (
-                <option key={r.id} value={r.id}>{r.name} ({r.identifier})</option>
+      <div className={styles.grid}>
+        {/* LEFT — compose (mirrors the composer) */}
+        <div className={styles.panel}>
+          <p className={styles.panelTitle}>Compose</p>
+
+          <div className={styles.row2}>
+            <label className={styles.field}>
+              Channel
+              <select
+                className={styles.input}
+                value={integrationId}
+                onChange={(e) => setIntegrationId(e.target.value)}
+              >
+                {rows.length === 0 && (
+                  <option value="">No channels connected</option>
+                )}
+                {rows.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name} ({r.identifier})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={styles.field}>
+              Type
+              <select
+                className={styles.input}
+                value={type}
+                onChange={(e) =>
+                  setType(e.target.value as "schedule" | "now" | "draft")
+                }
+              >
+                <option value="schedule">schedule</option>
+                <option value="now">now</option>
+                <option value="draft">draft</option>
+              </select>
+            </label>
+          </div>
+
+          <label className={styles.field}>
+            Post content
+            <textarea
+              className={`${styles.input} ${styles.editor}`}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              placeholder="What do you want to publish?"
+            />
+          </label>
+
+          <div className={styles.rowEnd}>
+            <label className={styles.field}>
+              Date &amp; time
+              <input
+                type="datetime-local"
+                className={styles.input}
+                value={datetime}
+                onChange={(e) => setDatetime(e.target.value)}
+              />
+            </label>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*,video/*"
+                style={{ display: "none" }}
+                onChange={(e) => onUpload(e.target.files?.[0])}
+              />
+              <button
+                type="button"
+                className={styles.ghost}
+                onClick={() => fileRef.current?.click()}
+                disabled={uploading}
+              >
+                {uploading ? "Uploading…" : image ? "Replace media" : "Add media"}
+              </button>
+              {image && (
+                <button
+                  type="button"
+                  className={`${styles.ghost} ${styles.removeBtn}`}
+                  onClick={() => setImage(null)}
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          </div>
+          {image && <div className={styles.imgNote}>media: {image.path}</div>}
+        </div>
+
+        {/* RIGHT — live request output */}
+        <div className={styles.output}>
+          <div className={styles.outputHead}>
+            <div className={styles.tabs}>
+              {(["curl", "json"] as const).map((tb) => (
+                <button
+                  key={tb}
+                  type="button"
+                  onClick={() => setTab(tb)}
+                  className={`${styles.tab} ${
+                    tab === tb ? styles.tabActive : ""
+                  }`}
+                >
+                  {tb}
+                </button>
               ))}
-            </select>
-          </label>
-          <label style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12, color: "var(--muted)" }}>
-            Type
-            <select style={input} value={type} onChange={(e) => setType(e.target.value as any)}>
-              <option value="schedule">schedule</option>
-              <option value="now">now</option>
-              <option value="draft">draft</option>
-            </select>
-          </label>
-        </div>
-
-        <label style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12, color: "var(--muted)" }}>
-          Text
-          <textarea style={{ ...input, minHeight: 70, resize: "vertical" }} value={content} onChange={(e) => setContent(e.target.value)} />
-        </label>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, alignItems: "end" }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12, color: "var(--muted)" }}>
-            Date
-            <input type="datetime-local" style={input} value={datetime} onChange={(e) => setDatetime(e.target.value)} />
-          </label>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input ref={fileRef} type="file" accept="image/*,video/*" style={{ display: "none" }} onChange={(e) => onUpload(e.target.files?.[0])} />
-            <button type="button" style={ghost} onClick={() => fileRef.current?.click()} disabled={uploading}>
-              {uploading ? "Uploading…" : image ? "Replace image" : "Add image"}
+            </div>
+            <button
+              type="button"
+              className={styles.copyBtn}
+              onClick={() => copy(tab === "curl" ? curl : json, tab)}
+            >
+              {copied === tab ? "Copied" : "Copy"}
             </button>
-            {image && (
-              <button type="button" style={{ ...ghost, color: "#DC2626", borderColor: "rgba(220,38,38,0.25)" }} onClick={() => setImage(null)}>Remove</button>
-            )}
           </div>
+          <pre className={styles.codeBlock}>{tab === "curl" ? curl : json}</pre>
         </div>
-        {image && (
-          <div style={{ fontSize: 11, color: "var(--muted)", wordBreak: "break-all" }}>image: {image.path}</div>
-        )}
-      </div>
-
-      <div style={{ marginTop: 18, border: "1px solid var(--line-soft)", borderRadius: 10, overflow: "hidden" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--line-soft)", padding: "6px 8px" }}>
-          <div style={{ display: "flex", gap: 4 }}>
-            {(["curl", "json"] as const).map((tb) => (
-              <button key={tb} type="button" onClick={() => setTab(tb)} style={{ padding: "5px 12px", borderRadius: 6, border: "none", background: tab === tb ? "var(--fg)" : "transparent", color: tab === tb ? "var(--bg)" : "var(--muted)", fontSize: 12, fontWeight: 600, cursor: "pointer", textTransform: "uppercase" }}>{tb}</button>
-            ))}
-          </div>
-          <button type="button" style={ghost} onClick={() => copy(tab === "curl" ? curl : json, tab)}>
-            {copied === tab ? "Copied" : "Copy"}
-          </button>
-        </div>
-        <pre style={{ margin: 0, padding: "14px 16px", fontSize: 12, lineHeight: 1.6, overflowX: "auto", whiteSpace: "pre", color: "var(--fg)" }}>{tab === "curl" ? curl : json}</pre>
       </div>
     </Card>
   );
