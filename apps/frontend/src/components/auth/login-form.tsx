@@ -10,6 +10,11 @@ import { api, ApiError, setAuthToken, setOrgId } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useT } from "@/lib/i18n";
 
+// Hidden during the private beta: new sign-ups are closed, so "Sign in with
+// Google" would only work for pre-existing Google accounts. Flip to `true` to
+// bring the Google button (and its "or" divider) back when the beta opens up.
+const SHOW_GOOGLE = false;
+
 export function LoginForm() {
   const t = useT();
   const router = useRouter();
@@ -94,11 +99,15 @@ export function LoginForm() {
         </>
       }
     >
-      <GoogleButton label={t("auth.googleSignIn")} />
+      {SHOW_GOOGLE && (
+        <>
+          <GoogleButton label={t("auth.googleSignIn")} />
 
-      <div className={styles.divider}>
-        <span>{t("common.or")}</span>
-      </div>
+          <div className={styles.divider}>
+            <span>{t("common.or")}</span>
+          </div>
+        </>
+      )}
 
       <form className={styles.form} onSubmit={onSubmit}>
         <div className={styles.field}>
