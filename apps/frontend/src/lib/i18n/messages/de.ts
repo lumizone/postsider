@@ -39,7 +39,6 @@ const de = {
     storage: "Speicher",
     api: "API",
     webhooks: "Webhooks",
-    mcp: "MCP",
   },
   billing: {
     title: "Abrechnung",
@@ -317,10 +316,6 @@ const de = {
     deleteConfirmTitle: "Webhook löschen?",
     deleteConfirmBody: "Webhook \"{name}\" löschen? Ereignisse werden nicht mehr an diesen Endpunkt gesendet.",
     deleteBtn: "Webhook löschen",
-  },
-  settingsMcp: {
-    title: "MCP-Server",
-    subtitle: "Verbinden Sie Ihren KI-Agenten mit PostSider über das Model Context Protocol.",
   },
   settingsStorage: {
     title: "Speicher",

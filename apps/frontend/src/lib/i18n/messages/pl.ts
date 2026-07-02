@@ -39,7 +39,6 @@ const pl = {
     storage: "Pamięć",
     api: "API",
     webhooks: "Webhooki",
-    mcp: "MCP",
   },
   billing: {
     title: "Płatności",
@@ -317,10 +316,6 @@ const pl = {
     deleteConfirmTitle: "Usunąć webhook?",
     deleteConfirmBody: "Usunąć webhook \"{name}\"? Zdarzenia nie będą już dostarczane do tego punktu końcowego.",
     deleteBtn: "Usuń webhook",
-  },
-  settingsMcp: {
-    title: "Serwer MCP",
-    subtitle: "Podłącz agenta AI do PostSider przez Model Context Protocol.",
   },
   settingsStorage: {
     title: "Pamięć",

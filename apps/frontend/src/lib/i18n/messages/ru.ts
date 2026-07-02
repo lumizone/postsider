@@ -39,7 +39,6 @@ const ru = {
     storage: "Хранилище",
     api: "API",
     webhooks: "Вебхуки",
-    mcp: "MCP",
   },
   billing: {
     title: "Оплата",
@@ -317,10 +316,6 @@ const ru = {
     deleteConfirmTitle: "Удалить вебхук?",
     deleteConfirmBody: "Удалить вебхук \"{name}\"? События больше не будут доставляться на этот адрес.",
     deleteBtn: "Удалить вебхук",
-  },
-  settingsMcp: {
-    title: "MCP-сервер",
-    subtitle: "Подключите AI-агент к PostSider через Model Context Protocol.",
   },
   settingsStorage: {
     title: "Хранилище",
