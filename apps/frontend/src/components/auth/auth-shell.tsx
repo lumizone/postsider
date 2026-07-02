@@ -8,14 +8,17 @@ export function AuthShell({
   subtitle,
   children,
   footer,
+  banner,
 }: {
   title: string;
   subtitle: string;
   children: ReactNode;
   footer?: ReactNode;
+  banner?: ReactNode;
 }) {
   return (
     <div className={styles.page}>
+      {banner && <div className={styles.topBanner}>{banner}</div>}
       <div className={styles.card}>
         <div className={styles.brand}>
           {/* eslint-disable-next-line @next/next/no-img-element */}

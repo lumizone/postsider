@@ -70,10 +70,27 @@ export function LoginForm() {
     <AuthShell
       title={t("auth.welcomeBack")}
       subtitle={t("auth.signInSubtitle")}
+      banner={
+        <>
+          Private beta. New sign-ups are closed and registration won&apos;t work
+          yet. To join, visit{" "}
+          <a
+            className={styles.topBannerLink}
+            href="https://postsider.com"
+            target="_blank"
+            rel="noreferrer"
+          >
+            postsider.com
+          </a>{" "}
+          and get on the whitelist.
+        </>
+      }
       footer={
         <>
-          {t("auth.noAccount")}{" "}
-          <Link href="/register">{t("auth.createOne")}</Link>
+          Want access?{" "}
+          <a href="https://postsider.com" target="_blank" rel="noreferrer">
+            Join the whitelist
+          </a>
         </>
       }
     >
