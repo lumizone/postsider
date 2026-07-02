@@ -1,4 +1,9 @@
-import { buildPostBody, buildCurl, BuildPostInput } from "./api-request-builder";
+import {
+  buildPostBody,
+  buildMultiPostBody,
+  buildCurl,
+  BuildPostInput,
+} from "./api-request-builder";
 
 const base: BuildPostInput = {
   integrationId: "int_1",
@@ -45,6 +50,45 @@ describe("buildPostBody", () => {
   it("passes through provider settings", () => {
     const body = buildPostBody({ ...base, settings: { post_type: "post" } }) as any;
     expect(body.posts[0].settings).toEqual({ post_type: "post" });
+  });
+});
+
+describe("buildMultiPostBody", () => {
+  it("emits one posts[] entry per channel, sharing group/content/date", () => {
+    const body = buildMultiPostBody({
+      channels: [
+        { integrationId: "int_1", valueId: "v1", settings: { a: 1 } },
+        { integrationId: "int_2", valueId: "v2" },
+      ],
+      content: "hi",
+      date: "2026-06-27T20:02:31",
+      group: "grp1",
+    }) as any;
+    expect(body.posts).toHaveLength(2);
+    expect(body.posts[0].integration.id).toBe("int_1");
+    expect(body.posts[0].settings).toEqual({ a: 1 });
+    expect(body.posts[1].integration.id).toBe("int_2");
+    expect(body.posts[1].settings).toEqual({});
+    expect(body.posts[0].group).toBe("grp1");
+    expect(body.posts[1].group).toBe("grp1");
+    expect(body.posts[1].value[0].content).toBe("<p>hi</p>");
+  });
+
+  it("buildPostBody stays equivalent to a single-channel multi build", () => {
+    const single = buildPostBody({
+      integrationId: "int_1",
+      content: "hello world",
+      date: "2026-06-27T20:02:31",
+      group: "grp1",
+      valueId: "val1",
+    });
+    const multi = buildMultiPostBody({
+      channels: [{ integrationId: "int_1", valueId: "val1" }],
+      content: "hello world",
+      date: "2026-06-27T20:02:31",
+      group: "grp1",
+    });
+    expect(single).toEqual(multi);
   });
 });
 

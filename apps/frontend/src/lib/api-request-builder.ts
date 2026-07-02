@@ -20,6 +20,22 @@ export interface BuildPostInput {
   valueId: string;
 }
 
+/** One selected channel in a multi-channel request. */
+export interface BuildPostChannel {
+  integrationId: string;
+  settings?: Record<string, unknown>;
+  valueId: string;
+}
+
+export interface BuildMultiPostInput {
+  channels: BuildPostChannel[];
+  content: string;
+  date: string; // ISO, e.g. "2026-06-27T20:02:31"
+  type?: "schedule" | "now" | "draft";
+  image?: RequestImage | null;
+  group: string;
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -27,40 +43,59 @@ function escapeHtml(s: string): string {
     .replace(/>/g, "&gt;");
 }
 
-export function buildPostBody(input: BuildPostInput): Record<string, unknown> {
-  const image = input.image
+function imageArray(image?: RequestImage | null) {
+  return image
     ? [
         {
-          id: input.image.id,
-          path: input.image.path,
-          alt: input.image.alt ?? null,
-          thumbnail: input.image.thumbnail ?? null,
+          id: image.id,
+          path: image.path,
+          alt: image.alt ?? null,
+          thumbnail: image.thumbnail ?? null,
           thumbnailTimestamp: null,
         },
       ]
     : [];
+}
 
+/**
+ * Multi-channel body: one entry in `posts[]` per selected channel (all sharing
+ * the same group, content, date and media — exactly like the calendar composer
+ * publishing one post across several channels).
+ */
+export function buildMultiPostBody(
+  input: BuildMultiPostInput
+): Record<string, unknown> {
+  const image = imageArray(input.image);
+  const content = `<p>${escapeHtml(input.content)}</p>`;
   return {
     type: input.type ?? "schedule",
     tags: [],
     shortLink: false,
     date: input.date,
-    posts: [
+    posts: input.channels.map((ch) => ({
+      integration: { id: ch.integrationId },
+      group: input.group,
+      settings: ch.settings ?? {},
+      value: [{ id: ch.valueId, content, delay: 0, image }],
+    })),
+  };
+}
+
+export function buildPostBody(input: BuildPostInput): Record<string, unknown> {
+  return buildMultiPostBody({
+    channels: [
       {
-        integration: { id: input.integrationId },
-        group: input.group,
-        settings: input.settings ?? {},
-        value: [
-          {
-            id: input.valueId,
-            content: `<p>${escapeHtml(input.content)}</p>`,
-            delay: 0,
-            image,
-          },
-        ],
+        integrationId: input.integrationId,
+        settings: input.settings,
+        valueId: input.valueId,
       },
     ],
-  };
+    content: input.content,
+    date: input.date,
+    type: input.type,
+    image: input.image,
+    group: input.group,
+  });
 }
 
 export function buildJson(body: Record<string, unknown>): string {

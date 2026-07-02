@@ -5,15 +5,15 @@ import { Card } from "@/components/settings-ui";
 import { listChannels } from "@/lib/integrations";
 import { defaultSettingsFor } from "@/lib/provider-requirements";
 import { uploadMedia, UploadedMediaResponse } from "@/lib/media-api";
+import { ChannelAvatar } from "@/components/channel-avatar";
+import { type Channel } from "@/lib/calendar-data";
 import {
-  buildPostBody,
+  buildMultiPostBody,
   buildJson,
   buildCurl,
   RequestImage,
 } from "@/lib/api-request-builder";
 import styles from "./api-request-generator.module.css";
-
-type IntegrationRow = { id: string; name: string; identifier: string };
 
 const rid = () => Math.random().toString(36).slice(2, 12);
 const BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000";
@@ -27,13 +27,13 @@ function nowLocal(): string {
 }
 
 /**
- * Settings -> API "Request generator". A composer-style two-panel form (compose
- * on the left, live request on the right) that produces the ready-to-send
- * `POST /public/v1/posts` curl/JSON instead of publishing.
+ * Settings -> API "Request generator". The same compose form as the calendar
+ * (multi-select channels with their icons, content editor, date, media) but the
+ * action is a live `POST /public/v1/posts` curl/JSON instead of publishing.
  */
 export function ApiRequestGenerator() {
-  const [rows, setRows] = useState<IntegrationRow[]>([]);
-  const [integrationId, setIntegrationId] = useState("");
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [content, setContent] = useState("Hello from the API");
   const [datetime, setDatetime] = useState(nowLocal());
   const [type, setType] = useState<"schedule" | "now" | "draft">("schedule");
@@ -43,40 +43,56 @@ export function ApiRequestGenerator() {
   const [copied, setCopied] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // group + value id are stable for the session so the output does not churn.
-  const ids = useMemo(() => ({ group: rid(), valueId: rid() }), []);
+  // Stable ids: one group for the whole request, one value id per channel.
+  const groupId = useMemo(() => rid(), []);
+  const valueIds = useRef<Record<string, string>>({});
 
   useEffect(() => {
     listChannels()
-      .then(({ raw }) => {
-        const mapped = (raw || []).map((i) => ({
-          id: i.id,
-          name: i.name,
-          identifier: i.identifier,
-        }));
-        setRows(mapped);
-        if (mapped[0]) setIntegrationId(mapped[0].id);
+      .then(({ channels: chans }) => {
+        setChannels(chans);
+        if (chans[0]) setSelectedIds(new Set([chans[0].id]));
       })
       .catch(() => {});
   }, []);
 
-  const selected = rows.find((r) => r.id === integrationId);
+  const toggle = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const { curl, json } = useMemo(() => {
-    const body = buildPostBody({
-      integrationId: integrationId || "YOUR_CHANNEL_ID",
+    const selected = channels.filter((c) => selectedIds.has(c.id));
+    const chans =
+      selected.length > 0
+        ? selected.map((c) => ({
+            integrationId: c.id,
+            settings: defaultSettingsFor(c.identifier) as Record<
+              string,
+              unknown
+            >,
+            valueId: (valueIds.current[c.id] ??= rid()),
+          }))
+        : [
+            {
+              integrationId: "YOUR_CHANNEL_ID",
+              settings: {},
+              valueId: "value_id",
+            },
+          ];
+    const body = buildMultiPostBody({
+      channels: chans,
       content,
       date: datetime ? `${datetime}:00` : nowLocal() + ":00",
       type,
-      settings: selected
-        ? (defaultSettingsFor(selected.identifier) as Record<string, unknown>)
-        : {},
       image,
-      group: ids.group,
-      valueId: ids.valueId,
+      group: groupId,
     });
     return { curl: buildCurl(body, BASE), json: buildJson(body) };
-  }, [integrationId, content, datetime, type, image, selected, ids]);
+  }, [channels, selectedIds, content, datetime, type, image, groupId]);
 
   const onUpload = async (file?: File | null) => {
     if (!file) return;
@@ -102,7 +118,8 @@ export function ApiRequestGenerator() {
   return (
     <Card title="Request generator">
       <p className={styles.intro}>
-        Compose a post just like the calendar, then copy the ready-to-send{" "}
+        The same compose form as the calendar — pick one or more channels, write
+        your post, attach media — but the result is a ready-to-send{" "}
         <code className={styles.codeInline}>POST /public/v1/posts</code> request
         instead of publishing. Replace{" "}
         <code className={styles.codeInline}>ps_YOUR_API_KEY</code> with your key
@@ -110,43 +127,48 @@ export function ApiRequestGenerator() {
       </p>
 
       <div className={styles.grid}>
-        {/* LEFT — compose (mirrors the composer) */}
+        {/* LEFT — the calendar compose form */}
         <div className={styles.panel}>
-          <p className={styles.panelTitle}>Compose</p>
-
-          <div className={styles.row2}>
-            <label className={styles.field}>
-              Channel
-              <select
-                className={styles.input}
-                value={integrationId}
-                onChange={(e) => setIntegrationId(e.target.value)}
-              >
-                {rows.length === 0 && (
-                  <option value="">No channels connected</option>
-                )}
-                {rows.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name} ({r.identifier})
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={styles.field}>
-              Type
-              <select
-                className={styles.input}
-                value={type}
-                onChange={(e) =>
-                  setType(e.target.value as "schedule" | "now" | "draft")
-                }
-              >
-                <option value="schedule">schedule</option>
-                <option value="now">now</option>
-                <option value="draft">draft</option>
-              </select>
-            </label>
-          </div>
+          <p className={styles.panelTitle}>
+            Channels
+            {selectedIds.size > 0 && (
+              <span className={styles.selectedCount}>
+                {"  ·  "}
+                {selectedIds.size} selected
+              </span>
+            )}
+          </p>
+          {channels.length === 0 ? (
+            <div className={styles.channelEmpty}>No channels connected yet.</div>
+          ) : (
+            <div className={styles.channelStrip}>
+              {channels.map((c) => {
+                const on = selectedIds.has(c.id);
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className={
+                      styles.channelChip +
+                      (on ? " " + styles.channelChipOn : "")
+                    }
+                    onClick={() => toggle(c.id)}
+                    title={`${c.name} · ${c.platform}`}
+                    aria-pressed={on}
+                  >
+                    <ChannelAvatar
+                      channel={c}
+                      size={40}
+                      circular
+                      showPlatformBadge
+                      inverted={!on}
+                    />
+                    <span className={styles.channelChipName}>{c.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           <label className={styles.field}>
             Post content
@@ -168,6 +190,26 @@ export function ApiRequestGenerator() {
                 onChange={(e) => setDatetime(e.target.value)}
               />
             </label>
+            <label className={styles.field} style={{ width: 130 }}>
+              Type
+              <select
+                className={styles.input}
+                value={type}
+                onChange={(e) =>
+                  setType(e.target.value as "schedule" | "now" | "draft")
+                }
+              >
+                <option value="schedule">schedule</option>
+                <option value="now">now</option>
+                <option value="draft">draft</option>
+              </select>
+            </label>
+          </div>
+
+          <div className={styles.rowEnd}>
+            <div className={styles.imgNote}>
+              {image ? `media: ${image.path}` : "No media attached"}
+            </div>
             <div style={{ display: "flex", gap: 8 }}>
               <input
                 ref={fileRef}
@@ -182,7 +224,11 @@ export function ApiRequestGenerator() {
                 onClick={() => fileRef.current?.click()}
                 disabled={uploading}
               >
-                {uploading ? "Uploading…" : image ? "Replace media" : "Add media"}
+                {uploading
+                  ? "Uploading…"
+                  : image
+                    ? "Replace media"
+                    : "Insert media"}
               </button>
               {image && (
                 <button
@@ -195,7 +241,6 @@ export function ApiRequestGenerator() {
               )}
             </div>
           </div>
-          {image && <div className={styles.imgNote}>media: {image.path}</div>}
         </div>
 
         {/* RIGHT — live request output */}
