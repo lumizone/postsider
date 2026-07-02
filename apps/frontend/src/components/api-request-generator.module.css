@@ -43,38 +43,43 @@
 .row2 { display: grid; grid-template-columns: 1fr 150px; gap: 10px; }
 .rowEnd { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }
 
-/* Channel multi-select — same chip-with-avatar strip as the calendar composer. */
-.channelStrip { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Channel multi-select — same chip-with-avatar strip as the calendar composer,
+   including the white + dark "halo" ring on the selected avatar. */
+.channelStrip { display: flex; flex-wrap: wrap; gap: 14px; padding: 4px 0; }
 .channelChip {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  width: 76px;
-  padding: 8px 6px;
-  border: 1px solid var(--line-soft);
-  border-radius: 12px;
-  background: var(--bg);
+  padding: 4px;
+  border: none;
+  background: transparent;
   color: var(--fg);
+  border-radius: 12px;
   cursor: pointer;
-  opacity: 0.5;
-  transition: border-color 0.15s, background 0.15s, opacity 0.15s;
+  transition: transform 0.14s;
 }
-.channelChip:hover { opacity: 0.85; }
-.channelChipOn {
-  opacity: 1;
-  border-color: var(--fg);
-  background: rgba(0, 0, 0, 0.02);
+.channelChip:hover { transform: translateY(-1px); }
+.channelChipOn > span:first-child {
+  /* white gap ring hugging the avatar, then the solid dark ring (adapts to the
+     theme via --bg / --fg) — matches the calendar composer. */
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--fg);
 }
 .channelChipName {
   width: 100%;
+  max-width: 80px;
   font-size: 11px;
+  font-weight: 600;
   line-height: 1.2;
   text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--muted);
 }
+.channelChipOn .channelChipName { color: var(--fg); }
 .channelEmpty { font-size: 13px; color: var(--muted); }
 .selectedCount {
   font-size: 11px;
