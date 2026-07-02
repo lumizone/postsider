@@ -178,6 +178,29 @@ function channelIdentifier(c: Channel): string | undefined {
  * Turn any thrown error (ApiError, network failure, validation array) into a
  * friendly, human sentence we can show in the modal.
  */
+/**
+ * Turn a raw NestJS/class-validator message into something readable: drop the
+ * `Posts.0.settings.` field path, Title-case the field name, and hide the
+ * internal `__type` discriminator noise (the giant provider list) behind a
+ * friendly line.
+ */
+function cleanValidationMessage(raw: string): string {
+  const msg = raw.trim();
+  if (msg.includes("__type")) {
+    return "This channel isn't fully supported for publishing yet. Please contact support.";
+  }
+  // Strip nested field paths like `Posts.0.settings.subject` / `Posts.0.title`.
+  let m = msg.replace(/^Posts\.\d+\.(settings\.)?/i, "");
+  // Unwrap + Title-case a leading (optionally quoted) field name.
+  m = m.replace(/^["']?([a-zA-Z][a-zA-Z0-9_]*)["']?/, (_, field: string) => {
+    const spaced = field
+      .replace(/[_-]+/g, " ")
+      .replace(/([a-z])([A-Z])/g, "$1 $2");
+    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+  });
+  return capitalizeFirst(m);
+}
+
 function humanizeSubmitError(err: unknown): string {
   // Our ApiError carries a parsed `body` which for NestJS validation is
   // usually `{ message: string | string[], statusCode, error }`.
@@ -193,11 +216,10 @@ function humanizeSubmitError(err: unknown): string {
 
   // class-validator returns an array of messages.
   if (body && Array.isArray(body.message) && body.message.length > 0) {
-    const first = String(body.message[0]);
-    return capitalizeFirst(first);
+    return cleanValidationMessage(String(body.message[0]));
   }
   if (body && typeof body.message === "string" && body.message.trim()) {
-    return capitalizeFirst(body.message);
+    return cleanValidationMessage(body.message);
   }
 
   // Network / fetch failure (no response).
