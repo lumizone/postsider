@@ -51,11 +51,12 @@ export class SettingsController {
     return { success: true };
   }
 
+  // Listing the team must work on ANY plan (an org admin should always see
+  // themselves + existing members); only INVITING is gated behind the paid
+  // TEAM_MEMBERS feature (see @Post below). Requiring TEAM_MEMBERS here made the
+  // whole Users tab 402 for plans without team seats.
   @Get('/team')
-  @CheckPolicies(
-    [AuthorizationActions.Create, Sections.TEAM_MEMBERS],
-    [AuthorizationActions.Create, Sections.ADMIN]
-  )
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
   async getTeam(@GetOrgFromRequest() org: Organization) {
     return this._organizationService.getTeam(org.id);
   }
@@ -180,9 +181,11 @@ export class SettingsController {
     @GetOrgFromRequest() org: Organization,
     @GetUserFromRequest() user: User
   ) {
-    // In SaaS mode, only platform superadmins can view storage config.
-    // Regular org admins should not see server infrastructure details.
-    if (!user.isSuperAdmin) {
+    // Only lock this down in managed/SaaS mode — org admins shouldn't see the
+    // platform's shared infrastructure. In self-hosted mode the operator's own
+    // org admins may view it, mirroring the frontend nav gate
+    // (NEXT_PUBLIC_SELF_HOSTED), so it no longer 403s (which logged them out).
+    if (!process.env.NEXT_PUBLIC_SELF_HOSTED && !user.isSuperAdmin) {
       throw new HttpException('Not available in managed mode', 403);
     }
 

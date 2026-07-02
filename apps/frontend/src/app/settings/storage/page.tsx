@@ -68,14 +68,18 @@ export default function StorageSettingsPage() {
   const [cleanOrphans, setCleanOrphans] = useState(false);
 
   const reloadStorage = async () => {
-    const res = await api.get<StorageInfo>("/settings/storage");
+    // `silent` so a permission error (403) surfaces as a page message instead
+    // of triggering the api client's global auto-logout.
+    const res = await api.get<StorageInfo>("/settings/storage", undefined, {
+      silent: true,
+    });
     setInfo(res);
   };
 
   useEffect(() => {
     setLoading(true);
     api
-      .get<StorageInfo>("/settings/storage")
+      .get<StorageInfo>("/settings/storage", undefined, { silent: true })
       .then((res) => setInfo(res))
       .catch((err) =>
         setError(err instanceof Error ? err.message : t("settingsStorage.loadError")),

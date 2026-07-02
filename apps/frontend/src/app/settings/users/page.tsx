@@ -53,7 +53,9 @@ export default function UsersSettingsPage() {
       const res = await getTeam();
       setMembers(res?.users ?? []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load team");
+      // Show a friendly plan/permission message rather than a raw "HTTP 402".
+      const { planLimitMessage } = await import("@/lib/plan-errors");
+      setError(planLimitMessage(err, "Could not load team"));
     } finally {
       setLoading(false);
     }
