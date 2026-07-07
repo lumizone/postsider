@@ -248,7 +248,7 @@ export function Analytics() {
           </div>
 
           <div className={styles.headerControls}>
-            <div className={styles.segmented} role="tablist" aria-label="Range">
+            <div className={styles.segmented} role="tablist" aria-label={t("analytics.range" as any)}>
               {(Object.keys(RANGE_DAYS) as Range[]).map((r) => (
                 <button
                   key={r}
@@ -308,7 +308,7 @@ export function Analytics() {
                 onClick={() => setMetric("clicks")}
               />
               <Kpi
-                label={labels.showEngagementRate ? "Engagement rate" : labels.audienceLabel}
+                label={labels.showEngagementRate ? t("analytics.engagementRate" as any) : labels.audienceLabel}
                 value={
                   labels.showEngagementRate
                     ? `${engagementRate.toFixed(1)}%`
@@ -327,23 +327,28 @@ export function Analytics() {
                 <div className={styles.chartHead}>
                   <div>
                     <div className={styles.chartTitle}>
-                      {metric === "impressions"
-                        ? labels.impressionsLabel
-                        : metric === "engagements"
-                          ? labels.engagementsLabel
-                          : labels.clicksLabel}{" "}
-                      over time
+                      {t("analytics.overTime" as any, {
+                        metric:
+                          metric === "impressions"
+                            ? labels.impressionsLabel
+                            : metric === "engagements"
+                              ? labels.engagementsLabel
+                              : labels.clicksLabel,
+                      })}
                     </div>
                     <div className={styles.chartSub}>
                       {trend === 0
-                        ? "Flat trend"
-                        : `${trend > 0 ? "▲" : "▼"} ${Math.abs(trend).toFixed(1)}% vs first half`}
+                        ? t("analytics.flatTrend" as any)
+                        : t("analytics.trendVsFirstHalf" as any, {
+                            arrow: trend > 0 ? "▲" : "▼",
+                            pct: Math.abs(trend).toFixed(1),
+                          })}
                     </div>
                   </div>
                 </div>
                 {points[metric].length === 0 ? (
                   <div className={styles.empty}>
-                    No data from the provider for this range.
+                    {t("analytics.noRangeData" as any)}
                   </div>
                 ) : (
                   <LineChart data={points[metric]} />
@@ -358,17 +363,20 @@ export function Analytics() {
                     </div>
                     <div className={styles.chartSub}>
                       {audiencePoints.length === 0
-                        ? "Provider did not return audience data"
-                        : `${compactNumber(audienceLatest)} total · ${
-                            audienceDelta >= 0 ? "▲" : "▼"
-                          } ${compactNumber(Math.abs(audienceDelta))} (${
-                            audienceDeltaPct >= 0 ? "+" : ""
-                          }${audienceDeltaPct.toFixed(1)}%)`}
+                        ? t("analytics.noAudienceData" as any)
+                        : t("analytics.audienceSummary" as any, {
+                            total: compactNumber(audienceLatest),
+                            arrow: audienceDelta >= 0 ? "▲" : "▼",
+                            delta: compactNumber(Math.abs(audienceDelta)),
+                            pct:
+                              (audienceDeltaPct >= 0 ? "+" : "") +
+                              audienceDeltaPct.toFixed(1),
+                          })}
                     </div>
                   </div>
                 </div>
                 {audiencePoints.length === 0 ? (
-                  <div className={styles.empty}>—</div>
+                  <div className={styles.empty}>-</div>
                 ) : (
                   <LineChart data={audiencePoints} />
                 )}
@@ -377,15 +385,15 @@ export function Analytics() {
 
             <div className={styles.card}>
               <div className={styles.sectionHead}>
-                <span className={styles.sectionTitle}>Series breakdown</span>
+                <span className={styles.sectionTitle}>{t("analytics.seriesBreakdown" as any)}</span>
                 <span className={styles.sectionSub}>
-                  Raw labels returned by {channel.platform}
+                  {t("analytics.rawLabels" as any, { platform: channel.platform })}
                 </span>
               </div>
 
               {!data || data.length === 0 ? (
                 <div className={styles.empty}>
-                  No analytics returned by the provider.
+                  {t("analytics.noProviderData" as any)}
                 </div>
               ) : (
                 <ul className={styles.postList}>
@@ -399,8 +407,10 @@ export function Analytics() {
                         <div className={styles.postMain}>
                           <span className={styles.postTitle}>{s.label}</span>
                           <span className={styles.postMeta}>
-                            {pts.length} data points
-                            {last ? ` · last ${shortDay(last.date)}` : ""}
+                            {t("analytics.dataPoints" as any, { count: pts.length })}
+                            {last
+                              ? ` · ${t("analytics.lastPoint" as any, { date: shortDay(last.date) })}`
+                              : ""}
                           </span>
                         </div>
                         <div className={styles.postStats}>

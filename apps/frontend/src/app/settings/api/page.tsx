@@ -7,9 +7,10 @@ import {
   settingsStyles as s,
 } from "@/components/settings-ui";
 import { useAuth } from "@/lib/auth-context";
-import { useT } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { ApiRequestGenerator } from "@/components/api-request-generator";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 interface ApiKeyRow {
   id: string;
@@ -25,7 +26,7 @@ function maskKey(key: string): string {
 }
 
 export default function ApiSettingsPage() {
-  const t = useT();
+  const { t, locale } = useI18n();
   const { user } = useAuth();
   const canManage = user?.role === "ADMIN" || user?.role === "SUPERADMIN";
 
@@ -124,12 +125,24 @@ export default function ApiSettingsPage() {
     });
   };
 
+  // Close open modals on Escape.
+  useEffect(() => {
+    if (!showModal && !renameTarget) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (showModal) setShowModal(false);
+      if (renameTarget && !renameBusy) setRenameTarget(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showModal, renameTarget, renameBusy]);
+
   if (!canManage) {
     return (
       <PageHeader
         eyebrow={t("settings.eyebrow")}
         title={t("settings.api")}
-        subtitle="You don't have permission to manage API keys."
+        subtitle={t("settingsApi.noPermission")}
       />
     );
   }
@@ -143,7 +156,7 @@ export default function ApiSettingsPage() {
       />
 
       {error && (
-        <div style={{ margin: "0 0 16px", padding: "10px 12px", borderRadius: 8, background: "rgba(192,57,43,0.08)", color: "#c0392b", fontSize: 13 }}>
+        <div role="alert" style={{ margin: "0 0 16px", padding: "10px 12px", borderRadius: 8, background: "rgba(192,57,43,0.08)", color: "#c0392b", fontSize: 13 }}>
           {error}
         </div>
       )}
@@ -178,7 +191,7 @@ export default function ApiSettingsPage() {
                   {maskKey(k.key)}
                 </span>
                 <span style={{ fontSize: 12, color: "var(--muted)" }}>
-                  {new Date(k.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+                  {new Date(k.createdAt).toLocaleDateString(locale, { year: "numeric", month: "short", day: "numeric" })}
                 </span>
                 <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                   <IconBtn onClick={() => { setRenameTarget({ id: k.id, name: k.name }); setRenameValue(k.name); }} title={t("settingsApi.rename")}>
@@ -205,17 +218,18 @@ export default function ApiSettingsPage() {
                 placeholder={t("settingsApi.createPlaceholder")}
                 autoFocus
                 onKeyDown={(e) => { if (e.key === "Enter") void onCreate(); }}
-                style={{ flex: 1, padding: "9px 12px", borderRadius: 8, border: "1px solid var(--line-soft)", fontSize: 13, background: "var(--bg)", color: "var(--fg)" }}
+                className={s.input}
+                style={{ flex: 1 }}
               />
-              <button type="button" onClick={onCreate} disabled={creating} style={{ padding: "9px 16px", borderRadius: 8, border: "none", background: "var(--fg)", color: "var(--bg)", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+              <button type="button" className={s.btnPrimary} onClick={onCreate} disabled={creating} style={{ whiteSpace: "nowrap" }}>
                 {creating ? t("settingsApi.creating") : t("common.create")}
               </button>
-              <button type="button" onClick={() => { setShowCreate(false); setNewName(""); }} style={{ padding: "9px 12px", borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--bg)", fontSize: 13, cursor: "pointer" }}>
+              <button type="button" className={s.btnGhost} onClick={() => { setShowCreate(false); setNewName(""); }}>
                 {t("common.cancel")}
               </button>
             </div>
           ) : (
-            <button type="button" onClick={() => setShowCreate(true)} style={{ padding: "9px 16px", borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--bg)", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>
+            <button type="button" className={s.btnSecondary} onClick={() => setShowCreate(true)}>
               {t("settingsApi.createBtn")}
             </button>
           )}
@@ -225,7 +239,7 @@ export default function ApiSettingsPage() {
       {/* Usage card */}
       <Card title={t("settingsApi.usageTitle")}>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 13, color: "var(--muted)" }}>
-          <span>Pass the key in the <code style={{ background: "rgba(0,0,0,0.04)", padding: "2px 5px", borderRadius: 4 }}>Authorization</code> header:</span>
+          <span>{t("settingsApi.usageIntroPrefix")} <code style={{ background: "rgba(0,0,0,0.04)", padding: "2px 5px", borderRadius: 4 }}>Authorization</code> {t("settingsApi.usageIntroSuffix")}</span>
           <pre className={s.codeBlock} style={{ fontSize: 12, lineHeight: 1.7, padding: "14px 16px", borderRadius: 10 }}>{`curl ${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000"}/public/v1/posts \\
   -H "Authorization: ps_your_key_here" \\
   -H "Content-Type: application/json"`}</pre>
@@ -236,7 +250,7 @@ export default function ApiSettingsPage() {
 
       {/* New key modal */}
       {showModal && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 9999, display: "grid", placeItems: "center", background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }}>
+        <div role="dialog" aria-modal="true" aria-label={t("settingsApi.keyCreatedTitle")} style={{ position: "fixed", inset: 0, zIndex: 9999, display: "grid", placeItems: "center", background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }}>
           <div style={{ width: "100%", maxWidth: 480, background: "var(--bg)", borderRadius: 16, padding: "28px 24px 24px", boxShadow: "0 24px 64px rgba(0,0,0,0.18)", display: "flex", flexDirection: "column", gap: 16 }}>
             <div>
               <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 6px" }}>{t("settingsApi.keyCreatedTitle")}</h2>
@@ -250,24 +264,15 @@ export default function ApiSettingsPage() {
               </span>
               <button
                 type="button"
+                className={s.btnGhost}
                 onClick={onCopy}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 6,
-                  border: "1px solid var(--line-soft)",
-                  background: "var(--bg)",
-                  fontSize: 12,
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                  flexShrink: 0,
-                }}
+                style={{ whiteSpace: "nowrap", flexShrink: 0 }}
               >
                 {copied ? t("settingsApi.copied") : t("settingsApi.copy")}
               </button>
             </div>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button type="button" onClick={() => setShowModal(false)} style={{ padding: "10px 20px", borderRadius: 10, border: "none", background: "var(--fg)", color: "var(--bg)", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+              <button type="button" autoFocus className={s.btnPrimary} onClick={() => setShowModal(false)}>
                 {t("common.done")}
               </button>
             </div>
@@ -276,7 +281,7 @@ export default function ApiSettingsPage() {
       )}
       {/* Rename modal */}
       {renameTarget && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 9999, display: "grid", placeItems: "center", background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }} onClick={() => !renameBusy && setRenameTarget(null)}>
+        <div role="dialog" aria-modal="true" aria-label={t("settingsApi.renameTitle")} style={{ position: "fixed", inset: 0, zIndex: 9999, display: "grid", placeItems: "center", background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }} onClick={() => !renameBusy && setRenameTarget(null)}>
           <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 420, background: "var(--bg)", borderRadius: 16, padding: "28px 24px 24px", boxShadow: "0 24px 64px rgba(0,0,0,0.18)", display: "flex", flexDirection: "column", gap: 16 }}>
             <div>
               <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 6px" }}>{t("settingsApi.renameTitle")}</h2>
@@ -294,10 +299,10 @@ export default function ApiSettingsPage() {
               style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line-soft)", fontSize: 14, background: "var(--bg)", color: "var(--fg)" }}
             />
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button type="button" onClick={() => setRenameTarget(null)} disabled={renameBusy} style={{ padding: "10px 20px", borderRadius: 10, border: "1px solid var(--line-soft)", background: "var(--bg)", fontSize: 14, fontWeight: 500, cursor: "pointer" }}>
+              <button type="button" className={s.btnGhost} onClick={() => setRenameTarget(null)} disabled={renameBusy}>
                 {t("common.cancel")}
               </button>
-              <button type="button" onClick={() => void onRename()} disabled={renameBusy || !renameValue.trim()} style={{ padding: "10px 20px", borderRadius: 10, border: "none", background: "var(--fg)", color: "var(--bg)", fontSize: 14, fontWeight: 600, cursor: renameValue.trim() ? "pointer" : "default", opacity: renameValue.trim() ? 1 : 0.5 }}>
+              <button type="button" className={s.btnPrimary} onClick={() => void onRename()} disabled={renameBusy || !renameValue.trim()} style={{ opacity: renameValue.trim() ? 1 : 0.5 }}>
                 {renameBusy ? t("settingsApi.savingRename") : t("common.save")}
               </button>
             </div>
@@ -306,32 +311,14 @@ export default function ApiSettingsPage() {
       )}
       {/* Delete confirmation modal */}
       {deleteTarget && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 9999, display: "grid", placeItems: "center", background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }} onClick={() => setDeleteTarget(null)}>
-          <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 420, background: "var(--bg)", borderRadius: 16, padding: "28px 24px 24px", boxShadow: "0 24px 64px rgba(0,0,0,0.18)", display: "flex", flexDirection: "column", gap: 16 }}>
-            <div>
-              <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 6px" }}>{t("settingsApi.revokeConfirmTitle")}</h2>
-              <p style={{ margin: 0, fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
-                {t("settingsApi.revokeConfirmBody", { name: deleteTarget.name })}
-              </p>
-            </div>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button
-                type="button"
-                onClick={() => setDeleteTarget(null)}
-                style={{ padding: "10px 20px", borderRadius: 10, border: "1px solid var(--line-soft)", background: "var(--bg)", fontSize: 14, fontWeight: 500, cursor: "pointer" }}
-              >
-                {t("common.cancel")}
-              </button>
-              <button
-                type="button"
-                onClick={() => void onDelete(deleteTarget.id)}
-                style={{ padding: "10px 20px", borderRadius: 10, border: "none", background: "#DC2626", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
-              >
-                {t("settingsApi.revokeBtn")}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          danger
+          title={t("settingsApi.revokeConfirmTitle")}
+          body={t("settingsApi.revokeConfirmBody", { name: deleteTarget.name })}
+          confirmLabel={t("settingsApi.revokeBtn")}
+          onConfirm={() => void onDelete(deleteTarget.id)}
+          onCancel={() => setDeleteTarget(null)}
+        />
       )}
     </>
   );
@@ -343,6 +330,7 @@ function IconBtn({ onClick, title, danger, children }: { onClick: () => void; ti
       type="button"
       onClick={onClick}
       title={title}
+      aria-label={title}
       style={{
         width: 28,
         height: 28,

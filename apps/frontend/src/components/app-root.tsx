@@ -4,6 +4,7 @@ import { useEffect, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { DashboardShell } from "./dashboard-shell";
 import { useAuth } from "@/lib/auth-context";
+import { useT } from "@/lib/i18n";
 
 const PUBLIC_PATHS = [
   "/login",
@@ -12,6 +13,10 @@ const PUBLIC_PATHS = [
   "/forgot-return",
   "/activate",
   "/auth/oauth",
+  // Password reset link target from the email: /auth/forgot/<token>
+  "/auth/forgot",
+  // Account activation link target from the email: /auth/activate/<jwt>
+  "/auth/activate",
   // OAuth callbacks
   "/integrations/social",
 ];
@@ -40,6 +45,7 @@ export function AppRoot({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading } = useAuth();
+  const t = useT();
 
   const publicPath = isPublic(pathname);
   const nakedPath = isNaked(pathname);
@@ -67,7 +73,7 @@ export function AppRoot({ children }: { children: ReactNode }) {
           fontSize: 14,
         }}
       >
-        Loading…
+        {t("common.loading" as any)}
       </div>
     );
   }

@@ -383,3 +383,11 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Stack the channels panel above the content on narrow screens. */
+@media (max-width: 900px) {
+  .shell {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

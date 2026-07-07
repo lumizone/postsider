@@ -124,6 +124,15 @@
   border-color: var(--fg);
 }
 
+/* iOS Safari zooms into inputs under 16px — bump only on small screens. */
+@media (max-width: 768px) {
+  .input,
+  .textarea,
+  .select {
+    font-size: 16px;
+  }
+}
+
 .textarea {
   min-height: 96px;
   resize: vertical;

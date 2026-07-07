@@ -16,6 +16,7 @@ import {
   type CurrentSubscription,
   type BillingPeriod,
   type TierName,
+  type PlanDescriptor,
 } from "@/lib/billing-api";
 import { ApiError } from "@/lib/api";
 import styles from "./billing.module.css";
@@ -90,6 +91,34 @@ function BillingInner() {
   // Status returned after coming back from a checkout.
   const checkoutId = searchParams.get("check");
   const [provisioning, setProvisioning] = useState(false);
+
+  // Esc closes the cancel modal (mirrors the overlay click behavior).
+  useEffect(() => {
+    if (!showCancel) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !cancelBusy) setShowCancel(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showCancel, cancelBusy]);
+
+  // Display copy for a plan card comes from the i18n catalog; the descriptor
+  // only carries the structural limits.
+  const planLabel = (name: string) =>
+    t(`billing.plans.${name}.label` as Parameters<typeof t>[0]);
+  const planTagline = (name: string) =>
+    t(`billing.plans.${name}.tagline` as Parameters<typeof t>[0]);
+  const planFeatures = (plan: PlanDescriptor): string[] => [
+    t("billing.features.channels", { count: plan.channels }),
+    plan.postsPerMonth === "unlimited"
+      ? t("billing.features.unlimitedPosts")
+      : t("billing.features.posts", { count: plan.postsPerMonth }),
+    ...(plan.teamMembers ? [t("billing.features.teamMembers")] : []),
+    t("billing.features.multiPlatform"),
+    t("billing.features.calendar"),
+    t("billing.features.analytics"),
+    t("billing.features.smartAgent"),
+  ];
 
   const loadBilling = useCallback(async () => {
     try {
@@ -224,7 +253,11 @@ function BillingInner() {
         subtitle={t("billing.subtitle")}
       />
 
-      {error && <div className={`${styles.banner} ${styles.bannerError}`}>{error}</div>}
+      {error && (
+        <div role="alert" className={`${styles.banner} ${styles.bannerError}`}>
+          {error}
+        </div>
+      )}
 
       {provisioning && (
         <div className={`${styles.banner} ${styles.bannerInfo}`}>
@@ -270,13 +303,17 @@ function BillingInner() {
                   </span>
                   <div className={styles.currentText}>
                     <span className={styles.currentTier}>
-                      {t("billing.currentPlanOn", { plan: currentPlan?.label || "current" })}
+                      {t("billing.currentPlanOn", {
+                        plan: planLabel(current.subscriptionTier),
+                      })}
                     </span>
                     <span className={styles.currentMeta}>
                       {isInternalPlan
                         ? t("billing.internalPlan")
-                        : `${current.period === "YEARLY" ? t("billing.billedYearly", { price: String((currentPlan as any)?.yearlyPrice ?? "") }) : t("billing.billedMonthly")}${
-                            current.isLifetime ? " · Lifetime" : ""
+                        : `${current.period === "YEARLY" ? t("billing.billedYearly", { price: String(currentPlan?.yearlyPrice ?? "") }) : t("billing.billedMonthly")}${
+                            current.isLifetime
+                              ? " · " + t("billing.lifetime")
+                              : ""
                           }`}
                     </span>
                   </div>
@@ -348,8 +385,10 @@ function BillingInner() {
                   <span className={styles.popularBadge}>{t("billing.popular")}</span>
                 )}
                 <div className={styles.planHead}>
-                  <span className={styles.planName}>{plan.label}</span>
-                  <span className={styles.planTagline}>{plan.tagline}</span>
+                  <span className={styles.planName}>{planLabel(plan.name)}</span>
+                  <span className={styles.planTagline}>
+                    {planTagline(plan.name)}
+                  </span>
                 </div>
 
                 <div>
@@ -367,7 +406,7 @@ function BillingInner() {
                 <div className={styles.priceDivider} />
 
                 <ul className={styles.featureList}>
-                  {plan.features.map((f) => (
+                  {planFeatures(plan).map((f) => (
                     <li key={f} className={styles.feature}>
                       <Check />
                       {f}
@@ -455,7 +494,13 @@ function BillingInner() {
           className={styles.modalOverlay}
           onClick={() => !cancelBusy && setShowCancel(false)}
         >
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+          <div
+            className={styles.modal}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("billing.cancelTitle")}
+            onClick={(e) => e.stopPropagation()}
+          >
             <h2 className={styles.modalTitle}>{t("billing.cancelTitle")}</h2>
             <p className={styles.modalText}>
               {t("billing.cancelBody")}
@@ -507,16 +552,7 @@ function PeriodToggle({
 }) {
   const t = useT();
   return (
-    <div
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        padding: 3,
-        borderRadius: 999,
-        background: "rgba(0,0,0,0.05)",
-        gap: 2,
-      }}
-    >
+    <div className={styles.periodToggle}>
       {(["MONTHLY", "YEARLY"] as BillingPeriod[]).map((p) => {
         const active = period === p;
         return (
@@ -524,32 +560,13 @@ function PeriodToggle({
             key={p}
             type="button"
             onClick={() => onChange(p)}
-            style={{
-              height: 30,
-              padding: "0 14px",
-              border: "none",
-              borderRadius: 999,
-              background: active ? "var(--fg)" : "transparent",
-              color: active ? "var(--bg)" : "var(--fg)",
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-            }}
+            className={
+              styles.periodBtn + (active ? " " + styles.periodBtnActive : "")
+            }
           >
             {p === "MONTHLY" ? t("billing.monthly") : t("billing.yearly")}
             {p === "YEARLY" && (
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  color: active ? "var(--bg)" : "var(--muted)",
-                }}
-              >
-                {t("billing.twoMonFree")}
-              </span>
+              <span className={styles.saveBadge}>{t("billing.twoMonFree")}</span>
             )}
           </button>
         );

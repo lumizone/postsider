@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   PageHeader,
   Card,
+  settingsStyles as s,
 } from "@/components/settings-ui";
 import { useAuth } from "@/lib/auth-context";
 import { useT } from "@/lib/i18n";
@@ -18,16 +19,6 @@ const PROVIDERS = [
   { id: "deepseek", label: "DeepSeek", placeholder: "e.g. deepseek-chat" },
   { id: "gemini", label: "Gemini", placeholder: "e.g. gemini-2.5-flash" },
 ];
-
-const fieldStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "9px 12px",
-  borderRadius: 8,
-  border: "1px solid var(--line-soft)",
-  fontSize: 13,
-  background: "var(--bg)",
-  color: "var(--fg)",
-};
 
 const labelStyle: React.CSSProperties = {
   display: "block",
@@ -73,9 +64,9 @@ export default function PostCheckerSettingsPage() {
       await saveCheckerConfig({ provider, model, apiKey });
       setConfigured(true);
       setApiKey("");
-      setMsg(t("postChecker.saved" as any));
+      setMsg(t("postChecker.saved"));
     } catch {
-      setMsg(t("postChecker.saveError" as any));
+      setMsg(t("postChecker.saveError"));
     } finally {
       setSaving(false);
     }
@@ -89,7 +80,7 @@ export default function PostCheckerSettingsPage() {
       setApiKey("");
       setMsg(null);
     } catch {
-      setMsg(t("postChecker.saveError" as any));
+      setMsg(t("postChecker.saveError"));
     }
   };
 
@@ -98,31 +89,31 @@ export default function PostCheckerSettingsPage() {
   return (
     <>
       <PageHeader
-        eyebrow={t("settings.eyebrow" as any)}
-        title={t("postChecker.title" as any)}
-        subtitle={t("postChecker.subtitle" as any)}
+        eyebrow={t("settings.eyebrow")}
+        title={t("postChecker.title")}
+        subtitle={t("postChecker.subtitle")}
       />
 
       {/* Platform manages AI — no BYO config needed. */}
       {isPlatformAi ? (
         <Card title="">
           <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
-            AI is managed by the platform on this plan.
+            {t("postChecker.platformManaged")}
           </p>
         </Card>
       ) : !canManage ? (
         <Card title="">
           <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
-            {t("postChecker.noPermission" as any)}
+            {t("postChecker.noPermission")}
           </p>
         </Card>
       ) : (
         <Card title="">
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div>
-              <label style={labelStyle}>{t("postChecker.provider" as any)}</label>
+              <label style={labelStyle}>{t("postChecker.provider")}</label>
               <select
-                style={fieldStyle}
+                className={s.select}
                 value={provider}
                 onChange={(e) => setProvider(e.target.value)}
               >
@@ -135,9 +126,9 @@ export default function PostCheckerSettingsPage() {
             </div>
 
             <div>
-              <label style={labelStyle}>{t("postChecker.model" as any)}</label>
+              <label style={labelStyle}>{t("postChecker.model")}</label>
               <input
-                style={fieldStyle}
+                className={s.input}
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
                 placeholder={ph}
@@ -145,63 +136,38 @@ export default function PostCheckerSettingsPage() {
             </div>
 
             <div>
-              <label style={labelStyle}>{t("postChecker.apiKey" as any)}</label>
+              <label style={labelStyle}>{t("postChecker.apiKey")}</label>
               <input
-                style={fieldStyle}
+                className={s.input}
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder={
-                  configured ? "••••••••" : t("postChecker.apiKeyPlaceholder" as any)
+                  configured ? "••••••••" : t("postChecker.apiKeyPlaceholder")
                 }
               />
             </div>
 
             {msg && (
-              <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>{msg}</p>
+              <p role="status" style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>{msg}</p>
             )}
 
             <div style={{ display: "flex", gap: 8 }}>
               <button
                 type="button"
+                className={s.btnPrimary}
                 disabled={saving || !model || (!apiKey && !configured)}
                 onClick={save}
                 style={{
-                  padding: "9px 18px",
-                  borderRadius: 8,
-                  border: "none",
-                  background: "var(--fg)",
-                  color: "var(--bg)",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor:
-                    saving || !model || (!apiKey && !configured)
-                      ? "default"
-                      : "pointer",
                   opacity:
                     saving || !model || (!apiKey && !configured) ? 0.5 : 1,
                 }}
               >
-                {saving
-                  ? t("postChecker.saving" as any)
-                  : t("postChecker.save" as any)}
+                {saving ? t("postChecker.saving") : t("postChecker.save")}
               </button>
               {configured && (
-                <button
-                  type="button"
-                  onClick={remove}
-                  style={{
-                    padding: "9px 16px",
-                    borderRadius: 8,
-                    border: "1px solid var(--line-soft)",
-                    background: "var(--bg)",
-                    color: "var(--fg)",
-                    fontSize: 13,
-                    fontWeight: 500,
-                    cursor: "pointer",
-                  }}
-                >
-                  {t("postChecker.disconnect" as any)}
+                <button type="button" className={s.btnSecondary} onClick={remove}>
+                  {t("postChecker.disconnect")}
                 </button>
               )}
             </div>

@@ -4,16 +4,12 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { AuthShell } from "./auth-shell";
+import { BetaBanner, PRIVATE_BETA } from "./beta";
 import { GoogleButton } from "./google-button";
 import styles from "./auth.module.css";
 import { api, ApiError, setAuthToken, setOrgId } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useT } from "@/lib/i18n";
-
-// Hidden during the private beta: new sign-ups are closed, so "Sign in with
-// Google" would only work for pre-existing Google accounts. Flip to `true` to
-// bring the Google button (and its "or" divider) back when the beta opens up.
-const SHOW_GOOGLE = false;
 
 export function LoginForm() {
   const t = useT();
@@ -75,31 +71,24 @@ export function LoginForm() {
     <AuthShell
       title={t("auth.welcomeBack")}
       subtitle={t("auth.signInSubtitle")}
-      banner={
-        <>
-          Private beta. New sign-ups are closed and registration won&apos;t work
-          yet. To join, visit{" "}
-          <a
-            className={styles.topBannerLink}
-            href="https://postsider.com"
-            target="_blank"
-            rel="noreferrer"
-          >
-            postsider.com
-          </a>{" "}
-          and get on the whitelist.
-        </>
-      }
+      banner={PRIVATE_BETA ? <BetaBanner /> : undefined}
       footer={
-        <>
-          Want access?{" "}
-          <a href="https://postsider.com" target="_blank" rel="noreferrer">
-            Join the whitelist
-          </a>
-        </>
+        PRIVATE_BETA ? (
+          <>
+            {t("auth.betaFooterQuestion")}{" "}
+            <a href="https://postsider.com" target="_blank" rel="noreferrer">
+              {t("auth.betaFooterCta")}
+            </a>
+          </>
+        ) : (
+          <>
+            {t("auth.noAccount")}{" "}
+            <Link href="/register">{t("auth.createOne")}</Link>
+          </>
+        )
       }
     >
-      {SHOW_GOOGLE && (
+      {!PRIVATE_BETA && (
         <>
           <GoogleButton label={t("auth.googleSignIn")} />
 

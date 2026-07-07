@@ -43,6 +43,13 @@ export function FarcasterConnectModal({
     onConnectedRef.current = onConnected;
   }, [onConnected]);
 
+  // Latest translate function for the SIWN callback without re-running the
+  // script-loading effect on locale change.
+  const tRef = useRef(t);
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
+
   // Wire the SIWN global success callback and (re)load the widget script so it
   // renders the button into our div and drives the popup login.
   useEffect(() => {
@@ -55,7 +62,7 @@ export function FarcasterConnectModal({
     }) => {
       if (done) return;
       if (!data?.signer_uuid || !data?.fid) {
-        setError("Sign-in did not return a signer. Please try again.");
+        setError(tRef.current("connectFarcaster.signerError"));
         setPhase("error");
         return;
       }
@@ -81,7 +88,9 @@ export function FarcasterConnectModal({
         done = true;
         onConnectedRef.current();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Connection failed.");
+        setError(
+          e instanceof Error ? e.message : tRef.current("connectFarcaster.failed"),
+        );
         setPhase("error");
       }
     };
@@ -120,7 +129,7 @@ export function FarcasterConnectModal({
       className={styles.backdrop}
       role="dialog"
       aria-modal="true"
-      aria-label="Connect Farcaster"
+      aria-label={t("channels.connectName", { name: "Farcaster" })}
       onClick={onClose}
     >
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
@@ -142,8 +151,7 @@ export function FarcasterConnectModal({
         <div className={styles.form}>
           <div className={styles.field}>
             <span className={styles.label}>
-              Sign in with your Farcaster account through Neynar. A signer is
-              created and authorized for you — no manual UUID needed.
+              {t("connectFarcaster.description")}
             </span>
           </div>
 
@@ -157,7 +165,9 @@ export function FarcasterConnectModal({
           />
 
           {phase === "connecting" && (
-            <div className={styles.label}>✓ Authorized — connecting…</div>
+            <div className={styles.label}>
+              {t("connectFarcaster.connecting")}
+            </div>
           )}
           {phase === "error" && error && (
             <div className={styles.formError}>{error}</div>

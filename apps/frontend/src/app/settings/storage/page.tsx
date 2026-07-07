@@ -37,8 +37,9 @@ function formatBytes(b: number): string {
   return b + " B";
 }
 
-const LIMITS = [
-  { value: 0, label: "Unlimited" },
+// value 0 = unlimited (label comes from i18n at render time).
+const LIMITS: { value: number; label: string | null }[] = [
+  { value: 0, label: null },
   { value: 1_073_741_824, label: "1 GB" },
   { value: 5_368_709_120, label: "5 GB" },
   { value: 10_737_418_240, label: "10 GB" },
@@ -47,14 +48,8 @@ const LIMITS = [
   { value: 107_374_182_400, label: "100 GB" },
 ];
 
-const RETENTION_OPTIONS = [
-  { value: 0, label: "Never delete" },
-  { value: 30, label: "30 days" },
-  { value: 60, label: "60 days" },
-  { value: 90, label: "90 days" },
-  { value: 180, label: "180 days" },
-  { value: 365, label: "1 year" },
-];
+// Days; 0 = never delete, labels come from i18n at render time.
+const RETENTION_DAYS = [0, 30, 60, 90, 180, 365];
 
 export default function StorageSettingsPage() {
   const t = useT();
@@ -62,10 +57,20 @@ export default function StorageSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Local settings (persisted to localStorage for now — no backend endpoint yet)
+  // Local settings (persisted to localStorage for now; no backend endpoint yet)
   const [limit, setLimit] = useState(0);
   const [retention, setRetention] = useState(0);
   const [cleanOrphans, setCleanOrphans] = useState(false);
+
+  // Inline result message for manual cleanup actions (replaces native alert()).
+  const [cleanupMsg, setCleanupMsg] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+
+  const retentionLabel = (days: number) =>
+    days === 0
+      ? t("settingsStorage.retentionNever")
+      : days === 365
+        ? t("settingsStorage.retentionYear")
+        : t("settingsStorage.retentionDays", { days });
 
   const reloadStorage = async () => {
     // `silent` so a permission error (403) surfaces as a page message instead
@@ -246,7 +251,7 @@ export default function StorageSettingsPage() {
           >
             {LIMITS.map((l) => (
               <option key={l.value} value={l.value}>
-                {l.label}
+                {l.label ?? t("settingsStorage.limitUnlimited")}
               </option>
             ))}
           </select>
@@ -280,9 +285,9 @@ export default function StorageSettingsPage() {
               className={s.select}
               style={{ width: 150 }}
             >
-              {RETENTION_OPTIONS.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
+              {RETENTION_DAYS.map((days) => (
+                <option key={days} value={days}>
+                  {retentionLabel(days)}
                 </option>
               ))}
             </select>
@@ -339,16 +344,26 @@ export default function StorageSettingsPage() {
             buttonLabel={t("settingsStorage.cleanNow")}
             variant="secondary"
             onRun={async () => {
-              const res = await api.post<{ deleted: number }>(
-                "/media/cleanup/unused",
-                {},
-              );
-              await reloadStorage();
-              alert(
-                res.deleted > 0
-                  ? t("settingsStorage.removedUnused", { count: res.deleted })
-                  : t("settingsStorage.noUnused"),
-              );
+              setCleanupMsg(null);
+              try {
+                const res = await api.post<{ deleted: number }>(
+                  "/media/cleanup/unused",
+                  {},
+                );
+                await reloadStorage();
+                setCleanupMsg({
+                  kind: "success",
+                  text:
+                    res.deleted > 0
+                      ? t("settingsStorage.removedUnused", { count: res.deleted })
+                      : t("settingsStorage.noUnused"),
+                });
+              } catch (err) {
+                setCleanupMsg({
+                  kind: "error",
+                  text: err instanceof Error ? err.message : t("settingsStorage.cleanupFailed"),
+                });
+              }
             }}
           />
           <CleanupAction
@@ -358,19 +373,44 @@ export default function StorageSettingsPage() {
             variant="danger"
             confirmWord="DELETE"
             onRun={async () => {
-              const res = await api.post<{ deleted: number }>(
-                "/media/cleanup/all",
-                {},
-              );
-              await reloadStorage();
-              alert(
-                res.deleted > 0
-                  ? t("settingsStorage.removedFiles", { count: res.deleted })
-                  : t("settingsStorage.noFiles"),
-              );
+              setCleanupMsg(null);
+              try {
+                const res = await api.post<{ deleted: number }>(
+                  "/media/cleanup/all",
+                  {},
+                );
+                await reloadStorage();
+                setCleanupMsg({
+                  kind: "success",
+                  text:
+                    res.deleted > 0
+                      ? t("settingsStorage.removedFiles", { count: res.deleted })
+                      : t("settingsStorage.noFiles"),
+                });
+              } catch (err) {
+                setCleanupMsg({
+                  kind: "error",
+                  text: err instanceof Error ? err.message : t("settingsStorage.cleanupFailed"),
+                });
+              }
             }}
           />
         </div>
+        {cleanupMsg && (
+          <div
+            role={cleanupMsg.kind === "error" ? "alert" : "status"}
+            style={{
+              marginTop: 14,
+              padding: "10px 12px",
+              borderRadius: 8,
+              fontSize: 13,
+              background: cleanupMsg.kind === "error" ? "rgba(192,57,43,0.08)" : "rgba(0,0,0,0.03)",
+              color: cleanupMsg.kind === "error" ? "#c0392b" : "var(--fg)",
+            }}
+          >
+            {cleanupMsg.text}
+          </div>
+        )}
       </Card>
 
       {/* ─── Provider details ──────────────────────────────────── */}
@@ -378,14 +418,14 @@ export default function StorageSettingsPage() {
         {isLocal ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <ConfigRow label={t("settingsStorage.directory")} value={config.uploadDirectory || "./uploads"} />
-            <ConfigRow label={t("settingsStorage.publicUrl")} value={config.publicUrl || "—"} />
+            <ConfigRow label={t("settingsStorage.publicUrl")} value={config.publicUrl || "-"} />
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <ConfigRow label={t("settingsStorage.bucket")} value={config.bucket || "—"} />
+            <ConfigRow label={t("settingsStorage.bucket")} value={config.bucket || "-"} />
             <ConfigRow label={t("settingsStorage.region")} value={config.region || "auto"} />
-            <ConfigRow label={t("settingsStorage.bucketUrl")} value={config.bucketUrl || "—"} />
-            <ConfigRow label={t("settingsStorage.accountId")} value={config.accountId || "—"} />
+            <ConfigRow label={t("settingsStorage.bucketUrl")} value={config.bucketUrl || "-"} />
+            <ConfigRow label={t("settingsStorage.accountId")} value={config.accountId || "-"} />
           </div>
         )}
         <div
@@ -401,15 +441,16 @@ export default function StorageSettingsPage() {
         >
           {isLocal ? (
             <>
-              To switch to Cloudflare R2, set <code>STORAGE_PROVIDER=&quot;cloudflare&quot;</code> in
-              your <code>.env</code> file along with your R2 credentials, then restart
-              the backend.
+              {t("settingsStorage.switchLocal1")} <code>STORAGE_PROVIDER=&quot;cloudflare&quot;</code>{" "}
+              {t("settingsStorage.switchLocal2")} <code>.env</code>{" "}
+              {t("settingsStorage.switchLocal3")}
             </>
           ) : (
             <>
-              To switch back to local disk, set <code>STORAGE_PROVIDER=&quot;local&quot;</code> and
-              <code>UPLOAD_DIRECTORY=&quot;./uploads&quot;</code> in your <code>.env</code>, then
-              restart the backend.
+              {t("settingsStorage.switchCloud1")} <code>STORAGE_PROVIDER=&quot;local&quot;</code>{" "}
+              {t("settingsStorage.switchCloud2")} <code>UPLOAD_DIRECTORY=&quot;./uploads&quot;</code>{" "}
+              {t("settingsStorage.switchCloud3")} <code>.env</code>{" "}
+              {t("settingsStorage.switchCloud4")}
             </>
           )}
         </div>
@@ -477,6 +518,16 @@ function CleanupAction({
   const [showConfirm, setShowConfirm] = useState(false);
   const [typed, setTyped] = useState("");
 
+  // Close the confirmation modal on Escape.
+  useEffect(() => {
+    if (!showConfirm) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowConfirm(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showConfirm]);
+
   const handle = async () => {
     if (disabled) {
       return;
@@ -539,6 +590,9 @@ function CleanupAction({
 
       {showConfirm && (
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={t("settingsStorage.confirmTitle")}
           style={{
             position: "fixed",
             inset: 0,

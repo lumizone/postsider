@@ -70,6 +70,29 @@
   transform: scale(0.97);
 }
 
+/* Ghost sibling of .newBtn: same pill geometry, outlined instead of filled. */
+.importBtn {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-soft);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: border-color 140ms var(--ease), transform 120ms var(--ease);
+}
+
+.importBtn:hover {
+  border-color: var(--fg);
+}
+
+.importBtn:active {
+  transform: scale(0.97);
+}
+
 /* Filter row */
 .filters {
   display: flex;
@@ -149,7 +172,7 @@
   border-radius: var(--radius-pill);
   padding: 0 14px 0 34px;
   font: inherit;
-  font-size: 13px;
+  font-size: 16px;
   letter-spacing: -0.005em;
   color: var(--fg);
   transition: border-color 140ms var(--ease);

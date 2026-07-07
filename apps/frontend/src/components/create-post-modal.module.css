@@ -363,7 +363,7 @@
 .mediaThumb {
   width: 48px;
   height: 48px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   object-fit: cover;
   background: rgba(0, 0, 0, 0.05);
 }
@@ -471,112 +471,6 @@
   color: var(--muted);
 }
 
-.previewEmpty {
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.previewList {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.previewCard {
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--line-soft);
-  padding: 14px;
-  background: var(--bg);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.previewCardHead {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.previewIdentity {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  line-height: 1.1;
-  min-width: 0;
-}
-
-.previewName {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.previewPlatform {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-}
-
-.previewBody {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.previewEmptyBody {
-  margin: 0;
-  font-size: 12px;
-  color: var(--muted);
-  font-style: italic;
-}
-
-.previewMedia {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.previewMediaItem {
-  display: inline-flex;
-  width: 60px;
-  height: 60px;
-  border-radius: 8px;
-  overflow: hidden;
-  background: rgba(0, 0, 0, 0.05);
-}
-
-.previewMediaItem img,
-.previewMediaItem video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.previewMediaMore {
-  font-size: 11px;
-  color: var(--muted);
-  padding: 0 6px;
-}
-
-.previewThread {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding-top: 6px;
-  border-top: 1px solid var(--line-soft);
-}
-
-.previewThreadItem {
-  margin: 0;
-  font-size: 12px;
-  color: var(--muted);
-  white-space: pre-wrap;
-}
-
 /* ---------- Footer ---------- */
 
 .foot {
@@ -597,35 +491,6 @@
   border-radius: var(--radius-pill);
   border: 1px solid var(--line-soft);
   background: var(--bg);
-}
-
-.footIcon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--fg);
-}
-
-.footIcon svg {
-  width: 14px;
-  height: 14px;
-}
-
-.dateInput,
-.timeInput {
-  font: inherit;
-  font-size: 13px;
-  letter-spacing: -0.005em;
-  border: none;
-  background: transparent;
-  color: var(--fg);
-  font-variant-numeric: tabular-nums;
-  padding: 0;
-}
-
-.dateInput:focus,
-.timeInput:focus {
-  outline: none;
 }
 
 .footRight {
@@ -732,6 +597,16 @@
 @media (max-width: 800px) {
   .body { grid-template-columns: 1fr; }
   .editor { border-right: none; border-bottom: 1px solid var(--line-soft); }
+
+  /* iOS Safari zooms into focused fields whose font-size is below 16px;
+     bump every editable control to 16px on small screens to prevent it. */
+  .textarea,
+  .fieldTextarea,
+  .threadTextarea,
+  .fieldSelect,
+  .fieldInput {
+    font-size: 16px;
+  }
 }
 
 /* Submit / publish error banner */
@@ -773,7 +648,7 @@
   border: none;
   background: transparent;
   color: #b91c1c;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   opacity: 0.7;
   transition: opacity 0.15s, background 0.15s;
@@ -785,7 +660,7 @@
   display: block;
 }
 
-/* Validation summary ("Almost there — a few things to finish") */
+/* Validation summary ("Almost there, a few things to finish") */
 .validationSummary {
   margin: 0 0 16px;
   padding: 12px 14px;
@@ -859,7 +734,7 @@
   margin-bottom: 8px;
   font-size: 12px;
   line-height: 1.45;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
 }
 .providerHint svg,
 .providerWarning svg {
@@ -900,7 +775,7 @@
 .fieldInput {
   width: 100%;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--line-soft);
   font-size: 13px;
   background: var(--bg);

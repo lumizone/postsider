@@ -9,6 +9,7 @@ import {
 import { api } from "@/lib/api";
 import { useChannels } from "@/lib/use-channels";
 import { useT } from "@/lib/i18n";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 interface WebhookIntegration {
   integration: { id: string; name: string; picture: string | null };
@@ -106,7 +107,7 @@ export default function WebhooksSettingsPage() {
       />
 
       {error && (
-        <div style={{ margin: "0 0 16px", padding: "10px 12px", borderRadius: 8, background: "rgba(192,57,43,0.08)", color: "#c0392b", fontSize: 13 }}>
+        <div role="alert" style={{ margin: "0 0 16px", padding: "10px 12px", borderRadius: 8, background: "rgba(192,57,43,0.08)", color: "#c0392b", fontSize: 13 }}>
           {error}
         </div>
       )}
@@ -119,8 +120,8 @@ export default function WebhooksSettingsPage() {
           !showCreate ? (
             <button
               type="button"
+              className={s.btnPrimary}
               onClick={() => setShowCreate(true)}
-              style={{ padding: "8px 16px", borderRadius: 10, border: "none", background: "var(--fg)", color: "var(--bg)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
             >
               {t("settingsWebhooks.addEndpoint")}
             </button>
@@ -177,18 +178,9 @@ export default function WebhooksSettingsPage() {
                 </div>
                 <button
                   type="button"
+                  className={s.btnDanger}
                   onClick={() => setDeleteTarget(h)}
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: 6,
-                    border: "1px solid rgba(220,38,38,0.25)",
-                    background: "var(--bg)",
-                    color: "#DC2626",
-                    fontSize: 12,
-                    fontWeight: 500,
-                    cursor: "pointer",
-                    flexShrink: 0,
-                  }}
+                  style={{ flexShrink: 0 }}
                 >
                   {t("common.delete")}
                 </button>
@@ -264,15 +256,15 @@ export default function WebhooksSettingsPage() {
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <button
                 type="button"
+                className={s.btnGhost}
                 onClick={() => { setShowCreate(false); setNewName(""); setNewUrl(""); setSelectedChannels(new Set()); }}
-                style={{ padding: "9px 16px", borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--bg)", fontSize: 13, cursor: "pointer" }}
               >
                 {t("common.cancel")}
               </button>
               <button
                 type="submit"
+                className={s.btnPrimary}
                 disabled={creating}
-                style={{ padding: "9px 16px", borderRadius: 8, border: "none", background: "var(--fg)", color: "var(--bg)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
               >
                 {creating ? t("settingsWebhooks.creating") : t("settingsWebhooks.createEndpoint")}
               </button>
@@ -300,27 +292,14 @@ export default function WebhooksSettingsPage() {
 
       {/* Delete modal */}
       {deleteTarget && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 9999, display: "grid", placeItems: "center", background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }} onClick={() => setDeleteTarget(null)}>
-          <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 420, background: "var(--bg)", borderRadius: 16, padding: "28px 24px 24px", boxShadow: "0 24px 64px rgba(0,0,0,0.18)", display: "flex", flexDirection: "column", gap: 16 }}>
-            <div>
-              <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 6px" }}>{t("settingsWebhooks.deleteBtn")}</h2>
-              <p style={{ margin: 0, fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
-                {t("settingsWebhooks.deleteConfirmPrefix")} <strong>{deleteTarget.name}</strong>{t("settingsWebhooks.deleteConfirmSuffix")}
-              </p>
-            </div>
-            <div style={{ padding: "10px 14px", borderRadius: 8, background: "rgba(0,0,0,0.03)", fontFamily: "monospace", fontSize: 12, color: "var(--muted)", wordBreak: "break-all" }}>
-              {deleteTarget.url}
-            </div>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button type="button" onClick={() => setDeleteTarget(null)} style={{ padding: "10px 20px", borderRadius: 10, border: "1px solid var(--line-soft)", background: "var(--bg)", fontSize: 14, fontWeight: 500, cursor: "pointer" }}>
-                {t("common.cancel")}
-              </button>
-              <button type="button" onClick={() => void onDelete(deleteTarget.id)} style={{ padding: "10px 20px", borderRadius: 10, border: "none", background: "#DC2626", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-                {t("settingsWebhooks.deleteEndpoint")}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          danger
+          title={t("settingsWebhooks.deleteBtn")}
+          body={`${t("settingsWebhooks.deleteConfirmPrefix")} "${deleteTarget.name}"${t("settingsWebhooks.deleteConfirmSuffix")} (${deleteTarget.url})`}
+          confirmLabel={t("settingsWebhooks.deleteEndpoint")}
+          onConfirm={() => void onDelete(deleteTarget.id)}
+          onCancel={() => setDeleteTarget(null)}
+        />
       )}
     </>
   );

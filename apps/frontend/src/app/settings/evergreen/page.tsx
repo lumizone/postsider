@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PageHeader, Card } from "@/components/settings-ui";
+import { PageHeader, Card, settingsStyles as ui } from "@/components/settings-ui";
 import { useAuth } from "@/lib/auth-context";
 import { useT } from "@/lib/i18n";
 import {
@@ -79,15 +79,6 @@ export default function EvergreenSettingsPage() {
     marginBottom: 6,
     color: "var(--fg)",
   };
-  const inputStyle: React.CSSProperties = {
-    width: 160,
-    padding: "9px 12px",
-    borderRadius: 8,
-    border: "1px solid var(--line-soft)",
-    fontSize: 13,
-    background: "var(--bg)",
-    color: "var(--fg)",
-  };
 
   return (
     <>
@@ -98,7 +89,7 @@ export default function EvergreenSettingsPage() {
       />
 
       {error && (
-        <div style={{ margin: "0 0 16px", padding: "10px 12px", borderRadius: 8, background: "rgba(192,57,43,0.08)", color: "#c0392b", fontSize: 13 }}>
+        <div role="alert" style={{ margin: "0 0 16px", padding: "10px 12px", borderRadius: 8, background: "rgba(192,57,43,0.08)", color: "#c0392b", fontSize: 13 }}>
           {error}
         </div>
       )}
@@ -130,7 +121,8 @@ export default function EvergreenSettingsPage() {
                 min={1}
                 value={settings.intervalDays}
                 onChange={(e) => setSettings((s) => ({ ...s, intervalDays: Number(e.target.value) }))}
-                style={inputStyle}
+                className={ui.input}
+                style={{ width: 160 }}
               />
             </div>
 
@@ -144,16 +136,18 @@ export default function EvergreenSettingsPage() {
                 min={1}
                 value={settings.maxPerRun}
                 onChange={(e) => setSettings((s) => ({ ...s, maxPerRun: Number(e.target.value) }))}
-                style={inputStyle}
+                className={ui.input}
+                style={{ width: 160 }}
               />
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <button
                 type="button"
+                className={ui.btnPrimary}
                 onClick={onSave}
                 disabled={saving}
-                style={{ padding: "9px 16px", borderRadius: 8, border: "none", background: "var(--fg)", color: "var(--bg)", fontSize: 13, fontWeight: 600, cursor: saving ? "default" : "pointer", opacity: saving ? 0.6 : 1 }}
+                style={{ opacity: saving ? 0.6 : 1 }}
               >
                 {saving ? t("evergreen.saving") : t("evergreen.save")}
               </button>

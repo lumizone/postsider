@@ -123,6 +123,14 @@
   cursor: not-allowed;
 }
 
+/* .submit look for <a>/<Link> elements used as a primary call to action. */
+.submitLink {
+  composes: submit;
+  display: block;
+  text-align: center;
+  text-decoration: none;
+}
+
 .error {
   margin-top: -2px;
   font-size: 13px;
@@ -218,4 +226,22 @@
 .forgotLink a:hover {
   color: var(--fg);
   text-decoration: underline;
+}
+
+.legal {
+  margin-top: 18px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.legal a {
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.legal a:hover {
+  color: var(--fg);
 }

@@ -1,0 +1,112 @@
+.shell {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: 100vh;
+  padding: 16px;
+  gap: 16px;
+  transition: grid-template-columns 220ms var(--ease);
+}
+
+.shellCollapsed {
+  grid-template-columns: 76px 1fr;
+}
+
+.sidebar {
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--line-soft);
+  padding: 24px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  position: sticky;
+  top: 16px;
+  align-self: start;
+  height: calc(100vh - 32px);
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.02) 0%,
+    rgba(0, 0, 0, 0) 60%
+  );
+  transition: padding 220ms var(--ease), transform 220ms var(--ease);
+}
+
+.sidebarCollapsed {
+  padding: 20px 12px;
+}
+
+/* Mobile-only topbar with the hamburger; hidden on desktop. */
+.topbar {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.menuButton {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--fg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.topbarBrand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.backdrop {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .shell {
+    display: block;
+    padding: 12px;
+  }
+
+  .topbar {
+    display: flex;
+  }
+
+  /* Sidebar becomes an off-canvas drawer. */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    height: 100vh;
+    width: 280px;
+    max-width: 85vw;
+    border-radius: 0;
+    border-top: none;
+    border-bottom: none;
+    border-left: none;
+    background: var(--bg);
+    z-index: 60;
+    transform: translateX(-100%);
+    overflow-y: auto;
+    transition: transform 220ms var(--ease);
+  }
+
+  .sidebarOpen {
+    transform: translateX(0);
+  }
+
+  .backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 50;
+  }
+}

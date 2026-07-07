@@ -3,22 +3,22 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { useT } from "@/lib/i18n";
+import { useT, type MessageKey } from "@/lib/i18n";
 import styles from "./onboarding.module.css";
 
 type Step = "welcome" | "feature-write" | "feature-agent" | "feature-teams" | "feature-analytics" | "source" | "connect";
 
-const SOURCES = [
-  "Google Search",
-  "Twitter / X",
-  "YouTube",
-  "Reddit",
-  "LinkedIn",
-  "ChatGPT / AI",
-  "Friend / Colleague",
-  "Blog / Article",
-  "Product Hunt",
-  "Other",
+const SOURCES: { id: string; labelKey: MessageKey }[] = [
+  { id: "google", labelKey: "onboarding.sourceGoogle" },
+  { id: "twitter", labelKey: "onboarding.sourceTwitter" },
+  { id: "youtube", labelKey: "onboarding.sourceYoutube" },
+  { id: "reddit", labelKey: "onboarding.sourceReddit" },
+  { id: "linkedin", labelKey: "onboarding.sourceLinkedin" },
+  { id: "ai", labelKey: "onboarding.sourceAI" },
+  { id: "friend", labelKey: "onboarding.sourceFriend" },
+  { id: "blog", labelKey: "onboarding.sourceBlog" },
+  { id: "producthunt", labelKey: "onboarding.sourceProductHunt" },
+  { id: "other", labelKey: "onboarding.sourceOther" },
 ];
 
 const PLATFORMS = [
@@ -217,13 +217,13 @@ function SourceStep({
       <div className={styles.sourceGrid}>
         {SOURCES.map((source) => (
           <button
-            key={source}
+            key={source.id}
             className={`${styles.sourceChip} ${
-              selected === source ? styles.sourceChipActive : ""
+              selected === source.id ? styles.sourceChipActive : ""
             }`}
-            onClick={() => onSelect(source)}
+            onClick={() => onSelect(source.id)}
           >
-            {source}
+            {t(source.labelKey)}
           </button>
         ))}
       </div>

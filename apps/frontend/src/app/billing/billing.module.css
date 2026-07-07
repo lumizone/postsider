@@ -55,64 +55,6 @@
   flex-wrap: wrap;
 }
 
-/* Usage meters */
-.usageGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-@media (max-width: 720px) {
-  .usageGrid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.meter {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.meterHead {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-}
-
-.meterLabel {
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.meterValue {
-  font-size: 13px;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.track {
-  height: 8px;
-  border-radius: var(--radius-pill);
-  background: rgba(0, 0, 0, 0.07);
-  overflow: hidden;
-}
-
-.fill {
-  height: 100%;
-  border-radius: var(--radius-pill);
-  background: var(--fg);
-  transition: width 320ms var(--ease);
-}
-
-.fillWarn {
-  background: #d97706;
-}
-
-.fillFull {
-  background: #dc2626;
-}
-
 /* Period toggle */
 .periodRow {
   display: flex;
@@ -121,15 +63,44 @@
   gap: 12px;
 }
 
-.saveBadge {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--fg);
-  background: rgba(0, 0, 0, 0.05);
-  padding: 3px 8px;
+.periodToggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
   border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, 0.05);
+  gap: 2px;
+}
+
+.periodBtn {
+  height: 30px;
+  padding: 0 14px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 140ms var(--ease), color 140ms var(--ease);
+}
+
+.periodBtnActive {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.saveBadge {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.periodBtnActive .saveBadge {
+  color: var(--bg);
 }
 
 /* Plan grid */
@@ -403,39 +374,11 @@
   border-color: var(--fg);
 }
 
-/* No-plan call to action */
-.noPlan {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 12px;
-  padding: 32px 20px 28px;
-}
-
-.noPlanIcon {
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: rgba(0, 0, 0, 0.05);
-  color: var(--fg);
-}
-
-.noPlanTitle {
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  margin: 0;
-}
-
-.noPlanText {
-  font-size: 13px;
-  color: var(--muted);
-  max-width: 420px;
-  line-height: 1.5;
-  margin: 0 0 6px;
+/* iOS Safari auto-zooms focused fields under 16px. */
+@media (max-width: 768px) {
+  .textarea {
+    font-size: 16px;
+  }
 }
 
 /* FAQ */

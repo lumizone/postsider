@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AuthShell } from "./auth-shell";
+import { BetaBanner, PRIVATE_BETA } from "./beta";
 import { GoogleButton } from "./google-button";
 import styles from "./auth.module.css";
 import { api, ApiError } from "@/lib/api";
@@ -68,6 +69,33 @@ export function RegisterForm() {
       setLoading(false);
     }
   };
+
+  // During the private beta the server rejects every registration, so don't
+  // render a form that can only fail — send people to the whitelist instead.
+  if (PRIVATE_BETA) {
+    return (
+      <AuthShell
+        title={t("auth.betaTitle")}
+        subtitle={t("auth.betaRegisterInfo")}
+        banner={<BetaBanner />}
+        footer={
+          <>
+            {t("auth.betaHaveAccount")}{" "}
+            <Link href="/login">{t("auth.signIn")}</Link>
+          </>
+        }
+      >
+        <a
+          href="https://postsider.com"
+          target="_blank"
+          rel="noreferrer"
+          className={styles.submitLink}
+        >
+          {t("auth.betaJoinWhitelist")}
+        </a>
+      </AuthShell>
+    );
+  }
 
   if (activationRequired) {
     return (

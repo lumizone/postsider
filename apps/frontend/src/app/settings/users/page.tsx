@@ -21,14 +21,16 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 
 type InviteRole = "USER" | "ADMIN";
 
-const ROLE_LABEL: Record<TeamMember["role"], string> = {
-  SUPERADMIN: "Owner",
-  ADMIN: "Admin",
-  USER: "Member",
-};
-
 export default function UsersSettingsPage() {
   const t = useT();
+
+  const roleLabel = (role: TeamMember["role"]) =>
+    role === "SUPERADMIN"
+      ? t("settingsUsers.roleOwner")
+      : role === "ADMIN"
+        ? t("settingsUsers.roleAdmin")
+        : t("settingsUsers.roleMember");
+
   const { user } = useAuth();
   const isOwner = user?.role === "SUPERADMIN";
   const canManage = user?.role === "ADMIN" || user?.role === "SUPERADMIN";
@@ -128,7 +130,7 @@ export default function UsersSettingsPage() {
       downloadCredentialsPdf({
         email: inviteResult.email,
         password: inviteResult.password!,
-        role: inviteRole === "ADMIN" ? "Admin" : "Member",
+        role: inviteRole === "ADMIN" ? t("settingsUsers.roleAdmin") : t("settingsUsers.roleMember"),
         platformUrl:
           typeof window !== "undefined"
             ? window.location.origin
@@ -145,7 +147,7 @@ export default function UsersSettingsPage() {
         <PageHeader
           eyebrow={t("settings.eyebrow")}
           title={t("settingsUsers.title")}
-          subtitle="You don't have permission to manage users."
+          subtitle={t("settingsUsers.noPermission")}
         />
       </>
     );
@@ -161,6 +163,7 @@ export default function UsersSettingsPage() {
 
       {error && (
         <div
+          role="alert"
           style={{
             margin: "0 0 16px",
             padding: "10px 12px",
@@ -254,16 +257,15 @@ export default function UsersSettingsPage() {
                     borderRadius: "var(--radius-md)",
                   }}
                 >
-                  <span style={{ color: "var(--muted)", fontFamily: "inherit" }}>Email</span>
+                  <span style={{ color: "var(--muted)", fontFamily: "inherit" }}>{t("settingsUsers.credEmail")}</span>
                   <span>{inviteResult.email}</span>
-                  <span style={{ color: "var(--muted)", fontFamily: "inherit" }}>Password</span>
+                  <span style={{ color: "var(--muted)", fontFamily: "inherit" }}>{t("settingsUsers.credPassword")}</span>
                   <span style={{ fontWeight: 700, letterSpacing: "0.5px" }}>
                     {inviteResult.password}
                   </span>
                 </div>
                 <span style={{ color: "var(--muted)", fontSize: 12 }}>
-                  The user signs in with these credentials and sets their own
-                  password on first login.
+                  {t("settingsUsers.credNote")}
                 </span>
                 <button
                   type="button"
@@ -271,13 +273,13 @@ export default function UsersSettingsPage() {
                   className={s.btnPrimary}
                   style={{ alignSelf: "flex-start" }}
                 >
-                  ↓ Download credentials card
+                  {"↓ "}
+                  {t("settingsUsers.downloadCard")}
                 </button>
               </>
             ) : (
               <span style={{ color: "var(--muted)" }}>
-                Existing user added to this organization — they log in with
-                their current password.
+                {t("settingsUsers.existingUserNote")}
               </span>
             )}
           </div>
@@ -285,8 +287,8 @@ export default function UsersSettingsPage() {
       </Card>
 
       <Card
-        title="Members"
-        subtitle={loading ? t("common.loading") : `${members.length} people`}
+        title={t("settingsUsers.membersTitle")}
+        subtitle={loading ? t("common.loading") : t("settingsUsers.peopleCount", { count: members.length })}
       >
         {loading ? (
           <div style={{ fontSize: 13, color: "var(--muted)" }}>{t("common.loading")}</div>
@@ -314,7 +316,7 @@ export default function UsersSettingsPage() {
                           fontWeight: 500,
                         }}
                       >
-                        you
+                        {t("settingsUsers.youChip")}
                       </span>
                     )}
                   </span>
@@ -329,7 +331,7 @@ export default function UsersSettingsPage() {
                   }}
                 >
                   {isMemberOwner ? (
-                    <StatusChip variant="filled">Owner</StatusChip>
+                    <StatusChip variant="filled">{t("settingsUsers.roleOwner")}</StatusChip>
                   ) : isOwner && !isYou ? (
                     <select
                       value={m.role}
@@ -347,7 +349,7 @@ export default function UsersSettingsPage() {
                     </select>
                   ) : (
                     <StatusChip variant="muted">
-                      {ROLE_LABEL[m.role]}
+                      {roleLabel(m.role)}
                     </StatusChip>
                   )}
                 </div>
@@ -358,16 +360,16 @@ export default function UsersSettingsPage() {
                     onClick={() =>
                       setRemoveTarget({
                         id: m.user.id,
-                        name: m.user.email || "this member",
+                        name: m.user.email || t("settingsUsers.thisMember"),
                       })
                     }
                     disabled={!canManage || isMemberOwner || isYou}
                     title={
                       isMemberOwner
-                        ? "Owner cannot be removed."
+                        ? t("settingsUsers.ownerLocked")
                         : isYou
-                          ? "Cannot remove yourself."
-                          : "Remove from organization"
+                          ? t("settingsUsers.cannotRemoveSelf")
+                          : t("settingsUsers.removeFromOrg")
                     }
                   >
                     {t("common.remove")}
@@ -389,20 +391,17 @@ export default function UsersSettingsPage() {
             fontSize: 13,
           }}
         >
-          <span style={{ fontWeight: 600 }}>Owner</span>
+          <span style={{ fontWeight: 600 }}>{t("settingsUsers.roleOwner")}</span>
           <span style={{ color: "var(--muted)" }}>
-            Full access. Manage users, channels, settings, API key. Cannot be
-            removed.
+            {t("settingsUsers.roleOwnerDesc")}
           </span>
-          <span style={{ fontWeight: 600 }}>Admin</span>
+          <span style={{ fontWeight: 600 }}>{t("settingsUsers.roleAdmin")}</span>
           <span style={{ color: "var(--muted)" }}>
-            Manage channels, create/publish posts on all channels, view all
-            analytics, invite Members.
+            {t("settingsUsers.roleAdminDesc")}
           </span>
-          <span style={{ fontWeight: 600 }}>Member</span>
+          <span style={{ fontWeight: 600 }}>{t("settingsUsers.roleMember")}</span>
           <span style={{ color: "var(--muted)" }}>
-            Create and publish posts, view analytics, upload media. Cannot
-            manage channels or users.
+            {t("settingsUsers.roleMemberDesc")}
           </span>
         </div>
       </Card>

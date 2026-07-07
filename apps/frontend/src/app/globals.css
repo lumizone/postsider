@@ -98,6 +98,13 @@ button[class] {
   cursor: pointer;
 }
 
+/* Brand keyboard-focus ring for classed buttons too (modules rarely define
+ * their own); :focus-visible keeps mouse clicks ring-free. */
+button[class]:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+}
+
 h1,
 h2,
 h3,

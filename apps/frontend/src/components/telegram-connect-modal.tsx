@@ -5,8 +5,10 @@ import styles from "./custom-fields-modal.module.css";
 import { useT } from "@/lib/i18n";
 import { connectIntegration, pollTelegramUpdates } from "@/lib/integrations";
 
-// The shared platform bot users add to their channel/group.
-const BOT_USERNAME = "postsider_news_bot";
+// The shared platform bot users add to their channel/group. NEXT_PUBLIC_* is
+// inlined at build time; falls back to the cloud bot for existing builds.
+const BOT_USERNAME =
+  process.env.NEXT_PUBLIC_TELEGRAM_BOT_NAME || "postsider_news_bot";
 
 function CloseIcon() {
   return (
@@ -131,7 +133,7 @@ export function TelegramConnectModal({
       className={styles.backdrop}
       role="dialog"
       aria-modal="true"
-      aria-label="Connect Telegram"
+      aria-label={t("channels.connectName", { name: "Telegram" })}
       onClick={onClose}
     >
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
@@ -153,15 +155,15 @@ export function TelegramConnectModal({
         <div className={styles.form}>
           <div className={styles.field}>
             <span className={styles.label}>
-              1. Add{" "}
-              <strong>@{BOT_USERNAME}</strong> as an administrator to your
-              Telegram channel or group.
+              {t("connectTelegram.step1Before")}{" "}
+              <strong>@{BOT_USERNAME}</strong>{" "}
+              {t("connectTelegram.step1After")}
             </span>
           </div>
 
           <div className={styles.field}>
             <span className={styles.label}>
-              2. Send this command in that chat:
+              {t("connectTelegram.step2")}
             </span>
             <div style={{ display: "flex", gap: 8 }}>
               <input
@@ -177,18 +179,20 @@ export function TelegramConnectModal({
                 onClick={copy}
                 style={{ width: "auto", whiteSpace: "nowrap" }}
               >
-                {copied ? "Copied" : "Copy"}
+                {copied
+                  ? t("connectTelegram.copied")
+                  : t("connectTelegram.copy")}
               </button>
             </div>
           </div>
 
           {phase === "waiting" && (
             <div className={styles.label} style={{ opacity: 0.8 }}>
-              ⏳ Waiting for the command… the channel is detected automatically.
+              {t("connectTelegram.waiting")}
             </div>
           )}
           {phase === "connecting" && (
-            <div className={styles.label}>✓ Detected — connecting…</div>
+            <div className={styles.label}>{t("connectTelegram.connecting")}</div>
           )}
           {phase === "error" && error && (
             <div className={styles.formError}>{error}</div>

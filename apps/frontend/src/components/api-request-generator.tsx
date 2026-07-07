@@ -118,8 +118,8 @@ export function ApiRequestGenerator() {
   return (
     <Card title="Request generator">
       <p className={styles.intro}>
-        The same compose form as the calendar — pick one or more channels, write
-        your post, attach media — but the result is a ready-to-send{" "}
+        The same compose form as the calendar: pick one or more channels, write
+        your post, attach media. The result is a ready-to-send{" "}
         <code className={styles.codeInline}>POST /public/v1/posts</code> request
         instead of publishing. Replace{" "}
         <code className={styles.codeInline}>ps_YOUR_API_KEY</code> with your key

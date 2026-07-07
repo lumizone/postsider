@@ -87,7 +87,7 @@ export function OauthCallback({ provider }: Props) {
         }
 
         setStatus("ok");
-        setMessage("Channel connected — taking you back…");
+        setMessage("Channel connected. Taking you back…");
         setTimeout(() => router.replace("/calendar"), 600);
       } catch (err) {
         const msg =
@@ -112,7 +112,7 @@ export function OauthCallback({ provider }: Props) {
       });
       if (res?.success) {
         setStatus("ok");
-        setMessage("Page connected — taking you back…");
+        setMessage("Page connected. Taking you back…");
         setTimeout(() => router.replace("/calendar"), 600);
       } else {
         setStatus("error");

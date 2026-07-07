@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import styles from "./calendar.module.css";
 import { ChannelsPanel } from "./channels-panel";
 import { ChannelAvatar } from "./channel-avatar";
@@ -12,7 +12,7 @@ import { FarcasterConnectModal } from "./farcaster-connect-modal";
 import { DayPopup } from "./day-popup";
 import { ConfirmDialog } from "./confirm-dialog";
 import { EmptyState } from "./empty-state";
-import { useT } from "@/lib/i18n";
+import { useI18n, useT } from "@/lib/i18n";
 import {
   type CalendarEvent,
   type Channel,
@@ -41,23 +41,23 @@ import {
 } from "./create-post-modal";
 import { useAuth } from "@/lib/auth-context";
 
-const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const WEEKDAYS_NARROW = ["M", "T", "W", "T", "F", "S", "S"];
+/** Monday-first weekday names for the given locale (2024-01-01 is a Monday). */
+function buildWeekdayNames(
+  locale: string,
+  format: "short" | "narrow",
+): string[] {
+  const fmt = new Intl.DateTimeFormat(locale, { weekday: format });
+  return Array.from({ length: 7 }, (_, i) =>
+    fmt.format(new Date(2024, 0, 1 + i)),
+  );
+}
 
-const MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
+function buildMonthNames(locale: string): string[] {
+  const fmt = new Intl.DateTimeFormat(locale, { month: "long" });
+  return Array.from({ length: 12 }, (_, i) =>
+    fmt.format(new Date(2024, i, 1)),
+  );
+}
 
 type ViewMode = "day" | "week" | "month" | "year";
 
@@ -122,15 +122,6 @@ function buildMonthGrid(year: number, month: number): DayCell[] {
   return cells;
 }
 
-function formatLongDate(d: Date): string {
-  return d.toLocaleDateString("en-US", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-}
-
 function channelInitial(c: Channel): string {
   const parts = c.name.trim().split(/\s+/);
   return (parts[0]?.[0] ?? "?").toUpperCase();
@@ -172,7 +163,7 @@ const VIEW_LABELS: Record<ViewMode, string> = {
 };
 
 export function Calendar({ year, month }: CalendarProps) {
-  const t = useT();
+  const { t, locale } = useI18n();
   const [view, setView] = useState<ViewMode>("month");
   const [cursor, setCursor] = useState<Date>(new Date(year, month, 1));
   const [selected, setSelected] = useState<Date | null>(null);
@@ -192,14 +183,24 @@ export function Calendar({ year, month }: CalendarProps) {
     channels,
     setChannels,
     loading: channelsLoading,
+    error: channelsError,
     refresh: refreshChannels,
   } = useChannels();
   const cursorYear = cursor.getFullYear();
   const cursorMonth = cursor.getMonth();
-  const { events, refresh: refreshEvents, setEvents } = useCalendarData({
+  const {
+    events,
+    loading: eventsLoading,
+    error: eventsError,
+    refresh: refreshEvents,
+    setEvents,
+  } = useCalendarData({
     year: cursorYear,
     month: cursorMonth,
   });
+  const loadError = eventsError || channelsError;
+  const initialLoading =
+    channelsLoading || (eventsLoading && events.length === 0);
 
   // All channels are always visible in the calendar — the dot in the panel is a
   // colour identifier only, not a toggle.
@@ -434,9 +435,11 @@ export function Calendar({ year, month }: CalendarProps) {
     setSelected(new Date());
   };
 
+  const monthNames = useMemo(() => buildMonthNames(locale), [locale]);
+
   const headerTitle = useMemo(() => {
     if (view === "day") {
-      return cursor.toLocaleDateString("en-US", {
+      return cursor.toLocaleDateString(locale, {
         weekday: "long",
         day: "numeric",
         month: "long",
@@ -446,26 +449,26 @@ export function Calendar({ year, month }: CalendarProps) {
       const start = startOfWeek(cursor);
       const end = addDays(start, 6);
       const sameMonth = start.getMonth() === end.getMonth();
-      const startStr = start.toLocaleDateString("en-US", {
+      const startStr = start.toLocaleDateString(locale, {
         day: "numeric",
         month: sameMonth ? undefined : "short",
       });
-      const endStr = end.toLocaleDateString("en-US", {
+      const endStr = end.toLocaleDateString(locale, {
         day: "numeric",
         month: "short",
       });
-      return `${startStr} – ${endStr}`;
+      return `${startStr} - ${endStr}`;
     }
     if (view === "month") {
-      return MONTH_NAMES[cursor.getMonth()];
+      return monthNames[cursor.getMonth()];
     }
     return String(cursor.getFullYear());
-  }, [view, cursor]);
+  }, [view, cursor, locale, monthNames]);
 
   const headerSub = useMemo(() => {
-    if (view === "year") return "12 months";
+    if (view === "year") return t("calendar.twelveMonths");
     return String(cursor.getFullYear());
-  }, [view, cursor]);
+  }, [view, cursor, t]);
 
   /**
    * Send the composer payload to the backend. The composer doesn't know about
@@ -704,6 +707,44 @@ export function Calendar({ year, month }: CalendarProps) {
             </button>
           </div>
         )}
+        {loadError && (
+          <div
+            role="alert"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "12px 14px",
+              borderRadius: "var(--radius-md)",
+              background: "rgba(220, 38, 38, 0.08)",
+              color: "#c0392b",
+              fontSize: 13,
+              marginBottom: 16,
+            }}
+          >
+            <span style={{ flex: 1 }}>{t("calendar.loadError")}</span>
+            <button
+              type="button"
+              onClick={() => {
+                if (channelsError) void refreshChannels();
+                if (eventsError) void refreshEvents();
+              }}
+              style={{
+                border: "none",
+                background: "transparent",
+                fontWeight: 600,
+                color: "#c0392b",
+                textDecoration: "underline",
+                whiteSpace: "nowrap",
+                cursor: "pointer",
+                fontSize: 13,
+                padding: 0,
+              }}
+            >
+              {t("calendar.retry")}
+            </button>
+          </div>
+        )}
         <div className={styles.header}>
           <div className={styles.title}>
             <span className={styles.titleMain}>{headerTitle}</span>
@@ -757,7 +798,12 @@ export function Calendar({ year, month }: CalendarProps) {
           </div>
         </div>
 
-        {!channelsLoading && channels.length === 0 ? (
+        {initialLoading && !loadError ? (
+          <div className={styles.loadingState} role="status">
+            <span className={styles.loadingDot} aria-hidden />
+            {t("calendar.loading")}
+          </div>
+        ) : channels.length === 0 ? (
           <EmptyState
             icon="channel"
             title={t("calendar.emptyTitle")}
@@ -964,16 +1010,18 @@ export function Calendar({ year, month }: CalendarProps) {
           busy={confirmBusy}
           title={
             confirm.kind === "channel"
-              ? "Disconnect channel?"
-              : "Delete post?"
+              ? t("channels.deleteConfirmTitle")
+              : t("posts.deleteConfirmTitle")
           }
           body={
             confirm.kind === "channel"
-              ? `This disconnects "${confirm.name}" and deletes its scheduled posts. This cannot be undone.`
-              : "This permanently deletes the post from all its channels. This cannot be undone."
+              ? t("channels.deleteConfirmBody", { name: confirm.name })
+              : t("posts.deleteConfirmBody")
           }
           confirmLabel={
-            confirm.kind === "channel" ? "Disconnect" : "Delete post"
+            confirm.kind === "channel"
+              ? t("channels.disconnect")
+              : t("posts.deleteBtn")
           }
           onConfirm={() => void runConfirm()}
           onCancel={() => setConfirm(null)}
@@ -1004,6 +1052,9 @@ function MonthView({
   channelsById,
   onMoveEvent,
 }: MonthViewProps) {
+  const t = useT();
+  const { locale } = useI18n();
+  const weekdays = useMemo(() => buildWeekdayNames(locale, "short"), [locale]);
   const cells = useMemo(
     () => buildMonthGrid(cursor.getFullYear(), cursor.getMonth()),
     [cursor],
@@ -1014,9 +1065,9 @@ function MonthView({
     <>
       <div>
         <div className={styles.weekdays}>
-          {WEEKDAYS.map((d, idx) => (
+          {weekdays.map((d, idx) => (
             <div
-              key={d}
+              key={idx}
               className={
                 styles.weekday + (idx >= 5 ? " " + styles.weekendLabel : "")
               }
@@ -1149,7 +1200,9 @@ function MonthView({
                     })}
                     {dayEvents.length > 2 && (
                       <span className={styles.eventMore}>
-                        +{dayEvents.length - 2} more
+                        {t("calendar.moreCount", {
+                          count: dayEvents.length - 2,
+                        })}
                       </span>
                     )}
                   </div>
@@ -1199,6 +1252,9 @@ function Timeline({
   onCreate,
   onMoveEvent,
 }: TimelineProps) {
+  const t = useT();
+  const { locale } = useI18n();
+  const weekdays = useMemo(() => buildWeekdayNames(locale, "short"), [locale]);
   const cols = days.length;
   const gridTemplate = `64px repeat(${cols}, 1fr)`;
   const [dragOver, setDragOver] = useState<string | null>(null);
@@ -1220,7 +1276,7 @@ function Timeline({
             <div key={d.toISOString()} className={styles.timelineHeaderCell}>
               {showWeekdayLabels && (
                 <span className={styles.timelineHeaderDay}>
-                  {WEEKDAYS[(d.getDay() + 6) % 7]}
+                  {weekdays[(d.getDay() + 6) % 7]}
                 </span>
               )}
               <span
@@ -1265,7 +1321,9 @@ function Timeline({
                         `${String(h).padStart(2, "0")}:00`,
                       )
                     }
-                    aria-label={`Add post at ${formatHourLabel(h)}`}
+                    aria-label={t("calendar.addPostAt", {
+                      time: formatHourLabel(h),
+                    })}
                     style={
                       dragOver === slotKey
                         ? { outline: "2px solid var(--fg)", outlineOffset: -2 }
@@ -1446,11 +1504,17 @@ interface YearViewProps {
 }
 
 function YearView({ cursor, today, eventsByDay, onPickMonth }: YearViewProps) {
+  const { locale } = useI18n();
+  const monthNames = useMemo(() => buildMonthNames(locale), [locale]);
+  const weekdaysNarrow = useMemo(
+    () => buildWeekdayNames(locale, "narrow"),
+    [locale],
+  );
   const year = cursor.getFullYear();
 
   return (
     <div className={styles.yearGrid}>
-      {MONTH_NAMES.map((name, m) => {
+      {monthNames.map((name, m) => {
         const cells = buildMonthGrid(year, m);
         return (
           <button
@@ -1461,7 +1525,7 @@ function YearView({ cursor, today, eventsByDay, onPickMonth }: YearViewProps) {
           >
             <span className={styles.yearMonthName}>{name}</span>
             <div className={styles.yearMonthGrid}>
-              {WEEKDAYS_NARROW.map((d, i) => (
+              {weekdaysNarrow.map((d, i) => (
                 <span key={"w" + i} className={styles.yearWeekday}>
                   {d}
                 </span>

@@ -1,7 +1,7 @@
 import { Media } from "@/components/media";
 
 export const metadata = {
-  title: "Media — PostSider",
+  title: "Media · PostSider",
 };
 
 export default function MediaPage() {
