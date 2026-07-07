@@ -193,7 +193,7 @@ export function ApiRequestGenerator() {
             <label className={styles.field} style={{ width: 130 }}>
               Type
               <select
-                className={styles.input}
+                className={styles.select}
                 value={type}
                 onChange={(e) =>
                   setType(e.target.value as "schedule" | "now" | "draft")

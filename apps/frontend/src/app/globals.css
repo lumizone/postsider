@@ -28,6 +28,68 @@
   box-sizing: border-box;
 }
 
+/* ── Native form controls, branded ───────────────────────────────────────────
+ * Everything the browser would otherwise render in its own (blue/gray) theme:
+ * check/radio ticks, text selection, carets, placeholders, autofill, native
+ * search/number/date chrome. Keeps the strict B&W look without per-module
+ * repetition; modules may still override locally. */
+
+:root {
+  accent-color: var(--fg);
+}
+
+::selection {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+input,
+textarea,
+select {
+  caret-color: var(--fg);
+}
+
+::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+/* Chrome/Safari autofill paints a yellow/blue fill — repaint it ours. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--bg) inset;
+  -webkit-text-fill-color: var(--fg);
+  caret-color: var(--fg);
+}
+
+/* Search fields: drop the native WebKit decorations and cancel button. */
+input[type="search"]::-webkit-search-decoration,
+input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+
+/* Number fields: plain textfield, no native spinners. */
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Date/time fields: mute the native picker glyph into the B&W scale. */
+::-webkit-calendar-picker-indicator {
+  filter: grayscale(1);
+  opacity: 0.55;
+  cursor: pointer;
+}
+::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
 html,
 body {
   margin: 0;
