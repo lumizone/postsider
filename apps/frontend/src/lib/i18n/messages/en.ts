@@ -348,6 +348,7 @@ const en = {
     resetError:
       "Could not reset your password. The link may have expired. Request a new one.",
     activateChecking: "Activating your account…",
+    activatePendingSubtitle: "This should only take a moment.",
     activateDoneTitle: "Account activated",
     activateDoneSubtitle: "Your account is ready. Taking you in…",
     activateErrorTitle: "Activation failed",

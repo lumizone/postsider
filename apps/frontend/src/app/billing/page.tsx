@@ -104,10 +104,18 @@ function BillingInner() {
 
   // Display copy for a plan card comes from the i18n catalog; the descriptor
   // only carries the structural limits.
-  const planLabel = (name: string) =>
-    t(`billing.plans.${name}.label` as Parameters<typeof t>[0]);
-  const planTagline = (name: string) =>
-    t(`billing.plans.${name}.tagline` as Parameters<typeof t>[0]);
+  const planLabel = (name: string) => {
+    const key = `billing.plans.${name}.label`;
+    const label = t(key as Parameters<typeof t>[0]);
+    // t() echoes the key back when a tier is missing from the catalog
+    // (e.g. added server-side first) — fall back to the raw tier name.
+    return label === key ? name : label;
+  };
+  const planTagline = (name: string) => {
+    const key = `billing.plans.${name}.tagline`;
+    const tagline = t(key as Parameters<typeof t>[0]);
+    return tagline === key ? "" : tagline;
+  };
   const planFeatures = (plan: PlanDescriptor): string[] => [
     t("billing.features.channels", { count: plan.channels }),
     plan.postsPerMonth === "unlimited"

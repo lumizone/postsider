@@ -190,7 +190,7 @@ type Translate = ReturnType<typeof useT>;
 function cleanValidationMessage(raw: string, t: Translate): string {
   const msg = raw.trim();
   if (msg.includes("__type")) {
-    return t("createPost.channelNotSupported" as any);
+    return t("createPost.channelNotSupported");
   }
   // Strip nested field paths like `Posts.0.settings.subject` / `Posts.0.title`.
   let m = msg.replace(/^Posts\.\d+\.(settings\.)?/i, "");
@@ -230,14 +230,14 @@ function humanizeSubmitError(err: unknown, t: Translate): string {
     anyErr?.message?.toLowerCase().includes("failed to fetch") ||
     anyErr?.message?.toLowerCase().includes("networkerror")
   ) {
-    return t("createPost.networkError" as any);
+    return t("createPost.networkError");
   }
 
   if (anyErr?.status === 413) {
-    return t("createPost.tooLarge" as any);
+    return t("createPost.tooLarge");
   }
   if (anyErr?.status === 429) {
-    return t("createPost.tooFast" as any);
+    return t("createPost.tooFast");
   }
   if (anyErr?.status === 402) {
     // Plan limit reached (posts per month / no active plan).
@@ -246,18 +246,18 @@ function humanizeSubmitError(err: unknown, t: Translate): string {
         ? String((body as { section?: unknown }).section)
         : "";
     if (section === "posts_per_month") {
-      return t("createPost.planLimitPosts" as any);
+      return t("createPost.planLimitPosts");
     }
-    return t("createPost.planNotAllowed" as any);
+    return t("createPost.planNotAllowed");
   }
   if (anyErr?.status && anyErr.status >= 500) {
-    return t("createPost.serverError" as any);
+    return t("createPost.serverError");
   }
 
   if (anyErr?.message && anyErr.message.trim()) {
     return capitalizeFirst(anyErr.message);
   }
-  return t("createPost.saveFailed" as any);
+  return t("createPost.saveFailed");
 }
 
 function capitalizeFirst(s: string): string {
@@ -784,7 +784,7 @@ export function CreatePostModal({
       const maxLen = effectiveMaxLength(req, { verified: c.verified });
       if (body.length > maxLen) {
         problems.push(
-          t("createPost.contentTooLong" as any, {
+          t("createPost.contentTooLong", {
             channel: req.label,
             max: maxLen,
           }),
@@ -802,7 +802,7 @@ export function CreatePostModal({
           (Array.isArray(v) && v.length === 0);
         if (empty && !problems.some((p) => p.toLowerCase().includes(field.label.toLowerCase()))) {
           problems.push(
-            t("createPost.fieldRequired" as any, {
+            t("createPost.fieldRequired", {
               field: field.label,
               channel: req.label,
             }),
@@ -831,7 +831,7 @@ export function CreatePostModal({
       const list: string[] = [];
       // Missing content is the most common omission.
       if ((bodyForChannel(c.id) ?? "").trim().length === 0) {
-        list.push(t("createPost.addTextForChannel" as any));
+        list.push(t("createPost.addTextForChannel"));
       }
       list.push(...(channelProblems[c.id] ?? []));
       if (list.length > 0) out.push({ channel: c, problems: list });
@@ -861,19 +861,19 @@ export function CreatePostModal({
       if (kind !== "draft") {
         setShowValidation(true);
         if (selectedIds.size === 0) {
-          setSubmitError(t("createPost.pickChannel" as any));
+          setSubmitError(t("createPost.pickChannel"));
           return;
         }
         if (validationSummary.length > 0) {
           // The inline per-channel panels already show the details; nudge the
           // user toward them with a single friendly line.
           setSubmitError(
-            t("createPost.attentionNeeded" as any),
+            t("createPost.attentionNeeded"),
           );
           return;
         }
       } else if (selectedIds.size === 0) {
-        setSubmitError(t("createPost.pickDraft" as any));
+        setSubmitError(t("createPost.pickDraft"));
         return;
       }
 
@@ -934,11 +934,11 @@ export function CreatePostModal({
 
   const placeholder =
     mode === "global"
-      ? t("createPost.placeholderGlobal" as any)
-      : t("createPost.placeholderChannel" as any, {
+      ? t("createPost.placeholderGlobal")
+      : t("createPost.placeholderChannel", {
           channel:
             channels.find((c) => c.id === activeTarget)?.name ??
-            t("createPost.thisChannel" as any),
+            t("createPost.thisChannel"),
         });
 
   return (
@@ -956,7 +956,7 @@ export function CreatePostModal({
       >
         <header className={styles.head}>
           <span className={styles.title}>
-            {isEdit ? t("createPost.editTitle" as any) : t("createPost.title" as any)}
+            {isEdit ? t("createPost.editTitle") : t("createPost.title")}
           </span>
           <button
             type="button"
@@ -993,7 +993,7 @@ export function CreatePostModal({
               <div className={styles.validationSummary} role="status">
                 <div className={styles.validationSummaryHead}>
                   <WarnIcon />
-                  <span>{t("createPost.almostThere" as any)}</span>
+                  <span>{t("createPost.almostThere")}</span>
                 </div>
                 <ul className={styles.validationList}>
                   {validationSummary.map(({ channel, problems }) => (
@@ -1039,7 +1039,7 @@ export function CreatePostModal({
                   }
                   onClick={() => switchMode("global")}
                 >
-                  {t("createPost.globalWrite" as any)}
+                  {t("createPost.globalWrite")}
                 </button>
                 <button
                   type="button"
@@ -1054,7 +1054,7 @@ export function CreatePostModal({
                   }
                   onClick={() => switchMode("per-channel")}
                 >
-                  {t("createPost.perChannel" as any)}
+                  {t("createPost.perChannel")}
                 </button>
               </div>
 
@@ -1100,17 +1100,17 @@ export function CreatePostModal({
             {anySelectedSupportsComment && (
               <div className={styles.field}>
                 <label className={styles.fieldLabel}>
-                  {t("firstComment.label" as any)}
+                  {t("firstComment.label")}
                 </label>
                 <textarea
                   value={firstComment}
                   onChange={(e) => setFirstComment(e.target.value)}
-                  placeholder={t("firstComment.placeholder" as any)}
+                  placeholder={t("firstComment.placeholder")}
                   className={styles.fieldTextarea}
                   rows={2}
                 />
                 <span className={styles.fieldHelp}>
-                  {t("firstComment.hint" as any)}
+                  {t("firstComment.hint")}
                 </span>
               </div>
             )}
@@ -1181,7 +1181,7 @@ export function CreatePostModal({
                 onClick={onPickMedia}
               >
                 <ImageIcon />
-                {t("createPost.addImage" as any)}
+                {t("createPost.addImage")}
               </button>
               <button
                 type="button"
@@ -1189,7 +1189,7 @@ export function CreatePostModal({
                 onClick={onPickMedia}
               >
                 <VideoIcon />
-                {t("createPost.addVideo" as any)}
+                {t("createPost.addVideo")}
               </button>
               <input
                 ref={fileInputRef}
@@ -1205,14 +1205,14 @@ export function CreatePostModal({
                 onClick={addThreadPart}
               >
                 <CommentIcon />
-                {t("createPost.addComment" as any)}
+                {t("createPost.addComment")}
               </button>
               <button
                 type="button"
                 className={styles.toolBtn}
                 onClick={openSnippets}
               >
-                # {t("createPost.snippets" as any)}
+                # {t("createPost.snippets")}
               </button>
             </div>
 
@@ -1224,7 +1224,7 @@ export function CreatePostModal({
                     <textarea
                       value={part}
                       onChange={(e) => updateThreadPart(i, e.target.value)}
-                      placeholder={t("createPost.threadPlaceholder" as any)}
+                      placeholder={t("createPost.threadPlaceholder")}
                       className={styles.threadTextarea}
                       rows={2}
                     />
@@ -1244,7 +1244,7 @@ export function CreatePostModal({
 
           <aside className={styles.preview}>
             <span className={styles.previewLabel}>
-              {t("createPost.postPreview" as any)}
+              {t("createPost.postPreview")}
             </span>
             <PostPreviewPanel
               channels={selectedChannels}
@@ -1307,8 +1307,8 @@ export function CreatePostModal({
               onClick={fetchSlots}
             >
               {slotsLoading
-                ? t("smartSlots.suggesting" as any)
-                : `✦ ${t("smartSlots.suggest" as any)}`}
+                ? t("smartSlots.suggesting")
+                : `✦ ${t("smartSlots.suggest")}`}
             </button>
             {!slotsLoading && slotSuggestions.length > 0 && (
               <>
@@ -1325,13 +1325,13 @@ export function CreatePostModal({
                   ))}
                 </div>
                 <span className={styles.smartSlotsHint}>
-                  {t("smartSlots.reason" as any)}
+                  {t("smartSlots.reason")}
                 </span>
               </>
             )}
             {!slotsLoading && slotsError && (
               <span className={styles.smartSlotsHint}>
-                {t("smartSlots.none" as any)}
+                {t("smartSlots.none")}
               </span>
             )}
           </div>
@@ -1343,7 +1343,7 @@ export function CreatePostModal({
                 disabled={submitting !== null}
                 onClick={onDelete}
               >
-                {t("common.delete" as any)}
+                {t("common.delete")}
               </button>
             )}
             {!isEdit && (
@@ -1354,8 +1354,8 @@ export function CreatePostModal({
                 onClick={() => runSubmit("draft", onSaveDraft)}
               >
                 {submitting === "draft"
-                  ? t("createPost.saving" as any)
-                  : t("createPost.saveDraft" as any)}
+                  ? t("createPost.saving")
+                  : t("createPost.saveDraft")}
               </button>
             )}
             {onPublishNow && (
@@ -1366,8 +1366,8 @@ export function CreatePostModal({
                 onClick={() => runSubmit("now", onPublishNow)}
               >
                 {submitting === "now"
-                  ? t("createPost.publishing" as any)
-                  : t("createPost.publishNow" as any)}
+                  ? t("createPost.publishing")
+                  : t("createPost.publishNow")}
               </button>
             )}
             <button
@@ -1376,7 +1376,7 @@ export function CreatePostModal({
               disabled={submitting !== null || checkerPlatforms.length === 0}
               onClick={() => { setShowSnippets(false); setShowRewrite(false); setShowChecker(true); }}
             >
-              ✦ {t("postChecker.checkPost" as any)}
+              ✦ {t("postChecker.checkPost")}
             </button>
             <button
               type="button"
@@ -1384,7 +1384,7 @@ export function CreatePostModal({
               disabled={submitting !== null || currentBody.trim().length === 0}
               onClick={openRewrite}
             >
-              ✎ {t("createPost.rewrite" as any)}
+              ✎ {t("createPost.rewrite")}
             </button>
             {selectedChannels.length === 1 && (
               <button
@@ -1394,8 +1394,8 @@ export function CreatePostModal({
                 onClick={addToQueue}
               >
                 {addingToQueue
-                  ? t("createPost.addingToQueue" as any)
-                  : t("createPost.addToQueue" as any)}
+                  ? t("createPost.addingToQueue")
+                  : t("createPost.addToQueue")}
               </button>
             )}
             <button
@@ -1405,10 +1405,10 @@ export function CreatePostModal({
               onClick={() => runSubmit("schedule", onSchedule)}
             >
               {submitting === "schedule"
-                ? t("createPost.saving" as any)
+                ? t("createPost.saving")
                 : isEdit
-                  ? t("createPost.update" as any)
-                  : t("createPost.schedule" as any)}
+                  ? t("createPost.update")
+                  : t("createPost.schedule")}
             </button>
           </div>
         </footer>
@@ -1660,11 +1660,11 @@ function ProviderField({
         {label}
         {options === undefined ? (
           <span className={styles.fieldHelp}>
-            {t("createPost.loading" as any)}
+            {t("createPost.loading")}
           </span>
         ) : options.length === 0 ? (
           <span className={styles.fieldHelp}>
-            {t("createPost.nothingAvailable" as any)}
+            {t("createPost.nothingAvailable")}
           </span>
         ) : (
           <select
@@ -1673,7 +1673,7 @@ function ProviderField({
             onChange={(e) => onChange(e.target.value)}
           >
             <option value="" disabled>
-              {t("createPost.select" as any)}
+              {t("createPost.select")}
             </option>
             {options.map((opt) => (
               <option key={opt.id} value={opt.id}>
@@ -1722,7 +1722,7 @@ function ProviderField({
           className={styles.fieldInput}
           type="text"
           value={asString}
-          placeholder={field.placeholder ?? t("createPost.commaSeparated" as any)}
+          placeholder={field.placeholder ?? t("createPost.commaSeparated")}
           onChange={(e) => {
             const parts = e.target.value
               .split(",")

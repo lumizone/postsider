@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import styles from "./calendar.module.css";
 import { ChannelsPanel } from "./channels-panel";
 import { ChannelAvatar } from "./channel-avatar";
@@ -199,8 +199,15 @@ export function Calendar({ year, month }: CalendarProps) {
     month: cursorMonth,
   });
   const loadError = eventsError || channelsError;
+  // Show the loading placeholder only until the FIRST full load completes;
+  // later range/view changes keep the grid mounted, so empty workspaces can
+  // navigate months without the grid flashing away.
+  const [bootstrapped, setBootstrapped] = useState(false);
+  useEffect(() => {
+    if (!channelsLoading && !eventsLoading) setBootstrapped(true);
+  }, [channelsLoading, eventsLoading]);
   const initialLoading =
-    channelsLoading || (eventsLoading && events.length === 0);
+    !bootstrapped && (channelsLoading || eventsLoading);
 
   // All channels are always visible in the calendar — the dot in the panel is a
   // colour identifier only, not a toggle.

@@ -117,7 +117,7 @@ export function ChannelDetailModal({
             type="button"
             className={styles.closeBtn}
             onClick={onClose}
-            aria-label={t("common.close" as any)}
+            aria-label={t("common.close")}
           >
             <CloseIcon />
           </button>
@@ -185,14 +185,14 @@ export function ChannelDetailModal({
             className={styles.btnDanger}
             onClick={onDelete}
           >
-            {t("channels.delete" as any)}
+            {t("channels.delete")}
           </button>
           <button
             type="button"
             className={styles.btnPrimary}
             onClick={onReconnect}
           >
-            {t("channels.reconnect" as any)}
+            {t("channels.reconnect")}
           </button>
         </footer>
       </div>

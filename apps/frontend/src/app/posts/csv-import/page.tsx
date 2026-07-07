@@ -39,7 +39,7 @@ export default function CsvImportPage() {
   const pick = (f: File | null | undefined) => {
     if (!f) return;
     if (!/\.csv$/i.test(f.name)) {
-      setError(t("csvImport.onlyCsv" as any));
+      setError(t("csvImport.onlyCsv"));
       return;
     }
     setError(null);
@@ -54,7 +54,7 @@ export default function CsvImportPage() {
     try {
       setResults(await uploadCsv(file));
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("csvImport.importFailed" as any));
+      setError(e instanceof Error ? e.message : t("csvImport.importFailed"));
     } finally {
       setBusy(false);
     }
@@ -66,9 +66,9 @@ export default function CsvImportPage() {
   return (
     <div style={{ maxWidth: 760, margin: "0 auto", padding: "32px 20px", display: "flex", flexDirection: "column", gap: 20 }}>
       <div>
-        <div style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)" }}>{t("csvImport.eyebrow" as any)}</div>
-        <h1 style={{ fontSize: 24, fontWeight: 700, margin: "4px 0 6px" }}>{t("csvImport.title" as any)}</h1>
-        <p style={{ margin: 0, fontSize: 14, color: "var(--muted)" }}>{t("csvImport.subtitle" as any)}</p>
+        <div style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)" }}>{t("csvImport.eyebrow")}</div>
+        <h1 style={{ fontSize: 24, fontWeight: 700, margin: "4px 0 6px" }}>{t("csvImport.title")}</h1>
+        <p style={{ margin: 0, fontSize: 14, color: "var(--muted)" }}>{t("csvImport.subtitle")}</p>
       </div>
 
       {error && (
@@ -90,26 +90,26 @@ export default function CsvImportPage() {
         }}
       >
         <input ref={inputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={(e) => pick(e.target.files?.[0])} />
-        <div style={{ fontSize: 14, fontWeight: 600 }}>{file ? file.name : t("csvImport.dropHint" as any)}</div>
-        <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>{file ? `${(file.size / 1024).toFixed(1)} KB` : t("csvImport.maxSize" as any)}</div>
+        <div style={{ fontSize: 14, fontWeight: 600 }}>{file ? file.name : t("csvImport.dropHint")}</div>
+        <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>{file ? `${(file.size / 1024).toFixed(1)} KB` : t("csvImport.maxSize")}</div>
       </div>
 
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <button type="button" style={{ ...primaryBtn, opacity: file && !busy ? 1 : 0.5, cursor: file && !busy ? "pointer" : "default" }} onClick={onImport} disabled={!file || busy}>
-          {busy ? t("csvImport.importing" as any) : t("csvImport.importBtn" as any)}
+          {busy ? t("csvImport.importing") : t("csvImport.importBtn")}
         </button>
-        <a style={ghostBtn} href="/csv-template.csv" download>{t("csvImport.downloadTemplate" as any)}</a>
-        <Link style={ghostBtn} href="/posts">{t("csvImport.backToPosts" as any)}</Link>
+        <a style={ghostBtn} href="/csv-template.csv" download>{t("csvImport.downloadTemplate")}</a>
+        <Link style={ghostBtn} href="/posts">{t("csvImport.backToPosts")}</Link>
       </div>
 
       <details style={{ fontSize: 13, color: "var(--muted)" }}>
-        <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--fg)" }}>{t("csvImport.columnsTitle" as any)}</summary>
+        <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--fg)" }}>{t("csvImport.columnsTitle")}</summary>
         <ul style={{ margin: "10px 0 0", paddingLeft: 18, lineHeight: 1.7 }}>
-          <li><b>content</b> ({t("csvImport.colRequired" as any)}) {t("csvImport.colContent" as any)}</li>
-          <li><b>channels</b> ({t("csvImport.colRequired" as any)}) {t("csvImport.colChannels" as any)}</li>
-          <li><b>datetime</b> {t("csvImport.colDatetime" as any)}</li>
-          <li><b>first_comment</b> ({t("csvImport.colOptional" as any)}) {t("csvImport.colFirstComment" as any)}</li>
-          <li><b>thread</b> ({t("csvImport.colOptional" as any)}) {t("csvImport.colThread" as any)}</li>
+          <li><b>content</b> ({t("csvImport.colRequired")}) {t("csvImport.colContent")}</li>
+          <li><b>channels</b> ({t("csvImport.colRequired")}) {t("csvImport.colChannels")}</li>
+          <li><b>datetime</b> {t("csvImport.colDatetime")}</li>
+          <li><b>first_comment</b> ({t("csvImport.colOptional")}) {t("csvImport.colFirstComment")}</li>
+          <li><b>thread</b> ({t("csvImport.colOptional")}) {t("csvImport.colThread")}</li>
         </ul>
       </details>
 
@@ -117,19 +117,19 @@ export default function CsvImportPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ fontSize: 14, fontWeight: 600 }}>
             {errCount
-              ? t("csvImport.summaryWithErrors" as any, { ok: okCount, errors: errCount })
-              : t("csvImport.summaryOk" as any, { ok: okCount })}
+              ? t("csvImport.summaryWithErrors", { ok: okCount, errors: errCount })
+              : t("csvImport.summaryOk", { ok: okCount })}
           </div>
           <div style={{ border: "1px solid var(--line-soft)", borderRadius: 10, overflow: "hidden" }}>
             <div style={{ display: "grid", gridTemplateColumns: "56px 1fr 1.4fr", gap: 8, padding: "10px 12px", borderBottom: "1px solid var(--line-soft)", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted)" }}>
-              <span>{t("csvImport.rowHeader" as any)}</span>
-              <span>{t("csvImport.statusHeader" as any)}</span>
-              <span>{t("csvImport.detailHeader" as any)}</span>
+              <span>{t("csvImport.rowHeader")}</span>
+              <span>{t("csvImport.statusHeader")}</span>
+              <span>{t("csvImport.detailHeader")}</span>
             </div>
             {results.map((r) => (
               <div key={r.row} style={{ display: "grid", gridTemplateColumns: "56px 1fr 1.4fr", gap: 8, padding: "10px 12px", borderBottom: "1px solid rgba(0,0,0,0.05)", fontSize: 13, alignItems: "center" }}>
                 <span style={{ color: "var(--muted)" }}>{r.row}</span>
-                <span style={{ fontWeight: 600, color: r.ok ? "#15803d" : "#DC2626" }}>{r.ok ? t("csvImport.statusScheduled" as any) : t("csvImport.statusError" as any)}</span>
+                <span style={{ fontWeight: 600, color: r.ok ? "#15803d" : "#DC2626" }}>{r.ok ? t("csvImport.statusScheduled") : t("csvImport.statusError")}</span>
                 <span style={{ color: "var(--muted)" }}>{r.ok ? `${r.channels ?? ""}${r.scheduledFor ? ` · ${r.scheduledFor.replace("T", " ")}` : ""}` : r.error}</span>
               </div>
             ))}

@@ -73,7 +73,7 @@ export function AppRoot({ children }: { children: ReactNode }) {
           fontSize: 14,
         }}
       >
-        {t("common.loading" as any)}
+        {t("common.loading")}
       </div>
     );
   }

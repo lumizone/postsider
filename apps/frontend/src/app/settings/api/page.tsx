@@ -125,17 +125,17 @@ export default function ApiSettingsPage() {
     });
   };
 
-  // Close open modals on Escape.
+  // Close the rename modal on Escape. The new-key reveal modal is deliberately
+  // NOT escapable: the key is shown exactly once, so it only closes via Done.
   useEffect(() => {
-    if (!showModal && !renameTarget) return;
+    if (!renameTarget) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (showModal) setShowModal(false);
-      if (renameTarget && !renameBusy) setRenameTarget(null);
+      if (!renameBusy) setRenameTarget(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [showModal, renameTarget, renameBusy]);
+  }, [renameTarget, renameBusy]);
 
   if (!canManage) {
     return (

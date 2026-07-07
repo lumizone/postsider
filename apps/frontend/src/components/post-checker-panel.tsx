@@ -23,11 +23,11 @@ export function PostCheckerPanel({ content, hasMedia, mediaType, platforms, onCl
   return (
     <aside className={styles.panel}>
       <div className={styles.head}>
-        <strong>{t("postChecker.title" as any)}</strong>
-        <button onClick={onClose} aria-label={t("common.close" as any)}>×</button>
+        <strong>{t("postChecker.title")}</strong>
+        <button onClick={onClose} aria-label={t("common.close")}>×</button>
       </div>
-      {state === "loading" && <p className={styles.muted}>{t("postChecker.analysing" as any)}</p>}
-      {state === "error" && <p className={styles.muted}>{t("postChecker.error" as any)}</p>}
+      {state === "loading" && <p className={styles.muted}>{t("postChecker.analysing")}</p>}
+      {state === "error" && <p className={styles.muted}>{t("postChecker.error")}</p>}
       {state === "done" && (
         <>
           {platforms.length > 1 && (
@@ -46,7 +46,7 @@ export function PostCheckerPanel({ content, hasMedia, mediaType, platforms, onCl
 
 function Result({ r, t }: { r: any; t: (k: string) => string }) {
   if (!r) return null;
-  if ("error" in r) return <p className={styles.muted}>{t("postChecker.platformError" as any)}</p>;
+  if ("error" in r) return <p className={styles.muted}>{t("postChecker.platformError")}</p>;
   const bar = (label: string, v: number) => (
     <div className={styles.bar}><span>{label}</span><div className={styles.track}><div className={styles.fill} style={{ width: `${v}%` }} /></div></div>
   );
@@ -58,10 +58,10 @@ function Result({ r, t }: { r: any; t: (k: string) => string }) {
         </div>
       </div>
       <div className={styles.bars}>
-        {bar(t("postChecker.hook" as any), r.dimensions.hook)}
-        {bar(t("postChecker.clarity" as any), r.dimensions.clarity)}
-        {bar(t("postChecker.cta" as any), r.dimensions.cta)}
-        {bar(t("postChecker.platformFit" as any), r.dimensions.platformFit)}
+        {bar(t("postChecker.hook"), r.dimensions.hook)}
+        {bar(t("postChecker.clarity"), r.dimensions.clarity)}
+        {bar(t("postChecker.cta"), r.dimensions.cta)}
+        {bar(t("postChecker.platformFit"), r.dimensions.platformFit)}
       </div>
       <ul className={styles.good}>{r.positives.map((p: string, i: number) => <li key={i}>+ {p}</li>)}</ul>
       <ul className={styles.bad}>{r.negatives.map((n: string, i: number) => <li key={i}>- {n}</li>)}</ul>

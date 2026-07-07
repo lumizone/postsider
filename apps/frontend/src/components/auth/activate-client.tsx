@@ -57,12 +57,10 @@ export function ActivateClient({ token }: { token: string }) {
 
   return (
     <AuthShell
-      title={t("auth.activateDoneTitle")}
-      subtitle={t("auth.activateChecking")}
+      title={t("auth.activateChecking")}
+      subtitle={t("auth.activatePendingSubtitle")}
     >
-      <p style={{ textAlign: "center", color: "var(--muted)", fontSize: 14 }}>
-        {t("auth.activateChecking")}
-      </p>
+      <></>
     </AuthShell>
   );
 }

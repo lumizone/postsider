@@ -238,17 +238,17 @@ export function Analytics() {
       <section className={styles.root}>
         <header className={styles.header}>
           <div className={styles.title}>
-            <span className={styles.eyebrow}>{t("analytics.eyebrow" as any)}</span>
-            <h1 className={styles.h1}>{t("analytics.title" as any)}</h1>
+            <span className={styles.eyebrow}>{t("analytics.eyebrow")}</span>
+            <h1 className={styles.h1}>{t("analytics.title")}</h1>
             <p className={styles.subtitle}>
               {channel
                 ? `${channel.name} · ${channel.platform}`
-                : t("analytics.subtitle" as any)}
+                : t("analytics.subtitle")}
             </p>
           </div>
 
           <div className={styles.headerControls}>
-            <div className={styles.segmented} role="tablist" aria-label={t("analytics.range" as any)}>
+            <div className={styles.segmented} role="tablist" aria-label={t("analytics.range")}>
               {(Object.keys(RANGE_DAYS) as Range[]).map((r) => (
                 <button
                   key={r}
@@ -272,18 +272,18 @@ export function Analytics() {
           channels.length === 0 ? (
             <EmptyState
               icon="analytics"
-              title={t("empty.analyticsTitle" as any)}
-              description={t("empty.analyticsDesc" as any)}
-              actionLabel={t("channels.add" as any)}
+              title={t("empty.analyticsTitle")}
+              description={t("empty.analyticsDesc")}
+              actionLabel={t("channels.add")}
               actionHref="/calendar"
             />
           ) : (
             <div className={styles.empty}>
-              {t("analytics.empty" as any)}
+              {t("analytics.empty")}
             </div>
           )
         ) : loading ? (
-          <div className={styles.empty}>{t("common.loading" as any)}</div>
+          <div className={styles.empty}>{t("common.loading")}</div>
         ) : error ? (
           <div className={styles.empty}>{error}</div>
         ) : (
@@ -308,7 +308,7 @@ export function Analytics() {
                 onClick={() => setMetric("clicks")}
               />
               <Kpi
-                label={labels.showEngagementRate ? t("analytics.engagementRate" as any) : labels.audienceLabel}
+                label={labels.showEngagementRate ? t("analytics.engagementRate") : labels.audienceLabel}
                 value={
                   labels.showEngagementRate
                     ? `${engagementRate.toFixed(1)}%`
@@ -327,7 +327,7 @@ export function Analytics() {
                 <div className={styles.chartHead}>
                   <div>
                     <div className={styles.chartTitle}>
-                      {t("analytics.overTime" as any, {
+                      {t("analytics.overTime", {
                         metric:
                           metric === "impressions"
                             ? labels.impressionsLabel
@@ -338,8 +338,8 @@ export function Analytics() {
                     </div>
                     <div className={styles.chartSub}>
                       {trend === 0
-                        ? t("analytics.flatTrend" as any)
-                        : t("analytics.trendVsFirstHalf" as any, {
+                        ? t("analytics.flatTrend")
+                        : t("analytics.trendVsFirstHalf", {
                             arrow: trend > 0 ? "▲" : "▼",
                             pct: Math.abs(trend).toFixed(1),
                           })}
@@ -348,7 +348,7 @@ export function Analytics() {
                 </div>
                 {points[metric].length === 0 ? (
                   <div className={styles.empty}>
-                    {t("analytics.noRangeData" as any)}
+                    {t("analytics.noRangeData")}
                   </div>
                 ) : (
                   <LineChart data={points[metric]} />
@@ -363,8 +363,8 @@ export function Analytics() {
                     </div>
                     <div className={styles.chartSub}>
                       {audiencePoints.length === 0
-                        ? t("analytics.noAudienceData" as any)
-                        : t("analytics.audienceSummary" as any, {
+                        ? t("analytics.noAudienceData")
+                        : t("analytics.audienceSummary", {
                             total: compactNumber(audienceLatest),
                             arrow: audienceDelta >= 0 ? "▲" : "▼",
                             delta: compactNumber(Math.abs(audienceDelta)),
@@ -385,15 +385,15 @@ export function Analytics() {
 
             <div className={styles.card}>
               <div className={styles.sectionHead}>
-                <span className={styles.sectionTitle}>{t("analytics.seriesBreakdown" as any)}</span>
+                <span className={styles.sectionTitle}>{t("analytics.seriesBreakdown")}</span>
                 <span className={styles.sectionSub}>
-                  {t("analytics.rawLabels" as any, { platform: channel.platform })}
+                  {t("analytics.rawLabels", { platform: channel.platform })}
                 </span>
               </div>
 
               {!data || data.length === 0 ? (
                 <div className={styles.empty}>
-                  {t("analytics.noProviderData" as any)}
+                  {t("analytics.noProviderData")}
                 </div>
               ) : (
                 <ul className={styles.postList}>
@@ -407,9 +407,9 @@ export function Analytics() {
                         <div className={styles.postMain}>
                           <span className={styles.postTitle}>{s.label}</span>
                           <span className={styles.postMeta}>
-                            {t("analytics.dataPoints" as any, { count: pts.length })}
+                            {t("analytics.dataPoints", { count: pts.length })}
                             {last
-                              ? ` · ${t("analytics.lastPoint" as any, { date: shortDay(last.date) })}`
+                              ? ` · ${t("analytics.lastPoint", { date: shortDay(last.date) })}`
                               : ""}
                           </span>
                         </div>

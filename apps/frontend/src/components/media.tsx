@@ -221,7 +221,7 @@ export function Media() {
     } catch (err) {
       console.error("[delete-media]", err);
       setRaw(snapshot);
-      setActionError(t("errors.mediaDelete" as any));
+      setActionError(t("errors.mediaDelete"));
       setDeleteId(null);
     } finally {
       setDeleteBusy(false);
@@ -247,12 +247,12 @@ export function Media() {
     <section className={styles.root}>
       <header className={styles.header}>
         <div className={styles.title}>
-          <span className={styles.eyebrow}>{t("media.eyebrow" as any)}</span>
-          <h1 className={styles.h1}>{t("media.title" as any)}</h1>
+          <span className={styles.eyebrow}>{t("media.eyebrow")}</span>
+          <h1 className={styles.h1}>{t("media.title")}</h1>
           <p className={styles.subtitle}>
-            {t("media.subtitle" as any)}
+            {t("media.subtitle")}
             {" "}
-            {t("media.counts" as any, {
+            {t("media.counts", {
               images: counts.images,
               videos: counts.videos,
               total: counts.total,
@@ -261,7 +261,7 @@ export function Media() {
         </div>
 
         <div className={styles.headerControls}>
-          <div className={styles.segmented} role="tablist" aria-label={t("media.type" as any)}>
+          <div className={styles.segmented} role="tablist" aria-label={t("media.type")}>
             {(Object.keys(FILTER_LABELS) as Filter[]).map((f) => (
               <button
                 key={f}
@@ -279,12 +279,12 @@ export function Media() {
             ))}
           </div>
 
-          <div className={styles.viewToggle} role="tablist" aria-label={t("media.viewMode" as any)}>
+          <div className={styles.viewToggle} role="tablist" aria-label={t("media.viewMode")}>
             <button
               type="button"
               role="tab"
               aria-selected={view === "list"}
-              aria-label={t("media.list" as any)}
+              aria-label={t("media.list")}
               className={
                 styles.viewBtn + (view === "list" ? " " + styles.viewBtnActive : "")
               }
@@ -296,7 +296,7 @@ export function Media() {
               type="button"
               role="tab"
               aria-selected={view === "grid"}
-              aria-label={t("media.grid" as any)}
+              aria-label={t("media.grid")}
               className={
                 styles.viewBtn + (view === "grid" ? " " + styles.viewBtnActive : "")
               }
@@ -312,7 +312,7 @@ export function Media() {
             disabled={uploading}
             onClick={() => fileInputRef.current?.click()}
           >
-            {uploading ? t("media.uploading" as any) : t("media.upload" as any)}
+            {uploading ? t("media.uploading") : t("media.upload")}
           </button>
           <input
             ref={fileInputRef}
@@ -343,7 +343,7 @@ export function Media() {
           <button
             type="button"
             onClick={() => setActionError(null)}
-            aria-label={t("common.dismiss" as any)}
+            aria-label={t("common.dismiss")}
             style={{
               border: "none",
               background: "transparent",
@@ -360,25 +360,25 @@ export function Media() {
       )}
 
       {loading ? (
-        <div className={styles.empty}>{t("common.loading" as any)}</div>
+        <div className={styles.empty}>{t("common.loading")}</div>
       ) : error ? (
         <div className={styles.empty}>{error}</div>
       ) : items.length === 0 ? (
         <EmptyState
           icon="media"
-          title={t("media.empty" as any)}
-          description={t("media.emptyDesc" as any)}
+          title={t("media.empty")}
+          description={t("media.emptyDesc")}
           actionLabel="Open calendar"
           actionHref="/calendar"
         />
       ) : view === "list" ? (
         <div className={styles.list} role="list">
           <div className={styles.listHead} aria-hidden>
-            <span>{t("media.name" as any)}</span>
-            <span>{t("media.type" as any)}</span>
-            <span>{t("media.channel" as any)}</span>
-            <span>{t("media.size" as any)}</span>
-            <span>{t("media.uploaded" as any)}</span>
+            <span>{t("media.name")}</span>
+            <span>{t("media.type")}</span>
+            <span>{t("media.channel")}</span>
+            <span>{t("media.size")}</span>
+            <span>{t("media.uploaded")}</span>
           </div>
           {items.map(({ item, src }) => (
             <MediaRow
@@ -430,9 +430,9 @@ export function Media() {
         <ConfirmDialog
           danger
           busy={deleteBusy}
-          title={t("media.deleteConfirmTitle" as any)}
-          body={t("media.deleteConfirmBody" as any)}
-          confirmLabel={t("media.deleteBtn" as any)}
+          title={t("media.deleteConfirmTitle")}
+          body={t("media.deleteConfirmBody")}
+          confirmLabel={t("media.deleteBtn")}
           onConfirm={() => void onDelete(deleteId)}
           onCancel={() => setDeleteId(null)}
         />
@@ -491,7 +491,7 @@ function MediaRow({ item, src, channel, onOpen, onDelete }: MediaRowProps) {
 
       <div className={styles.typeCell}>
         <span className={styles.typeChip}>
-          {item.kind === "image" ? t("media.image" as any) : t("media.video" as any)}
+          {item.kind === "image" ? t("media.image") : t("media.video")}
         </span>
       </div>
 
@@ -505,7 +505,7 @@ function MediaRow({ item, src, channel, onOpen, onDelete }: MediaRowProps) {
             </span>
           </>
         ) : (
-          <span className={styles.muted}>{t("media.unassigned" as any)}</span>
+          <span className={styles.muted}>{t("media.unassigned")}</span>
         )}
       </div>
 
@@ -518,7 +518,7 @@ function MediaRow({ item, src, channel, onOpen, onDelete }: MediaRowProps) {
             e.stopPropagation();
             onDelete();
           }}
-          aria-label={t("media.deleteMedia" as any)}
+          aria-label={t("media.deleteMedia")}
           style={{
             marginLeft: 12,
             border: "none",
@@ -528,7 +528,7 @@ function MediaRow({ item, src, channel, onOpen, onDelete }: MediaRowProps) {
             fontSize: 12,
           }}
         >
-          {t("common.delete" as any)}
+          {t("common.delete")}
         </button>
       </div>
     </div>
@@ -554,7 +554,7 @@ function MediaTile({ item, src, channel, onOpen }: MediaTileProps) {
     >
       <div className={styles.thumbBox}>
         <span className={styles.thumbBadge}>
-          {item.kind === "image" ? t("media.image" as any) : t("media.video" as any)}
+          {item.kind === "image" ? t("media.image") : t("media.video")}
         </span>
         {item.kind === "image" ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -609,7 +609,7 @@ function MediaTile({ item, src, channel, onOpen }: MediaTileProps) {
               {channel.name} · {channel.platform}
             </span>
           ) : (
-            <span>{t("media.unassigned" as any)}</span>
+            <span>{t("media.unassigned")}</span>
           )}
           <span className={styles.tileSep}>·</span>
           {formatDate(item.uploadedAt)}
@@ -672,7 +672,7 @@ function MediaPreview({ item, src, channel, onClose, onDelete }: MediaPreviewPro
           <div className={styles.modalHead}>
             <div className={styles.modalTitle}>
               <span className={styles.modalKind}>
-                {item.kind === "image" ? t("media.image" as any) : t("media.video" as any)}
+                {item.kind === "image" ? t("media.image") : t("media.video")}
               </span>
               <span className={styles.modalName}>{item.name}</span>
             </div>
@@ -680,7 +680,7 @@ function MediaPreview({ item, src, channel, onClose, onDelete }: MediaPreviewPro
               type="button"
               className={styles.modalClose}
               onClick={onClose}
-              aria-label={t("common.close" as any)}
+              aria-label={t("common.close")}
             >
               <CloseIcon />
             </button>
@@ -688,14 +688,14 @@ function MediaPreview({ item, src, channel, onClose, onDelete }: MediaPreviewPro
 
           <dl className={styles.modalMeta}>
             <div className={styles.metaRow}>
-              <dt className={styles.metaLabel}>{t("media.type" as any)}</dt>
+              <dt className={styles.metaLabel}>{t("media.type")}</dt>
               <dd className={styles.metaValue}>
-                {item.kind === "image" ? t("media.image" as any) : t("media.video" as any)}
+                {item.kind === "image" ? t("media.image") : t("media.video")}
               </dd>
             </div>
             {item.width && item.height && (
               <div className={styles.metaRow}>
-                <dt className={styles.metaLabel}>{t("media.dimensions" as any)}</dt>
+                <dt className={styles.metaLabel}>{t("media.dimensions")}</dt>
                 <dd className={styles.metaValue}>
                   {item.width} × {item.height}
                 </dd>
@@ -703,22 +703,22 @@ function MediaPreview({ item, src, channel, onClose, onDelete }: MediaPreviewPro
             )}
             {item.durationSeconds !== undefined && (
               <div className={styles.metaRow}>
-                <dt className={styles.metaLabel}>{t("media.duration" as any)}</dt>
+                <dt className={styles.metaLabel}>{t("media.duration")}</dt>
                 <dd className={styles.metaValue}>
                   {formatDuration(item.durationSeconds)}
                 </dd>
               </div>
             )}
             <div className={styles.metaRow}>
-              <dt className={styles.metaLabel}>{t("media.size" as any)}</dt>
+              <dt className={styles.metaLabel}>{t("media.size")}</dt>
               <dd className={styles.metaValue}>{formatBytes(item.size)}</dd>
             </div>
             <div className={styles.metaRow}>
-              <dt className={styles.metaLabel}>{t("media.uploaded" as any)}</dt>
+              <dt className={styles.metaLabel}>{t("media.uploaded")}</dt>
               <dd className={styles.metaValue}>{formatDate(item.uploadedAt)}</dd>
             </div>
             <div className={styles.metaRow}>
-              <dt className={styles.metaLabel}>{t("media.channel" as any)}</dt>
+              <dt className={styles.metaLabel}>{t("media.channel")}</dt>
               <dd className={styles.metaValue}>
                 {channel ? (
                   <span className={styles.metaChannelValue}>
@@ -726,7 +726,7 @@ function MediaPreview({ item, src, channel, onClose, onDelete }: MediaPreviewPro
                     {channel.name} · {channel.platform}
                   </span>
                 ) : (
-                  t("media.unassigned" as any)
+                  t("media.unassigned")
                 )}
               </dd>
             </div>
@@ -742,14 +742,14 @@ function MediaPreview({ item, src, channel, onClose, onDelete }: MediaPreviewPro
                 }
               }}
             >
-              {t("media.download" as any)}
+              {t("media.download")}
             </button>
             <button
               type="button"
               className={styles.modalBtnSecondary}
               onClick={onDelete}
             >
-              {t("common.delete" as any)}
+              {t("common.delete")}
             </button>
           </div>
         </div>
