@@ -28,8 +28,8 @@ export function RegisterForm() {
     if (loading) return;
     setError(null);
 
-    if (password.length < 6) {
-      setError(t("auth.passwordMin6"));
+    if (password.length < 8) {
+      setError(t("auth.passwordMin8"));
       return;
     }
 
@@ -174,8 +174,8 @@ export function RegisterForm() {
             onChange={(e) => setPassword(e.target.value)}
             required
             autoComplete="new-password"
-            minLength={6}
-            placeholder={t("auth.passwordPlaceholder6")}
+            minLength={8}
+            placeholder={t("auth.passwordPlaceholder8")}
           />
         </div>
         <div className={styles.field}>
@@ -190,7 +190,7 @@ export function RegisterForm() {
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
             autoComplete="new-password"
-            minLength={6}
+            minLength={8}
             placeholder={t("auth.confirmPasswordPlaceholder")}
           />
         </div>

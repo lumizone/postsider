@@ -22,8 +22,8 @@ export function ResetPasswordForm({ token }: { token: string }) {
     if (loading) return;
     setError(null);
 
-    if (password.length < 6) {
-      setError(t("auth.passwordMin6"));
+    if (password.length < 8) {
+      setError(t("auth.passwordMin8"));
       return;
     }
     if (password !== repeat) {
@@ -83,10 +83,10 @@ export function ResetPasswordForm({ token }: { token: string }) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength={6}
+            minLength={8}
             autoComplete="new-password"
             autoFocus
-            placeholder={t("auth.passwordPlaceholder6")}
+            placeholder={t("auth.passwordPlaceholder8")}
           />
         </div>
         <div className={styles.field}>
@@ -100,7 +100,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
             value={repeat}
             onChange={(e) => setRepeat(e.target.value)}
             required
-            minLength={6}
+            minLength={8}
             autoComplete="new-password"
             placeholder={t("auth.confirmPasswordPlaceholder")}
           />
