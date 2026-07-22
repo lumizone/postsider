@@ -21,6 +21,7 @@ import { MediaService } from '@postsider/nestjs-libraries/database/prisma/media/
 import { ApiTags } from '@nestjs/swagger';
 import handleR2Upload from '@postsider/nestjs-libraries/upload/r2.uploader';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { uploadInterceptorOptions } from '@postsider/nestjs-libraries/upload/upload.limits';
 import { CustomFileValidationPipe } from '@postsider/nestjs-libraries/upload/custom.upload.validation';
 import { SubscriptionService } from '@postsider/nestjs-libraries/database/prisma/subscriptions/subscription.service';
 import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
@@ -70,7 +71,7 @@ export class MediaController {
   }
 
   @Post('/upload-server')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', uploadInterceptorOptions))
   @UsePipes(new CustomFileValidationPipe())
   async uploadServer(
     @GetOrgFromRequest() org: Organization,
@@ -114,7 +115,7 @@ export class MediaController {
   }
 
   @Post('/upload-simple')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', uploadInterceptorOptions))
   @UsePipes(new CustomFileValidationPipe())
   async uploadSimple(
     @GetOrgFromRequest() org: Organization,

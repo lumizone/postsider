@@ -95,22 +95,26 @@ export class PolarService {
    * repository.
    */
   private async onSubscriptionUpserted(subscription: any) {
+    // Both misses below THROW instead of returning {ok:false}: the controller
+    // turns a return value into HTTP 200, which Polar records as delivered and
+    // NEVER retries — so an unmapped product (new tier, price change) silently
+    // desynced billing: the customer paid, the org stayed FREE, and the only
+    // trace was a warn line in docker logs. A 5xx makes Polar retry with
+    // backoff and flag the failing webhook in its dashboard.
     const orgId = this.extractOrgId(subscription);
     if (!orgId) {
-      this._logger.warn(
-        `Polar subscription ${subscription?.id} has no resolvable organization id`
-      );
-      return { ok: false };
+      const msg = `Polar subscription ${subscription?.id} has no resolvable organization id — cannot apply billing event`;
+      this._logger.error(msg);
+      throw new Error(msg);
     }
 
     const productId =
       subscription?.product?.id || subscription?.productId || null;
     const ref = resolveProductRef(productId);
     if (!ref) {
-      this._logger.warn(
-        `Polar product ${productId} is not mapped to a PostSider tier`
-      );
-      return { ok: false };
+      const msg = `Polar product ${productId} is not mapped to a PostSider tier (check POLAR_PRODUCT_* env) — subscription ${subscription?.id} for org ${orgId} NOT applied`;
+      this._logger.error(msg);
+      throw new Error(msg);
     }
 
     // Polar status: incomplete | trialing | active | canceled | unpaid ...
@@ -160,8 +164,14 @@ export class PolarService {
         pricing.FREE.channel || 0,
         'FREE'
       );
+      return { ok: true };
     }
-    return { ok: true };
+
+    // Neither id resolves: acknowledging with 200 would mean a cancelled
+    // customer silently keeps paid access. Throw so Polar retries/flags it.
+    const msg = `Polar cancellation ${subscription?.id} has neither customer id nor org id — subscription NOT downgraded`;
+    this._logger.error(msg);
+    throw new Error(msg);
   }
 
   /**

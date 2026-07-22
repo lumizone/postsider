@@ -161,15 +161,16 @@ function assertRequiredSecrets() {
     process.exit(1);
   }
 
-  // NOT_SECURED exposes JWT in headers and disables httpOnly cookies — never
-  // allow this in production. Catch misconfigurations early and hard.
-  if (
-    process.env.NOT_SECURED &&
-    process.env.NOT_SECURED !== 'false' &&
-    process.env.NODE_ENV === 'production'
-  ) {
+  // NOT_SECURED exposes JWT in headers, disables httpOnly cookies AND the CSRF
+  // middleware — never allow this in production. Every runtime check is a bare
+  // truthiness test, so the string "false" ENABLES insecure mode too; the old
+  // guard here explicitly exempted exactly that value. Any non-empty value in
+  // production is a misconfiguration: abort on all of them.
+  if (process.env.NOT_SECURED && process.env.NODE_ENV === 'production') {
     Logger.error(
-      'NOT_SECURED must not be enabled in production! Aborting startup.',
+      `NOT_SECURED is set (value: ${JSON.stringify(
+        process.env.NOT_SECURED
+      )}) — the code checks truthiness, so even "false" enables insecure mode. Remove the variable entirely for production. Aborting startup.`,
       'Startup'
     );
     process.exit(1);

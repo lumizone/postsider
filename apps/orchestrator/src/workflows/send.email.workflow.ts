@@ -15,6 +15,12 @@ const { sendEmail } = proxyActivities<EmailActivity>({
   startToCloseTimeout: '10 minute',
   taskQueue: 'main',
   cancellationType: 'ABANDON',
+  // Bounded: sendEmailSync now throws on total failure, and Temporal's default
+  // retry policy is UNLIMITED attempts — one permanently-bouncing email would
+  // wedge this singleton queue forever. 3 activity attempts (x3 in-process
+  // tries each) is plenty; the catch below then drops that one email and the
+  // queue moves on.
+  retry: { maximumAttempts: 3 },
 });
 
 const RATE_LIMIT_MS = 700;

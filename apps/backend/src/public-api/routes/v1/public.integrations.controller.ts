@@ -20,6 +20,7 @@ import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/
 import { CheckPolicies } from '@postsider/backend/services/auth/permissions/permissions.ability';
 import { PostsService } from '@postsider/nestjs-libraries/database/prisma/posts/posts.service';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { uploadInterceptorOptions } from '@postsider/nestjs-libraries/upload/upload.limits';
 import { UploadFactory } from '@postsider/nestjs-libraries/upload/upload.factory';
 import { MediaService } from '@postsider/nestjs-libraries/database/prisma/media/media.service';
 import { GetPostsDto } from '@postsider/nestjs-libraries/dtos/posts/get.posts.dto';
@@ -73,7 +74,7 @@ export class PublicIntegrationsController {
   ) {}
 
   @Post('/upload')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', uploadInterceptorOptions))
   @UsePipes(new CustomFileValidationPipe())
   async uploadSimple(
     @GetOrgFromRequest() org: Organization,

@@ -1,15 +1,23 @@
 import { proxyActivities, sleep } from '@temporalio/workflow';
 import { IntegrationsActivity } from '@postsider/orchestrator/activities/integrations.activity';
+import { PostActivity } from '@postsider/orchestrator/activities/post.activity';
 
-const { getIntegrationsById, refreshToken } =
-  proxyActivities<IntegrationsActivity>({
-    startToCloseTimeout: '10 minute',
-    retry: {
-      maximumAttempts: 3,
-      backoffCoefficient: 1,
-      initialInterval: '2 minutes',
-    },
-  });
+const activityOptions = {
+  startToCloseTimeout: '10 minute',
+  retry: {
+    maximumAttempts: 3,
+    backoffCoefficient: 1,
+    initialInterval: '2 minutes',
+  },
+} as const;
+
+const { getIntegrationsById } =
+  proxyActivities<IntegrationsActivity>(activityOptions);
+// Activities resolve by NAME at runtime; `refreshToken` has always been
+// PostActivity's (IntegrationsActivity's copy was never decorated/registered —
+// removed in the 2026-07-22 audit). Type it accordingly so the code says what
+// the runtime does.
+const { refreshToken } = proxyActivities<PostActivity>(activityOptions);
 
 export async function refreshTokenWorkflow({
   organizationId,

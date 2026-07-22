@@ -61,11 +61,14 @@ export class WebhookController {
       return { send: false, error: 'Blocked protocol' };
     }
 
+    // Report the REAL outcome. This used to return { send: true } even when
+    // the fetch threw — a user validating a broken/unreachable URL was told it
+    // works, then wondered why deliveries never arrived.
     try {
       const { ssrfSafeDispatcher } = await import(
         '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher'
       );
-      await fetch(query.url, {
+      const res = await fetch(query.url, {
         method: 'POST',
         body: JSON.stringify(body),
         headers: { 'Content-Type': 'application/json' },
@@ -73,10 +76,15 @@ export class WebhookController {
         dispatcher: ssrfSafeDispatcher,
         signal: AbortSignal.timeout(10000),
       });
+      if (!res.ok) {
+        return { send: false, error: `Endpoint responded with HTTP ${res.status}` };
+      }
+      return { send: true };
     } catch (err) {
-      /** sent **/
+      return {
+        send: false,
+        error: err instanceof Error ? err.message : 'Request failed',
+      };
     }
-
-    return { send: true };
   }
 }

@@ -43,7 +43,11 @@ export class PostsRepository {
           deletedAt: null,
         },
         publishDate: {
-          gte: dayjs.utc().subtract(2, 'day').toDate(),
+          // 14 days, not 2: the 2026-07 outage lasted ~10 days, and posts
+          // stuck longer than the window fall out of this recovery sweep
+          // permanently. The sweep is cheap (indexed state+date filter), so a
+          // wide net costs nothing.
+          gte: dayjs.utc().subtract(14, 'day').toDate(),
           lt: dayjs.utc().toDate(),
         },
         state: 'QUEUE',

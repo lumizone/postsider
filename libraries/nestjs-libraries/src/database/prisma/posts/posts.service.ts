@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   ValidationPipe,
 } from '@nestjs/common';
 import { PostsRepository } from '@postsider/nestjs-libraries/database/prisma/posts/posts.repository';
@@ -61,6 +62,7 @@ type PostWithConditionals = Post & {
 
 @Injectable()
 export class PostsService {
+  private _logger = new Logger(PostsService.name);
   private storage = UploadFactory.createStorage();
   constructor(
     private _postRepository: PostsRepository,
@@ -712,6 +714,8 @@ export class PostsService {
     orgId: string,
     state: State
   ) {
+    // Best-effort cleanup of previous runs — a failure here must not block the
+    // (re)schedule below, but it is worth a log line.
     try {
       const workflows = this._temporalService.client
         .getRawClient()
@@ -730,40 +734,72 @@ export class PostsService {
           ) {
             await workflow.terminate();
           }
-        } catch (err) {}
+        } catch (err) {
+          this._logger.warn(
+            `startWorkflow: could not terminate old run ${executionInfo.workflowId} for post ${postId}: ${err}`
+          );
+        }
       }
-    } catch (err) {}
+    } catch (err) {
+      this._logger.warn(
+        `startWorkflow: could not list old runs for post ${postId}: ${err}`
+      );
+    }
 
     if (state === 'DRAFT') {
       return;
     }
 
+    // NOT best-effort. If this start is lost, the post sits in QUEUE forever
+    // with no error and every health signal green — the silent 2026-07 outage
+    // class. So: a null client is an error (the old `?.` chain made it a
+    // no-op), and any failure marks the post ERROR (user-visible, and the
+    // monitor's stuck-post check counts only error-less posts) before
+    // rethrowing for the caller.
     try {
-      await this._temporalService.client
-        .getRawClient()
-        ?.workflow.start('postWorkflowV105', {
-          workflowId: `post_${postId}`,
-          taskQueue: 'main',
-          workflowIdConflictPolicy: 'TERMINATE_EXISTING',
-          args: [
-            {
-              taskQueue: taskQueue,
-              postId: postId,
-              organizationId: orgId,
-            },
-          ],
-          typedSearchAttributes: new TypedSearchAttributes([
-            {
-              key: postIdSearchParam,
-              value: postId,
-            },
-            {
-              key: organizationId,
-              value: orgId,
-            },
-          ]),
-        });
-    } catch (err) {}
+      const workflow = this._temporalService.client.getRawClient()?.workflow;
+      if (!workflow) {
+        throw new Error('Temporal client is not available');
+      }
+      await workflow.start('postWorkflowV105', {
+        workflowId: `post_${postId}`,
+        taskQueue: 'main',
+        workflowIdConflictPolicy: 'TERMINATE_EXISTING',
+        args: [
+          {
+            taskQueue: taskQueue,
+            postId: postId,
+            organizationId: orgId,
+          },
+        ],
+        typedSearchAttributes: new TypedSearchAttributes([
+          {
+            key: postIdSearchParam,
+            value: postId,
+          },
+          {
+            key: organizationId,
+            value: orgId,
+          },
+        ]),
+      });
+    } catch (err) {
+      this._logger.error(
+        `startWorkflow: FAILED to schedule publish workflow for post ${postId} (org ${orgId}): ${err}`
+      );
+      try {
+        await this._postRepository.changeState(
+          postId,
+          'ERROR',
+          'Could not schedule the publish workflow (scheduler unavailable). Please re-schedule this post.'
+        );
+      } catch (stateErr) {
+        this._logger.error(
+          `startWorkflow: could not even mark post ${postId} as ERROR: ${stateErr}`
+        );
+      }
+      throw err;
+    }
   }
 
   /**
@@ -933,12 +969,19 @@ export class PostsService {
       }
 
       if (body.type !== 'update') {
+        // Deliberately not awaited (don't hold the HTTP response for Temporal),
+        // but never silent: on failure startWorkflow has already marked the
+        // post ERROR, so the calendar shows it — this log is for the operator.
         this.startWorkflow(
           post.settings.__type.split('-')[0].toLowerCase(),
           posts[0].id,
           orgId,
           posts[0].state
-        ).catch((err) => {});
+        ).catch((err) =>
+          this._logger.error(
+            `createPost: scheduling failed for post ${posts[0].id}: ${err}`
+          )
+        );
       }
 
       Sentry.metrics.count('post_created', 1);
@@ -1030,14 +1073,16 @@ export class PostsService {
     const state: State = status === 'draft' ? 'DRAFT' : 'QUEUE';
     await this._postRepository.changeState(id, state);
 
-    try {
-      await this.startWorkflow(
-        getPostById.integration.providerIdentifier.split('-')[0].toLowerCase(),
-        getPostById.id,
-        orgId,
-        state
-      );
-    } catch (err) {}
+    // No swallow: if the workflow cannot be scheduled the post is already
+    // marked ERROR (inside startWorkflow) and the user must see the failure
+    // instead of a green "scheduled" response over a post that will never
+    // publish.
+    await this.startWorkflow(
+      getPostById.integration.providerIdentifier.split('-')[0].toLowerCase(),
+      getPostById.id,
+      orgId,
+      state
+    );
 
     return { id, state };
   }
@@ -1065,16 +1110,17 @@ export class PostsService {
     );
 
     if (action === 'schedule') {
-      try {
-        await this.startWorkflow(
-          getPostById.integration.providerIdentifier
-            .split('-')[0]
-            .toLowerCase(),
-          getPostById.id,
-          orgId,
-          getPostById.state === 'DRAFT' ? 'DRAFT' : 'QUEUE'
-        );
-      } catch (err) {}
+      // No swallow — same reasoning as changePostStatus: a reschedule that
+      // silently failed to move the workflow leaves the DB date and the actual
+      // publish time out of sync forever.
+      await this.startWorkflow(
+        getPostById.integration.providerIdentifier
+          .split('-')[0]
+          .toLowerCase(),
+        getPostById.id,
+        orgId,
+        getPostById.state === 'DRAFT' ? 'DRAFT' : 'QUEUE'
+      );
     }
 
     return newDate;

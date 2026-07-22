@@ -226,7 +226,20 @@ export class SubscriptionService {
   }
 
   async getSubscription(organizationId: string) {
-    return this._subscriptionRepository.getSubscription(organizationId);
+    const subscription = await this._subscriptionRepository.getSubscription(
+      organizationId
+    );
+    // Same expired-trial rule as getSubscriptionByOrganizationId above. This
+    // path gates PUBLISHING (post.activity), which used to keep honoring an
+    // expired trial while the rest of the app already treated the org as FREE.
+    if (
+      subscription?.identifier === 'trial' &&
+      subscription.cancelAt &&
+      subscription.cancelAt.getTime() < Date.now()
+    ) {
+      return null;
+    }
+    return subscription;
   }
 
   async checkCredits(organization: Organization, checkType = 'ai_images') {
