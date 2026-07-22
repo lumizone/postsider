@@ -246,6 +246,40 @@ export class IntegrationService {
     return this._integrationRepository.disableChannel(org, id);
   }
 
+  async wipeIntegrationsForPlatformUser(
+    providerIdentifiers: string[],
+    internalIds: string[]
+  ) {
+    const integrations =
+      await this._integrationRepository.findByPlatformInternalIds(
+        providerIdentifiers,
+        internalIds
+      );
+    if (integrations.length) {
+      await this._integrationRepository.dataDeletionWipe(
+        integrations.map((i) => i.id)
+      );
+    }
+    return integrations.length;
+  }
+
+  async deauthorizeIntegrationsForPlatformUser(
+    providerIdentifiers: string[],
+    internalIds: string[]
+  ) {
+    const integrations =
+      await this._integrationRepository.findByPlatformInternalIds(
+        providerIdentifiers,
+        internalIds
+      );
+    if (integrations.length) {
+      await this._integrationRepository.markDeauthorized(
+        integrations.map((i) => i.id)
+      );
+    }
+    return integrations.length;
+  }
+
   async enableChannel(org: string, totalChannels: number, id: string) {
     const integrations = (
       await this._integrationRepository.getIntegrationsList(org)

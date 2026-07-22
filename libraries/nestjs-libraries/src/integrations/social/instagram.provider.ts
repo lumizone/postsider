@@ -546,7 +546,9 @@ export class InstagramProvider
       pageId: p.pageId,
       id: p.id,
       name: p.name,
-      picture: { data: { url: p.profile_picture_url } },
+      // Flat URL string — the picker renders <img src={picture}>, so a
+      // { data: { url } } object showed up as a broken image.
+      picture: p.profile_picture_url || '',
     }));
   }
 

@@ -384,7 +384,18 @@ export class FacebookProvider extends SocialAbstract implements SocialProvider {
       // Business Manager API not available for all users
     }
 
-    return allPages;
+    // Normalize to the ConnectPage shape the picker expects: a flat `picture`
+    // URL string (Graph returns `picture: { data: { url } }`, which the client
+    // rendered as "[object Object]" → broken image) and NO per-page
+    // `access_token` (raw Graph objects carry one; it must not leak to the
+    // browser — the connect step re-fetches server-side from the page id).
+    return allPages.map((page: any) => ({
+      id: page.id,
+      page: page.id,
+      name: page.name,
+      username: page.username,
+      picture: page.picture?.data?.url || '',
+    }));
   }
 
   async fetchPageInformation(accessToken: string, data: { page: string }) {

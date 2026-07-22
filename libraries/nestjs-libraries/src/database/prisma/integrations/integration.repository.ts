@@ -562,6 +562,47 @@ export class IntegrationRepository {
     });
   }
 
+  // Platform-initiated compliance callbacks (e.g. Meta data deletion) arrive
+  // with only the provider-side user id, so these lookups are cross-org.
+  findByPlatformInternalIds(
+    providerIdentifiers: string[],
+    internalIds: string[]
+  ) {
+    return this._integration.model.integration.findMany({
+      where: {
+        providerIdentifier: { in: providerIdentifiers },
+        deletedAt: null,
+        OR: [
+          { rootInternalId: { in: internalIds } },
+          { internalId: { in: internalIds } },
+        ],
+      },
+    });
+  }
+
+  dataDeletionWipe(ids: string[]) {
+    return this._integration.model.integration.updateMany({
+      where: { id: { in: ids } },
+      data: {
+        deletedAt: new Date(),
+        disabled: true,
+        refreshNeeded: true,
+        token: '',
+        refreshToken: '',
+      },
+    });
+  }
+
+  markDeauthorized(ids: string[]) {
+    return this._integration.model.integration.updateMany({
+      where: { id: { in: ids } },
+      data: {
+        disabled: true,
+        refreshNeeded: true,
+      },
+    });
+  }
+
   async checkForDeletedOnceAndUpdate(org: string, page: string) {
     return this._integration.model.integration.updateMany({
       where: {
