@@ -125,7 +125,9 @@ export class RefreshIntegrationService implements OnApplicationBootstrap {
         ).filter((integration) => integration.refreshToken);
       }
 
-      const failed: typeof pending = [];
+      const failed: Awaited<
+        ReturnType<typeof this._integrationService.getAllForRefreshArming>
+      > = [];
       let armed = 0;
       for (const integration of pending) {
         try {
