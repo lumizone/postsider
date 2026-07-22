@@ -359,7 +359,8 @@ export class IntegrationService {
     org: Organization,
     integration: string,
     date: string,
-    forceRefresh = false
+    forceRefresh = false,
+    _retryCount = 0
   ): Promise<AnalyticsData[]> {
     const getIntegration = await this.getIntegrationById(org.id, integration);
 
@@ -429,8 +430,31 @@ export class IntegrationService {
         return loadAnalytics;
       } catch (e) {
         if (e instanceof RefreshToken) {
-          return this.checkAnalytics(org, integration, date, true);
+          // Bounded: a token can refresh successfully yet still be rejected by
+          // the analytics API (missing scope, revoked-but-refreshable). Without
+          // a cap this recursed forever — hanging the request and hammering the
+          // provider + refresh endpoints. Mirrors checkPostAnalytics's guard.
+          if (_retryCount >= 2) {
+            console.error(
+              `[analytics] ${getIntegration.providerIdentifier}/${integration}: token still rejected after ${_retryCount} refresh attempts — giving up`
+            );
+            return [];
+          }
+          return this.checkAnalytics(
+            org,
+            integration,
+            date,
+            true,
+            _retryCount + 1
+          );
         }
+        // Previously swallowed silently, so the UI rendered an empty chart —
+        // indistinguishable from "no data" — for a channel that was actually
+        // erroring. Log it so genuine failures are visible.
+        console.error(
+          `[analytics] ${getIntegration.providerIdentifier}/${integration}: analytics fetch failed`,
+          e
+        );
       }
     }
 

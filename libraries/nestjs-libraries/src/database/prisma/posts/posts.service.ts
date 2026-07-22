@@ -346,7 +346,12 @@ export class PostsService {
     );
   }
 
-  async updateMedia(id: string, imagesList: any[], convertToJPEG = false) {
+  async updateMedia(
+    id: string,
+    imagesList: any[],
+    orgId: string,
+    convertToJPEG = false
+  ) {
     try {
       let imageUpdateNeeded = false;
       const getImageList = await Promise.all(
@@ -355,7 +360,7 @@ export class PostsService {
             (imagesList || []).map(async (p: any) => {
               if (!p.path && p.id) {
                 imageUpdateNeeded = true;
-                return this._mediaService.getMediaById(p.id);
+                return this._mediaService.getMediaById(p.id, orgId);
               }
 
               return p;
@@ -509,6 +514,7 @@ export class PostsService {
           image: await this.updateMedia(
             post.id,
             JSON.parse(post.image || '[]'),
+            orgId,
             convertToJPEG
           ),
         }))
@@ -555,6 +561,7 @@ export class PostsService {
           image: await this.updateMedia(
             post.id,
             JSON.parse(post.image || '[]'),
+            orgId,
             convertToJPEG
           ),
         }))

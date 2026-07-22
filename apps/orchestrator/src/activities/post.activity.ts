@@ -214,6 +214,7 @@ export class PostActivity {
               media: await this._postService.updateMedia(
                 p.id,
                 JSON.parse(p.image || '[]'),
+                integration.organizationId,
                 getIntegration?.convertToJPEG || false
               ),
             }))
@@ -274,6 +275,7 @@ export class PostActivity {
               media: await this._postService.updateMedia(
                 p.id,
                 JSON.parse(p.image || '[]'),
+                integration.organizationId,
                 getIntegration?.convertToJPEG || false
               ),
             }))
