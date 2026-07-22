@@ -139,6 +139,9 @@ COPY --from=builder --chown=postsider:postsider /build/libraries/nestjs-librarie
 # Scripts
 COPY --from=builder --chown=postsider:postsider /build/scripts ./scripts
 
+# pm2 process definitions (starts each app as `node` directly — see the file)
+COPY --from=builder --chown=postsider:postsider /build/ecosystem.config.js ./ecosystem.config.js
+
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=60s \
   CMD wget --no-verbose --tries=1 --spider http://localhost:5000/api/health || exit 1
@@ -146,7 +149,14 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=60s \
 # Use tini as init process for proper signal handling
 ENTRYPOINT ["tini", "--"]
 
-# Start nginx + application via pm2
-CMD ["sh", "-c", "nginx && pnpm run pm2"]
+# Start nginx + application via pm2.
+#
+# `exec` (and NOT going through `pnpm run pm2`) is deliberate: it makes
+# pm2-runtime the direct child of tini, so a `docker stop` SIGTERM actually
+# reaches the supervisor and each app gets its kill_timeout to drain. Routed
+# through pnpm the signal died in the wrapper chain and everything was SIGKILLed
+# 10s later. pm2-runtime also keeps pm2 in the foreground, so no `pm2 logs` tail
+# is needed to hold the container open.
+CMD ["sh", "-c", "nginx && pnpm run prisma-migrate-deploy && exec pm2-runtime start ecosystem.config.js"]
 
 EXPOSE 5000

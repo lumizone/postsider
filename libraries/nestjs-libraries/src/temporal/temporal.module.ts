@@ -18,6 +18,15 @@ export const getTemporalModule = (
     logLevel: 'error',
     ...(isWorkers
       ? {
+          // Fail LOUDLY when workers cannot be created. The library default
+          // (undefined) makes TemporalWorkerManagerService log a warning and
+          // `return` on a failed connection, so Nest boots "healthy" with zero
+          // workers polling — scheduled posts then pile up in QUEUE with no
+          // error and nothing alerts. Setting this to false turns that into a
+          // thrown error, so the process exits and pm2 restarts it.
+          // Client-side (isWorkers=false) keeps the lenient default: it uses a
+          // lazy connection and must not take the backend down with it.
+          allowConnectionFailure: false,
           workers: [
             { identifier: 'main', maxConcurrentJob: undefined },
             ...socialIntegrationList,

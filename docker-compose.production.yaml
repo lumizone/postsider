@@ -61,6 +61,12 @@ services:
         condition: service_healthy
       postsider-minio:
         condition: service_healthy
+      # Without this the orchestrator's Temporal workers raced the server on a
+      # cold boot: the connection was refused, the factory swallowed it, and the
+      # app came up "healthy" with ZERO workers polling. Publishing was silently
+      # dead for ~10 days in 2026-07.
+      temporal:
+        condition: service_healthy
 
   # ─── PostgreSQL (App Database) ────────────────────────────────────────────
   postsider-postgres:
@@ -281,6 +287,17 @@ services:
       - 7233
     volumes:
       - ./dynamicconfig:/etc/temporal/config/dynamicconfig
+    # Readiness for the orchestrator's workers is NOT "the server accepts TCP" —
+    # auto-setup registers the `default` namespace only after the server is up,
+    # and a worker connecting before that fails. Describing the namespace covers
+    # both. Address must be the container IP: the server does not bind ::1, so
+    # `localhost:7233` is refused even when it is fully healthy.
+    healthcheck:
+      test: ["CMD-SHELL", "temporal operator namespace describe -n ${TEMPORAL_NAMESPACE:-default} --address $$(hostname -i):7233 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
 
   temporal-ui:
     image: temporalio/ui:2.34.0
