@@ -43,7 +43,7 @@ importers:
         version: 1.2.0(@nestjs/common@11.1.24(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.24)(@nestjs/throttler@6.5.0(@nestjs/common@11.1.24(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.24)(reflect-metadata@0.2.2))(ioredis@5.11.1)(reflect-metadata@0.2.2)
       '@nestjs/cli':
         specifier: ^11.0.21
-        version: 11.0.21(@swc/cli@0.3.14(@swc/core@1.5.7(@swc/helpers@0.5.15))(chokidar@4.0.3))(@swc/core@1.5.7(@swc/helpers@0.5.15))(@types/node@18.16.9)(esbuild@0.27.7)(postcss@8.5.15)(prettier@2.8.8)
+        version: 11.0.21(@swc/cli@0.3.14(@swc/core@1.5.7(@swc/helpers@0.5.15))(chokidar@4.0.3))(@swc/core@1.5.7(@swc/helpers@0.5.15))(@types/node@18.16.9)(esbuild@0.28.0)(postcss@8.5.15)(prettier@2.8.8)
       '@nestjs/common':
         specifier: ^11.1.21
         version: 11.1.24(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -91,7 +91,7 @@ importers:
         version: 1.17.2
       '@temporalio/worker':
         specifier: ^1.14.0
-        version: 1.17.2(@swc/helpers@0.5.15)(esbuild@0.27.7)(postcss@8.5.15)(tslib@2.8.1)
+        version: 1.17.2(@swc/helpers@0.5.15)(esbuild@0.28.0)(postcss@8.5.15)(tslib@2.8.1)
       '@temporalio/workflow':
         specifier: ^1.14.0
         version: 1.17.2
@@ -232,7 +232,7 @@ importers:
         version: 3.0.1(@nestjs/common@11.1.24(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))
       nestjs-temporal-core:
         specifier: ^3.2.0
-        version: 3.2.8(@nestjs/common@11.1.24(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.24)(@temporalio/client@1.17.2)(@temporalio/common@1.17.2)(@temporalio/worker@1.17.2(@swc/helpers@0.5.15)(esbuild@0.27.7)(postcss@8.5.15)(tslib@2.8.1))(@temporalio/workflow@1.17.2)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+        version: 3.2.8(@nestjs/common@11.1.24(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.24)(@temporalio/client@1.17.2)(@temporalio/common@1.17.2)(@temporalio/worker@1.17.2(@swc/helpers@0.5.15)(esbuild@0.28.0)(postcss@8.5.15)(tslib@2.8.1))(@temporalio/workflow@1.17.2)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       node-fetch:
         specifier: ^3.3.2
         version: 3.3.2
@@ -254,6 +254,9 @@ importers:
       parse5:
         specifier: ^6.0.1
         version: 6.0.1
+      prisma:
+        specifier: 6.5.0
+        version: 6.5.0(typescript@5.5.4)
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -411,12 +414,9 @@ importers:
       prettier:
         specifier: ^2.6.2
         version: 2.8.8
-      prisma:
-        specifier: 6.5.0
-        version: 6.5.0(typescript@5.5.4)
       ts-jest:
         specifier: ^29.1.0
-        version: 29.4.11(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(esbuild@0.27.7)(jest-util@29.7.0)(jest@29.7.0(@types/node@18.16.9)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(@types/node@18.16.9)(typescript@5.5.4)))(typescript@5.5.4)
+        version: 29.4.11(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(esbuild@0.28.0)(jest-util@29.7.0)(jest@29.7.0(@types/node@18.16.9)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(@types/node@18.16.9)(typescript@5.5.4)))(typescript@5.5.4)
       ts-node:
         specifier: 10.9.2
         version: 10.9.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(@types/node@18.16.9)(typescript@5.5.4)
@@ -10116,7 +10116,7 @@ snapshots:
       reflect-metadata: 0.2.2
       tslib: 2.8.1
 
-  '@nestjs/cli@11.0.21(@swc/cli@0.3.14(@swc/core@1.5.7(@swc/helpers@0.5.15))(chokidar@4.0.3))(@swc/core@1.5.7(@swc/helpers@0.5.15))(@types/node@18.16.9)(esbuild@0.27.7)(postcss@8.5.15)(prettier@2.8.8)':
+  '@nestjs/cli@11.0.21(@swc/cli@0.3.14(@swc/core@1.5.7(@swc/helpers@0.5.15))(chokidar@4.0.3))(@swc/core@1.5.7(@swc/helpers@0.5.15))(@types/node@18.16.9)(esbuild@0.28.0)(postcss@8.5.15)(prettier@2.8.8)':
     dependencies:
       '@angular-devkit/core': 19.2.24(chokidar@4.0.3)
       '@angular-devkit/schematics': 19.2.24(chokidar@4.0.3)
@@ -10127,14 +10127,14 @@ snapshots:
       chokidar: 4.0.3
       cli-table3: 0.6.5
       commander: 4.1.1
-      fork-ts-checker-webpack-plugin: 9.1.0(typescript@5.9.3)(webpack@5.106.0(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.27.7)(postcss@8.5.15))
+      fork-ts-checker-webpack-plugin: 9.1.0(typescript@5.9.3)(webpack@5.106.0(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.28.0)(postcss@8.5.15))
       glob: 13.0.6
       node-emoji: 1.11.0
       ora: 5.4.1
       tsconfig-paths: 4.2.0
       tsconfig-paths-webpack-plugin: 4.2.0
       typescript: 5.9.3
-      webpack: 5.106.0(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.27.7)(postcss@8.5.15)
+      webpack: 5.106.0(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.28.0)(postcss@8.5.15)
       webpack-node-externals: 3.0.0
     optionalDependencies:
       '@swc/cli': 0.3.14(@swc/core@1.5.7(@swc/helpers@0.5.15))(chokidar@4.0.3)
@@ -10850,7 +10850,7 @@ snapshots:
       long: 5.3.2
       protobufjs: 7.6.4
 
-  '@temporalio/worker@1.17.2(@swc/helpers@0.5.15)(esbuild@0.27.7)(postcss@8.5.15)(tslib@2.8.1)':
+  '@temporalio/worker@1.17.2(@swc/helpers@0.5.15)(esbuild@0.28.0)(postcss@8.5.15)(tslib@2.8.1)':
     dependencies:
       '@grpc/grpc-js': 1.14.4
       '@swc/core': 1.5.7(@swc/helpers@0.5.15)
@@ -10869,11 +10869,11 @@ snapshots:
       protobufjs: 7.6.4
       rxjs: 7.8.2
       source-map: 0.7.6
-      source-map-loader: 4.0.2(webpack@5.107.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.27.7)(postcss@8.5.15))
+      source-map-loader: 4.0.2(webpack@5.107.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.28.0)(postcss@8.5.15))
       supports-color: 8.1.1
-      swc-loader: 0.2.7(@swc/core@1.5.7(@swc/helpers@0.5.15))(webpack@5.107.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.27.7)(postcss@8.5.15))
+      swc-loader: 0.2.7(@swc/core@1.5.7(@swc/helpers@0.5.15))(webpack@5.107.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.28.0)(postcss@8.5.15))
       unionfs: 4.6.0
-      webpack: 5.107.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.27.7)(postcss@8.5.15)
+      webpack: 5.107.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.28.0)(postcss@8.5.15)
     transitivePeerDependencies:
       - '@minify-html/node'
       - '@swc/css'
@@ -12913,7 +12913,7 @@ snapshots:
 
   forever-agent@0.6.1: {}
 
-  fork-ts-checker-webpack-plugin@9.1.0(typescript@5.9.3)(webpack@5.106.0(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.27.7)(postcss@8.5.15)):
+  fork-ts-checker-webpack-plugin@9.1.0(typescript@5.9.3)(webpack@5.106.0(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.28.0)(postcss@8.5.15)):
     dependencies:
       '@babel/code-frame': 7.29.7
       chalk: 4.1.2
@@ -12928,7 +12928,7 @@ snapshots:
       semver: 7.8.1
       tapable: 2.3.3
       typescript: 5.9.3
-      webpack: 5.106.0(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.27.7)(postcss@8.5.15)
+      webpack: 5.106.0(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.28.0)(postcss@8.5.15)
 
   form-data@4.0.6:
     dependencies:
@@ -14415,13 +14415,13 @@ snapshots:
       '@nestjs/common': 11.1.24(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@supercharge/request-ip': 1.2.0
 
-  nestjs-temporal-core@3.2.8(@nestjs/common@11.1.24(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.24)(@temporalio/client@1.17.2)(@temporalio/common@1.17.2)(@temporalio/worker@1.17.2(@swc/helpers@0.5.15)(esbuild@0.27.7)(postcss@8.5.15)(tslib@2.8.1))(@temporalio/workflow@1.17.2)(reflect-metadata@0.2.2)(rxjs@7.8.2):
+  nestjs-temporal-core@3.2.8(@nestjs/common@11.1.24(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.24)(@temporalio/client@1.17.2)(@temporalio/common@1.17.2)(@temporalio/worker@1.17.2(@swc/helpers@0.5.15)(esbuild@0.28.0)(postcss@8.5.15)(tslib@2.8.1))(@temporalio/workflow@1.17.2)(reflect-metadata@0.2.2)(rxjs@7.8.2):
     dependencies:
       '@nestjs/common': 11.1.24(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/core': 11.1.24(@nestjs/common@11.1.24(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/microservices@11.1.24)(@nestjs/platform-express@11.1.24)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@temporalio/client': 1.17.2
       '@temporalio/common': 1.17.2
-      '@temporalio/worker': 1.17.2(@swc/helpers@0.5.15)(esbuild@0.27.7)(postcss@8.5.15)(tslib@2.8.1)
+      '@temporalio/worker': 1.17.2(@swc/helpers@0.5.15)(esbuild@0.28.0)(postcss@8.5.15)(tslib@2.8.1)
       '@temporalio/workflow': 1.17.2
       ms: 2.1.3
       reflect-metadata: 0.2.2
@@ -15428,11 +15428,11 @@ snapshots:
 
   source-map-js@1.2.1: {}
 
-  source-map-loader@4.0.2(webpack@5.107.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.27.7)(postcss@8.5.15)):
+  source-map-loader@4.0.2(webpack@5.107.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.28.0)(postcss@8.5.15)):
     dependencies:
       iconv-lite: 0.6.3
       source-map-js: 1.2.1
-      webpack: 5.107.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.27.7)(postcss@8.5.15)
+      webpack: 5.107.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.28.0)(postcss@8.5.15)
 
   source-map-support@0.5.13:
     dependencies:
@@ -15621,11 +15621,11 @@ snapshots:
     dependencies:
       '@scarf/scarf': 1.4.0
 
-  swc-loader@0.2.7(@swc/core@1.5.7(@swc/helpers@0.5.15))(webpack@5.107.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.27.7)(postcss@8.5.15)):
+  swc-loader@0.2.7(@swc/core@1.5.7(@swc/helpers@0.5.15))(webpack@5.107.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.28.0)(postcss@8.5.15)):
     dependencies:
       '@swc/core': 1.5.7(@swc/helpers@0.5.15)
       '@swc/counter': 0.1.3
-      webpack: 5.107.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.27.7)(postcss@8.5.15)
+      webpack: 5.107.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.28.0)(postcss@8.5.15)
 
   symbol-observable@4.0.0: {}
 
@@ -15641,28 +15641,28 @@ snapshots:
       minizlib: 3.1.0
       yallist: 5.0.0
 
-  terser-webpack-plugin@5.6.1(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.27.7)(postcss@8.5.15)(webpack@5.106.0(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.27.7)(postcss@8.5.15)):
+  terser-webpack-plugin@5.6.1(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.28.0)(postcss@8.5.15)(webpack@5.106.0(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.28.0)(postcss@8.5.15)):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       jest-worker: 27.5.1
       schema-utils: 4.3.3
       terser: 5.48.0
-      webpack: 5.106.0(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.27.7)(postcss@8.5.15)
+      webpack: 5.106.0(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.28.0)(postcss@8.5.15)
     optionalDependencies:
       '@swc/core': 1.5.7(@swc/helpers@0.5.15)
-      esbuild: 0.27.7
+      esbuild: 0.28.0
       postcss: 8.5.15
 
-  terser-webpack-plugin@5.6.1(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.27.7)(postcss@8.5.15)(webpack@5.107.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.27.7)(postcss@8.5.15)):
+  terser-webpack-plugin@5.6.1(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.28.0)(postcss@8.5.15)(webpack@5.107.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.28.0)(postcss@8.5.15)):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       jest-worker: 27.5.1
       schema-utils: 4.3.3
       terser: 5.48.0
-      webpack: 5.107.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.27.7)(postcss@8.5.15)
+      webpack: 5.107.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.28.0)(postcss@8.5.15)
     optionalDependencies:
       '@swc/core': 1.5.7(@swc/helpers@0.5.15)
-      esbuild: 0.27.7
+      esbuild: 0.28.0
       postcss: 8.5.15
 
   terser@5.48.0:
@@ -15811,7 +15811,7 @@ snapshots:
 
   ts-interface-checker@0.1.13: {}
 
-  ts-jest@29.4.11(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(esbuild@0.27.7)(jest-util@29.7.0)(jest@29.7.0(@types/node@18.16.9)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(@types/node@18.16.9)(typescript@5.5.4)))(typescript@5.5.4):
+  ts-jest@29.4.11(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(esbuild@0.28.0)(jest-util@29.7.0)(jest@29.7.0(@types/node@18.16.9)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(@types/node@18.16.9)(typescript@5.5.4)))(typescript@5.5.4):
     dependencies:
       bs-logger: 0.2.6
       fast-json-stable-stringify: 2.1.0
@@ -15829,7 +15829,7 @@ snapshots:
       '@jest/transform': 29.7.0
       '@jest/types': 29.6.3
       babel-jest: 29.7.0(@babel/core@7.29.7)
-      esbuild: 0.27.7
+      esbuild: 0.28.0
       jest-util: 29.7.0
 
   ts-node@10.9.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(@types/node@18.16.9)(typescript@5.5.4):
@@ -16154,7 +16154,7 @@ snapshots:
 
   webpack-sources@3.5.0: {}
 
-  webpack@5.106.0(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.27.7)(postcss@8.5.15):
+  webpack@5.106.0(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.28.0)(postcss@8.5.15):
     dependencies:
       '@types/eslint-scope': 3.7.7
       '@types/estree': 1.0.9
@@ -16178,7 +16178,7 @@ snapshots:
       neo-async: 2.6.2
       schema-utils: 4.3.3
       tapable: 2.3.3
-      terser-webpack-plugin: 5.6.1(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.27.7)(postcss@8.5.15)(webpack@5.106.0(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.27.7)(postcss@8.5.15))
+      terser-webpack-plugin: 5.6.1(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.28.0)(postcss@8.5.15)(webpack@5.106.0(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.28.0)(postcss@8.5.15))
       watchpack: 2.5.1
       webpack-sources: 3.5.0
     transitivePeerDependencies:
@@ -16195,7 +16195,7 @@ snapshots:
       - postcss
       - uglify-js
 
-  webpack@5.107.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.27.7)(postcss@8.5.15):
+  webpack@5.107.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.28.0)(postcss@8.5.15):
     dependencies:
       '@types/estree': 1.0.9
       '@types/json-schema': 7.0.15
@@ -16217,7 +16217,7 @@ snapshots:
       neo-async: 2.6.2
       schema-utils: 4.3.3
       tapable: 2.3.3
-      terser-webpack-plugin: 5.6.1(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.27.7)(postcss@8.5.15)(webpack@5.107.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.27.7)(postcss@8.5.15))
+      terser-webpack-plugin: 5.6.1(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.28.0)(postcss@8.5.15)(webpack@5.107.2(@swc/core@1.5.7(@swc/helpers@0.5.15))(esbuild@0.28.0)(postcss@8.5.15))
       watchpack: 2.5.1
       webpack-sources: 3.5.0
     transitivePeerDependencies:

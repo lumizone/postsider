@@ -48,12 +48,22 @@ services:
     networks:
       - postsider-network
       - temporal-network
+    # pm2 gives the orchestrator 35s to drain in-flight Temporal activities on
+    # shutdown (ecosystem.config.js kill_timeout); the compose default grace of
+    # 10s was SIGKILLing the whole container before that drain could finish.
+    stop_grace_period: 45s
+    # All three processes, not just the frontend: the old `/` probe proved only
+    # that Next.js was up — the backend and the orchestrator's Temporal workers
+    # could both be dead while the container reported healthy (that is how a
+    # 10-day publishing outage stayed invisible). /health/workers 503s until
+    # the workers actually poll, hence the longer start_period (the orchestrator
+    # may legitimately wait for Temporal on a cold boot).
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/"]
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:5000/ && wget -q --spider http://localhost:5000/api/health && wget -q --spider http://localhost:3002/health/workers"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 180s
     depends_on:
       postsider-postgres:
         condition: service_healthy
@@ -67,6 +77,8 @@ services:
       # dead for ~10 days in 2026-07.
       temporal:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
 
   # ─── PostgreSQL (App Database) ────────────────────────────────────────────
   postsider-postgres:
@@ -129,7 +141,11 @@ services:
 
   # ─── MinIO (S3-compatible Object Storage) ─────────────────────────────────
   postsider-minio:
-    image: minio/minio:latest
+    # Pinned to the digest that runs in prod (RELEASE.2025-09-07). `:latest`
+    # would jump on the next pull — typically mid-recovery, the worst moment —
+    # and MinIO upstream has been stripping features from community builds.
+    # To upgrade: change the digest DELIBERATELY and test the S3 surface.
+    image: minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
     container_name: postsider-minio
     restart: always
     command: server /data --console-address ":9001"
@@ -157,26 +173,31 @@ services:
       start_period: 10s
 
   # MinIO bucket initialization (runs once, then exits)
+  # `&&` chaining + no forced `exit 0`: a failed bucket create/policy set must
+  # exit non-zero, so the app's depends_on (below) actually gates on a REAL
+  # bucket instead of booting into 500s on first upload (fresh installs /
+  # disaster-recovery rebuilds).
   minio-init:
-    image: minio/mc:latest
+    # Pinned for the same reason as postsider-minio above.
+    image: minio/mc@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
     container_name: postsider-minio-init
     depends_on:
       postsider-minio:
         condition: service_healthy
     entrypoint: >
       /bin/sh -c "
-      mc alias set myminio http://postsider-minio:9000 ${MINIO_ACCESS_KEY:-postsider-minio-key} ${MINIO_SECRET_KEY:-postsider-minio-secret-change-me};
-      mc mb myminio/${MINIO_BUCKET:-postsider-media} --ignore-existing;
-      mc anonymous set download myminio/${MINIO_BUCKET:-postsider-media};
-      echo 'MinIO bucket ready';
-      exit 0;
+      mc alias set myminio http://postsider-minio:9000 ${MINIO_ACCESS_KEY:-postsider-minio-key} ${MINIO_SECRET_KEY:-postsider-minio-secret-change-me} &&
+      mc mb myminio/${MINIO_BUCKET:-postsider-media} --ignore-existing &&
+      mc anonymous set download myminio/${MINIO_BUCKET:-postsider-media} &&
+      echo 'MinIO bucket ready'
       "
     networks:
       - postsider-network
 
   # ─── DbGate (Database UI) ───────────────────────────────────────────────
   postsider-dbgate:
-    image: dbgate/dbgate:latest
+    # Pinned — a DB UI with stored prod credentials should never self-upgrade.
+    image: dbgate/dbgate@sha256:331726a5387fe38f0ed37b97092b12d891308e5995f36d8e4db3028fe0744140
     container_name: postsider-dbgate
     restart: always
     environment:

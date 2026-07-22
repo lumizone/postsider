@@ -35,7 +35,13 @@ COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
 MAINT_FLAG="${MONITOR_MAINTENANCE_FLAG:-/home/ubuntu/monitoring/MAINTENANCE}"
 if [[ -d "$(dirname "$MAINT_FLAG")" ]]; then
   touch "$MAINT_FLAG" 2>/dev/null || true
-  trap 'rm -f "$MAINT_FLAG" 2>/dev/null || true' EXIT
+  # EXIT alone does NOT fire on an untrapped SIGINT/SIGTERM (verified on this
+  # host), which used to leak the flag and mute the monitor indefinitely. The
+  # monitor now also has a TTL on the flag as the second line of defense.
+  cleanup_maint() { rm -f "$MAINT_FLAG" 2>/dev/null || true; }
+  trap cleanup_maint EXIT
+  trap 'cleanup_maint; exit 130' INT
+  trap 'cleanup_maint; exit 143' TERM
 fi
 
 BOOTSTRAP=false
@@ -110,25 +116,61 @@ set +a
 
 # ── 4. Build + start ─────────────────────────────────────────────────────────
 if $DO_BUILD; then
+  # Keep a rollback handle: the fresh build re-tags :latest and would leave the
+  # currently-running image dangling — the only way back was a full rebuild.
+  if docker image inspect postsider_app-postsider:latest >/dev/null 2>&1; then
+    docker tag postsider_app-postsider:latest postsider_app-postsider:prev
+    ok "Tagged current image as postsider_app-postsider:prev (rollback handle)"
+  fi
   log "Building image (NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL)"
   "${COMPOSE[@]}" build
+fi
+
+# Safety net before boot-time `prisma migrate deploy`: the nightly backup can be
+# up to ~20h stale. Skipped on first install (no postgres container yet).
+if docker ps --format '{{.Names}}' | grep -qx postsider-postgres; then
+  PREDEPLOY_DIR="${PREDEPLOY_BACKUP_DIR:-/home/ubuntu/postsider_backups}/predeploy-$(date +%Y%m%d-%H%M%S)"
+  log "Pre-deploy DB backup -> $PREDEPLOY_DIR"
+  mkdir -p "$PREDEPLOY_DIR"
+  if docker exec postsider-postgres pg_dump -U "${POSTGRES_USER:-postsider}" -Fc "${POSTGRES_DB:-postsider_prod}" > "$PREDEPLOY_DIR/postsider_prod.dump"; then
+    cp "$ENV_FILE" "$PREDEPLOY_DIR/env.production.bak" && chmod -R go-rwx "$PREDEPLOY_DIR"
+    git -C "$SCRIPT_DIR" rev-parse HEAD > "$PREDEPLOY_DIR/DEPLOYED_COMMIT.txt" 2>/dev/null || true
+    # keep the last 5 pre-deploy dumps
+    ls -1dt "${PREDEPLOY_BACKUP_DIR:-/home/ubuntu/postsider_backups}"/predeploy-* 2>/dev/null | tail -n +6 | xargs -r rm -rf
+    ok "Pre-deploy backup done"
+  else
+    rm -rf "$PREDEPLOY_DIR"
+    die "Pre-deploy pg_dump failed — NOT deploying on top of an unbackupable database"
+  fi
 fi
 
 log "Starting stack"
 "${COMPOSE[@]}" up -d
 
 # ── 5. Wait for health ───────────────────────────────────────────────────────
-log "Waiting for the app container to become healthy (up to ~3 min)"
-deadline=$(( $(date +%s) + 180 ))
+# Timeout is a HARD failure: a migrate-crash-looping container shows `starting`
+# forever, and the old behavior (warn + "Deploy complete.") reported success on
+# a dead deploy. Rollback hint: postsider_app-postsider:prev + the pre-deploy
+# dump above.
+log "Waiting for the app container to become healthy (up to ~5 min)"
+deadline=$(( $(date +%s) + 300 ))
 while true; do
   status=$(docker inspect --format '{{.State.Health.Status}}' postsider-app 2>/dev/null || echo "starting")
   case "$status" in
     healthy) ok "App is healthy"; break ;;
     unhealthy) die "App became unhealthy. Check logs: ${COMPOSE[*]} logs postsider" ;;
   esac
-  [[ $(date +%s) -lt $deadline ]] || { warn "Timed out waiting for health. Tail logs with: ${COMPOSE[*]} logs -f postsider"; break; }
+  [[ $(date +%s) -lt $deadline ]] || die "Timed out waiting for health — deploy FAILED. Logs: ${COMPOSE[*]} logs postsider | Rollback: docker tag postsider_app-postsider:prev postsider_app-postsider:latest && ${COMPOSE[*]} up -d"
   sleep 5
 done
+
+# ── 5b. Housekeeping: stop deploys from slowly eating the disk ───────────────
+# Each build adds a build-cache generation and orphans the previous image
+# (~2-3GB); measured 19GB of cache before this was added. Dangling-only prune —
+# tagged images of other stacks (n8n, umami) are untouched.
+log "Pruning docker build cache (keep 5GB) + dangling images"
+docker builder prune -f --keep-storage=5GB >/dev/null 2>&1 || true
+docker image prune -f >/dev/null 2>&1 || true
 
 # ── 6. Optional: bootstrap first admin ───────────────────────────────────────
 if $BOOTSTRAP; then
@@ -136,7 +178,9 @@ if $BOOTSTRAP; then
   # Run the compiled CLI directly. `pnpm bootstrap` would try to rebuild from
   # source, which isn't present in the slim runtime image.
   BOOT="apps/commands/dist/apps/commands/src/bootstrap.main.js"
-  docker exec -it postsider-app node "$BOOT" bootstrap \
+  # -t only when we actually have a TTY — `-it` under cron/CI aborts instantly.
+  TTY_FLAG=""; [[ -t 0 ]] && TTY_FLAG="-t"
+  docker exec -i $TTY_FLAG postsider-app node "$BOOT" bootstrap \
     || warn "Bootstrap failed — run it manually: docker exec -it postsider-app node $BOOT bootstrap"
 fi
 

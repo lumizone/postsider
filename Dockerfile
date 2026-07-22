@@ -146,6 +146,14 @@ COPY --from=builder --chown=postsider:postsider /build/ecosystem.config.js ./eco
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=60s \
   CMD wget --no-verbose --tries=1 --spider http://localhost:5000/api/health || exit 1
 
+# Drop root: the `postsider` user existed since the beginning but was never
+# switched to, so pm2 and all three node apps ran as root — with 512MB uploads
+# and a public API that is more blast radius than this container needs. nginx
+# binds :5000 (unprivileged) and /run, /var/log/nginx, /var/lib/nginx, /uploads
+# and /app are all postsider-owned above. pm2 state moves to /app/.pm2.
+ENV PM2_HOME=/app/.pm2
+USER postsider
+
 # Use tini as init process for proper signal handling
 ENTRYPOINT ["tini", "--"]
 
