@@ -488,13 +488,6 @@ export class OrganizationRepository {
     });
   }
 
-  async resetUserForReinvite(userId: string, hashedPassword: string) {
-    return (this._organization.model as any).user.update({
-      where: { id: userId },
-      data: { password: hashedPassword, name: null },
-    });
-  }
-
   async getMediaStats(orgId: string) {
     const media = this._organization.model as any;
     const [total, images, videos, totalSize] = await Promise.all([

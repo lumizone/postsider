@@ -160,7 +160,19 @@ export class OAuthService {
   }
 
   async getApprovedApps(userId: string) {
-    return this._oauthRepository.getApprovedApps(userId);
+    const apps = await this._oauthRepository.getApprovedApps(userId);
+    // Strip secrets before returning to the authorizing user (a third party,
+    // not the app owner): the authorization's accessToken/authorizationCode and,
+    // crucially, the OAuth app's clientSecret must never leave the server here.
+    // getApp() already strips clientSecret for the owner; do the same here.
+    return apps.map(
+      ({ accessToken, authorizationCode, oauthApp, ...rest }) => ({
+        ...rest,
+        oauthApp: oauthApp
+          ? (({ clientSecret, ...app }) => app)(oauthApp)
+          : oauthApp,
+      })
+    );
   }
 
   async revokeApp(userId: string, authId: string) {

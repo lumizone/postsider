@@ -805,12 +805,23 @@ export class PostsRepository {
   }
 
   async getComments(postId: string) {
+    // Served through the PUBLIC preview endpoint, so expose only non-identifying
+    // fields: never leak userId/organizationId (who commented / which org), and
+    // never surface soft-deleted comments. (Whether comment CONTENT should be
+    // public at all is a product decision — gating the preview behind a share
+    // token would be the fuller fix.)
     return this._comments.model.comments.findMany({
       where: {
         postId,
+        deletedAt: null,
       },
       orderBy: {
         createdAt: 'asc',
+      },
+      select: {
+        id: true,
+        content: true,
+        createdAt: true,
       },
     });
   }

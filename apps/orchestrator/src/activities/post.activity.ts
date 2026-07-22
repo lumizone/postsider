@@ -358,6 +358,13 @@ export class PostActivity {
     );
 
     const post = await this._postService.getPostByForWebhookId(postId);
+    // Re-validate egress at fire time. The stored URL was only checked for
+    // public-HTTPS at create time, so a domain that later rebinds to an
+    // internal IP (127.0.0.1 / 169.254.169.254 / RFC1918) would otherwise be
+    // reachable. Dynamic import keeps undici out of any static bundle.
+    const { ssrfSafeDispatcher } = await import(
+      '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher'
+    );
     await Promise.all(
       webhooks.map(async (webhook) => {
         // Retry with exponential backoff (up to 3 attempts)
@@ -377,6 +384,8 @@ export class PostActivity {
               },
               body: JSON.stringify(post),
               signal: AbortSignal.timeout(10000),
+              // @ts-ignore - undici dispatcher (SSRF / DNS-rebinding guard)
+              dispatcher: ssrfSafeDispatcher,
             });
             if (res.ok) return;
             if (res.status < 500) {
