@@ -195,9 +195,16 @@ services:
       /bin/sh -c "
       mc alias set myminio http://postsider-minio:9000 ${MINIO_ACCESS_KEY:-postsider-minio-key} ${MINIO_SECRET_KEY:-postsider-minio-secret-change-me} &&
       mc mb myminio/${MINIO_BUCKET:-postsider-media} --ignore-existing &&
-      mc anonymous set download myminio/${MINIO_BUCKET:-postsider-media} &&
-      echo 'MinIO bucket ready'
+      mc anonymous set-json /policy.json myminio/${MINIO_BUCKET:-postsider-media} &&
+      echo 'MinIO bucket ready (public GET only, no anonymous listing)'
       "
+    volumes:
+      # Anonymous policy = s3:GetObject ONLY. `mc anonymous set download` (the
+      # previous line) also grants s3:ListBucket to *, which let anyone enumerate
+      # and download EVERY org's media via GET /?list-type=2. GetObject-only keeps
+      # media publicly fetchable by exact URL (platforms need this) without the
+      # bucket-wide listing. Resource ARN matches MINIO_BUCKET's default.
+      - ./minio-anon-policy.json:/policy.json:ro
     networks:
       - postsider-network
 
