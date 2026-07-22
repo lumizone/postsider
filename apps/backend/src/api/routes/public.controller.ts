@@ -18,9 +18,6 @@ import { TrackEnum } from '@postsider/nestjs-libraries/user/track.enum';
 import { Request, Response } from 'express';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import { getCookieUrlFromDomain } from '@postsider/helpers/subdomain/subdomain.management';
-import { SubscriptionService } from '@postsider/nestjs-libraries/database/prisma/subscriptions/subscription.service';
-import { AuthService } from '@postsider/helpers/auth/auth.service';
-import { pricing } from '@postsider/nestjs-libraries/database/prisma/subscriptions/pricing';
 import { Readable, pipeline } from 'stream';
 import { promisify } from 'util';
 import { OnlyURL } from '@postsider/nestjs-libraries/dtos/webhooks/webhooks.dto';
@@ -34,14 +31,16 @@ const pump = promisify(pipeline);
 export class PublicController {
   constructor(
     private _trackService: TrackService,
-    private _postsService: PostsService,
-    private _subscriptionService: SubscriptionService
+    private _postsService: PostsService
   ) {}
 
   @Get(`/posts/:id`)
   async getPreview(@Param('id') id: string) {
+    // Public preview (no auth, gated only by the post id). Drop internal-only
+    // fields like `error` (platform failure messages) that a shared preview
+    // link must never expose. A share-token gate is the fuller fix (product).
     return (await this._postsService.getPostsRecursively(id, true)).map(
-      ({ childrenPost, ...p }) => ({
+      ({ childrenPost, error, ...p }) => ({
         ...p,
         ...(p.integration
           ? {
@@ -115,32 +114,11 @@ export class PublicController {
     });
   }
 
-  @Post('/modify-subscription')
-  async modifySubscription(@Body('params') params: string) {
-    try {
-      const load = AuthService.verifyJWT(params) as {
-        orgId: string;
-        billing: 'FREE' | 'STANDARD' | 'TEAM' | 'PRO' | 'ULTIMATE';
-      };
-
-      if (!load || !load.orgId || !load.billing || !pricing[load.billing]) {
-        return { success: false };
-      }
-
-      const totalChannels = pricing[load.billing].channel || 0;
-
-      await this._subscriptionService.modifySubscriptionByOrg(
-        load.orgId,
-        totalChannels,
-        load.billing
-      );
-
-      return { success: true };
-    } catch (err) {
-      return { success: false };
-    }
-  }
-
+  // Removed: POST /public/modify-subscription. It was an unauthenticated route
+  // that set ANY org's plan (orgId taken from the request body), guarded only by
+  // a non-expiring HMAC over the shared JWT_SECRET, with no minter anywhere in
+  // the codebase — dead legacy surface. Real billing changes flow through the
+  // Polar webhook -> subscription.service.modifySubscriptionByOrg.
 
   @Get('/stream')
   async streamFile(
