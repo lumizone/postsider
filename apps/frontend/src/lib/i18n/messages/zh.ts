@@ -39,7 +39,6 @@ const zh = {
     storage: "存储",
     api: "API",
     webhooks: "Webhooks",
-    mcp: "MCP",
   },
   billing: {
     title: "账单",
@@ -317,10 +316,6 @@ const zh = {
     deleteConfirmTitle: "删除 Webhook？",
     deleteConfirmBody: "删除 Webhook \"{name}\"？事件将不再发送到此端点。",
     deleteBtn: "删除 Webhook",
-  },
-  settingsMcp: {
-    title: "MCP 服务器",
-    subtitle: "通过 Model Context Protocol 将您的 AI 代理连接到 PostSider。",
   },
   settingsStorage: {
     title: "存储",

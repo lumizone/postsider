@@ -39,7 +39,6 @@ const tr = {
     storage: "Depolama",
     api: "API",
     webhooks: "Webhook",
-    mcp: "MCP",
   },
   billing: {
     title: "Faturalama",
@@ -317,10 +316,6 @@ const tr = {
     deleteConfirmTitle: "Webhook silinsin mi?",
     deleteConfirmBody: "\"{name}\" webhook'u silinsin mi? Olaylar artık bu uç noktaya teslim edilmeyecek.",
     deleteBtn: "Webhook'u sil",
-  },
-  settingsMcp: {
-    title: "MCP Sunucusu",
-    subtitle: "AI ajanınızı Model Context Protocol aracılığıyla PostSider'a bağlayın.",
   },
   settingsStorage: {
     title: "Depolama",
