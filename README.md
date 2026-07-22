@@ -389,5 +389,3 @@ Contributions are welcome. Here is how to get started:
 PostSider is licensed under the [GNU Affero General Public License v3.0](LICENSE).
 
 This means you can use, modify, and distribute PostSider freely, but if you run a modified version as a network service, you must make your source code available to users of that service.
-
-PostSider is a fork of [Postiz](https://github.com/gitroomhq/postiz-app); see [ATTRIBUTION.md](ATTRIBUTION.md).

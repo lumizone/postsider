@@ -343,11 +343,7 @@ export class YoutubeProvider extends SocialAbstract implements SocialProvider {
       return channels.map((channel) => ({
         id: channel.id!,
         name: channel.snippet?.title || 'Unnamed Channel',
-        picture: {
-          data: {
-            url: channel.snippet?.thumbnails?.default?.url || '',
-          },
-        },
+        picture: channel.snippet?.thumbnails?.default?.url || '',
         username: channel.snippet?.customUrl || '',
         subscriberCount: channel.statistics?.subscriberCount || '0',
       }));

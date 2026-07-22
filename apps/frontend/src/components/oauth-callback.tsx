@@ -14,6 +14,25 @@ interface Props {
 }
 
 /**
+ * Error shown when a two-step provider returns no pages the user administers.
+ * Each platform has a different cause, so the hint is provider-specific.
+ */
+function noPagesMessage(provider: string): string {
+  switch (provider) {
+    case "instagram":
+      return "No Instagram account found. Connect an Instagram Business/Creator account to a Facebook Page you administer, then try again.";
+    case "instagram-standalone":
+      return "No Instagram account found. Make sure you're logged into an Instagram Business/Creator account.";
+    case "facebook":
+      return "No pages found. Make sure you're an admin of at least one Facebook Page.";
+    case "linkedin-page":
+      return "No pages found. Make sure you're an admin of at least one LinkedIn Page.";
+    default:
+      return "No pages found. Make sure you administer at least one page on this platform.";
+  }
+}
+
+/**
  * OAuth callback landing.
  *
  * The provider redirects the browser back to /integrations/social/:provider
@@ -81,9 +100,7 @@ export function OauthCallback({ provider }: Props) {
         // Two-step provider but no pages found — user administers no pages.
         if (res.inBetweenSteps && (!res.pages || res.pages.length === 0)) {
           setStatus("error");
-          setMessage(
-            "No pages found. Make sure you're an admin of at least one LinkedIn Page.",
-          );
+          setMessage(noPagesMessage(provider));
           return;
         }
 
@@ -213,12 +230,15 @@ export function OauthCallback({ provider }: Props) {
                       display: "grid",
                       placeItems: "center",
                       fontSize: 13,
+                      color: "var(--fg)",
                     }}
                   >
                     {page.name?.[0]?.toUpperCase() ?? "?"}
                   </span>
                 )}
-                <span style={{ fontSize: 14 }}>{page.name}</span>
+                <span style={{ fontSize: 14, color: "var(--fg)" }}>
+                  {page.name}
+                </span>
               </button>
             ))}
           </div>
