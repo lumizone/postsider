@@ -81,56 +81,96 @@ export class RefreshIntegrationService implements OnApplicationBootstrap {
   async onApplicationBootstrap(): Promise<void> {
     // Fire-and-forget so a slow Temporal connection never blocks app startup.
     this.reArmAllRefreshWorkflows().catch((err) =>
-      console.log('[refresh re-arm] failed', err)
+      console.error('[refresh re-arm] crashed', err)
     );
   }
 
   async reArmAllRefreshWorkflows(): Promise<void> {
-    // The Temporal raw client is not necessarily ready the instant the app
-    // boots — poll for it (up to ~30s) instead of silently bailing.
-    let raw = this._temporalService.client?.getRawClient();
-    for (let i = 0; i < 30 && !raw; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      raw = this._temporalService.client?.getRawClient();
-    }
-    if (!raw) {
-      console.log('[refresh re-arm] Temporal client unavailable, skipped');
-      return;
-    }
+    // Retry for ~10 minutes, not 30 seconds. Giving up after 30s meant that a
+    // Temporal still starting (or an app client that took a while to connect)
+    // left EVERY channel un-armed until the next redeploy — idle channels then
+    // quietly let their tokens lapse. Failures per integration are retried in
+    // the next round too, instead of being skipped once and forgotten.
+    const maxRounds = 20;
+    const roundDelayMs = 30_000;
+    let pending: Awaited<
+      ReturnType<typeof this._integrationService.getAllForRefreshArming>
+    > | null = null;
 
-    const integrations = await this._integrationService.getAllForRefreshArming();
-    let armed = 0;
-    for (const integration of integrations) {
-      try {
-        // Arm any channel that actually has a refresh token. (We intentionally
-        // do NOT gate on the provider's `refreshCron` flag — most providers
-        // leave it false yet still expose a working refreshToken(), so gating
-        // on it left their tokens to silently expire when idle.)
-        if (!integration.refreshToken) {
-          continue;
+    for (let round = 1; round <= maxRounds; round++) {
+      const raw = this._temporalService.client?.getRawClient();
+      if (!raw) {
+        if (round === maxRounds) {
+          console.error(
+            `[refresh re-arm] Temporal client still unavailable after ${maxRounds} rounds — token refresh workflows are NOT armed; restart the backend once Temporal is reachable`
+          );
+          return;
         }
-
-        await raw.workflow.start('refreshTokenWorkflow', {
-          workflowId: `refresh_${integration.id}`,
-          args: [
-            {
-              integrationId: integration.id,
-              organizationId: integration.organizationId,
-            },
-          ],
-          taskQueue: 'main',
-          // Leave a running refresh untouched; allow restarting a closed one.
-          workflowIdConflictPolicy: 'USE_EXISTING',
-          workflowIdReusePolicy: 'ALLOW_DUPLICATE',
-        });
-        armed++;
-      } catch (err) {
-        // unknown provider / transient Temporal error — skip this one
+        console.warn(
+          `[refresh re-arm] Temporal client unavailable (round ${round}/${maxRounds}) — retrying in ${
+            roundDelayMs / 1000
+          }s`
+        );
+        await new Promise((resolve) => setTimeout(resolve, roundDelayMs));
+        continue;
       }
+
+      // Arm any channel that actually has a refresh token. (We intentionally do
+      // NOT gate on the provider's `refreshCron` flag — most providers leave it
+      // false yet still expose a working refreshToken(), so gating on it left
+      // their tokens to silently expire when idle.)
+      if (!pending) {
+        pending = (
+          await this._integrationService.getAllForRefreshArming()
+        ).filter((integration) => integration.refreshToken);
+      }
+
+      const failed: typeof pending = [];
+      let armed = 0;
+      for (const integration of pending) {
+        try {
+          await raw.workflow.start('refreshTokenWorkflow', {
+            workflowId: `refresh_${integration.id}`,
+            args: [
+              {
+                integrationId: integration.id,
+                organizationId: integration.organizationId,
+              },
+            ],
+            taskQueue: 'main',
+            // Leave a running refresh untouched; allow restarting a closed one.
+            workflowIdConflictPolicy: 'USE_EXISTING',
+            workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+          });
+          armed++;
+        } catch (err) {
+          failed.push(integration);
+        }
+      }
+
+      if (failed.length === 0) {
+        console.log(
+          `[refresh re-arm] armed ${armed} integration refresh workflow(s)`
+        );
+        return;
+      }
+
+      pending = failed;
+      if (round === maxRounds) {
+        console.error(
+          `[refresh re-arm] ${failed.length} integration(s) could NOT be armed after ${maxRounds} rounds (ids: ${failed
+            .map((f) => f.id)
+            .join(', ')}) — their tokens will not auto-refresh`
+        );
+        return;
+      }
+      console.warn(
+        `[refresh re-arm] armed ${armed}, ${failed.length} failed (round ${round}/${maxRounds}) — retrying those in ${
+          roundDelayMs / 1000
+        }s`
+      );
+      await new Promise((resolve) => setTimeout(resolve, roundDelayMs));
     }
-    console.log(
-      `[refresh re-arm] armed ${armed} integration refresh workflow(s)`
-    );
   }
 
   private async refreshProcess(

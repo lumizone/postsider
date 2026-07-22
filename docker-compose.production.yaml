@@ -122,7 +122,14 @@ services:
     image: redis:7-alpine
     container_name: postsider-redis
     restart: always
-    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru --save 60 1000
+    # volatile-lru, NOT allkeys-lru: every key we write today has a TTL (OAuth
+    # connect state, throttler counters, analytics caches), so behavior is
+    # unchanged in practice — but if anything TTL-less is ever stored here
+    # (a lock, a queue, a session) allkeys-lru would silently evict it under
+    # pressure, while volatile-lru raises a loud OOM error instead. Losing
+    # `organization:<state>` mid-OAuth can fork a reconnect into a duplicate
+    # channel, so silent eviction is exactly what we do not want.
+    command: redis-server --maxmemory 128mb --maxmemory-policy volatile-lru --save 60 1000
     deploy:
       resources:
         limits:
