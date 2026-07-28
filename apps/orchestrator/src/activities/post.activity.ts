@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import {
   Activity,
   ActivityMethod,
@@ -56,6 +56,7 @@ function slimPost(post: any) {
 @Injectable()
 @Activity()
 export class PostActivity {
+  private _logger = new Logger(PostActivity.name);
   constructor(
     private _postService: PostsService,
     private _notificationService: NotificationService,
@@ -124,7 +125,9 @@ export class PostActivity {
       }
     }
     const post = await this._postService.getPostById(postId, orgId);
-    if (post!.deletedAt) {
+    // A missing post used to hit `post!.deletedAt` and throw on every retry,
+    // failing the whole workflow before any state transition.
+    if (!post || post.deletedAt) {
       return false;
     }
 
@@ -159,6 +162,14 @@ export class PostActivity {
     const getIntegration = this._integrationManager.getSocialIntegration(
       integration.providerIdentifier
     );
+
+    // Orphaned-provider guard (same as postSocial's): for a channel whose
+    // provider was removed, `getSocialIntegration` returns undefined and the
+    // bare property access was a deterministic TypeError — three retries,
+    // workflow dead, post stuck in QUEUE with no error.
+    if (!getIntegration) {
+      return false;
+    }
 
     return !!getIntegration.comment;
   }
@@ -203,6 +214,7 @@ export class PostActivity {
               media: await this._postService.updateMedia(
                 p.id,
                 JSON.parse(p.image || '[]'),
+                integration.organizationId,
                 getIntegration?.convertToJPEG || false
               ),
             }))
@@ -232,6 +244,13 @@ export class PostActivity {
         const getIntegration = this._integrationManager.getSocialIntegration(
           integration.providerIdentifier
         );
+        // Orphaned integration for a provider that no longer exists — fail this
+        // post cleanly (workflow marks it ERROR) instead of crashing on undefined.
+        if (!getIntegration) {
+          throw new Error(
+            `Provider "${integration.providerIdentifier}" is no longer supported`
+          );
+        }
 
         const newPosts = await this._postService.updateTags(
           integration.organizationId,
@@ -256,6 +275,7 @@ export class PostActivity {
               media: await this._postService.updateMedia(
                 p.id,
                 JSON.parse(p.image || '[]'),
+                integration.organizationId,
                 getIntegration?.convertToJPEG || false
               ),
             }))
@@ -338,10 +358,21 @@ export class PostActivity {
     );
 
     const post = await this._postService.getPostByForWebhookId(postId);
+    // Re-validate egress at fire time. The stored URL was only checked for
+    // public-HTTPS at create time, so a domain that later rebinds to an
+    // internal IP (127.0.0.1 / 169.254.169.254 / RFC1918) would otherwise be
+    // reachable. Dynamic import keeps undici out of any static bundle.
+    const { ssrfSafeDispatcher } = await import(
+      '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher'
+    );
     await Promise.all(
       webhooks.map(async (webhook) => {
         // Retry with exponential backoff (up to 3 attempts)
         // OSS does fire-and-forget with no retry — PostSider improvement.
+        // Never throws (a broken user webhook must not fail the publish
+        // workflow) — but total failure is at least logged now: it used to
+        // leave literally zero trace (2026-07-22 audit).
+        let lastOutcome = '';
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
             const res = await fetch(webhook.url, {
@@ -353,16 +384,31 @@ export class PostActivity {
               },
               body: JSON.stringify(post),
               signal: AbortSignal.timeout(10000),
+              // @ts-ignore - undici dispatcher (SSRF / DNS-rebinding guard)
+              dispatcher: ssrfSafeDispatcher,
             });
-            if (res.ok || res.status < 500) break; // Success or client error — don't retry
+            if (res.ok) return;
+            if (res.status < 500) {
+              // Client error — a retry cannot help, but 401/404/410 means the
+              // user's endpoint is effectively dead. Log and stop.
+              this._logger.warn(
+                `webhook ${webhook.url} rejected post.published with HTTP ${res.status} — not retrying`
+              );
+              return;
+            }
+            lastOutcome = `HTTP ${res.status}`;
             // Server error — retry after backoff
           } catch (e) {
+            lastOutcome = String(e);
             // Network error — retry after backoff
           }
           if (attempt < 2) {
             await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt)));
           }
         }
+        this._logger.warn(
+          `webhook ${webhook.url} failed after 3 attempts (${lastOutcome}) — post.published delivery dropped`
+        );
       })
     );
   }

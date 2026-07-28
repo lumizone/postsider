@@ -174,11 +174,37 @@ function channelIdentifier(c: Channel): string | undefined {
   return c.identifier ?? identifierFromPlatform(c.platform);
 }
 
+/** The translate function shape returned by `useT()`. */
+type Translate = ReturnType<typeof useT>;
+
 /**
  * Turn any thrown error (ApiError, network failure, validation array) into a
  * friendly, human sentence we can show in the modal.
  */
-function humanizeSubmitError(err: unknown): string {
+/**
+ * Turn a raw NestJS/class-validator message into something readable: drop the
+ * `Posts.0.settings.` field path, Title-case the field name, and hide the
+ * internal `__type` discriminator noise (the giant provider list) behind a
+ * friendly line.
+ */
+function cleanValidationMessage(raw: string, t: Translate): string {
+  const msg = raw.trim();
+  if (msg.includes("__type")) {
+    return t("createPost.channelNotSupported");
+  }
+  // Strip nested field paths like `Posts.0.settings.subject` / `Posts.0.title`.
+  let m = msg.replace(/^Posts\.\d+\.(settings\.)?/i, "");
+  // Unwrap + Title-case a leading (optionally quoted) field name.
+  m = m.replace(/^["']?([a-zA-Z][a-zA-Z0-9_]*)["']?/, (_, field: string) => {
+    const spaced = field
+      .replace(/[_-]+/g, " ")
+      .replace(/([a-z])([A-Z])/g, "$1 $2");
+    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+  });
+  return capitalizeFirst(m);
+}
+
+function humanizeSubmitError(err: unknown, t: Translate): string {
   // Our ApiError carries a parsed `body` which for NestJS validation is
   // usually `{ message: string | string[], statusCode, error }`.
   const anyErr = err as {
@@ -193,11 +219,10 @@ function humanizeSubmitError(err: unknown): string {
 
   // class-validator returns an array of messages.
   if (body && Array.isArray(body.message) && body.message.length > 0) {
-    const first = String(body.message[0]);
-    return capitalizeFirst(first);
+    return cleanValidationMessage(String(body.message[0]), t);
   }
   if (body && typeof body.message === "string" && body.message.trim()) {
-    return capitalizeFirst(body.message);
+    return cleanValidationMessage(body.message, t);
   }
 
   // Network / fetch failure (no response).
@@ -205,14 +230,14 @@ function humanizeSubmitError(err: unknown): string {
     anyErr?.message?.toLowerCase().includes("failed to fetch") ||
     anyErr?.message?.toLowerCase().includes("networkerror")
   ) {
-    return "We couldn't reach the server. Check your connection and try again.";
+    return t("createPost.networkError");
   }
 
   if (anyErr?.status === 413) {
-    return "One of your attachments is too large. Try a smaller file.";
+    return t("createPost.tooLarge");
   }
   if (anyErr?.status === 429) {
-    return "You're going a little fast. Wait a moment and try again.";
+    return t("createPost.tooFast");
   }
   if (anyErr?.status === 402) {
     // Plan limit reached (posts per month / no active plan).
@@ -221,18 +246,18 @@ function humanizeSubmitError(err: unknown): string {
         ? String((body as { section?: unknown }).section)
         : "";
     if (section === "posts_per_month") {
-      return "You've reached your monthly post limit. Upgrade your plan in Billing to keep publishing.";
+      return t("createPost.planLimitPosts");
     }
-    return "Your plan doesn't allow this action. Open Billing to upgrade your plan.";
+    return t("createPost.planNotAllowed");
   }
   if (anyErr?.status && anyErr.status >= 500) {
-    return "Something went wrong on our side. Please try again in a moment.";
+    return t("createPost.serverError");
   }
 
   if (anyErr?.message && anyErr.message.trim()) {
     return capitalizeFirst(anyErr.message);
   }
-  return "Something went wrong while saving your post. Please try again.";
+  return t("createPost.saveFailed");
 }
 
 function capitalizeFirst(s: string): string {
@@ -312,6 +337,9 @@ export function CreatePostModal({
   >({});
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Dialog root (focus trap) and the main editor textarea (initial focus).
+  const modalRef = useRef<HTMLDivElement | null>(null);
+  const mainTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Submit lifecycle: which action is in-flight, and any error to surface.
   const [submitting, setSubmitting] = useState<
@@ -341,9 +369,42 @@ export function CreatePostModal({
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotsError, setSlotsError] = useState(false);
 
+  // Focus the main editor once when the modal opens.
+  useEffect(() => {
+    mainTextareaRef.current?.focus();
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      // Simple focus trap: keep Tab / Shift+Tab cycling inside the dialog.
+      if (e.key === "Tab") {
+        const root = modalRef.current;
+        if (!root) return;
+        const focusables = Array.from(
+          root.querySelectorAll<HTMLElement>(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+          ),
+        ).filter(
+          (el) => !el.hasAttribute("disabled") && el.offsetParent !== null,
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        const active = document.activeElement;
+        if (e.shiftKey) {
+          if (active === first || !root.contains(active)) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else if (active === last || !root.contains(active)) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     };
     window.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
@@ -465,13 +526,30 @@ export function CreatePostModal({
       const req = requirementFor(c);
       for (const field of req.fields) {
         if (field.type !== "remote-select" || !field.remoteFn) continue;
-        const key = `${c.id}::${field.remoteFn}`;
+        // Dependent remote-selects (e.g. the Whop forum depends on the chosen
+        // company) pass the parent field's value as the `id` param. Skip until
+        // the parent value exists; the param-aware key means changing it
+        // triggers a fresh fetch and switching back reuses the cached list.
+        const paramVal = field.remoteParam
+          ? (channelSettings[c.id]?.[field.remoteParam] as string | undefined)
+          : undefined;
+        if (field.remoteParam && !paramVal) continue;
+        const key = `${c.id}::${field.remoteFn}::${paramVal ?? ""}`;
         if (fetchedKeysRef.current.has(key)) continue;
         fetchedKeysRef.current.add(key);
+        const remoteFn = field.remoteFn;
         void (async () => {
-          const list = await getIntegrationChannels(c.id, field.remoteFn);
+          const list = await getIntegrationChannels(
+            c.id,
+            remoteFn,
+            paramVal ? { id: paramVal } : {},
+          );
           if (!cancelled) {
             setRemoteOptions((prev) => ({ ...prev, [key]: list }));
+          } else {
+            // Effect re-ran before this resolved; drop the key so a later run
+            // re-fetches instead of stranding the dropdown on "Loading…".
+            fetchedKeysRef.current.delete(key);
           }
         })();
       }
@@ -479,7 +557,7 @@ export function CreatePostModal({
     return () => {
       cancelled = true;
     };
-  }, [selectedChannels, requirementFor]);
+  }, [selectedChannels, requirementFor, channelSettings]);
 
   // Seed default provider settings for selected channels so required DTO
   // fields (e.g. TikTok privacy_level, Instagram post_type) are always present
@@ -507,10 +585,21 @@ export function CreatePostModal({
     key: string,
     value: unknown,
   ) => {
-    setChannelSettings((prev) => ({
-      ...prev,
-      [integrationId]: { ...(prev[integrationId] ?? {}), [key]: value },
-    }));
+    setChannelSettings((prev) => {
+      const next = { ...(prev[integrationId] ?? {}), [key]: value };
+      // Drop any dependent remote-select whose parent (`remoteParam`) just
+      // changed, so a stale child (e.g. a forum from a different Whop company)
+      // isn't kept selected.
+      const channel = selectedChannels.find((c) => c.id === integrationId);
+      if (channel) {
+        for (const f of requirementFor(channel).fields) {
+          if (f.type === "remote-select" && f.remoteParam === key) {
+            delete next[f.key];
+          }
+        }
+      }
+      return { ...prev, [integrationId]: next };
+    });
   };
 
   // When entering per-channel mode, seed empty per-channel bodies from the global body.
@@ -699,7 +788,10 @@ export function CreatePostModal({
       const maxLen = effectiveMaxLength(req, { verified: c.verified });
       if (body.length > maxLen) {
         problems.push(
-          `Content is too long for ${req.label} (max ${maxLen} characters).`,
+          t("createPost.contentTooLong", {
+            channel: req.label,
+            max: maxLen,
+          }),
         );
       }
       // Required settings fields that are still empty.
@@ -713,7 +805,12 @@ export function CreatePostModal({
           (typeof v === "string" && v.trim() === "") ||
           (Array.isArray(v) && v.length === 0);
         if (empty && !problems.some((p) => p.toLowerCase().includes(field.label.toLowerCase()))) {
-          problems.push(`${field.label} is required for ${req.label}.`);
+          problems.push(
+            t("createPost.fieldRequired", {
+              field: field.label,
+              channel: req.label,
+            }),
+          );
         }
       }
       if (problems.length > 0) out[c.id] = problems;
@@ -725,6 +822,7 @@ export function CreatePostModal({
     bodyForChannel,
     mediaLike,
     channelSettings,
+    t,
   ]);
 
   // A flat, human summary of everything the user still needs to fix before the
@@ -737,13 +835,13 @@ export function CreatePostModal({
       const list: string[] = [];
       // Missing content is the most common omission.
       if ((bodyForChannel(c.id) ?? "").trim().length === 0) {
-        list.push("Add some text for this channel.");
+        list.push(t("createPost.addTextForChannel"));
       }
       list.push(...(channelProblems[c.id] ?? []));
       if (list.length > 0) out.push({ channel: c, problems: list });
     }
     return out;
-  }, [selectedChannels, bodyForChannel, channelProblems]);
+  }, [selectedChannels, bodyForChannel, channelProblems, t]);
 
   // Once the user resolves every gap, drop the "almost there" banner so it
   // doesn't linger. We keep `showValidation` itself so it can re-trigger.
@@ -767,19 +865,19 @@ export function CreatePostModal({
       if (kind !== "draft") {
         setShowValidation(true);
         if (selectedIds.size === 0) {
-          setSubmitError(t("createPost.pickChannel" as any));
+          setSubmitError(t("createPost.pickChannel"));
           return;
         }
         if (validationSummary.length > 0) {
           // The inline per-channel panels already show the details; nudge the
           // user toward them with a single friendly line.
           setSubmitError(
-            t("createPost.attentionNeeded" as any),
+            t("createPost.attentionNeeded"),
           );
           return;
         }
       } else if (selectedIds.size === 0) {
-        setSubmitError(t("createPost.pickDraft" as any));
+        setSubmitError(t("createPost.pickDraft"));
         return;
       }
 
@@ -789,11 +887,11 @@ export function CreatePostModal({
         // Parent closes the modal on success; nothing else to do here.
       } catch (err) {
         console.error("[submit-post]", err);
-        setSubmitError(humanizeSubmitError(err));
+        setSubmitError(humanizeSubmitError(err, t));
         setSubmitting(null);
       }
     },
-    [buildPost, selectedIds.size, validationSummary.length],
+    [buildPost, selectedIds.size, validationSummary.length, t],
   );
 
   // Add to queue: drop the post into this channel's next free posting slot,
@@ -819,10 +917,10 @@ export function CreatePostModal({
       // Defer the submit so it runs after postDate/postTime have updated.
       setQueuePending(true);
     } catch (err) {
-      setSubmitError(humanizeSubmitError(err));
+      setSubmitError(humanizeSubmitError(err, t));
       setAddingToQueue(false);
     }
-  }, [selectedChannels]);
+  }, [selectedChannels, t]);
 
   useEffect(() => {
     if (!queuePending) return;
@@ -840,10 +938,12 @@ export function CreatePostModal({
 
   const placeholder =
     mode === "global"
-      ? "Write something — same content for every selected channel"
-      : `Write something for ${
-          channels.find((c) => c.id === activeTarget)?.name ?? "this channel"
-        }`;
+      ? t("createPost.placeholderGlobal")
+      : t("createPost.placeholderChannel", {
+          channel:
+            channels.find((c) => c.id === activeTarget)?.name ??
+            t("createPost.thisChannel"),
+        });
 
   return (
     <div
@@ -853,10 +953,14 @@ export function CreatePostModal({
       aria-label="Create post"
       onClick={onClose}
     >
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={modalRef}
+        className={styles.modal}
+        onClick={(e) => e.stopPropagation()}
+      >
         <header className={styles.head}>
           <span className={styles.title}>
-            {isEdit ? t("createPost.editTitle" as any) : t("createPost.title" as any)}
+            {isEdit ? t("createPost.editTitle") : t("createPost.title")}
           </span>
           <button
             type="button"
@@ -893,7 +997,7 @@ export function CreatePostModal({
               <div className={styles.validationSummary} role="status">
                 <div className={styles.validationSummaryHead}>
                   <WarnIcon />
-                  <span>Almost there — a few things to finish:</span>
+                  <span>{t("createPost.almostThere")}</span>
                 </div>
                 <ul className={styles.validationList}>
                   {validationSummary.map(({ channel, problems }) => (
@@ -939,7 +1043,7 @@ export function CreatePostModal({
                   }
                   onClick={() => switchMode("global")}
                 >
-                  Global write
+                  {t("createPost.globalWrite")}
                 </button>
                 <button
                   type="button"
@@ -954,7 +1058,7 @@ export function CreatePostModal({
                   }
                   onClick={() => switchMode("per-channel")}
                 >
-                  Per channel
+                  {t("createPost.perChannel")}
                 </button>
               </div>
 
@@ -989,6 +1093,7 @@ export function CreatePostModal({
             </div>
 
             <textarea
+              ref={mainTextareaRef}
               value={currentBody}
               onChange={(e) => setCurrentBody(e.target.value)}
               placeholder={placeholder}
@@ -999,17 +1104,17 @@ export function CreatePostModal({
             {anySelectedSupportsComment && (
               <div className={styles.field}>
                 <label className={styles.fieldLabel}>
-                  {t("firstComment.label" as any)}
+                  {t("firstComment.label")}
                 </label>
                 <textarea
                   value={firstComment}
                   onChange={(e) => setFirstComment(e.target.value)}
-                  placeholder={t("firstComment.placeholder" as any)}
+                  placeholder={t("firstComment.placeholder")}
                   className={styles.fieldTextarea}
                   rows={2}
                 />
                 <span className={styles.fieldHelp}>
-                  {t("firstComment.hint" as any)}
+                  {t("firstComment.hint")}
                 </span>
               </div>
             )}
@@ -1080,7 +1185,7 @@ export function CreatePostModal({
                 onClick={onPickMedia}
               >
                 <ImageIcon />
-                Add image
+                {t("createPost.addImage")}
               </button>
               <button
                 type="button"
@@ -1088,7 +1193,7 @@ export function CreatePostModal({
                 onClick={onPickMedia}
               >
                 <VideoIcon />
-                Add video
+                {t("createPost.addVideo")}
               </button>
               <input
                 ref={fileInputRef}
@@ -1104,14 +1209,14 @@ export function CreatePostModal({
                 onClick={addThreadPart}
               >
                 <CommentIcon />
-                Add comment / post
+                {t("createPost.addComment")}
               </button>
               <button
                 type="button"
                 className={styles.toolBtn}
                 onClick={openSnippets}
               >
-                # Snippets
+                # {t("createPost.snippets")}
               </button>
             </div>
 
@@ -1123,7 +1228,7 @@ export function CreatePostModal({
                     <textarea
                       value={part}
                       onChange={(e) => updateThreadPart(i, e.target.value)}
-                      placeholder="Reply, comment or follow-up post"
+                      placeholder={t("createPost.threadPlaceholder")}
                       className={styles.threadTextarea}
                       rows={2}
                     />
@@ -1142,7 +1247,9 @@ export function CreatePostModal({
           </section>
 
           <aside className={styles.preview}>
-            <span className={styles.previewLabel}>Post preview</span>
+            <span className={styles.previewLabel}>
+              {t("createPost.postPreview")}
+            </span>
             <PostPreviewPanel
               channels={selectedChannels}
               activeTarget={activeTarget}
@@ -1204,8 +1311,8 @@ export function CreatePostModal({
               onClick={fetchSlots}
             >
               {slotsLoading
-                ? t("smartSlots.suggesting" as any)
-                : `✦ ${t("smartSlots.suggest" as any)}`}
+                ? t("smartSlots.suggesting")
+                : `✦ ${t("smartSlots.suggest")}`}
             </button>
             {!slotsLoading && slotSuggestions.length > 0 && (
               <>
@@ -1222,13 +1329,13 @@ export function CreatePostModal({
                   ))}
                 </div>
                 <span className={styles.smartSlotsHint}>
-                  {t("smartSlots.reason" as any)}
+                  {t("smartSlots.reason")}
                 </span>
               </>
             )}
             {!slotsLoading && slotsError && (
               <span className={styles.smartSlotsHint}>
-                {t("smartSlots.none" as any)}
+                {t("smartSlots.none")}
               </span>
             )}
           </div>
@@ -1240,7 +1347,7 @@ export function CreatePostModal({
                 disabled={submitting !== null}
                 onClick={onDelete}
               >
-                {t("common.delete" as any)}
+                {t("common.delete")}
               </button>
             )}
             {!isEdit && (
@@ -1250,7 +1357,9 @@ export function CreatePostModal({
                 disabled={submitting !== null}
                 onClick={() => runSubmit("draft", onSaveDraft)}
               >
-                {submitting === "draft" ? "Saving…" : t("createPost.saveDraft" as any)}
+                {submitting === "draft"
+                  ? t("createPost.saving")
+                  : t("createPost.saveDraft")}
               </button>
             )}
             {onPublishNow && (
@@ -1260,7 +1369,9 @@ export function CreatePostModal({
                 disabled={submitting !== null}
                 onClick={() => runSubmit("now", onPublishNow)}
               >
-                {submitting === "now" ? "Publishing…" : t("createPost.publishNow" as any)}
+                {submitting === "now"
+                  ? t("createPost.publishing")
+                  : t("createPost.publishNow")}
               </button>
             )}
             <button
@@ -1269,7 +1380,7 @@ export function CreatePostModal({
               disabled={submitting !== null || checkerPlatforms.length === 0}
               onClick={() => { setShowSnippets(false); setShowRewrite(false); setShowChecker(true); }}
             >
-              ✦ {t("postChecker.checkPost" as any)}
+              ✦ {t("postChecker.checkPost")}
             </button>
             <button
               type="button"
@@ -1277,7 +1388,7 @@ export function CreatePostModal({
               disabled={submitting !== null || currentBody.trim().length === 0}
               onClick={openRewrite}
             >
-              ✎ Rewrite
+              ✎ {t("createPost.rewrite")}
             </button>
             {selectedChannels.length === 1 && (
               <button
@@ -1286,7 +1397,9 @@ export function CreatePostModal({
                 disabled={submitting !== null || addingToQueue}
                 onClick={addToQueue}
               >
-                {addingToQueue ? "Adding…" : "Add to queue"}
+                {addingToQueue
+                  ? t("createPost.addingToQueue")
+                  : t("createPost.addToQueue")}
               </button>
             )}
             <button
@@ -1296,10 +1409,10 @@ export function CreatePostModal({
               onClick={() => runSubmit("schedule", onSchedule)}
             >
               {submitting === "schedule"
-                ? "Saving…"
+                ? t("createPost.saving")
                 : isEdit
-                  ? t("createPost.update" as any)
-                  : t("createPost.schedule" as any)}
+                  ? t("createPost.update")
+                  : t("createPost.schedule")}
             </button>
           </div>
         </footer>
@@ -1465,6 +1578,11 @@ function ProviderSettingsPanel({
               channelId={channel.id}
               field={field}
               value={settings[field.key]}
+              remoteParamValue={
+                field.remoteParam
+                  ? (settings[field.remoteParam] as string | undefined)
+                  : undefined
+              }
               remoteOptions={remoteOptions}
               onChange={(value) => onChange(field.key, value)}
             />
@@ -1479,6 +1597,8 @@ interface ProviderFieldProps {
   channelId: string;
   field: SettingsField;
   value: unknown;
+  /** For a dependent remote-select: the current value of its `remoteParam`. */
+  remoteParamValue?: string;
   remoteOptions: Record<string, IntegrationChannel[] | undefined>;
   onChange: (value: unknown) => void;
 }
@@ -1487,9 +1607,11 @@ function ProviderField({
   channelId,
   field,
   value,
+  remoteParamValue,
   remoteOptions,
   onChange,
 }: ProviderFieldProps) {
+  const t = useT();
   const label = (
     <label className={styles.fieldLabel}>
       {field.label}
@@ -1522,7 +1644,7 @@ function ProviderField({
           value={(value as string) ?? ""}
           onChange={(e) => onChange(e.target.value)}
         >
-          {!field.required && <option value="">—</option>}
+          {!field.required && <option value="">-</option>}
           {field.options?.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
@@ -1535,16 +1657,18 @@ function ProviderField({
   }
 
   if (field.type === "remote-select") {
-    const key = `${channelId}::${field.remoteFn ?? ""}`;
+    const key = `${channelId}::${field.remoteFn ?? ""}::${remoteParamValue ?? ""}`;
     const options = remoteOptions[key];
     return (
       <div className={styles.field}>
         {label}
         {options === undefined ? (
-          <span className={styles.fieldHelp}>Loading…</span>
+          <span className={styles.fieldHelp}>
+            {t("createPost.loading")}
+          </span>
         ) : options.length === 0 ? (
           <span className={styles.fieldHelp}>
-            Nothing available yet. Make sure the account has access.
+            {t("createPost.nothingAvailable")}
           </span>
         ) : (
           <select
@@ -1553,7 +1677,7 @@ function ProviderField({
             onChange={(e) => onChange(e.target.value)}
           >
             <option value="" disabled>
-              Select…
+              {t("createPost.select")}
             </option>
             {options.map((opt) => (
               <option key={opt.id} value={opt.id}>
@@ -1602,7 +1726,7 @@ function ProviderField({
           className={styles.fieldInput}
           type="text"
           value={asString}
-          placeholder={field.placeholder ?? "Comma-separated"}
+          placeholder={field.placeholder ?? t("createPost.commaSeparated")}
           onChange={(e) => {
             const parts = e.target.value
               .split(",")

@@ -546,47 +546,26 @@ export class InstagramProvider
       pageId: p.pageId,
       id: p.id,
       name: p.name,
-      picture: p.profile_picture_url,
+      // Flat URL string — the picker renders <img src={picture}>, so a
+      // { data: { url } } object showed up as a broken image.
+      picture: p.profile_picture_url || '',
     }));
   }
 
   async fetchPageInformation(
     token: string,
-    data: { page?: string; id?: string; pageId?: string }
+    data: { pageId: string; id: string }
   ) {
     const [accessToken, userToken] = token.split('___');
-
-    // The page picker posts { page: <instagram account id> }; reConnect posts
-    // { id, pageId }. Support both: derive the Instagram account id, and resolve
-    // its parent Facebook page id (needed for the page-scoped token) when the
-    // caller only knows the Instagram id.
-    const instagramId = data.id || data.page;
-    let pageId = data.pageId;
-    if (instagramId && !pageId) {
-      const match = (await this.pages(accessToken)).find(
-        (p) => p.id === instagramId
-      );
-      pageId = match?.pageId;
-    }
-    if (!instagramId || !pageId) {
-      // Without both ids the Graph calls below would request `/undefined` and
-      // silently finalize a broken channel — fail loudly instead.
-      throw new Error(
-        `Instagram fetchPageInformation: could not resolve account/page for ${JSON.stringify(
-          data
-        )}`
-      );
-    }
-
     const { access_token, ...all } = await (
       await fetch(
-        `https://graph.facebook.com/v20.0/${pageId}?fields=access_token,name,picture.type(large)&access_token=${accessToken}`
+        `https://graph.facebook.com/v20.0/${data.pageId}?fields=access_token,name,picture.type(large)&access_token=${accessToken}`
       )
     ).json();
 
     const { id, name, profile_picture_url, username } = await (
       await fetch(
-        `https://graph.facebook.com/v20.0/${instagramId}?fields=username,name,profile_picture_url&access_token=${accessToken}`
+        `https://graph.facebook.com/v20.0/${data.id}?fields=username,name,profile_picture_url&access_token=${accessToken}`
       )
     ).json();
 
@@ -922,7 +901,7 @@ export class InstagramProvider
     );
 
     analytics.push(
-      ...(data2?.map((d: any) => ({
+      ...data2.map((d: any) => ({
         label: this.setTitle(d.name),
         percentageChange: 5,
         data: [
@@ -931,7 +910,7 @@ export class InstagramProvider
             date: dayjs().format('YYYY-MM-DD'),
           },
         ],
-      })) || [])
+      }))
     );
 
     return analytics;

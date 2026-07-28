@@ -19,7 +19,7 @@ export class MediaService {
    * leaves the user unable to clean up their library.
    */
   async deleteMedia(org: string, id: string) {
-    const existing = await this._mediaRepository.getMediaById(id);
+    const existing = await this._mediaRepository.getMediaById(id, org);
     const result = await this._mediaRepository.deleteMedia(org, id);
 
     if (existing?.path && existing.organizationId === org) {
@@ -33,8 +33,8 @@ export class MediaService {
     return result;
   }
 
-  getMediaById(id: string) {
-    return this._mediaRepository.getMediaById(id);
+  getMediaById(id: string, orgId: string) {
+    return this._mediaRepository.getMediaById(id, orgId);
   }
 
   /**

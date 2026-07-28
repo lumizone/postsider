@@ -27,6 +27,15 @@ export class EnterpriseController {
         saasName: string;
       };
 
+      // Require the full reseller payload. These routes are verified with the
+      // shared JWT_SECRET, so without this a user's own session token — which
+      // carries no saasName — could be replayed to self-provision a privileged
+      // (ULTIMATE) org. The sibling routes already fail closed by requiring an
+      // apiKey the session token lacks.
+      if (!id || !name || !saasName || !email) {
+        return { success: false };
+      }
+
       try {
         return await this._organizationService.createMaxUser(
           id,

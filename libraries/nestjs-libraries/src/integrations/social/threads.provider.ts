@@ -23,6 +23,9 @@ export class ThreadsProvider extends SocialAbstract implements SocialProvider {
     'threads_basic',
     'threads_content_publish',
     'threads_manage_insights',
+    // Required by comment() (first-comment / reply). Newly-connected accounts
+    // get it only if the Meta app has the permission approved.
+    'threads_manage_replies',
     // 'threads_profile_discovery',
   ];
   override maxConcurrentJob = 2; // Threads has moderate rate limits

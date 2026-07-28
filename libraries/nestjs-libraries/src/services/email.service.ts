@@ -64,8 +64,8 @@ export class EmailService {
     }
 
     if (!process.env.EMAIL_FROM_ADDRESS || !process.env.EMAIL_FROM_NAME) {
-      console.log(
-        'Email sender information not found in environment variables'
+      console.error(
+        `EMAIL_FROM_ADDRESS/EMAIL_FROM_NAME not set — dropping email "${subject}" to ${to}. Configure them (or unset EMAIL_PROVIDER to silence email entirely).`
       );
       return;
     }
@@ -154,6 +154,14 @@ export class EmailService {
         }
       }
     }
-    console.log(`Email to ${to} failed after 3 attempts:`, lastErr);
+    // Throw so the caller can see the failure. This method's only caller is the
+    // sendEmail Temporal activity: the activity fails (bounded by its retry
+    // policy), sendEmailWorkflow catches per-email and moves on. Swallowing
+    // here meant the activity always "succeeded" and mail — including "your
+    // publish FAILED" notifications — vanished without any trace.
+    console.error(`Email to ${to} ("${subject}") failed after 3 attempts:`, lastErr);
+    throw lastErr instanceof Error
+      ? lastErr
+      : new Error(`Email delivery failed: ${lastErr}`);
   }
 }

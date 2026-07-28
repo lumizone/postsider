@@ -48,7 +48,7 @@ export function ActivateClient({ token }: { token: string }) {
         subtitle={t("auth.activateErrorSubtitle")}
         footer={<Link href="/login">{t("auth.backToSignIn")}</Link>}
       >
-        <Link href="/login" className={styles.submit} style={{ textAlign: "center" }}>
+        <Link href="/login" className={styles.submitLink}>
           {t("auth.backToSignIn")}
         </Link>
       </AuthShell>
@@ -57,12 +57,10 @@ export function ActivateClient({ token }: { token: string }) {
 
   return (
     <AuthShell
-      title={t("auth.activateDoneTitle")}
-      subtitle={t("auth.activateChecking")}
+      title={t("auth.activateChecking")}
+      subtitle={t("auth.activatePendingSubtitle")}
     >
-      <p style={{ textAlign: "center", color: "var(--muted)", fontSize: 14 }}>
-        {t("auth.activateChecking")}
-      </p>
+      <></>
     </AuthShell>
   );
 }

@@ -1,4 +1,4 @@
-import { proxyActivities, sleep } from '@temporalio/workflow';
+import { continueAsNew, log, proxyActivities, sleep } from '@temporalio/workflow';
 import { EvergreenActivity } from '@postsider/orchestrator/activities/evergreen.activity';
 
 const { recycleEvergreenForAllOrgs } = proxyActivities<EvergreenActivity>({
@@ -10,10 +10,21 @@ const { recycleEvergreenForAllOrgs } = proxyActivities<EvergreenActivity>({
   },
 });
 
+/**
+ * Daily evergreen recycling. A failed run is logged and retried the next day
+ * instead of killing the loop forever, and continueAsNew keeps the event
+ * history bounded (see missing.post.workflow.ts for the rationale).
+ */
+const ITERATIONS_PER_RUN = 60;
+
 export async function evergreenWorkflow() {
-  await recycleEvergreenForAllOrgs();
-  while (true) {
+  for (let i = 0; i < ITERATIONS_PER_RUN; i++) {
+    try {
+      await recycleEvergreenForAllOrgs();
+    } catch (err) {
+      log.error(`evergreenWorkflow run failed (retrying tomorrow): ${err}`);
+    }
     await sleep('1 day');
-    await recycleEvergreenForAllOrgs();
   }
+  await continueAsNew<typeof evergreenWorkflow>();
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   PageHeader,
@@ -111,12 +111,12 @@ function PasswordCard() {
         </div>
       </div>
       {err && (
-        <div style={{ marginTop: 8, fontSize: 13, color: "#c0392b" }}>
+        <div role="alert" style={{ marginTop: 8, fontSize: 13, color: "#c0392b" }}>
           {err}
         </div>
       )}
       {msg && (
-        <div style={{ marginTop: 8, fontSize: 13, color: "#27ae60" }}>
+        <div role="status" style={{ marginTop: 8, fontSize: 13, color: "#27ae60" }}>
           {msg}
         </div>
       )}
@@ -288,6 +288,15 @@ function DangerModal({
   const [err, setErr] = useState<string | null>(null);
   const ready = typed.trim().toUpperCase() === confirmWord;
 
+  // Close on Escape (unless a destructive call is in flight).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !busy) onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [busy, onClose]);
+
   const run = async () => {
     if (!ready || busy) return;
     setBusy(true);
@@ -302,6 +311,9 @@ function DangerModal({
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
       style={{
         position: "fixed",
         inset: 0,
@@ -358,7 +370,7 @@ function DangerModal({
         </div>
 
         {err && (
-          <div style={{ fontSize: 13, color: "#c0392b" }}>{err}</div>
+          <div role="alert" style={{ fontSize: 13, color: "#c0392b" }}>{err}</div>
         )}
 
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
@@ -376,7 +388,7 @@ function DangerModal({
               cursor: "pointer",
             }}
           >
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             type="button"

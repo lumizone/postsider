@@ -15,6 +15,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { uploadInterceptorOptions } from '@postsider/nestjs-libraries/upload/upload.limits';
 import { SmartSlotsService } from '@postsider/nestjs-libraries/smart-slots/smart-slots.service';
 import { CsvImportService } from '@postsider/nestjs-libraries/csv-import/csv-import.service';
 import { PostCheckerService, NoCheckerConfigError } from '@postsider/nestjs-libraries/post-checker/post-checker.service';
@@ -235,7 +236,7 @@ export class PostsController {
 
   @Post('/csv-import')
   @CheckPolicies([AuthorizationActions.Create, Sections.POSTS_PER_MONTH])
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', uploadInterceptorOptions))
   async csvImport(
     @GetOrgFromRequest() org: Organization,
     @UploadedFile()

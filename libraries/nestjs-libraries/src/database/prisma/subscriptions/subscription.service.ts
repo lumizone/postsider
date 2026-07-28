@@ -15,10 +15,23 @@ export class SubscriptionService {
     private readonly _organizationService: OrganizationService
   ) {}
 
-  getSubscriptionByOrganizationId(organizationId: string) {
-    return this._subscriptionRepository.getSubscriptionByOrganizationId(
-      organizationId
-    );
+  async getSubscriptionByOrganizationId(organizationId: string) {
+    const subscription =
+      await this._subscriptionRepository.getSubscriptionByOrganizationId(
+        organizationId
+      );
+    // A local free trial whose cancelAt has passed has ended — treat the org as
+    // having no active plan (it drops to FREE) so trial limits stop applying.
+    // Scoped to `identifier === 'trial'` so Polar-managed subscriptions are left
+    // entirely to Polar's own webhook lifecycle.
+    if (
+      subscription?.identifier === 'trial' &&
+      subscription.cancelAt &&
+      subscription.cancelAt.getTime() < Date.now()
+    ) {
+      return null;
+    }
+    return subscription;
   }
 
   useCredit<T>(
@@ -213,7 +226,20 @@ export class SubscriptionService {
   }
 
   async getSubscription(organizationId: string) {
-    return this._subscriptionRepository.getSubscription(organizationId);
+    const subscription = await this._subscriptionRepository.getSubscription(
+      organizationId
+    );
+    // Same expired-trial rule as getSubscriptionByOrganizationId above. This
+    // path gates PUBLISHING (post.activity), which used to keep honoring an
+    // expired trial while the rest of the app already treated the org as FREE.
+    if (
+      subscription?.identifier === 'trial' &&
+      subscription.cancelAt &&
+      subscription.cancelAt.getTime() < Date.now()
+    ) {
+      return null;
+    }
+    return subscription;
   }
 
   async checkCredits(organization: Organization, checkType = 'ai_images') {

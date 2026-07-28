@@ -23,7 +23,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
     setError(null);
 
     if (password.length < 8) {
-      setError(t("auth.passwordMin6"));
+      setError(t("auth.passwordMin8"));
       return;
     }
     if (password !== repeat) {
@@ -58,7 +58,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
         subtitle={t("auth.resetDoneSubtitle")}
         footer={<Link href="/login">{t("auth.backToSignIn")}</Link>}
       >
-        <Link href="/login" className={styles.submit} style={{ textAlign: "center" }}>
+        <Link href="/login" className={styles.submitLink}>
           {t("auth.backToSignIn")}
         </Link>
       </AuthShell>
@@ -86,7 +86,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
             minLength={8}
             autoComplete="new-password"
             autoFocus
-            placeholder={t("auth.passwordPlaceholder6")}
+            placeholder={t("auth.passwordPlaceholder8")}
           />
         </div>
         <div className={styles.field}>

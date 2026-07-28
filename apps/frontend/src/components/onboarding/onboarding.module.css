@@ -55,8 +55,22 @@
 .welcomeImage {
   width: 200px;
   height: 200px;
+  max-width: 100%;
   object-fit: contain;
   border-radius: 20px;
+}
+
+@media (max-width: 560px) {
+  .welcomeLayout {
+    flex-direction: column-reverse;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .welcomeImage {
+    width: 140px;
+    height: 140px;
+  }
 }
 
 .title {
@@ -78,7 +92,7 @@
   display: block;
   width: 100%;
   padding: 13px 20px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-pill);
   border: none;
   background: var(--fg);
   color: var(--bg);
@@ -127,7 +141,7 @@
 .sourceChip {
   padding: 8px 16px;
   border: 1px solid var(--line-soft);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--bg);
   color: var(--fg);
   font-size: 13px;

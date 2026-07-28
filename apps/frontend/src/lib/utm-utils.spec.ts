@@ -54,4 +54,21 @@ describe('appendUtmParams', () => {
     expect(out.endsWith('launch%202026.')).toBe(true);
     expect(out).not.toContain('com.?');
   });
+
+  it('keeps a balanced trailing ) that is part of the URL path', () => {
+    const out = appendUtmParams(
+      'see https://en.wikipedia.org/wiki/Foo_(bar) here',
+      preset
+    );
+    expect(out).toContain(
+      'https://en.wikipedia.org/wiki/Foo_(bar)?utm_source=newsletter'
+    );
+  });
+
+  it('treats an unbalanced trailing ) as sentence punctuation', () => {
+    const out = appendUtmParams('(see https://x.com)', preset);
+    expect(out).toContain('https://x.com?utm_source=newsletter');
+    expect(out).not.toContain('com)?');
+    expect(out.endsWith(')')).toBe(true);
+  });
 });

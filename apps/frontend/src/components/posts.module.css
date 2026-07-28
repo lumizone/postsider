@@ -70,6 +70,29 @@
   transform: scale(0.97);
 }
 
+/* Ghost sibling of .newBtn: same pill geometry, outlined instead of filled. */
+.importBtn {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-soft);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: border-color 140ms var(--ease), transform 120ms var(--ease);
+}
+
+.importBtn:hover {
+  border-color: var(--fg);
+}
+
+.importBtn:active {
+  transform: scale(0.97);
+}
+
 /* Filter row */
 .filters {
   display: flex;
@@ -153,6 +176,13 @@
   letter-spacing: -0.005em;
   color: var(--fg);
   transition: border-color 140ms var(--ease);
+}
+
+/* iOS Safari auto-zooms focused fields under 16px. */
+@media (max-width: 768px) {
+  .searchInput {
+    font-size: 16px;
+  }
 }
 
 .searchInput:focus {

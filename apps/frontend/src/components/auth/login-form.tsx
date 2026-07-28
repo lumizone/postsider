@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { AuthShell } from "./auth-shell";
+import { BetaBanner, PRIVATE_BETA } from "./beta";
 import { GoogleButton } from "./google-button";
 import styles from "./auth.module.css";
 import { api, ApiError, setAuthToken, setOrgId } from "@/lib/api";
@@ -70,18 +71,32 @@ export function LoginForm() {
     <AuthShell
       title={t("auth.welcomeBack")}
       subtitle={t("auth.signInSubtitle")}
+      banner={PRIVATE_BETA ? <BetaBanner /> : undefined}
       footer={
-        <>
-          {t("auth.noAccount")}{" "}
-          <Link href="/register">{t("auth.createOne")}</Link>
-        </>
+        PRIVATE_BETA ? (
+          <>
+            {t("auth.betaFooterQuestion")}{" "}
+            <a href="https://postsider.com" target="_blank" rel="noreferrer">
+              {t("auth.betaFooterCta")}
+            </a>
+          </>
+        ) : (
+          <>
+            {t("auth.noAccount")}{" "}
+            <Link href="/register">{t("auth.createOne")}</Link>
+          </>
+        )
       }
     >
-      <GoogleButton label={t("auth.googleSignIn")} />
+      {!PRIVATE_BETA && (
+        <>
+          <GoogleButton label={t("auth.googleSignIn")} />
 
-      <div className={styles.divider}>
-        <span>{t("common.or")}</span>
-      </div>
+          <div className={styles.divider}>
+            <span>{t("common.or")}</span>
+          </div>
+        </>
+      )}
 
       <form className={styles.form} onSubmit={onSubmit}>
         <div className={styles.field}>

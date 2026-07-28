@@ -5,6 +5,7 @@ import { AuthService } from '@postsider/helpers/auth/auth.service';
 import { CreateOrgUserDto } from '@postsider/nestjs-libraries/dtos/auth/create.org.user.dto';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
+import { pricing } from '@postsider/nestjs-libraries/database/prisma/subscriptions/pricing';
 
 @Injectable()
 export class OrganizationRepository {
@@ -266,12 +267,35 @@ export class OrganizationRepository {
     userAgent: string,
     allowTrial = true
   ) {
+    // Grant a real 7-day trial of the STANDARD plan (with its channel limit) on
+    // the first signup for an email — but only when billing is enforced. In
+    // self-host mode (no billing) every org is already unlimited, so no trial
+    // subscription is needed (and one would wrongly downgrade them to STANDARD).
+    const TRIAL_DAYS = 7;
+    const grantTrial = allowTrial && isBillingEnabled();
+
     return this._organization.model.organization.create({
       data: {
         name: body.company,
         apiKey: AuthService.fixedEncryption(makeId(20)),
         allowTrial,
         isTrailing: allowTrial,
+        ...(grantTrial
+          ? {
+              subscription: {
+                create: {
+                  subscriptionTier: SubscriptionTier.STANDARD,
+                  totalChannels: pricing.STANDARD.channel ?? 5,
+                  period: 'MONTHLY',
+                  isLifetime: false,
+                  identifier: 'trial',
+                  cancelAt: new Date(
+                    Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000
+                  ),
+                },
+              },
+            }
+          : {}),
         users: {
           create: {
             role: Role.SUPERADMIN,
@@ -461,13 +485,6 @@ export class OrganizationRepository {
         },
       },
       select: { disabled: true, role: true },
-    });
-  }
-
-  async resetUserForReinvite(userId: string, hashedPassword: string) {
-    return (this._organization.model as any).user.update({
-      where: { id: userId },
-      data: { password: hashedPassword, name: null },
     });
   }
 

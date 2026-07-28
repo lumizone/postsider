@@ -34,7 +34,6 @@ const ALL_PLATFORMS: PlatformOption[] = [
     iconKey: "InstagramStandalone",
   },
   { id: "pinterest", label: "Pinterest", iconKey: "Pinterest" },
-  { id: "reddit", label: "Reddit", iconKey: "Reddit" },
 
   // Tier 2 — chat / community
   { id: "discord", label: "Discord", iconKey: "Discord" },
@@ -43,8 +42,6 @@ const ALL_PLATFORMS: PlatformOption[] = [
 
   // Tier 3 — video / streaming
   { id: "twitch", label: "Twitch", iconKey: "Twitch" },
-  // Kick hidden until the integration works — re-add when fixed.
-  { id: "rumble", label: "Rumble", iconKey: "Rumble" },
 
   // Tier 4 — alt / federated social
   { id: "bluesky", label: "Bluesky", iconKey: "Bluesky" },
@@ -52,12 +49,8 @@ const ALL_PLATFORMS: PlatformOption[] = [
   { id: "wrapcast", label: "Farcaster", iconKey: "Farcaster" },
   { id: "nostr", label: "Nostr", iconKey: "Nostr" },
   { id: "lemmy", label: "Lemmy", iconKey: "Lemmy" },
-  // VK hidden for now — re-add when we get to it.
-  // { id: "vk", label: "VK", iconKey: "VK" },
-  { id: "mewe", label: "MeWe", iconKey: "MeWe" },
 
   // Tier 5 — productivity / business
-  { id: "gmail", label: "Gmail", iconKey: "Gmail" },
   { id: "gmb", label: "Google Business", iconKey: "GoogleBusiness" },
   { id: "blogger", label: "Blogger", iconKey: "Blogger" },
   { id: "notion", label: "Notion", iconKey: "Notion" },
@@ -69,13 +62,11 @@ const ALL_PLATFORMS: PlatformOption[] = [
   { id: "ghost", label: "Ghost", iconKey: "Ghost" },
   { id: "hashnode", label: "Hashnode", iconKey: "Hashnode" },
   { id: "devto", label: "Dev.to", iconKey: "DevTo" },
-  { id: "bear-blog", label: "Bear Blog", iconKey: "BearBlog" },
   { id: "mataroa", label: "Mataroa", iconKey: "Mataroa" },
   { id: "writeas", label: "Write.as", iconKey: "WriteAs" },
 
   // Tier 7 — design / niche
   { id: "dribbble", label: "Dribbble", iconKey: "Dribbble" },
-  { id: "skool", label: "Skool", iconKey: "Skool" },
   { id: "whop", label: "Whop", iconKey: "Whop" },
   { id: "moltbook", label: "Moltbook", iconKey: "Moltbook" },
 ];

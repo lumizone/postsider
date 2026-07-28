@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { PageHeader, Card } from "@/components/settings-ui";
+import { useEffect, useMemo, useState } from "react";
+import { PageHeader, Card, settingsStyles as s } from "@/components/settings-ui";
 import { useAuth } from "@/lib/auth-context";
-import { useT } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
 import { listChannels } from "@/lib/integrations";
 import type { Channel } from "@/lib/calendar-data";
 import {
@@ -13,36 +13,6 @@ import {
   minutesToHHMM,
   hhmmToMinutes,
 } from "@/lib/queue-plan-api";
-
-const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-const inputStyle: React.CSSProperties = {
-  padding: "8px 10px",
-  borderRadius: 8,
-  border: "1px solid var(--line-soft)",
-  fontSize: 13,
-  background: "var(--bg)",
-  color: "var(--fg)",
-};
-const primaryBtn: React.CSSProperties = {
-  padding: "8px 16px",
-  borderRadius: 8,
-  border: "none",
-  background: "var(--fg)",
-  color: "var(--bg)",
-  fontSize: 13,
-  fontWeight: 600,
-  cursor: "pointer",
-};
-const ghostBtn: React.CSSProperties = {
-  padding: "7px 12px",
-  borderRadius: 8,
-  border: "1px solid var(--line-soft)",
-  background: "var(--bg)",
-  color: "var(--fg)",
-  fontSize: 12,
-  cursor: "pointer",
-};
 
 function dayChip(active: boolean): React.CSSProperties {
   return {
@@ -59,9 +29,19 @@ function dayChip(active: boolean): React.CSSProperties {
 }
 
 export default function QueuePlanPage() {
-  const t = useT();
+  const { t, locale } = useI18n();
   const { user } = useAuth();
   const canManage = user?.role === "ADMIN" || user?.role === "SUPERADMIN";
+
+  // Localized weekday labels, index 0 = Sunday (matches the slot day numbers).
+  const dayLabels = useMemo(() => {
+    const narrow = new Intl.DateTimeFormat(locale, { weekday: "narrow", timeZone: "UTC" });
+    const long = new Intl.DateTimeFormat(locale, { weekday: "long", timeZone: "UTC" });
+    return Array.from({ length: 7 }, (_, d) => {
+      const date = new Date(Date.UTC(2023, 0, 1 + d)); // 2023-01-01 is a Sunday
+      return { narrow: narrow.format(date), long: long.format(date) };
+    });
+  }, [locale]);
 
   const [channels, setChannels] = useState<Channel[]>([]);
   const [plans, setPlans] = useState<Record<string, QueueSlot[]>>({});
@@ -87,11 +67,12 @@ export default function QueuePlanPage() {
         );
         setPlans(Object.fromEntries(entries));
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not load channels");
+        setError(e instanceof Error ? e.message : t("settingsQueuePlan.loadError"));
       } finally {
         setLoading(false);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const update = (id: string, slots: QueueSlot[]) =>
@@ -132,7 +113,7 @@ export default function QueuePlanPage() {
       setSavedId(id);
       setTimeout(() => setSavedId((cur) => (cur === id ? null : cur)), 2000);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save");
+      setError(e instanceof Error ? e.message : t("settingsQueuePlan.saveError"));
     } finally {
       setSavingId(null);
     }
@@ -143,7 +124,7 @@ export default function QueuePlanPage() {
       <PageHeader
         eyebrow={t("settings.eyebrow")}
         title={t("settings.queuePlan")}
-        subtitle="You don't have permission to manage the queue plan."
+        subtitle={t("settingsQueuePlan.noPermission")}
       />
     );
   }
@@ -153,10 +134,10 @@ export default function QueuePlanPage() {
       <PageHeader
         eyebrow={t("settings.eyebrow")}
         title={t("settings.queuePlan")}
-        subtitle="Set recurring posting times per channel (times are in UTC). Use Add to queue in the composer to fill the next open slot."
+        subtitle={t("settingsQueuePlan.subtitle")}
       />
       {error && (
-        <div style={{ margin: "0 0 16px", padding: "10px 12px", borderRadius: 8, background: "rgba(192,57,43,0.08)", color: "#c0392b", fontSize: 13 }}>{error}</div>
+        <div role="alert" style={{ margin: "0 0 16px", padding: "10px 12px", borderRadius: 8, background: "rgba(192,57,43,0.08)", color: "#c0392b", fontSize: 13 }}>{error}</div>
       )}
       {loading ? (
         <Card title="">
@@ -164,7 +145,7 @@ export default function QueuePlanPage() {
         </Card>
       ) : channels.length === 0 ? (
         <Card title="">
-          <div style={{ padding: "30px 0", textAlign: "center", color: "var(--muted)", fontSize: 14 }}>No channels connected yet.</div>
+          <div style={{ padding: "30px 0", textAlign: "center", color: "var(--muted)", fontSize: 14 }}>{t("settingsQueuePlan.noChannels")}</div>
         </Card>
       ) : (
         channels.map((c) => {
@@ -173,27 +154,37 @@ export default function QueuePlanPage() {
             <Card key={c.id} title={c.name}>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {slots.length === 0 && (
-                  <div style={{ fontSize: 13, color: "var(--muted)" }}>No slots yet. Add one to enable queuing for this channel.</div>
+                  <div style={{ fontSize: 13, color: "var(--muted)" }}>{t("settingsQueuePlan.noSlots")}</div>
                 )}
-                {slots.map((s, i) => {
-                  const active = s.days && s.days.length ? s.days : [0, 1, 2, 3, 4, 5, 6];
+                {slots.map((slot, i) => {
+                  const active = slot.days && slot.days.length ? slot.days : [0, 1, 2, 3, 4, 5, 6];
                   return (
                     <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <input type="time" style={inputStyle} value={minutesToHHMM(s.time)} onChange={(e) => setTime(c.id, i, e.target.value)} />
+                      <input type="time" className={s.input} style={{ width: 120 }} value={minutesToHHMM(slot.time)} onChange={(e) => setTime(c.id, i, e.target.value)} />
                       <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600 }}>UTC</span>
                       <div style={{ display: "flex", gap: 4 }}>
-                        {DAY_LABELS.map((lbl, d) => (
-                          <button key={d} type="button" style={dayChip(active.includes(d))} onClick={() => toggleDay(c.id, i, d)}>{lbl[0]}</button>
+                        {dayLabels.map((lbl, d) => (
+                          <button
+                            key={d}
+                            type="button"
+                            style={dayChip(active.includes(d))}
+                            title={lbl.long}
+                            aria-label={lbl.long}
+                            aria-pressed={active.includes(d)}
+                            onClick={() => toggleDay(c.id, i, d)}
+                          >
+                            {lbl.narrow}
+                          </button>
                         ))}
                       </div>
-                      <button type="button" style={{ ...ghostBtn, color: "#DC2626", borderColor: "rgba(220,38,38,0.25)" }} onClick={() => removeSlot(c.id, i)}>Remove</button>
+                      <button type="button" className={s.btnDanger} onClick={() => removeSlot(c.id, i)}>{t("common.remove")}</button>
                     </div>
                   );
                 })}
                 <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-                  <button type="button" style={ghostBtn} onClick={() => addSlot(c.id)}>+ Add slot</button>
-                  <button type="button" style={primaryBtn} onClick={() => save(c.id)} disabled={savingId === c.id}>
-                    {savingId === c.id ? "Saving…" : savedId === c.id ? "Saved" : "Save"}
+                  <button type="button" className={s.btnGhost} onClick={() => addSlot(c.id)}>{t("settingsQueuePlan.addSlot")}</button>
+                  <button type="button" className={s.btnPrimary} onClick={() => save(c.id)} disabled={savingId === c.id}>
+                    {savingId === c.id ? t("settingsQueuePlan.saving") : savedId === c.id ? t("settingsQueuePlan.saved") : t("common.save")}
                   </button>
                 </div>
               </div>

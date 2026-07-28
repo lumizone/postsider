@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useT, type MessageKey } from "@/lib/i18n";
 import { LanguageSwitcher } from "./language-switcher";
+import styles from "./dashboard-shell.module.css";
 
 interface NavItem {
   href: string;
@@ -189,6 +190,8 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const t = useT();
   const [collapsed, setCollapsed] = useState(false);
+  // Mobile off-canvas drawer (opened from the hamburger in the topbar).
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // Restore collapsed state from localStorage on mount.
   useEffect(() => {
@@ -197,6 +200,21 @@ export function DashboardShell({ children }: { children: ReactNode }) {
       if (stored === "1") setCollapsed(true);
     } catch {}
   }, []);
+
+  // Close the drawer on navigation.
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
+
+  // Escape closes the drawer.
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileNavOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileNavOpen]);
 
   const toggleCollapsed = () => {
     setCollapsed((prev) => {
@@ -208,45 +226,84 @@ export function DashboardShell({ children }: { children: ReactNode }) {
     });
   };
 
+  // The open drawer always shows the full sidebar; on desktop the drawer is
+  // never open, so this matches the stored collapsed state exactly.
+  const isCollapsed = collapsed && !mobileNavOpen;
+
   return (
     <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: `${collapsed ? "76px" : "260px"} 1fr`,
-        minHeight: "100vh",
-        padding: "16px",
-        gap: "16px",
-        transition: "grid-template-columns 220ms var(--ease)",
-      }}
+      className={
+        styles.shell + (collapsed ? " " + styles.shellCollapsed : "")
+      }
     >
+      <header className={styles.topbar}>
+        <button
+          type="button"
+          className={styles.menuButton}
+          onClick={() => setMobileNavOpen(true)}
+          aria-label={t("calendar.openMenu")}
+          aria-expanded={mobileNavOpen}
+        >
+          <svg viewBox="0 0 16 16" fill="none" aria-hidden width="18" height="18">
+            <path
+              d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+        <span className={styles.topbarBrand}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/postsider-logo.png"
+            alt=""
+            width={28}
+            height={28}
+            aria-hidden
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: "var(--radius-sm)",
+              objectFit: "cover",
+              flexShrink: 0,
+              display: "block",
+            }}
+          />
+          <span
+            className="brand"
+            style={{ fontSize: "19px", lineHeight: 1, display: "inline-block" }}
+          >
+            PostSider
+          </span>
+        </span>
+      </header>
+
+      {mobileNavOpen && (
+        <div
+          className={styles.backdrop}
+          onClick={() => setMobileNavOpen(false)}
+          aria-hidden
+        />
+      )}
+
       <aside
-        style={{
-          borderRadius: "var(--radius-xl)",
-          border: "1px solid var(--line-soft)",
-          padding: collapsed ? "20px 12px" : "24px 18px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "24px",
-          position: "sticky",
-          top: "16px",
-          alignSelf: "start",
-          height: "calc(100vh - 32px)",
-          background:
-            "linear-gradient(180deg, rgba(0,0,0,0.02) 0%, rgba(0,0,0,0) 60%)",
-          transition:
-            "padding 220ms var(--ease)",
-        }}
+        className={
+          styles.sidebar +
+          (isCollapsed ? " " + styles.sidebarCollapsed : "") +
+          (mobileNavOpen ? " " + styles.sidebarOpen : "")
+        }
       >
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: collapsed ? "center" : "space-between",
+            justifyContent: isCollapsed ? "center" : "space-between",
             gap: 8,
-            padding: collapsed ? 0 : "0 6px",
+            padding: isCollapsed ? 0 : "0 6px",
           }}
         >
-          {!collapsed ? (
+          {!isCollapsed ? (
             <span
               style={{
                 display: "inline-flex",
@@ -302,7 +359,9 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           <button
             type="button"
             onClick={toggleCollapsed}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={
+              isCollapsed ? t("calendar.expand") : t("calendar.collapse")
+            }
             style={{
               width: 28,
               height: 28,
@@ -311,7 +370,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
               border: "none",
               background: "transparent",
               color: "var(--fg)",
-              display: collapsed ? "none" : "inline-flex",
+              display: isCollapsed ? "none" : "inline-flex",
               alignItems: "center",
               justifyContent: "center",
               cursor: "pointer",
@@ -325,15 +384,15 @@ export function DashboardShell({ children }: { children: ReactNode }) {
               e.currentTarget.style.background = "transparent";
             }}
           >
-            <ChevronCollapse collapsed={collapsed} />
+            <ChevronCollapse collapsed={isCollapsed} />
           </button>
         </div>
 
-        {collapsed && (
+        {isCollapsed && (
           <button
             type="button"
             onClick={toggleCollapsed}
-            aria-label="Expand sidebar"
+            aria-label={t("calendar.expand")}
             style={{
               width: 28,
               height: 28,
@@ -358,7 +417,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
               e.currentTarget.style.background = "transparent";
             }}
           >
-            <ChevronCollapse collapsed={collapsed} />
+            <ChevronCollapse collapsed={isCollapsed} />
           </button>
         )}
 
@@ -371,13 +430,13 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                 <li key={item.href}>
                   <Link
                     href={item.href}
-                    title={collapsed ? t(item.labelKey) : undefined}
+                    title={isCollapsed ? t(item.labelKey) : undefined}
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      gap: collapsed ? 0 : "12px",
-                      justifyContent: collapsed ? "center" : "flex-start",
-                      padding: collapsed ? "10px 0" : "10px 14px",
+                      gap: isCollapsed ? 0 : "12px",
+                      justifyContent: isCollapsed ? "center" : "flex-start",
+                      padding: isCollapsed ? "10px 0" : "10px 14px",
                       borderRadius: "var(--radius-md)",
                       background: isActive ? "var(--fg)" : "transparent",
                       color: isActive ? "var(--bg)" : "var(--fg)",
@@ -399,7 +458,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                     >
                       {item.icon}
                     </span>
-                    {!collapsed && <span>{t(item.labelKey)}</span>}
+                    {!isCollapsed && <span>{t(item.labelKey)}</span>}
                   </Link>
                 </li>
               );
@@ -407,7 +466,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           </ul>
         </nav>
 
-        {!collapsed && (
+        {!isCollapsed && (
           <div style={{ marginTop: "auto", padding: "0 6px", display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={{ padding: "0 8px" }}>
               <LanguageSwitcher />

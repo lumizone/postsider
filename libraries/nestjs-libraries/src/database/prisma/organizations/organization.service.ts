@@ -121,25 +121,23 @@ export class OrganizationService {
         };
       }
 
-      // User exists but is NOT in this org (or was removed). Re-add them
-      // and reset their password so they can sign in fresh.
-      const newPassword = makeId(12);
+      // The email belongs to an existing account, which may live in a DIFFERENT
+      // organization. Link — or re-enable — their membership here, but NEVER
+      // touch their credentials. The old code reset the password on invite,
+      // which let an admin of one org reset (and learn, via the response) the
+      // password of a user who belongs to another org — a cross-tenant account
+      // takeover. Existing users sign in with their own existing password.
       await this._organizationRepository.createUserOrgLink(
         orgId,
         existingUser.id,
         body.role as 'USER' | 'ADMIN'
       );
-      // Reset their password to the new one-time value and clear name to
-      // trigger the setup screen.
-      await this._organizationRepository.resetUserForReinvite(
-        existingUser.id,
-        AuthService.hashPassword(newPassword),
-      );
 
       return {
         email: body.email,
-        password: newPassword,
-        message: 'User re-added to the organization with a new one-time password.',
+        password: null,
+        message:
+          'Existing user added to the organization. They sign in with their existing password.',
       };
     }
 

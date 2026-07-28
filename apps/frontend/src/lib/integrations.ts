@@ -51,13 +51,10 @@ const PROVIDER_LABELS: Record<string, { label: string; platform: string }> = {
   "linkedin-page": { label: "LinkedIn Page", platform: "LinkedIn" },
   threads: { label: "Threads", platform: "Threads" },
   pinterest: { label: "Pinterest", platform: "Pinterest" },
-  reddit: { label: "Reddit", platform: "Reddit" },
   discord: { label: "Discord", platform: "Discord" },
   slack: { label: "Slack", platform: "Slack" },
   telegram: { label: "Telegram", platform: "Telegram" },
   twitch: { label: "Twitch", platform: "Twitch" },
-  kick: { label: "Kick", platform: "Kick" },
-  rumble: { label: "Rumble", platform: "Rumble" },
   bluesky: { label: "Bluesky", platform: "Bluesky" },
   mastodon: { label: "Mastodon", platform: "Mastodon" },
   "mastodon-custom": { label: "Mastodon", platform: "Mastodon" },
@@ -65,9 +62,6 @@ const PROVIDER_LABELS: Record<string, { label: string; platform: string }> = {
   wrapcast: { label: "Farcaster", platform: "Farcaster" },
   nostr: { label: "Nostr", platform: "Nostr" },
   lemmy: { label: "Lemmy", platform: "Lemmy" },
-  vk: { label: "VK", platform: "VK" },
-  mewe: { label: "MeWe", platform: "MeWe" },
-  gmail: { label: "Gmail", platform: "Gmail" },
   gmb: { label: "Google Business", platform: "Google Business" },
   blogger: { label: "Blogger", platform: "Blogger" },
   notion: { label: "Notion", platform: "Notion" },
@@ -78,11 +72,9 @@ const PROVIDER_LABELS: Record<string, { label: string; platform: string }> = {
   hashnode: { label: "Hashnode", platform: "Hashnode" },
   "dev-to": { label: "Dev.to", platform: "Dev.to" },
   devto: { label: "Dev.to", platform: "Dev.to" },
-  "bear-blog": { label: "Bear Blog", platform: "Bear Blog" },
   mataroa: { label: "Mataroa", platform: "Mataroa" },
   writeas: { label: "Write.as", platform: "Write.as" },
   dribbble: { label: "Dribbble", platform: "Dribbble" },
-  skool: { label: "Skool", platform: "Skool" },
   whop: { label: "Whop", platform: "Whop" },
   moltbook: { label: "Moltbook", platform: "Moltbook" },
 };
@@ -192,6 +184,8 @@ export interface OauthLinkResponse {
   oauthUrl?: string;
   /** Whether OAuth is already configured for this provider. */
   oauthConfigured?: boolean;
+  /** Sign In With Neynar client id — present for Farcaster (wrapcast). */
+  neynarClientId?: string;
 }
 
 export async function getOauthUrl(
@@ -240,6 +234,28 @@ export async function connectIntegration(
   );
 }
 
+export interface TelegramUpdateResult {
+  chatId?: number | string;
+  lastChatId?: number;
+}
+
+/**
+ * Poll the shared Telegram bot for a `/connect <code>` message. Returns
+ * `{ chatId }` once the user posts the command in a chat where the bot is an
+ * admin, `{ lastChatId }` (an offset to pass back as `id` on the next poll)
+ * while still waiting, or `{}` when there are no updates yet.
+ */
+export async function pollTelegramUpdates(
+  word: string,
+  id?: number,
+): Promise<TelegramUpdateResult> {
+  return api.get<TelegramUpdateResult>(
+    `/integrations/telegram/updates`,
+    { word, ...(id ? { id } : {}) },
+    { silent: true },
+  );
+}
+
 /**
  * Finalize a two-step provider connection (e.g. LinkedIn Page) by saving the
  * page/company the user picked. `state` is the OAuth state from the callback.
@@ -267,11 +283,12 @@ export interface IntegrationChannel {
 export async function getIntegrationChannels(
   integrationId: string,
   fnName = "channels",
+  data: Record<string, unknown> = {},
 ): Promise<IntegrationChannel[]> {
   try {
     const res = await api.post<IntegrationChannel[]>(
       `/integrations/function`,
-      { id: integrationId, name: fnName, data: {} },
+      { id: integrationId, name: fnName, data },
       { silent: true },
     );
     return Array.isArray(res) ? res : [];

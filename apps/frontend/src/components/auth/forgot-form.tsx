@@ -39,7 +39,7 @@ export function ForgotForm() {
         subtitle={t("auth.forgotSentSubtitle")}
         footer={<Link href="/login">{t("auth.backToSignIn")}</Link>}
       >
-        <Link href="/login" className={styles.submit} style={{ textAlign: "center" }}>
+        <Link href="/login" className={styles.submitLink}>
           {t("auth.backToSignIn")}
         </Link>
       </AuthShell>

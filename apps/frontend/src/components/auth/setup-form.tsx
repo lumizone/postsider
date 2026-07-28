@@ -39,8 +39,8 @@ export function SetupForm() {
       setError(t("auth.passwordsNoMatch"));
       return;
     }
-    if (password.length < 3) {
-      setError(t("auth.passwordMin3"));
+    if (password.length < 8) {
+      setError(t("auth.passwordMin8"));
       return;
     }
     if (!email || !/.+@.+\..+/.test(email)) {
@@ -116,7 +116,7 @@ export function SetupForm() {
             onChange={(e) => setPassword(e.target.value)}
             required
             autoComplete="new-password"
-            minLength={3}
+            minLength={8}
           />
         </div>
         <div className={styles.field}>
@@ -131,7 +131,7 @@ export function SetupForm() {
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
             autoComplete="new-password"
-            minLength={3}
+            minLength={8}
           />
         </div>
         {error && <div className={styles.error}>{error}</div>}

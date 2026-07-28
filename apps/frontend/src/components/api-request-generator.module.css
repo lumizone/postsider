@@ -1,0 +1,194 @@
+.intro {
+  margin: 0 0 18px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+.codeInline {
+  background: rgba(0, 0, 0, 0.05);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+/* Composer-style two-panel: compose on the left, live request on the right. */
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .grid { grid-template-columns: 1fr; }
+}
+
+.panel {
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.panelTitle {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.row2 { display: grid; grid-template-columns: 1fr 150px; gap: 10px; }
+.rowEnd { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }
+
+/* Channel multi-select — same chip-with-avatar strip as the calendar composer,
+   including the white + dark "halo" ring on the selected avatar. */
+.channelStrip { display: flex; flex-wrap: wrap; gap: 14px; padding: 4px 0; }
+.channelChip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 0.14s;
+}
+.channelChip:hover { transform: translateY(-1px); }
+.channelChipOn > span:first-child {
+  /* white gap ring hugging the avatar, then the solid dark ring (adapts to the
+     theme via --bg / --fg) — matches the calendar composer. */
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--fg);
+}
+.channelChipName {
+  width: 100%;
+  max-width: 80px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.channelChipOn .channelChipName { color: var(--fg); }
+.channelEmpty { font-size: 13px; color: var(--muted); }
+.selectedCount {
+  font-size: 11px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.input {
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line-soft);
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--fg);
+  width: 100%;
+}
+.input:focus { outline: none; border-color: var(--fg); }
+/* Selects share the input look plus a brand chevron (no native OS arrow). */
+.select {
+  composes: input;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--fg) 50%),
+    linear-gradient(135deg, var(--fg) 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) 50%,
+    calc(100% - 11px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 30px;
+}
+.editor {
+  min-height: 150px;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.5;
+}
+.ghost {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line-soft);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.ghost:hover { background: rgba(0, 0, 0, 0.03); }
+.ghost:disabled { opacity: 0.6; cursor: default; }
+.removeBtn { color: #dc2626; border-color: rgba(220, 38, 38, 0.25); }
+.imgNote { font-size: 11px; color: var(--muted); word-break: break-all; }
+
+/* Live request output — a sticky code panel that mirrors the composer preview. */
+.output {
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg);
+  position: sticky;
+  top: 12px;
+}
+.outputHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line-soft);
+  padding: 7px 8px;
+}
+.tabs { display: flex; gap: 4px; }
+.tab {
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-transform: uppercase;
+}
+.tabActive { background: var(--fg); color: var(--bg); }
+.copyBtn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--line-soft);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 12px;
+  cursor: pointer;
+}
+.copyBtn:hover { background: rgba(0, 0, 0, 0.03); }
+.codeBlock {
+  margin: 0;
+  padding: 14px 16px;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow: auto;
+  white-space: pre;
+  color: var(--fg);
+  max-height: 480px;
+}

@@ -280,7 +280,7 @@
   color: var(--fg);
   background: var(--bg);
   border: 1px solid var(--line-soft);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 3px 6px 3px 6px;
   white-space: nowrap;
   overflow: hidden;
@@ -327,115 +327,33 @@
   padding-left: 7px;
 }
 
-/* DAY CARD (under month view) */
-.dayCard {
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--line-soft);
-  padding: 22px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  transition: box-shadow 220ms var(--ease);
-}
-
-.dayCard:hover {
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
-}
-
-.dayCardHeader {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.dayCardTitle {
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
-.dayCardSubtitle {
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.dayCardEmpty {
-  color: var(--muted);
-  font-size: 14px;
-}
-
-.eventList {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.eventListItem {
+/* Discreet loading state (initial data fetch) */
+.loadingState {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--line-soft);
-  transition: box-shadow 180ms var(--ease), transform 180ms var(--ease);
-}
-
-.eventListItem:hover {
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
-  transform: translateY(-1px);
-}
-
-.eventListTime {
-  font-size: 12px;
+  justify-content: center;
+  gap: 10px;
+  padding: 72px 0;
   color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  min-width: 56px;
-}
-
-.eventListTitle {
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.eventListChannel {
-  font-size: 12px;
-  color: var(--muted);
-  letter-spacing: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.newPostBtn {
-  height: 32px;
-  padding: 0 16px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--fg);
-  background: var(--fg);
-  color: var(--bg);
   font-size: 13px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  cursor: pointer;
-  transition: opacity 140ms var(--ease), transform 120ms var(--ease);
 }
 
-.newPostBtn:hover {
-  opacity: 0.85;
-  background: var(--fg);
-  color: var(--bg);
+.loadingDot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--muted);
+  animation: loadingPulse 1s ease-in-out infinite;
 }
 
-.newPostBtn:active {
-  transform: scale(0.97);
+@keyframes loadingPulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 /* WEEK + DAY (timeline-based) views */
@@ -554,7 +472,7 @@
   transform: translate(-50%, -50%) scale(0.92);
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--fg);
   color: var(--bg);
   display: inline-flex;
@@ -580,7 +498,7 @@
   background: var(--bg);
   color: var(--fg);
   border: 1px solid var(--line-soft);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 6px 8px 6px 10px;
   font-size: 11px;
   font-weight: 600;
@@ -747,4 +665,34 @@
   font-size: 18px;
   line-height: 0;
   margin-top: 2px;
+}
+
+/* RESPONSIVE (narrow screens) */
+@media (max-width: 900px) {
+  /* Stack the channels panel above the calendar. */
+  .shell {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .shell > :first-child {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--line-soft);
+  }
+
+  /* Week/day timeline scrolls horizontally instead of squeezing columns. */
+  .timeline {
+    overflow-x: auto;
+  }
+
+  .timelineHeader,
+  .timelineBody {
+    min-width: 620px;
+  }
+
+  .yearGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
 }

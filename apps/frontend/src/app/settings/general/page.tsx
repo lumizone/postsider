@@ -123,6 +123,7 @@ export default function GeneralSettingsPage() {
 
       {error && (
         <div
+          role="alert"
           style={{
             margin: "0 0 16px",
             padding: "10px 12px",

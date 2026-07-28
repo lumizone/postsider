@@ -17,94 +17,56 @@ export type BillingPeriod = "MONTHLY" | "YEARLY";
 
 export interface PlanDescriptor {
   name: TierName;
-  label: string;
   monthlyPrice: number;
   yearlyPrice: number;
   channels: number;
   postsPerMonth: number | "unlimited";
   teamMembers: boolean;
-  tagline: string;
   /** Whether to show a "Popular" badge on this plan. */
   popular: boolean;
-  /** Marketing-style highlight points shown on the card. */
-  features: string[];
 }
 
 /**
- * Top features shown on every plan card (kept short — only the headline ones).
- * Standard shows 6 bullets total (2 limits + 4 features), the rest show 7
- * (3 limits + 4 features).
+ * Structural plan data only. All display copy (labels, taglines, feature
+ * bullets) lives in the i18n catalog under `billing.plans.*` and
+ * `billing.features.*`; the billing page composes the card copy from there.
  */
-const TOP_FEATURES = [
-  "Schedule to 40+ platforms",
-  "Visual calendar",
-  "Analytics",
-  "Smart Agent (AI tools)",
-];
-
 export const PLANS: PlanDescriptor[] = [
   {
     name: "STANDARD",
-    label: "Standard",
     monthlyPrice: 20,
     yearlyPrice: 200,
     channels: 5,
     postsPerMonth: 400,
     teamMembers: false,
-    tagline: "Best for content creators",
     popular: false,
-    features: ["5 channels", "400 posts per month", ...TOP_FEATURES],
   },
   {
     name: "TEAM",
-    label: "Team",
     monthlyPrice: 35,
     yearlyPrice: 350,
     channels: 10,
     postsPerMonth: "unlimited",
     teamMembers: true,
-    tagline: "Best for small brands",
     popular: false,
-    features: [
-      "10 channels",
-      "Unlimited posts per month",
-      "Unlimited team members",
-      ...TOP_FEATURES,
-    ],
   },
   {
     name: "PRO",
-    label: "Pro",
     monthlyPrice: 45,
     yearlyPrice: 450,
     channels: 30,
     postsPerMonth: "unlimited",
     teamMembers: true,
-    tagline: "Best for large businesses",
     popular: true,
-    features: [
-      "30 channels",
-      "Unlimited posts per month",
-      "Unlimited team members",
-      ...TOP_FEATURES,
-    ],
   },
   {
     name: "ULTIMATE",
-    label: "Ultimate",
     monthlyPrice: 90,
     yearlyPrice: 900,
     channels: 100,
     postsPerMonth: "unlimited",
     teamMembers: true,
-    tagline: "Best for agencies",
     popular: false,
-    features: [
-      "100 channels",
-      "Unlimited posts per month",
-      "Unlimited team members",
-      ...TOP_FEATURES,
-    ],
   },
 ];
 
@@ -115,15 +77,12 @@ export function getPlan(name: string | null | undefined): PlanDescriptor | null 
   if (name === "SAMURAI") {
     return {
       name: "ULTIMATE",
-      label: "Samurai",
       monthlyPrice: 0,
       yearlyPrice: 0,
       channels: 1000000,
       postsPerMonth: "unlimited",
       teamMembers: true,
-      tagline: "Internal plan",
       popular: false,
-      features: [],
     };
   }
   return PLANS.find((p) => p.name === name) ?? null;

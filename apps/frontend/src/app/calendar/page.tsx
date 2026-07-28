@@ -17,7 +17,7 @@ export default function CalendarPage() {
           color: "var(--muted)",
         }}
       >
-        {t("calendar.eyebrow" as any)}
+        {t("calendar.eyebrow")}
       </span>
       <Calendar year={today.getFullYear()} month={today.getMonth()} />
     </section>

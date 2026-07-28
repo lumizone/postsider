@@ -14,9 +14,13 @@ FROM node:22.20-bookworm-slim AS builder
 ARG NEXT_PUBLIC_VERSION
 ARG NEXT_PUBLIC_BACKEND_URL
 ARG NEXT_PUBLIC_SELF_HOSTED="true"
+ARG NEXT_PUBLIC_TELEGRAM_BOT_NAME
+ARG NEXT_PUBLIC_DISABLE_REGISTRATION
 ENV NEXT_PUBLIC_VERSION=$NEXT_PUBLIC_VERSION
 ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
 ENV NEXT_PUBLIC_SELF_HOSTED=$NEXT_PUBLIC_SELF_HOSTED
+ENV NEXT_PUBLIC_TELEGRAM_BOT_NAME=$NEXT_PUBLIC_TELEGRAM_BOT_NAME
+ENV NEXT_PUBLIC_DISABLE_REGISTRATION=$NEXT_PUBLIC_DISABLE_REGISTRATION
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
@@ -105,7 +109,11 @@ COPY --from=builder --chown=postsider:postsider /build/apps/frontend/.next ./app
 COPY --from=builder --chown=postsider:postsider /build/apps/frontend/public ./apps/frontend/public
 COPY --from=builder --chown=postsider:postsider /build/apps/frontend/package.json ./apps/frontend/package.json
 COPY --from=builder --chown=postsider:postsider /build/apps/frontend/next.config.mjs ./apps/frontend/next.config.mjs
-COPY --from=builder --chown=postsider:postsider /build/apps/frontend/node_modules ./apps/frontend/node_modules
+# NOTE: apps/frontend/node_modules is intentionally NOT copied. With
+# node-linker=hoisted (.npmrc) and no workspace: deps in the frontend, pnpm
+# places all third-party deps (next, react, ...) in the ROOT node_modules
+# (copied above). apps/frontend/node_modules is never created; next start
+# resolves deps from the root via Node's upward module resolution.
 
 # Orchestrator (Temporal worker: scheduled publishing + token refresh)
 COPY --from=builder --chown=postsider:postsider /build/apps/orchestrator/dist ./apps/orchestrator/dist
@@ -131,14 +139,32 @@ COPY --from=builder --chown=postsider:postsider /build/libraries/nestjs-librarie
 # Scripts
 COPY --from=builder --chown=postsider:postsider /build/scripts ./scripts
 
+# pm2 process definitions (starts each app as `node` directly — see the file)
+COPY --from=builder --chown=postsider:postsider /build/ecosystem.config.js ./ecosystem.config.js
+
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=60s \
   CMD wget --no-verbose --tries=1 --spider http://localhost:5000/api/health || exit 1
 
+# Drop root: the `postsider` user existed since the beginning but was never
+# switched to, so pm2 and all three node apps ran as root — with 512MB uploads
+# and a public API that is more blast radius than this container needs. nginx
+# binds :5000 (unprivileged) and /run, /var/log/nginx, /var/lib/nginx, /uploads
+# and /app are all postsider-owned above. pm2 state moves to /app/.pm2.
+ENV PM2_HOME=/app/.pm2
+USER postsider
+
 # Use tini as init process for proper signal handling
 ENTRYPOINT ["tini", "--"]
 
-# Start nginx + application via pm2
-CMD ["sh", "-c", "nginx && pnpm run pm2"]
+# Start nginx + application via pm2.
+#
+# `exec` (and NOT going through `pnpm run pm2`) is deliberate: it makes
+# pm2-runtime the direct child of tini, so a `docker stop` SIGTERM actually
+# reaches the supervisor and each app gets its kill_timeout to drain. Routed
+# through pnpm the signal died in the wrapper chain and everything was SIGKILLed
+# 10s later. pm2-runtime also keeps pm2 in the foreground, so no `pm2 logs` tail
+# is needed to hold the container open.
+CMD ["sh", "-c", "nginx && pnpm run prisma-migrate-deploy && exec pm2-runtime start ecosystem.config.js"]
 
 EXPOSE 5000

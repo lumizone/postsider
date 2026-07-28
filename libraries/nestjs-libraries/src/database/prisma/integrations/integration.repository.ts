@@ -495,6 +495,26 @@ export class IntegrationRepository {
     });
   }
 
+  // All live integrations (every org) eligible to have their token-refresh
+  // workflow (re-)armed on boot. Excludes deleted/disabled/already-broken
+  // (refreshNeeded) and half-connected (inBetweenSteps) channels.
+  getAllForRefreshArming() {
+    return this._integration.model.integration.findMany({
+      where: {
+        deletedAt: null,
+        disabled: false,
+        refreshNeeded: false,
+        inBetweenSteps: false,
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        providerIdentifier: true,
+        refreshToken: true,
+      },
+    });
+  }
+
   async disableChannel(org: string, id: string) {
     await this._integration.model.integration.update({
       where: {
@@ -538,6 +558,47 @@ export class IntegrationRepository {
       },
       data: {
         deletedAt: new Date(),
+      },
+    });
+  }
+
+  // Platform-initiated compliance callbacks (e.g. Meta data deletion) arrive
+  // with only the provider-side user id, so these lookups are cross-org.
+  findByPlatformInternalIds(
+    providerIdentifiers: string[],
+    internalIds: string[]
+  ) {
+    return this._integration.model.integration.findMany({
+      where: {
+        providerIdentifier: { in: providerIdentifiers },
+        deletedAt: null,
+        OR: [
+          { rootInternalId: { in: internalIds } },
+          { internalId: { in: internalIds } },
+        ],
+      },
+    });
+  }
+
+  dataDeletionWipe(ids: string[]) {
+    return this._integration.model.integration.updateMany({
+      where: { id: { in: ids } },
+      data: {
+        deletedAt: new Date(),
+        disabled: true,
+        refreshNeeded: true,
+        token: '',
+        refreshToken: '',
+      },
+    });
+  }
+
+  markDeauthorized(ids: string[]) {
+    return this._integration.model.integration.updateMany({
+      where: { id: { in: ids } },
+      data: {
+        disabled: true,
+        refreshNeeded: true,
       },
     });
   }

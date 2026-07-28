@@ -43,7 +43,11 @@ export class PostsRepository {
           deletedAt: null,
         },
         publishDate: {
-          gte: dayjs.utc().subtract(2, 'day').toDate(),
+          // 14 days, not 2: the 2026-07 outage lasted ~10 days, and posts
+          // stuck longer than the window fall out of this recovery sweep
+          // permanently. The sweep is cheap (indexed state+date filter), so a
+          // wide net costs nothing.
+          gte: dayjs.utc().subtract(14, 'day').toDate(),
           lt: dayjs.utc().toDate(),
         },
         state: 'QUEUE',
@@ -801,12 +805,23 @@ export class PostsRepository {
   }
 
   async getComments(postId: string) {
+    // Served through the PUBLIC preview endpoint, so expose only non-identifying
+    // fields: never leak userId/organizationId (who commented / which org), and
+    // never surface soft-deleted comments. (Whether comment CONTENT should be
+    // public at all is a product decision — gating the preview behind a share
+    // token would be the fuller fix.)
     return this._comments.model.comments.findMany({
       where: {
         postId,
+        deletedAt: null,
       },
       orderBy: {
         createdAt: 'asc',
+      },
+      select: {
+        id: true,
+        content: true,
+        createdAt: true,
       },
     });
   }

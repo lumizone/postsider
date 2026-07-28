@@ -13,7 +13,7 @@ import { useChannels } from "@/lib/use-channels";
 import { fetchPostsList, duplicatePost, type BackendPost } from "@/lib/posts";
 import { backendPostToEvent } from "@/lib/use-calendar-data";
 import { EmptyState } from "./empty-state";
-import { useT } from "@/lib/i18n";
+import { useI18n, useT } from "@/lib/i18n";
 import { toggleEvergreen, listEvergreen } from "@/lib/evergreen-api";
 import { requestApproval } from "@/lib/approval-api";
 
@@ -46,15 +46,15 @@ function parseDate(s: string): Date | null {
   return new Date(y, m - 1, d);
 }
 
-function formatDate(d: Date): string {
-  return d.toLocaleDateString("en-US", {
+function formatDate(d: Date, locale: string): string {
+  return d.toLocaleDateString(locale, {
     day: "numeric",
     month: "short",
     year: "numeric",
   });
 }
 
-function relativeFromNow(d: Date): string {
+function relativeFromNow(d: Date, t: ReturnType<typeof useT>): string {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
   const target = new Date(d);
@@ -62,11 +62,11 @@ function relativeFromNow(d: Date): string {
   const diff = Math.round(
     (target.getTime() - now.getTime()) / 86_400_000,
   );
-  if (diff === 0) return "Today";
-  if (diff === 1) return "Tomorrow";
-  if (diff === -1) return "Yesterday";
-  if (diff > 0) return `In ${diff} days`;
-  return `${Math.abs(diff)} days ago`;
+  if (diff === 0) return t("posts.today");
+  if (diff === 1) return t("posts.tomorrow");
+  if (diff === -1) return t("posts.yesterday");
+  if (diff > 0) return t("posts.inDays", { n: diff });
+  return t("posts.daysAgo", { n: Math.abs(diff) });
 }
 
 function SearchIcon() {
@@ -84,6 +84,51 @@ function SearchIcon() {
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function DotsIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden>
+      <circle cx="3.5" cy="8" r="1.3" fill="currentColor" />
+      <circle cx="8" cy="8" r="1.3" fill="currentColor" />
+      <circle cx="12.5" cy="8" r="1.3" fill="currentColor" />
+    </svg>
+  );
+}
+
+function RepeatIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden>
+      <path
+        d="M3 6.5V6a2.5 2.5 0 0 1 2.5-2.5H12"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="m10 1.5 2 2-2 2"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M13 9.5v.5a2.5 2.5 0 0 1-2.5 2.5H4"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="m6 14.5-2-2 2-2"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   );
@@ -210,18 +255,18 @@ export function Posts() {
   const handleRequestApproval = useCallback(async (postId: string) => {
     try {
       await requestApproval(postId);
-      setToast("Sent for approval");
+      setToast(t("posts.toastApprovalSent"));
     } catch (err) {
-      setToast(err instanceof Error ? err.message : "Could not request approval");
+      setToast(err instanceof Error ? err.message : t("posts.toastApprovalError"));
     }
     setTimeout(() => setToast(null), 3000);
-  }, []);
+  }, [t]);
 
   const handleDuplicate = useCallback(
     async (group: string, targetIntegrationId?: string) => {
       try {
         await duplicatePost(group, targetIntegrationId ? { targetIntegrationId } : undefined);
-        setToast(targetIntegrationId ? "Duplicated to another channel" : "Post duplicated as draft");
+        setToast(targetIntegrationId ? t("posts.toastDuplicatedTo") : t("posts.toastDuplicatedDraft"));
         setTimeout(() => setToast(null), 3000);
         // Refresh the list
         setLoading(true);
@@ -233,13 +278,13 @@ export function Posts() {
         }
         setEvents(collected.map(backendPostToEvent));
       } catch (err) {
-        setToast("Failed to duplicate");
+        setToast(t("posts.toastDuplicateFailed"));
         setTimeout(() => setToast(null), 3000);
       } finally {
         setLoading(false);
       }
     },
-    [],
+    [t],
   );
 
   const [duplicateTargetGroup, setDuplicateTargetGroup] = useState<string | null>(null);
@@ -259,28 +304,28 @@ export function Posts() {
       )}
       <header className={styles.header}>
         <div className={styles.title}>
-          <span className={styles.eyebrow}>{t("posts.eyebrow" as any)}</span>
-          <h1 className={styles.h1}>{t("posts.title" as any)}</h1>
+          <span className={styles.eyebrow}>{t("posts.eyebrow")}</span>
+          <h1 className={styles.h1}>{t("posts.title")}</h1>
           <p className={styles.subtitle}>
-            {t("posts.subtitle" as any)}
+            {t("posts.subtitle")}
           </p>
         </div>
         <div className={styles.headerControls}>
           <button
             type="button"
+            className={styles.importBtn}
             onClick={() => router.push("/posts/csv-import")}
-            style={{ padding: "9px 14px", borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--bg)", color: "var(--fg)", fontSize: 13, fontWeight: 500, cursor: "pointer", marginRight: 8 }}
           >
-            Import CSV
+            {t("posts.importCsv")}
           </button>
           <button type="button" className={styles.newBtn} onClick={() => router.push("/calendar")}>
-            + {t("posts.newPost" as any)}
+            + {t("posts.newPost")}
           </button>
         </div>
       </header>
 
       <div className={styles.filters}>
-        <div className={styles.tabs} role="tablist" aria-label="Status">
+        <div className={styles.tabs} role="tablist" aria-label={t("posts.statusFilter")}>
           {(["all", "scheduled", "draft", "published", "failed"] as StatusFilter[]).map(
             (f) => (
               <button
@@ -293,7 +338,7 @@ export function Posts() {
                 }
                 onClick={() => setFilter(f)}
               >
-                {f === "all" ? t("posts.all" as any) : t(STATUS_LABEL_KEYS[f] as any)}
+                {f === "all" ? t("posts.all") : t(STATUS_LABEL_KEYS[f] as any)}
                 <span className={styles.tabCount}>{counts[f]}</span>
               </button>
             ),
@@ -308,30 +353,30 @@ export function Posts() {
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={t("posts.search" as any)}
+            placeholder={t("posts.search")}
             className={styles.searchInput}
-            aria-label={t("posts.search" as any)}
+            aria-label={t("posts.search")}
           />
         </div>
       </div>
 
       {loading ? (
-        <div className={styles.empty}>{t("common.loading" as any)}</div>
+        <div className={styles.empty}>{t("common.loading")}</div>
       ) : error ? (
         <div className={styles.empty}>{error}</div>
       ) : items.length === 0 && channels.length === 0 ? (
         <EmptyState
           icon="channel"
-          title="Connect your first channel"
-          description="Connect a social media channel to start scheduling and publishing posts."
-          actionLabel="Go to Settings"
+          title={t("empty.channelTitle")}
+          description={t("empty.channelDescAdmin")}
+          actionLabel={t("empty.channelAction")}
           actionHref="/settings/general"
         />
       ) : items.length === 0 ? (
         <EmptyState
           icon="posts"
-          title={t("posts.emptyAll" as any)}
-          description={t("posts.emptyAllDesc" as any)}
+          title={t("posts.emptyAll")}
+          description={t("posts.emptyAllDesc")}
           actionLabel="Open calendar"
           actionHref="/calendar"
         />
@@ -369,7 +414,7 @@ function PostRow({ ev, status, channel, onDuplicate, onDuplicateTo, onRequestApp
   const date = parseDate(ev.date);
   const [menuOpen, setMenuOpen] = useState(false);
   const [evergreenOn, setEvergreenOn] = useState<boolean>(initialEvergreen ?? false);
-  const t = useT();
+  const { t, locale } = useI18n();
 
   // Reflect the evergreen state once the parent's async fetch resolves.
   useEffect(() => {
@@ -421,21 +466,21 @@ function PostRow({ ev, status, channel, onDuplicate, onDuplicateTo, onRequestApp
             </span>
           </>
         ) : (
-          <span className={styles.muted}>Unassigned</span>
+          <span className={styles.muted}>{t("posts.unassigned")}</span>
         )}
       </div>
 
       <div className={styles.dateCell}>
         {date ? (
           <>
-            <span className={styles.dateMain}>{formatDate(date)}</span>
+            <span className={styles.dateMain}>{formatDate(date, locale)}</span>
             <span className={styles.dateSub}>
               {ev.time ? ev.time + " · " : ""}
-              {relativeFromNow(date)}
+              {relativeFromNow(date, t)}
             </span>
           </>
         ) : (
-          <span className={styles.muted}>No date</span>
+          <span className={styles.muted}>{t("posts.noDate")}</span>
         )}
       </div>
 
@@ -446,11 +491,11 @@ function PostRow({ ev, status, channel, onDuplicate, onDuplicateTo, onRequestApp
               {compactNumber(ev.metrics.impressions)}
             </span>
             <span className={styles.metricsSub}>
-              {compactNumber(ev.metrics.engagements)} eng
+              {compactNumber(ev.metrics.engagements)} {t("posts.engShort")}
             </span>
           </>
         ) : (
-          <span className={styles.muted}>—</span>
+          <span className={styles.muted}>-</span>
         )}
       </div>
 
@@ -461,23 +506,25 @@ function PostRow({ ev, status, channel, onDuplicate, onDuplicateTo, onRequestApp
           onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
           aria-label="Post actions"
         >
-          ···
+          <DotsIcon />
         </button>
         {menuOpen && (
           <div className={styles.menu} onClick={() => setMenuOpen(false)} role="menu">
             <button type="button" className={styles.menuItem} onClick={onDuplicate} role="menuitem">
-              {t("posts.duplicate" as any)}
+              {t("posts.duplicate")}
             </button>
             <button type="button" className={styles.menuItem} onClick={onDuplicateTo} role="menuitem">
-              {t("posts.duplicateTo" as any)}
+              {t("posts.duplicateTo")}
             </button>
             <button type="button" className={styles.menuItem} onClick={onToggleEvergreen} role="menuitem">
-              {"♻ "}
-              {evergreenOn ? t("evergreen.unmarkEvergreen" as any) : t("evergreen.markEvergreen" as any)}
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <RepeatIcon />
+                {evergreenOn ? t("evergreen.unmarkEvergreen") : t("evergreen.markEvergreen")}
+              </span>
             </button>
             {status === "draft" && (
               <button type="button" className={styles.menuItem} onClick={onRequestApproval} role="menuitem">
-                {t("approval.requestBtn" as any)}
+                {t("approval.requestBtn")}
               </button>
             )}
           </div>
@@ -497,6 +544,7 @@ function DuplicateChannelPicker({
   onPick: (channelId: string) => void;
   onClose: () => void;
 }) {
+  const t = useT();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -512,11 +560,11 @@ function DuplicateChannelPicker({
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label="Duplicate to channel"
+        aria-label={t("posts.duplicateToTitle")}
       >
         <div className={styles.pickerHead}>
-          <span className={styles.pickerTitle}>Duplicate to channel</span>
-          <button type="button" className={styles.pickerClose} onClick={onClose} aria-label="Close">×</button>
+          <span className={styles.pickerTitle}>{t("posts.duplicateToTitle")}</span>
+          <button type="button" className={styles.pickerClose} onClick={onClose} aria-label={t("common.close")}>×</button>
         </div>
         <div className={styles.pickerList}>
           {channels.map((ch) => (

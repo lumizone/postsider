@@ -163,6 +163,8 @@ export async function postWorkflowV105({
   // iterate over the posts
   for (let i = 0; i < postsList.length; i++) {
     const before = postsResults.length;
+    // remembered so the retry-exhaustion path below can record WHY it gave up
+    let lastError: unknown = null;
     // this is a small trick to repeat an action in case of token refresh
     for (const _ of iterate) {
       try {
@@ -245,6 +247,7 @@ export async function postWorkflowV105({
         // break the current while to move to the next post
         break;
       } catch (err) {
+        lastError = err;
         // if token refresh is needed, do it and repeat
         if (
           err instanceof ActivityFailure &&
@@ -291,7 +294,17 @@ export async function postWorkflowV105({
     }
 
     if (postsResults.length === before) {
-      // all retries exhausted without success
+      // All retries exhausted without success. The refresh_token branch above
+      // `continue`s past the generic changeState, so this path used to return
+      // with the post still QUEUE and `error` null — a "Completed" workflow
+      // hiding a dead publish (the silent-outage diagnostic signature, but
+      // with healthy workers). Always record the failure before giving up.
+      await changeState(
+        postsList[0].id,
+        'ERROR',
+        lastError ?? 'Publish failed: all retries exhausted',
+        postsList
+      );
       return false;
     }
   }

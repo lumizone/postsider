@@ -19,6 +19,7 @@ export class EvergreenRepository {
         id: true,
         group: true,
         content: true,
+        integrationId: true,
         lastRecycledAt: true,
       },
     });

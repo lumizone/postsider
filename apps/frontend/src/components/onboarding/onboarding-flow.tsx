@@ -3,23 +3,22 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { useT } from "@/lib/i18n";
-import { getOauthUrl } from "@/lib/integrations";
+import { useT, type MessageKey } from "@/lib/i18n";
 import styles from "./onboarding.module.css";
 
 type Step = "welcome" | "feature-write" | "feature-agent" | "feature-teams" | "feature-analytics" | "source" | "connect";
 
-const SOURCES = [
-  "Google Search",
-  "Twitter / X",
-  "YouTube",
-  "Reddit",
-  "LinkedIn",
-  "ChatGPT / AI",
-  "Friend / Colleague",
-  "Blog / Article",
-  "Product Hunt",
-  "Other",
+const SOURCES: { id: string; labelKey: MessageKey }[] = [
+  { id: "google", labelKey: "onboarding.sourceGoogle" },
+  { id: "twitter", labelKey: "onboarding.sourceTwitter" },
+  { id: "youtube", labelKey: "onboarding.sourceYoutube" },
+  { id: "reddit", labelKey: "onboarding.sourceReddit" },
+  { id: "linkedin", labelKey: "onboarding.sourceLinkedin" },
+  { id: "ai", labelKey: "onboarding.sourceAI" },
+  { id: "friend", labelKey: "onboarding.sourceFriend" },
+  { id: "blog", labelKey: "onboarding.sourceBlog" },
+  { id: "producthunt", labelKey: "onboarding.sourceProductHunt" },
+  { id: "other", labelKey: "onboarding.sourceOther" },
 ];
 
 const PLATFORMS = [
@@ -32,7 +31,6 @@ const PLATFORMS = [
   { id: "threads", name: "Threads", icon: "/platforms/threads.png" },
   { id: "bluesky", name: "Bluesky", icon: "/platforms/bluesky.png" },
   { id: "pinterest", name: "Pinterest", icon: "/platforms/pinterest.png" },
-  { id: "reddit", name: "Reddit", icon: "/platforms/reddit.png" },
   { id: "telegram", name: "Telegram", icon: "/platforms/telegram.png" },
   { id: "discord", name: "Discord", icon: "/platforms/discord.png" },
 ];
@@ -219,13 +217,13 @@ function SourceStep({
       <div className={styles.sourceGrid}>
         {SOURCES.map((source) => (
           <button
-            key={source}
+            key={source.id}
             className={`${styles.sourceChip} ${
-              selected === source ? styles.sourceChipActive : ""
+              selected === source.id ? styles.sourceChipActive : ""
             }`}
-            onClick={() => onSelect(source)}
+            onClick={() => onSelect(source.id)}
           >
-            {source}
+            {t(source.labelKey)}
           </button>
         ))}
       </div>
@@ -256,22 +254,8 @@ function ConnectStep({ onSkip }: { onSkip: () => void }) {
           <button
             key={p.id}
             className={styles.platformCard}
-            onClick={async () => {
-              // `/integrations/social/<id>` is the OAuth *callback* route on the
-              // frontend — navigating there directly (with no code/state) just
-              // renders an error. Resolve the real provider login URL first.
-              try {
-                const res = await getOauthUrl(p.id);
-                if (res?.oauthUrl) {
-                  window.location.href = res.oauthUrl;
-                  return;
-                }
-              } catch {
-                // fall through to the main app
-              }
-              // Credential-only (e.g. Bluesky) or unconfigured providers: finish
-              // onboarding into the app, where the add-channel flow handles them.
-              window.location.href = "/";
+            onClick={() => {
+              window.location.href = `/integrations/social/${p.id}`;
             }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}

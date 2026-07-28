@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PageHeader, Card } from "@/components/settings-ui";
+import { PageHeader, Card, settingsStyles as s } from "@/components/settings-ui";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useAuth } from "@/lib/auth-context";
 import { useT } from "@/lib/i18n";
 import {
@@ -11,35 +12,6 @@ import {
   updateCaptionTemplate,
   deleteCaptionTemplate,
 } from "@/lib/composer-helpers-api";
-
-const inputStyle: React.CSSProperties = {
-  padding: "9px 12px",
-  borderRadius: 8,
-  border: "1px solid var(--line-soft)",
-  fontSize: 13,
-  background: "var(--bg)",
-  color: "var(--fg)",
-  width: "100%",
-};
-const primaryBtn: React.CSSProperties = {
-  padding: "9px 16px",
-  borderRadius: 8,
-  border: "none",
-  background: "var(--fg)",
-  color: "var(--bg)",
-  fontSize: 13,
-  fontWeight: 600,
-  cursor: "pointer",
-};
-const ghostBtn: React.CSSProperties = {
-  padding: "9px 14px",
-  borderRadius: 8,
-  border: "1px solid var(--line-soft)",
-  background: "var(--bg)",
-  color: "var(--fg)",
-  fontSize: 13,
-  cursor: "pointer",
-};
 
 export default function CaptionTemplatesPage() {
   const t = useT();
@@ -59,13 +31,14 @@ export default function CaptionTemplatesPage() {
     try {
       setItems((await getCaptionTemplates()) || []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load");
+      setError(e instanceof Error ? e.message : t("settingsCaptionTemplates.loadError"));
     } finally {
       setLoading(false);
     }
   };
   useEffect(() => {
     void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const openNew = () => {
@@ -90,20 +63,23 @@ export default function CaptionTemplatesPage() {
       setEditing(null);
       await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save");
+      setError(e instanceof Error ? e.message : t("settingsCaptionTemplates.saveError"));
     } finally {
       setBusy(false);
     }
   };
 
   const [deleteTarget, setDeleteTarget] = useState<CaptionTemplate | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const onDelete = async (id: string) => {
+    setDeleteBusy(true);
     try {
       await deleteCaptionTemplate(id);
       setItems((p) => p.filter((x) => x.id !== id));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Delete failed");
+      setError(e instanceof Error ? e.message : t("settingsCaptionTemplates.deleteError"));
     } finally {
+      setDeleteBusy(false);
       setDeleteTarget(null);
     }
   };
@@ -113,7 +89,7 @@ export default function CaptionTemplatesPage() {
       <PageHeader
         eyebrow={t("settings.eyebrow")}
         title={t("settings.captionTemplates")}
-        subtitle="You don't have permission to manage caption templates."
+        subtitle={t("settingsCaptionTemplates.noPermission")}
       />
     );
   }
@@ -123,10 +99,10 @@ export default function CaptionTemplatesPage() {
       <PageHeader
         eyebrow={t("settings.eyebrow")}
         title={t("settings.captionTemplates")}
-        subtitle="Save reusable captions, CTAs and signatures to insert into posts."
+        subtitle={t("settingsCaptionTemplates.subtitle")}
       />
       {error && (
-        <div style={{ margin: "0 0 16px", padding: "10px 12px", borderRadius: 8, background: "rgba(192,57,43,0.08)", color: "#c0392b", fontSize: 13 }}>{error}</div>
+        <div role="alert" style={{ margin: "0 0 16px", padding: "10px 12px", borderRadius: 8, background: "rgba(192,57,43,0.08)", color: "#c0392b", fontSize: 13 }}>{error}</div>
       )}
       <Card title="">
         {loading ? (
@@ -134,7 +110,7 @@ export default function CaptionTemplatesPage() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {items.length === 0 && editing === null && (
-              <div style={{ padding: "30px 0", textAlign: "center", color: "var(--muted)", fontSize: 14 }}>No caption templates yet.</div>
+              <div style={{ padding: "30px 0", textAlign: "center", color: "var(--muted)", fontSize: 14 }}>{t("settingsCaptionTemplates.empty")}</div>
             )}
             {items.map((c) => (
               <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
@@ -142,25 +118,25 @@ export default function CaptionTemplatesPage() {
                   <div style={{ fontSize: 13, fontWeight: 600 }}>{c.name}</div>
                   <div style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.content}</div>
                 </div>
-                <button type="button" style={ghostBtn} onClick={() => openEdit(c)}>Edit</button>
-                <button type="button" style={{ ...ghostBtn, color: "#DC2626", borderColor: "rgba(220,38,38,0.25)" }} onClick={() => setDeleteTarget(c)}>Delete</button>
+                <button type="button" className={s.btnGhost} onClick={() => openEdit(c)}>{t("common.edit")}</button>
+                <button type="button" className={s.btnDanger} onClick={() => setDeleteTarget(c)}>{t("common.delete")}</button>
               </div>
             ))}
 
             {editing !== null && (
               <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "14px 0 4px" }}>
-                <input style={inputStyle} placeholder="Template name (e.g. Product CTA)" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-                <textarea style={{ ...inputStyle, minHeight: 100, resize: "vertical" }} placeholder="Your reusable caption text…" value={content} onChange={(e) => setContent(e.target.value)} />
+                <input className={s.input} placeholder={t("settingsCaptionTemplates.namePlaceholder")} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+                <textarea className={s.textarea} style={{ minHeight: 100 }} placeholder={t("settingsCaptionTemplates.contentPlaceholder")} value={content} onChange={(e) => setContent(e.target.value)} />
                 <div style={{ display: "flex", gap: 10 }}>
-                  <button type="button" style={primaryBtn} onClick={save} disabled={busy}>{busy ? "Saving…" : "Save"}</button>
-                  <button type="button" style={ghostBtn} onClick={() => setEditing(null)}>Cancel</button>
+                  <button type="button" className={s.btnPrimary} onClick={save} disabled={busy}>{busy ? t("settingsCaptionTemplates.saving") : t("common.save")}</button>
+                  <button type="button" className={s.btnGhost} onClick={() => setEditing(null)}>{t("common.cancel")}</button>
                 </div>
               </div>
             )}
 
             {editing === null && (
               <div style={{ marginTop: 6 }}>
-                <button type="button" style={ghostBtn} onClick={openNew}>+ New template</button>
+                <button type="button" className={s.btnSecondary} onClick={openNew}>{t("settingsCaptionTemplates.newTemplate")}</button>
               </div>
             )}
           </div>
@@ -168,18 +144,15 @@ export default function CaptionTemplatesPage() {
       </Card>
 
       {deleteTarget && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 9999, display: "grid", placeItems: "center", background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }} onClick={() => setDeleteTarget(null)}>
-          <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 400, background: "var(--bg)", borderRadius: 16, padding: "24px", display: "flex", flexDirection: "column", gap: 16, boxShadow: "0 24px 64px rgba(0,0,0,0.18)" }}>
-            <div>
-              <h2 style={{ fontSize: 17, fontWeight: 700, margin: "0 0 6px" }}>Delete template?</h2>
-              <p style={{ margin: 0, fontSize: 13, color: "var(--muted)" }}>Delete &quot;{deleteTarget.name}&quot;? This cannot be undone.</p>
-            </div>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button type="button" style={ghostBtn} onClick={() => setDeleteTarget(null)}>Cancel</button>
-              <button type="button" style={{ ...primaryBtn, background: "#DC2626", color: "#fff" }} onClick={() => onDelete(deleteTarget.id)}>Delete</button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          danger
+          busy={deleteBusy}
+          title={t("settingsCaptionTemplates.deleteTitle")}
+          body={t("settingsCaptionTemplates.deleteBody", { name: deleteTarget.name })}
+          confirmLabel={t("common.delete")}
+          onConfirm={() => void onDelete(deleteTarget.id)}
+          onCancel={() => setDeleteTarget(null)}
+        />
       )}
     </>
   );

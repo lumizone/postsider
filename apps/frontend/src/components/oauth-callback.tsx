@@ -55,6 +55,7 @@ export function OauthCallback({ provider }: Props) {
     "Finishing the connection with your account…",
   );
   const [pages, setPages] = useState<ConnectPage[]>([]);
+  const [brokenPics, setBrokenPics] = useState<Record<string, boolean>>({});
   const [integrationId, setIntegrationId] = useState<string>("");
   const [savingPage, setSavingPage] = useState(false);
   const sentRef = useRef(false);
@@ -104,7 +105,7 @@ export function OauthCallback({ provider }: Props) {
         }
 
         setStatus("ok");
-        setMessage("Channel connected — taking you back…");
+        setMessage("Channel connected. Taking you back…");
         setTimeout(() => router.replace("/calendar"), 600);
       } catch (err) {
         const msg =
@@ -129,7 +130,7 @@ export function OauthCallback({ provider }: Props) {
       });
       if (res?.success) {
         setStatus("ok");
-        setMessage("Page connected — taking you back…");
+        setMessage("Page connected. Taking you back…");
         setTimeout(() => router.replace("/calendar"), 600);
       } else {
         setStatus("error");
@@ -207,7 +208,7 @@ export function OauthCallback({ provider }: Props) {
                   opacity: savingPage ? 0.6 : 1,
                 }}
               >
-                {page.picture ? (
+                {page.picture && !brokenPics[page.id] ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={page.picture}
@@ -215,6 +216,9 @@ export function OauthCallback({ provider }: Props) {
                     width={32}
                     height={32}
                     style={{ borderRadius: 6, objectFit: "cover" }}
+                    onError={() =>
+                      setBrokenPics((prev) => ({ ...prev, [page.id]: true }))
+                    }
                   />
                 ) : (
                   <span

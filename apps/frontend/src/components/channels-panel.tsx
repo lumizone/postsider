@@ -88,10 +88,10 @@ export function ChannelsPanel({
   return (
     <aside
       className={styles.panel + (collapsed ? " " + styles.panelCollapsed : "")}
-      aria-label={t("channels.add" as any)}
+      aria-label={t("channels.add")}
     >
       <div className={styles.head}>
-        {!collapsed && <span className={styles.headTitle}>{t("channels.title" as any)}</span>}
+        {!collapsed && <span className={styles.headTitle}>{t("channels.title")}</span>}
         <button
           type="button"
           className={styles.collapseBtn}
@@ -111,14 +111,14 @@ export function ChannelsPanel({
                 className={styles.addBtn}
                 onClick={onAddChannel}
               >
-                <PlusIcon /> {t("channels.add" as any)}
+                <PlusIcon /> {t("channels.add")}
               </button>
               <button
                 type="button"
                 className={styles.createBtn}
                 onClick={onCreatePost}
               >
-                <PlusIcon /> {t("channels.createPost" as any)}
+                <PlusIcon /> {t("channels.createPost")}
               </button>
             </div>
           )}
@@ -131,7 +131,7 @@ export function ChannelsPanel({
             aria-multiselectable={isSingle ? undefined : true}
           >
             {channels.length === 0 && (
-              <div className={styles.empty}>{t("channels.noChannels" as any)}</div>
+              <div className={styles.empty}>{t("channels.noChannels")}</div>
             )}
             {channels.map((c) => {
               const isOn = enabled.has(c.id);

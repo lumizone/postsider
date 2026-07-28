@@ -31,6 +31,7 @@ import { SignatureController } from '@postsider/backend/api/routes/signature.con
 import { SetsController } from '@postsider/backend/api/routes/sets.controller';
 import { MonitorController } from '@postsider/backend/api/routes/monitor.controller';
 import { NoAuthIntegrationsController } from '@postsider/backend/api/routes/no.auth.integrations.controller';
+import { MetaComplianceController } from '@postsider/backend/api/routes/meta.compliance.controller';
 import { EnterpriseController } from '@postsider/backend/api/routes/enterprise.controller';
 import { OAuthAppController } from '@postsider/backend/api/routes/oauth-app.controller';
 import { ApprovedAppsController } from '@postsider/backend/api/routes/approved-apps.controller';
@@ -78,6 +79,7 @@ const authenticatedController = [
     MonitorController,
     EnterpriseController,
     NoAuthIntegrationsController,
+    MetaComplianceController,
     OAuthController,
     ...authenticatedController,
   ],
