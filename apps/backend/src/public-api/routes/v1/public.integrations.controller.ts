@@ -59,6 +59,9 @@ import { PostValidationException } from '@postsider/backend/api/routes/posts.val
 import { timer } from '@postsider/helpers/utils/timer';
 import { ioRedis } from '@postsider/nestjs-libraries/redis/redis.service';
 
+// Ceiling for the remote-download endpoint (matches the video upload cap).
+const MAX_REMOTE_MEDIA_BYTES = 500 * 1024 * 1024;
+
 @ApiTags('Public API')
 @Controller('/public/v1')
 export class PublicIntegrationsController {
@@ -104,11 +107,20 @@ export class PublicIntegrationsController {
     const response = await fetch(body.url, {
       // @ts-ignore — undici option, not in lib.dom fetch types
       dispatcher: ssrfSafeDispatcher,
+      signal: AbortSignal.timeout(15000),
     });
     if (!response.ok) {
       throw new HttpException({ msg: 'Failed to fetch URL' }, 400);
     }
+    // Bound the download so an attacker-supplied URL cannot OOM the process.
+    const declared = Number(response.headers.get('content-length'));
+    if (declared && declared > MAX_REMOTE_MEDIA_BYTES) {
+      throw new HttpException({ msg: 'File too large' }, 413);
+    }
     const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length > MAX_REMOTE_MEDIA_BYTES) {
+      throw new HttpException({ msg: 'File too large' }, 413);
+    }
     const detected = await fromBuffer(buffer);
     if (!detected || !PUBLIC_API_ALLOWED_MIME.has(detected.mime)) {
       throw new HttpException({ msg: 'Unsupported file type.' }, 400);
@@ -171,7 +183,9 @@ export class PublicIntegrationsController {
     const body = await this._postsService.mapTypeToPost(
       rawBody,
       org.id,
-      rawBody?.type === 'draft' || true
+      // The third param is the "is draft" flag — a literal `|| true` made the
+      // predicate dead (always draft). Pass the real predicate.
+      rawBody?.type === 'draft'
     );
     body.type = rawBody.type;
 
@@ -179,7 +193,8 @@ export class PublicIntegrationsController {
       process.env.RESTRICT_UPLOAD_DOMAINS &&
       body.posts.some((p) =>
         p.value.some((a) =>
-          a.image.some(
+          // A post created without media has no image array — don't throw.
+          (a.image ?? []).some(
             (i) => i.path.indexOf(process.env.RESTRICT_UPLOAD_DOMAINS!) === -1
           )
         )
@@ -248,6 +263,9 @@ export class PublicIntegrationsController {
   ) {
     Sentry.metrics.count('public_api-request', 1);
     const getPostById = await this._postsService.getPost(org.id, id);
+    if (!getPostById) {
+      throw new HttpException({ msg: 'Post not found' }, 404);
+    }
     return this._postsService.deletePost(org.id, getPostById.group);
   }
 
@@ -509,7 +527,11 @@ export class PublicIntegrationsController {
       throw new HttpException({ msg: 'Tool not found' }, 404);
     }
 
-    while (true) {
+    // Bound the refresh retry: a provider that keeps returning a fresh token
+    // while the tool still throws RefreshToken would otherwise loop forever,
+    // holding the request thread at 10s per iteration.
+    const MAX_ATTEMPTS = 2;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       try {
         // @ts-ignore
         const result = await integrationProvider[body.methodName](
@@ -552,5 +574,7 @@ export class PublicIntegrationsController {
         throw new HttpException({ msg: 'Unexpected error' }, 500);
       }
     }
+
+    throw new HttpException({ msg: 'Token refresh did not resolve' }, 401);
   }
 }

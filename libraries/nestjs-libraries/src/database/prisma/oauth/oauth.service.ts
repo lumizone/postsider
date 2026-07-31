@@ -42,6 +42,12 @@ export class OAuthService {
   }
 
   async updateApp(orgId: string, dto: UpdateOAuthAppDto) {
+    // Align with deleteApp/rotateSecret: updating an org without an app must
+    // 404, not return a silent 200 with an empty body.
+    const existing = await this._oauthRepository.getAppByOrgId(orgId);
+    if (!existing) {
+      throw new HttpException('No OAuth app found', HttpStatus.NOT_FOUND);
+    }
     return this._oauthRepository.updateApp(orgId, {
       ...(dto.name && { name: dto.name }),
       ...(dto.description !== undefined && { description: dto.description }),

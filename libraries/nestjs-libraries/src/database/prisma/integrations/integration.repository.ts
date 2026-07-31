@@ -143,11 +143,18 @@ export class IntegrationRepository {
   }
 
   async updateIntegration(id: string, params: Partial<Integration>) {
-    if (
-      params.picture &&
-      (params.picture.indexOf(process.env.CLOUDFLARE_BUCKET_URL!) === -1 ||
-        params.picture.indexOf(process.env.FRONTEND_URL!) === -1)
-    ) {
+    // The old `||` made this true unless the URL contained BOTH hosts (never),
+    // so every already-hosted picture was re-downloaded/re-uploaded on each
+    // integration update. Only upload when the picture is NOT already on one of
+    // our hosts.
+    const hostedPrefixes = [
+      process.env.CLOUDFLARE_BUCKET_URL,
+      process.env.FRONTEND_URL,
+    ].filter((u): u is string => !!u);
+    const alreadyHosted =
+      !!params.picture &&
+      hostedPrefixes.some((host) => params.picture!.includes(host));
+    if (params.picture && !alreadyHosted) {
       params.picture = await this.storage.uploadSimple(params.picture);
     }
 

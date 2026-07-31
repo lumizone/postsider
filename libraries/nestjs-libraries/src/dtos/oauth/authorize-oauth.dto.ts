@@ -13,6 +13,10 @@ export class AuthorizeOAuthQueryDto {
   @IsString()
   @IsOptional()
   state?: string;
+
+  @IsString()
+  @IsOptional()
+  redirect_uri?: string;
 }
 
 export class ApproveOAuthDto {

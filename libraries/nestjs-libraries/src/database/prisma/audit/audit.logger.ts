@@ -64,8 +64,10 @@ export class AuditLogger {
       pageSize?: number;
     } = {}
   ) {
-    const pageSize = filters.pageSize ?? 50;
-    const page = filters.page ?? 0;
+    // Clamp like errors.repository.ts — a huge pageSize or negative page forces
+    // an unbounded/negative Prisma query.
+    const pageSize = Math.min(Math.max(1, filters.pageSize ?? 50), 100);
+    const page = Math.max(0, filters.page ?? 0);
     return this._auditLog.model.auditLog.findMany({
       where: {
         organizationId,

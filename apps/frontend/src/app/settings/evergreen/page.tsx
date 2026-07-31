@@ -120,7 +120,9 @@ export default function EvergreenSettingsPage() {
                 type="number"
                 min={1}
                 value={settings.intervalDays}
-                onChange={(e) => setSettings((s) => ({ ...s, intervalDays: Number(e.target.value) }))}
+                // min={1} is only a hint — cleared/typed input bypasses it
+                // (Number("") === 0). Clamp so 0/negative never reaches the API.
+                onChange={(e) => setSettings((s) => ({ ...s, intervalDays: Math.max(1, Number(e.target.value) || 1) }))}
                 className={ui.input}
                 style={{ width: 160 }}
               />
@@ -135,7 +137,7 @@ export default function EvergreenSettingsPage() {
                 type="number"
                 min={1}
                 value={settings.maxPerRun}
-                onChange={(e) => setSettings((s) => ({ ...s, maxPerRun: Number(e.target.value) }))}
+                onChange={(e) => setSettings((s) => ({ ...s, maxPerRun: Math.max(1, Number(e.target.value) || 1) }))}
                 className={ui.input}
                 style={{ width: 160 }}
               />

@@ -12,6 +12,14 @@ import axios from 'axios';
 
 const MOLTBOOK_API_BASE = 'https://www.moltbook.com/api/v1';
 
+// axios has no default timeout; a hung Moltbook connection would otherwise
+// block a posting worker slot indefinitely.
+const moltbookClient = axios.create({
+  baseURL: MOLTBOOK_API_BASE,
+  timeout: 15000,
+  headers: { 'Content-Type': 'application/json' },
+});
+
 export class MoltbookProvider extends SocialAbstract implements SocialProvider {
   override maxConcurrentJob = 100; // Moltbook: 100 requests/minute
   identifier = 'moltbook';
@@ -58,8 +66,8 @@ export class MoltbookProvider extends SocialAbstract implements SocialProvider {
   }
 
   async registerAgent(name: string, description: string) {
-    const response = await axios.post(
-      `${MOLTBOOK_API_BASE}/agents/register`,
+    const response = await moltbookClient.post(
+      '/agents/register',
       { name, description },
       { headers: { 'Content-Type': 'application/json' } }
     );
@@ -72,7 +80,7 @@ export class MoltbookProvider extends SocialAbstract implements SocialProvider {
   }
 
   async checkAgentStatus(apiKey: string) {
-    const response = await axios.get(`${MOLTBOOK_API_BASE}/agents/status`, {
+    const response = await moltbookClient.get('/agents/status', {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
 
@@ -80,7 +88,7 @@ export class MoltbookProvider extends SocialAbstract implements SocialProvider {
   }
 
   async getAgentProfile(apiKey: string) {
-    const response = await axios.get(`${MOLTBOOK_API_BASE}/agents/me`, {
+    const response = await moltbookClient.get('/agents/me', {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
 
@@ -140,8 +148,8 @@ export class MoltbookProvider extends SocialAbstract implements SocialProvider {
         content: post.message,
       };
 
-      const response = await axios.post(
-        `${MOLTBOOK_API_BASE}/posts`,
+      const response = await moltbookClient.post(
+        '/posts',
         postData,
         {
           headers: {
@@ -186,8 +194,8 @@ export class MoltbookProvider extends SocialAbstract implements SocialProvider {
         commentData.parent_id = lastCommentId;
       }
 
-      const response = await axios.post(
-        `${MOLTBOOK_API_BASE}/posts/${postId}/comments`,
+      const response = await moltbookClient.post(
+        `/posts/${postId}/comments`,
         commentData,
         {
           headers: {

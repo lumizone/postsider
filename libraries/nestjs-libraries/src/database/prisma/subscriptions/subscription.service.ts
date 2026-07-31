@@ -85,8 +85,12 @@ export class SubscriptionService {
         organizationId
       ))!;
 
-    const from = pricing[getCurrentSubscription?.subscriptionTier || 'FREE'];
-    const to = pricing[billing];
+    // An unknown persisted tier must not produce `undefined` and NPE on the
+    // team_members comparisons below — fall back to FREE.
+    const from =
+      pricing[getCurrentSubscription?.subscriptionTier || 'FREE'] ??
+      pricing.FREE;
+    const to = pricing[billing] ?? pricing.FREE;
 
     const currentTotalChannels = (
       await this._integrationService.getIntegrationsList(organizationId)
@@ -146,8 +150,12 @@ export class SubscriptionService {
       return false;
     }
 
-    const from = pricing[getCurrentSubscription?.subscriptionTier || 'FREE'];
-    const to = pricing[billing];
+    // An unknown persisted tier must not produce `undefined` and NPE on the
+    // team_members comparisons below — fall back to FREE.
+    const from =
+      pricing[getCurrentSubscription?.subscriptionTier || 'FREE'] ??
+      pricing.FREE;
+    const to = pricing[billing] ?? pricing.FREE;
 
     const currentTotalChannels = (
       await this._integrationService.getIntegrationsList(

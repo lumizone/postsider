@@ -23,10 +23,16 @@ const STATE_CHANGING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 @Injectable()
 export class CsrfMiddleware implements NestMiddleware {
   private allowedOrigins(): string[] {
+    // Normalize to bare scheme://host[:port]: the Origin header never carries a
+    // trailing slash/path, but FRONTEND_URL/MAIN_URL commonly do — a raw string
+    // compare would 403 every cookie-authenticated mutation.
     return [
       process.env.FRONTEND_URL,
       ...(process.env.MAIN_URL ? [process.env.MAIN_URL] : []),
-    ].filter(Boolean) as string[];
+    ]
+      .filter(Boolean)
+      .map((u) => safeOrigin(u as string))
+      .filter(Boolean) as string[];
   }
 
   use(req: Request, res: Response, next: NextFunction) {
@@ -35,8 +41,10 @@ export class CsrfMiddleware implements NestMiddleware {
       return next();
     }
 
-    // Dev/header-token mode: cookies are not the auth vector.
-    if (process.env.NOT_SECURED) {
+    // Dev/header-token mode: cookies are not the auth vector. Compare against
+    // the literal 'true' — env vars are strings, so NOT_SECURED=false must NOT
+    // silently disable CSRF in a production-like deployment.
+    if (process.env.NOT_SECURED === 'true') {
       return next();
     }
 

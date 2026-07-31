@@ -63,12 +63,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(me);
       if (me?.orgId) setOrgId(me.orgId);
     } catch (err) {
-      if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+      // 403 means "authenticated but lacking permission/plan" — clearing the
+      // session there kicks a valid user off. Only 401 (expired/missing session)
+      // logs out.
+      if (err instanceof ApiError && err.status === 401) {
         setAuthToken(null);
         setOrgId(null);
         setUser(null);
       } else {
-        // Network or 500 — keep any existing session, don't blow up auth.
+        // Network, 403 or 500 — keep any existing session, don't blow up auth.
         console.error("[auth] /user/self failed:", err);
       }
     } finally {

@@ -184,6 +184,12 @@ export class OrganizationService {
       throw new Error('You do not have permission to delete this user');
     }
 
+    // Equal-privilege check: myLevel < userLevel only blocks escalation, so a
+    // SUPERADMIN could delete the other SUPERADMIN (the org's only owner).
+    if (userRole === 'SUPERADMIN') {
+      throw new Error('The organization owner cannot be removed');
+    }
+
     return this._organizationRepository.deleteTeamMember(org.id, userId);
   }
 

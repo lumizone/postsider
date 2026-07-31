@@ -85,7 +85,12 @@ export class NotionProvider extends SocialAbstract implements SocialProvider {
         })
       ).json();
 
-      const id = me?.id || makeId(12);
+      // An id-less response means the token did not resolve to a real workspace;
+      // fabricating one would persist an id that never matches.
+      if (!me?.id) {
+        throw new Error('Could not resolve Notion workspace from API key');
+      }
+      const id = me.id;
       const name =
         me?.bot?.workspace_name || me?.name || 'Notion Workspace';
       const picture = me?.bot?.workspace_icon || me?.avatar_url || '';
@@ -177,6 +182,10 @@ export class NotionProvider extends SocialAbstract implements SocialProvider {
     const settings = postDetails?.[0]?.settings || ({} as NotionDto);
     const titleProperty = settings.titleProperty || 'Name';
 
+    const blocks = this.toBlocks(postDetails[0].message);
+
+    // Notion rejects a `children` array longer than 100 blocks; create the page
+    // with the first 100 and append the rest afterwards.
     const response = await this.fetch(`${NOTION_API}/pages`, {
       method: 'POST',
       headers: {
@@ -188,14 +197,34 @@ export class NotionProvider extends SocialAbstract implements SocialProvider {
         parent: { database_id: settings.database },
         properties: {
           [titleProperty]: {
-            title: [{ type: 'text', text: { content: settings.title } }],
+            title: [{ type: 'text', text: { content: settings.title || '' } }],
           },
         },
-        children: this.toBlocks(postDetails[0].message),
+        children: blocks.slice(0, 100),
       }),
     });
 
     const data = await response.json();
+    if (!response.ok || data?.object === 'error') {
+      throw new Error(
+        `Notion page creation failed (${response.status}): ${
+          data?.message || JSON.stringify(data)
+        }`
+      );
+    }
+
+    const pageId = data?.id;
+    for (let i = 100; i < blocks.length; i += 100) {
+      await this.fetch(`${NOTION_API}/blocks/${pageId}/children`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Notion-Version': NOTION_VERSION,
+        },
+        body: JSON.stringify({ children: blocks.slice(i, i + 100) }),
+      });
+    }
 
     return [
       {

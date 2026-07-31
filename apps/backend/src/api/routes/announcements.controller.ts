@@ -28,8 +28,8 @@ export class AnnouncementsController {
     @GetUserFromRequest() user: User,
     @Body() body: AnnouncementDto
   ) {
-    if (!user.isSuperAdmin) {
-      throw new HttpException('Unauthorized', 400);
+    if (!user?.isSuperAdmin) {
+      throw new HttpException('Unauthorized', 403);
     }
     return this._announcementsService.createAnnouncement(body);
   }
@@ -39,8 +39,8 @@ export class AnnouncementsController {
     @GetUserFromRequest() user: User,
     @Param('id') id: string
   ) {
-    if (!user.isSuperAdmin) {
-      throw new HttpException('Unauthorized', 400);
+    if (!user?.isSuperAdmin) {
+      throw new HttpException('Unauthorized', 403);
     }
     return this._announcementsService.deleteAnnouncement(id);
   }

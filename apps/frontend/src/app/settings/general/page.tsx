@@ -149,7 +149,10 @@ export default function GeneralSettingsPage() {
                 </label>
                 <input
                   id="user-email"
-                  defaultValue={user?.email ?? ""}
+                  // defaultValue only sets the DOM value at mount — user loads
+                  // asynchronously, so it would show empty forever. value keeps
+                  // it in sync.
+                  value={user?.email ?? ""}
                   disabled
                   className={s.input}
                 />

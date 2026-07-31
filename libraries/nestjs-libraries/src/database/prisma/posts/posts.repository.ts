@@ -196,13 +196,21 @@ export class PostsRepository {
     });
 
     return list.reduce((all, post) => {
-      if (!post.intervalInDays) {
+      // A falsy OR non-positive interval means "no recurring expansion" — a
+      // negative interval walks startingDate backwards forever and would pin
+      // the request thread (and grow addMorePosts until OOM).
+      if (!post.intervalInDays || post.intervalInDays <= 0) {
         return [...all, post];
       }
 
       const addMorePosts: any[] = [];
       let startingDate = dayjs.utc(post.publishDate);
-      while (dayjs.utc(endDate).isSameOrAfter(startingDate)) {
+      let occurrences = 0;
+      const maxOccurrences = 365; // hard bound matching the find-slot guard
+      while (
+        dayjs.utc(endDate).isSameOrAfter(startingDate) &&
+        occurrences < maxOccurrences
+      ) {
         if (dayjs(startingDate).isSameOrAfter(dayjs.utc(post.publishDate))) {
           addMorePosts.push({
             ...post,
@@ -212,6 +220,7 @@ export class PostsRepository {
         }
 
         startingDate = startingDate.add(post.intervalInDays, 'days');
+        occurrences++;
       }
 
       return [...all, ...addMorePosts];
@@ -637,6 +646,7 @@ export class PostsRepository {
           await this._post.model.post.findFirst({
             where: {
               group: body.group,
+              organizationId: orgId,
               deletedAt: null,
               parentPostId: null,
             },
@@ -651,6 +661,10 @@ export class PostsRepository {
       await this._post.model.post.updateMany({
         where: {
           group: body.group,
+          // Scope the soft-delete to the caller's org: `body.group` is
+          // client-supplied, and without this an attacker could soft-delete
+          // another org's entire post group and learn its root post id.
+          organizationId: orgId,
           deletedAt: null,
         },
         data: {

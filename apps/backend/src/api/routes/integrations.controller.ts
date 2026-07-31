@@ -33,7 +33,7 @@ import {
 } from '@postsider/backend/services/auth/permissions/permission.exception.class';
 import { uniqBy } from 'lodash';
 import { RefreshIntegrationService } from '@postsider/nestjs-libraries/integrations/refresh.integration.service';
-import { ProviderCredentialsService } from '@postsider/nestjs-libraries/database/prisma/integrations/provider-credentials.service';
+import { ProviderEnvHelper } from '@postsider/nestjs-libraries/integrations/provider-env.helper';
 
 @ApiTags('Integrations')
 @Controller('/integrations')
@@ -43,7 +43,7 @@ export class IntegrationsController {
     private _integrationService: IntegrationService,
     private _postService: PostsService,
     private _refreshIntegrationService: RefreshIntegrationService,
-    private _providerCredentialsService: ProviderCredentialsService,
+    private _providerEnvHelper: ProviderEnvHelper,
   ) {}
 
   @Post('/provider/:id/connect')
@@ -119,7 +119,7 @@ export class IntegrationsController {
               : {}),
             display: p.profile,
             type: p.type,
-            time: JSON.parse(p.postingTimes),
+            time: p.postingTimes ? JSON.parse(p.postingTimes) : [],
             changeProfilePicture: !!findIntegration?.changeProfilePicture,
             changeNickName: !!findIntegration?.changeNickname,
             customer: p.customer,
@@ -258,19 +258,14 @@ export class IntegrationsController {
       let oauthUrl: string | undefined;
       let oauthConfigured = false;
       try {
-        // Check if org has OAuth credentials stored in DB for this provider
-        const dbCreds = await this._providerCredentialsService.getCredentials(org.id, integration);
-        if (dbCreds && dbCreds.clientId && dbCreds.clientSecret) {
-          // Temporarily inject into process.env so provider's generateAuthUrl works
-          const envMapping = this.getEnvMapping(integration);
-          const originalEnv: Record<string, string | undefined> = {};
-          for (const [envKey, credKey] of Object.entries(envMapping)) {
-            originalEnv[envKey] = process.env[envKey];
-            if (credKey === 'clientId') process.env[envKey] = dbCreds.clientId;
-            else if (credKey === 'clientSecret') process.env[envKey] = dbCreds.clientSecret;
-          }
-
-          try {
+        // Build the OAuth URL inside ProviderEnvHelper, which injects the org's
+        // DB-stored creds into process.env (serialized per provider so two orgs
+        // sharing a provider cannot race each other's creds into env). It also
+        // runs through as-is when platform env vars are already set.
+        const authResult = await this._providerEnvHelper.withCredentials(
+          org.id,
+          integration,
+          async () => {
             const getExternalUrl = integrationProvider.externalUrl && externalUrl
               ? {
                   ...(await integrationProvider.externalUrl(externalUrl)),
@@ -278,66 +273,30 @@ export class IntegrationsController {
                 }
               : undefined;
 
-            const authResult = await integrationProvider.generateAuthUrl(getExternalUrl);
-            if (authResult?.url && authResult.url.startsWith('http')) {
-              oauthUrl = authResult.url;
+            const result = await integrationProvider.generateAuthUrl(getExternalUrl);
+            if (result?.url && result.url.startsWith('http')) {
               oauthConfigured = true;
-              await ioRedis.set(`login:${authResult.state}`, authResult.codeVerifier, 'EX', 3600);
-              await ioRedis.set(`organization:${authResult.state}`, org.id, 'EX', 3600);
+              await ioRedis.set(`login:${result.state}`, result.codeVerifier, 'EX', 3600);
+              await ioRedis.set(`organization:${result.state}`, org.id, 'EX', 3600);
               if (refresh) {
-                await ioRedis.set(`refresh:${authResult.state}`, refresh, 'EX', 3600);
+                await ioRedis.set(`refresh:${result.state}`, refresh, 'EX', 3600);
               }
               if (onboarding === 'true') {
-                await ioRedis.set(`onboarding:${authResult.state}`, 'true', 'EX', 3600);
+                await ioRedis.set(`onboarding:${result.state}`, 'true', 'EX', 3600);
               }
               if (redirectUrl) {
-                await ioRedis.set(`redirect:${authResult.state}`, redirectUrl, 'EX', 3600);
+                await ioRedis.set(`redirect:${result.state}`, redirectUrl, 'EX', 3600);
               }
               if (getExternalUrl) {
-                await ioRedis.set(`external:${authResult.state}`, JSON.stringify(getExternalUrl), 'EX', 3600);
+                await ioRedis.set(`external:${result.state}`, JSON.stringify(getExternalUrl), 'EX', 3600);
               }
             }
-          } finally {
-            // Restore original env vars
-            for (const [envKey] of Object.entries(envMapping)) {
-              if (originalEnv[envKey] === undefined) delete process.env[envKey];
-              else process.env[envKey] = originalEnv[envKey];
-            }
+            return result;
           }
-        } else if (!dbCreds) {
-          // No DB creds — check if env vars are actually set (non-empty)
-          const envMapping = this.getEnvMapping(integration);
-          const hasEnvVars = Object.keys(envMapping).length > 0 &&
-            Object.keys(envMapping).every((key) => !!process.env[key]?.trim());
+        );
 
-          if (hasEnvVars) {
-            const getExternalUrl = integrationProvider.externalUrl && externalUrl
-              ? {
-                  ...(await integrationProvider.externalUrl(externalUrl)),
-                  instanceUrl: externalUrl,
-                }
-              : undefined;
-
-            const authResult = await integrationProvider.generateAuthUrl(getExternalUrl);
-            if (authResult?.url && authResult.url.startsWith('http')) {
-              oauthUrl = authResult.url;
-              oauthConfigured = true;
-              await ioRedis.set(`login:${authResult.state}`, authResult.codeVerifier, 'EX', 3600);
-              await ioRedis.set(`organization:${authResult.state}`, org.id, 'EX', 3600);
-              if (refresh) {
-                await ioRedis.set(`refresh:${authResult.state}`, refresh, 'EX', 3600);
-              }
-              if (onboarding === 'true') {
-                await ioRedis.set(`onboarding:${authResult.state}`, 'true', 'EX', 3600);
-              }
-              if (redirectUrl) {
-                await ioRedis.set(`redirect:${authResult.state}`, redirectUrl, 'EX', 3600);
-              }
-              if (getExternalUrl) {
-                await ioRedis.set(`external:${authResult.state}`, JSON.stringify(getExternalUrl), 'EX', 3600);
-              }
-            }
-          }
+        if (authResult?.url && authResult.url.startsWith('http')) {
+          oauthUrl = authResult.url;
         }
       } catch (oauthErr) {
         // OAuth not available for this provider (missing env vars, etc.)

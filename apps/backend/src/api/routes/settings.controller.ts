@@ -26,6 +26,7 @@ export class SettingsController {
   ) {}
 
   @Get('/post-checker')
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
   async getCheckerConfig(@GetOrgFromRequest() org: Organization) {
     return (await this._postChecker.getConfig(org.id)) ?? { provider: null, model: null };
   }
@@ -185,7 +186,10 @@ export class SettingsController {
     // platform's shared infrastructure. In self-hosted mode the operator's own
     // org admins may view it, mirroring the frontend nav gate
     // (NEXT_PUBLIC_SELF_HOSTED), so it no longer 403s (which logged them out).
-    if (!process.env.NEXT_PUBLIC_SELF_HOSTED && !user.isSuperAdmin) {
+    // Env vars are strings: only the literal 'true' means self-hosted, otherwise
+    // NEXT_PUBLIC_SELF_HOSTED="false" would leak storage config to org admins.
+    const selfHosted = process.env.NEXT_PUBLIC_SELF_HOSTED === 'true';
+    if (!selfHosted && !user.isSuperAdmin) {
       throw new HttpException('Not available in managed mode', 403);
     }
 
@@ -231,11 +235,12 @@ export class SettingsController {
   ) {
     const creds = await this._providerCredentialsService.getCredentials(org.id, provider);
     if (!creds) return { configured: false };
-    // Return clientId but mask the secret
+    // Return clientId but only a presence flag for the secret — returning a
+    // prefix leaks key material (narrowing brute force for short secrets).
     return {
       configured: true,
       clientId: creds.clientId,
-      clientSecret: creds.clientSecret.slice(0, 4) + '••••',
+      hasClientSecret: !!creds.clientSecret,
       extraData: creds.extraData,
     };
   }
@@ -280,10 +285,24 @@ export class SettingsController {
     const integrations = await this._integrationService.getIntegrationsList(
       org.id
     );
+    // One failing delete must not abort the whole loop and report a partial
+    // disconnect as full success (or a mid-way 500).
+    const failed: string[] = [];
     for (const integration of integrations) {
-      await this._integrationService.deleteChannel(org.id, integration.id);
+      try {
+        await this._integrationService.deleteChannel(org.id, integration.id);
+      } catch (err) {
+        console.error(
+          `Failed to disconnect channel ${integration.id}`,
+          err
+        );
+        failed.push(integration.id);
+      }
     }
-    return { disconnected: integrations.length };
+    return {
+      disconnected: integrations.length - failed.length,
+      ...(failed.length ? { failed } : {}),
+    };
   }
 
   /**
@@ -296,6 +315,12 @@ export class SettingsController {
     @GetOrgFromRequest() org: Organization,
     @GetUserFromRequest() user: User,
   ) {
+    // Irreversible: only the owner may delete the org — ADMIN alone must not
+    // (mirrors changeTeamMemberRole's SUPERADMIN gate for a far lighter op).
+    // @ts-ignore — role is attached to org.users[0] by the auth middleware.
+    if (org.users?.[0]?.role !== 'SUPERADMIN') {
+      throw new HttpException('Only the owner can delete the account', 403);
+    }
     return this._organizationService.deleteAccount(org.id, user.id);
   }
 }

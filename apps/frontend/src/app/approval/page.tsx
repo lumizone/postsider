@@ -29,7 +29,9 @@ export default function ApprovalPage() {
   const [items, setItems] = useState<PendingApproval[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  // A Set (not a single busyId): one item's in-flight request must not re-enable
+  // another item's buttons, which let an admin double-fire an action.
+  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [rejectFor, setRejectFor] = useState<string | null>(null);
   const [note, setNote] = useState("");
 
@@ -48,7 +50,8 @@ export default function ApprovalPage() {
   }, []);
 
   const act = async (id: string, fn: () => Promise<unknown>) => {
-    setBusyId(id);
+    if (busyIds.has(id)) return;
+    setBusyIds((s) => new Set(s).add(id));
     setError(null);
     try {
       await fn();
@@ -58,7 +61,11 @@ export default function ApprovalPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : t("approval.actionError"));
     } finally {
-      setBusyId(null);
+      setBusyIds((s) => {
+        const n = new Set(s);
+        n.delete(id);
+        return n;
+      });
     }
   };
 
@@ -103,14 +110,14 @@ export default function ApprovalPage() {
                       className={ap.reasonInput}
                     />
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <button type="button" style={{ ...ghostBtn, color: "#DC2626", borderColor: "rgba(220,38,38,0.25)" }} disabled={busyId === a.id} onClick={() => act(a.id, () => rejectPost(a.id, note || undefined))}>{t("approval.confirmReject")}</button>
+                      <button type="button" style={{ ...ghostBtn, color: "#DC2626", borderColor: "rgba(220,38,38,0.25)" }} disabled={busyIds.has(a.id)} onClick={() => act(a.id, () => rejectPost(a.id, note || undefined))}>{t("approval.confirmReject")}</button>
                       <button type="button" style={ghostBtn} onClick={() => { setRejectFor(null); setNote(""); }}>{t("common.cancel")}</button>
                     </div>
                   </div>
                 ) : (
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button type="button" style={{ ...ghostBtn, background: "var(--fg)", color: "var(--bg)", border: "none", fontWeight: 600 }} disabled={busyId === a.id} onClick={() => act(a.id, () => approvePost(a.id))}>{t("approval.approveSchedule")}</button>
-                    <button type="button" style={ghostBtn} disabled={busyId === a.id} onClick={() => setRejectFor(a.id)}>{t("approval.reject")}</button>
+                    <button type="button" style={{ ...ghostBtn, background: "var(--fg)", color: "var(--bg)", border: "none", fontWeight: 600 }} disabled={busyIds.has(a.id)} onClick={() => act(a.id, () => approvePost(a.id))}>{t("approval.approveSchedule")}</button>
+                    <button type="button" style={ghostBtn} disabled={busyIds.has(a.id)} onClick={() => { setRejectFor(a.id); setNote(""); }}>{t("approval.reject")}</button>
                   </div>
                 )
               )}

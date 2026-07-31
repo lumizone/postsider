@@ -96,6 +96,13 @@ export class UsersRepository {
     });
   }
 
+  setupUser(id: string, data: Record<string, any>) {
+    return this._user.model.user.update({
+      where: { id },
+      data,
+    });
+  }
+
   changeAudienceSize(userId: string, audience: number) {
     return this._user.model.user.update({
       where: {

@@ -209,11 +209,10 @@ const REGISTRY: Record<string, ProviderRequirement> = {
         problems.push("Add a video or at least one photo — TikTok can't post without media.");
         return problems;
       }
-      if (media.length > 1 && hasVideo(media)) {
-        problems.push("Only photos are supported when selecting multiple items.");
-      }
-      if (media.length !== 1 && countVideos(media) >= 1) {
-        problems.push("A video post can only contain one media item.");
+      if (countVideos(media) >= 1 && media.length !== 1) {
+        problems.push(
+          "A video post can only contain one media item — use photos only when selecting multiple items.",
+        );
       }
       return problems;
     },

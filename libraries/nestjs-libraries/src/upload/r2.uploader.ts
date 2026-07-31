@@ -17,6 +17,9 @@ import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { fromBuffer } = require('file-type');
 
+// Keep in sync with the shared MIME allow-list (mime.types.ts): multipart
+// uploads are the path used for LARGE files, so omitting webm/mov/mkv/audio
+// here rejected formats the rest of the storage layer accepts.
 const ALLOWED_EXT_TO_MIME: Record<string, string> = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
@@ -28,6 +31,14 @@ const ALLOWED_EXT_TO_MIME: Record<string, string> = {
   '.tif': 'image/tiff',
   '.tiff': 'image/tiff',
   '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mov': 'video/quicktime',
+  '.mkv': 'video/x-matroska',
+  '.mp3': 'audio/mpeg',
+  '.m4a': 'audio/mp4',
+  '.wav': 'audio/wav',
+  '.ogg': 'audio/ogg',
+  '.weba': 'audio/webm',
 };
 
 function normalizeExtension(filename: string): string | null {
@@ -235,7 +246,10 @@ export async function completeMultipartUpload(req: Request, res: Response) {
       process.env.CLOUDFLARE_BUCKET_URL +
       '/' +
       response?.Location?.split('/').at(-1);
-    return response;
+    // Every other branch ends with res.status(...).json(...) — returning the SDK
+    // object here wrote nothing to the socket, so the client hung after a
+    // successful multipart upload.
+    return res.status(200).json(response);
   } catch (err) {
     console.log('Error', err);
     return res.status(500).json(err);

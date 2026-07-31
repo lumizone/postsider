@@ -202,6 +202,7 @@ export class AuthController {
   }
 
   @Post('/forgot-return')
+  @UseGuards(AuthRateLimitGuard)
   async forgotReturn(@Body() body: ForgotReturnPasswordDto) {
     const reset = await this._authService.forgotReturn(body);
     return {
@@ -228,6 +229,7 @@ export class AuthController {
   }
 
   @Post('/activate')
+  @UseGuards(AuthRateLimitGuard)
   async activate(
     @Body('code') code: string,
     @Body('datafast_visitor_id') datafast_visitor_id: string,
@@ -263,35 +265,47 @@ export class AuthController {
   }
 
   @Post('/resend-activation')
+  @UseGuards(AuthRateLimitGuard)
   async resendActivation(@Body() body: ResendActivationDto) {
     try {
       await this._authService.resendActivationEmail(body.email);
-      return {
-        success: true,
-      };
-    } catch (e: any) {
-      return {
-        success: false,
-        message: e.message,
-      };
+    } catch (e) {
+      // Do not disclose whether the address exists (email-bombing / enumeration
+      // vector); the rate-limit guard bounds the cost of a legit typo retry.
+      console.error('resend-activation failed', e);
     }
+    return {
+      success: true,
+    };
   }
 
   @Post('/oauth/:provider/exists')
+  @UseGuards(AuthRateLimitGuard)
   async oauthExists(
     @Body('code') code: string,
     @Body('redirect_uri') redirect_uri: string,
     @Param('provider') provider: string,
     @Res({ passthrough: false }) response: Response
   ) {
-    const { jwt, token } = await this._authService.checkExists(
-      provider,
-      code,
-      redirect_uri
-    );
+    let jwt: string | undefined;
+    let token: string | undefined;
+    try {
+      ({ jwt, token } = await this._authService.checkExists(
+        provider,
+        code,
+        redirect_uri
+      ));
+    } catch (e) {
+      console.error('OAuth exists check failed', e);
+      return response.status(400).send('OAuth verification failed');
+    }
 
     if (token) {
       return response.json({ token });
+    }
+
+    if (!jwt) {
+      return response.status(400).send('OAuth verification failed');
     }
 
     response.cookie('auth', jwt, {

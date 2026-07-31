@@ -18,9 +18,18 @@ export function parseDataUrl(
   const isBase64 = !!match[2];
   const data = match[3];
 
-  const buffer = isBase64
-    ? Buffer.from(data, 'base64')
-    : Buffer.from(decodeURIComponent(data), 'utf-8');
+  let buffer: Buffer;
+  if (isBase64) {
+    buffer = Buffer.from(data, 'base64');
+  } else {
+    try {
+      buffer = Buffer.from(decodeURIComponent(data), 'utf-8');
+    } catch {
+      // Malformed percent-encoding (e.g. %zz) would throw a URIError — the
+      // documented contract is "returns null when not valid".
+      return null;
+    }
+  }
 
   return { buffer, mime };
 }

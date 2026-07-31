@@ -105,7 +105,11 @@ export class HashnodeProvider extends SocialAbstract implements SocialProvider {
   }
 
   async tags() {
-    return tags.map((tag) => ({ value: tag.objectID, label: tag.name }));
+    // Some snapshot entries have no name — drop them or they render as blank
+    // picker options.
+    return tags
+      .filter((tag) => tag.name)
+      .map((tag) => ({ value: tag.objectID, label: tag.name }));
   }
 
   @Tool({ description: 'Tags', dataSchema: [] })

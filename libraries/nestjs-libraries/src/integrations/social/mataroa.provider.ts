@@ -144,6 +144,13 @@ export class MataroaProvider extends SocialAbstract implements SocialProvider {
     });
 
     const data = await response.json();
+    // this.fetch returns non-2xx responses (authenticate probes with ok), so the
+    // status must be inspected here — otherwise a 400/401 is recorded as posted.
+    if (!response.ok || data?.ok === false) {
+      throw new Error(
+        `Mataroa post failed (${response.status}): ${JSON.stringify(data)}`
+      );
+    }
     const slug = data?.slug || '';
 
     return [

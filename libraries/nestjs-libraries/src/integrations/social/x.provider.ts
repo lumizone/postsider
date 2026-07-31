@@ -505,14 +505,19 @@ export class XProvider extends SocialAbstract implements SocialProvider {
                   client.v2.uploadMedia(
                     hasExtension(m.path, 'mp4')
                       ? Buffer.from(await readOrFetch(m.path))
-                      : await sharp(await readOrFetch(m.path), {
-                          animated: lookup(m.path) === 'image/gif',
-                        })
-                          .resize({
+                      : await (async () => {
+                          // Only animated GIFs should be re-encoded as GIF; a
+                          // JPEG/PNG must keep its declared media_type or X
+                          // rejects the upload (bytes vs declared type).
+                          const isGif = lookup(m.path) === 'image/gif';
+                          const pipeline = sharp(await readOrFetch(m.path), {
+                            animated: isGif,
+                          }).resize({
                             width: 1000,
-                          })
-                          .gif()
-                          .toBuffer(),
+                            withoutEnlargement: true,
+                          });
+                          return (isGif ? pipeline.gif() : pipeline).toBuffer();
+                        })(),
                     {
                       media_type: (lookup(m.path) || '') as any,
                     }
@@ -600,15 +605,22 @@ export class XProvider extends SocialAbstract implements SocialProvider {
       },
       body: JSON.stringify(tweetBody),
     });
-    const { data } = (await tweetResponse.json()) as {
-      data: { id: string };
+    const json = (await tweetResponse.json()) as {
+      data?: { id: string };
+      errors?: unknown;
     };
+
+    // X can answer with an errors-only payload; a bare `data.id` would throw a
+    // TypeError instead of a mapped error.
+    if (!json.data?.id) {
+      throw new Error(`X post failed: ${JSON.stringify(json.errors || json)}`);
+    }
 
     return [
       {
-        postId: data.id,
+        postId: json.data.id,
         id: firstPost.id,
-        releaseURL: `https://twitter.com/${integration.profile}/status/${data.id}`,
+        releaseURL: `https://twitter.com/${integration.profile}/status/${json.data.id}`,
         status: 'posted',
       },
     ];
@@ -662,15 +674,22 @@ export class XProvider extends SocialAbstract implements SocialProvider {
       },
       body: JSON.stringify(tweetBody),
     });
-    const { data } = (await tweetResponse.json()) as {
-      data: { id: string };
+    const json = (await tweetResponse.json()) as {
+      data?: { id: string };
+      errors?: unknown;
     };
+
+    if (!json.data?.id) {
+      throw new Error(
+        `X comment failed: ${JSON.stringify(json.errors || json)}`
+      );
+    }
 
     return [
       {
-        postId: data.id,
+        postId: json.data.id,
         id: commentPost.id,
-        releaseURL: `https://twitter.com/${integration.profile}/status/${data.id}`,
+        releaseURL: `https://twitter.com/${integration.profile}/status/${json.data.id}`,
         status: 'posted',
       },
     ];
@@ -698,7 +717,9 @@ export class XProvider extends SocialAbstract implements SocialProvider {
 
     return [
       ...tweets.data.data,
-      ...(tweets.data.data.length === 100
+      // Recurse only when a next token actually exists — otherwise a full page
+      // without one fetches the same first page forever.
+      ...(tweets.data.data.length === 100 && tweets.meta.next_token
         ? await this.loadAllTweets(
             client,
             id,

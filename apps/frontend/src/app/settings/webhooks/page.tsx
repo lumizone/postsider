@@ -243,7 +243,16 @@ export default function WebhooksSettingsPage() {
                         type="checkbox"
                         checked={selectedChannels.has(ch.id)}
                         onChange={() => toggleChannel(ch.id)}
-                        style={{ display: "none" }}
+                        // Visually hidden but still focusable — display:none
+                        // removes it from tab order and the a11y tree (mouse-only).
+                        style={{
+                          position: "absolute",
+                          width: 1,
+                          height: 1,
+                          opacity: 0,
+                          margin: 0,
+                          pointerEvents: "none",
+                        }}
                       />
                       <span style={{ width: 6, height: 6, borderRadius: "50%", background: ch.color, flexShrink: 0 }} />
                       {ch.name}

@@ -46,6 +46,7 @@ export default function UsersSettingsPage() {
     email: string;
     password: string | null;
     message: string;
+    role: InviteRole;
   } | null>(null);
 
   const refresh = async () => {
@@ -79,7 +80,9 @@ export default function UsersSettingsPage() {
         role: inviteRole,
         sendEmail: false,
       });
-      setInviteResult(res);
+      // Snapshot the role used for THIS invite — the PDF must not read the live
+      // select value, which the admin can change before downloading.
+      setInviteResult({ ...res, role: inviteRole });
       setInviteEmail("");
       void refresh();
     } catch (err) {
@@ -130,7 +133,10 @@ export default function UsersSettingsPage() {
       downloadCredentialsPdf({
         email: inviteResult.email,
         password: inviteResult.password!,
-        role: inviteRole === "ADMIN" ? t("settingsUsers.roleAdmin") : t("settingsUsers.roleMember"),
+        role:
+          inviteResult.role === "ADMIN"
+            ? t("settingsUsers.roleAdmin")
+            : t("settingsUsers.roleMember"),
         platformUrl:
           typeof window !== "undefined"
             ? window.location.origin

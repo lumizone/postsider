@@ -224,9 +224,12 @@ export class ListmonkProvider extends SocialAbstract implements SocialProvider {
   </div>
 `;
 
-    const {
-      data: { uuid: postId, id: campaignId },
-    } = await (
+    const subject = postDetails[0].settings.subject;
+    if (!subject) {
+      throw new Error('Listmonk campaign requires a subject');
+    }
+
+    const campaignResponse = await (
       await this.fetch(body.url + '/api/campaigns', {
         method: 'POST',
         headers: {
@@ -235,14 +238,14 @@ export class ListmonkProvider extends SocialAbstract implements SocialProvider {
           Authorization: `Basic ${auth}`,
         },
         body: JSON.stringify({
-          name: slugify(postDetails[0].settings.subject, {
+          name: slugify(subject, {
             lower: true,
             strict: true,
             trim: true,
           }),
           type: 'regular',
           content_type: 'html',
-          subject: postDetails[0].settings.subject,
+          subject,
           lists: [+postDetails[0].settings.list],
           body: sendBody,
           ...(+postDetails?.[0]?.settings?.template
@@ -251,6 +254,14 @@ export class ListmonkProvider extends SocialAbstract implements SocialProvider {
         }),
       })
     ).json();
+
+    const campaignData = campaignResponse?.data;
+    if (!campaignData?.uuid || !campaignData?.id) {
+      throw new Error(
+        `Listmonk campaign creation failed: ${JSON.stringify(campaignResponse)}`
+      );
+    }
+    const { uuid: postId, id: campaignId } = campaignData;
 
     await this.fetch(body.url + `/api/campaigns/${campaignId}/status`, {
       method: 'PUT',

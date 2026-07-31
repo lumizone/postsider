@@ -162,16 +162,21 @@ export class ThreadsProvider extends SocialAbstract implements SocialProvider {
 
   private async checkLoaded(
     mediaContainerId: string,
-    accessToken: string
+    accessToken: string,
+    attempt = 0
   ): Promise<boolean> {
-    const { status, id, error_message } = await (
+    const { status, error_message } = await (
       await this.fetch(
         `https://graph.threads.net/v1.0/${mediaContainerId}?fields=status,error_message&access_token=${accessToken}`
       )
     ).json();
 
     if (status === 'ERROR') {
-      throw new Error(id);
+      // Surface the actual cause so handleErrors can match a Meta error string
+      // (throwing the container id discarded it).
+      throw new Error(
+        error_message || `Threads container ${mediaContainerId} failed`
+      );
     }
 
     if (status === 'FINISHED') {
@@ -179,8 +184,12 @@ export class ThreadsProvider extends SocialAbstract implements SocialProvider {
       return true;
     }
 
+    if (attempt >= 60) {
+      throw new Error('Threads media processing timed out');
+    }
+
     await timer(2200);
-    return this.checkLoaded(mediaContainerId, accessToken);
+    return this.checkLoaded(mediaContainerId, accessToken, attempt + 1);
   }
 
   private async fetchUserInfo(accessToken: string) {
@@ -516,11 +525,11 @@ export class ThreadsProvider extends SocialAbstract implements SocialProvider {
       )
     ).json();
 
-    const {
-      values: [value],
-    } = data.find((p: any) => p.name === 'likes');
+    const likes = data?.find?.((p: any) => p.name === 'likes');
+    const value = likes?.values?.[0];
+    const threshold = +fields.likesAmount;
 
-    if (value.value >= fields.likesAmount) {
+    if (value && threshold > 0 && value.value >= threshold) {
       await timer(2000);
 
       const form = new FormData();

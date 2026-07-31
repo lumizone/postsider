@@ -179,8 +179,9 @@ export class PublicController {
     }
 
     if (!r.ok && r.status !== 206) {
-      res.status(r.status);
-      throw new Error(`Upstream error: ${r.statusText}`);
+      // Return the upstream status directly — throwing would let the exception
+      // filter answer with a generic 500 and the status is lost.
+      return res.status(r.status).send(r.statusText || 'Upstream error');
     }
 
     const type = r.headers.get('content-type') ?? 'application/octet-stream';

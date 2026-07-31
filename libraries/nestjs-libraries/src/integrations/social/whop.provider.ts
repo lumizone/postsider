@@ -231,7 +231,12 @@ export class WhopProvider extends SocialAbstract implements SocialProvider {
     const attachments: { id: string }[] = [];
 
     for (const item of media) {
-      const fileResponse = await fetch(item.path);
+      const fileResponse = await fetch(item.path, {
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!fileResponse.ok) {
+        throw new Error(`Failed to fetch media for Whop (${fileResponse.status})`);
+      }
       const fileBuffer = await fileResponse.arrayBuffer();
       const fileName = item.path.split('/').pop() || 'file';
 
@@ -277,6 +282,7 @@ export class WhopProvider extends SocialAbstract implements SocialProvider {
               headers: {
                 Authorization: `Bearer ${accessToken}`,
               },
+              },
             },
             'check file status',
             0,
@@ -289,6 +295,9 @@ export class WhopProvider extends SocialAbstract implements SocialProvider {
         }
         if (uploadStatus !== 'ready') {
           await timer(5000);
+        }
+        if (uploadStatus !== 'ready') {
+          throw new Error('Whop file upload timed out');
         }
       }
 

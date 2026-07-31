@@ -137,7 +137,13 @@ export class MastodonProvider extends SocialAbstract implements SocialProvider {
     alt?: string
   ) {
     const form = new FormData();
-    form.append('file', await fetch(fileUrl).then((r) => r.blob()));
+    const mediaFetch = await fetch(fileUrl);
+    if (!mediaFetch.ok) {
+      throw new Error(
+        `Mastodon media fetch failed (${mediaFetch.status}) for ${fileUrl}`
+      );
+    }
+    form.append('file', await mediaFetch.blob());
     if (alt) {
       form.append('description', alt);
     }
@@ -150,6 +156,11 @@ export class MastodonProvider extends SocialAbstract implements SocialProvider {
         body: form,
       })
     ).json();
+    if (!media?.id) {
+      throw new Error(
+        `Mastodon media upload failed: ${JSON.stringify(media)}`
+      );
+    }
     return media.id;
   }
 
@@ -190,7 +201,7 @@ export class MastodonProvider extends SocialAbstract implements SocialProvider {
       {
         id: firstPost.id,
         postId: post.id,
-        releaseURL: `${url}/statuses/${post.id}`,
+        releaseURL: post.url || `${url}/statuses/${post.id}`,
         status: 'completed',
       },
     ];
@@ -237,7 +248,7 @@ export class MastodonProvider extends SocialAbstract implements SocialProvider {
       {
         id: commentPost.id,
         postId: post.id,
-        releaseURL: `${url}/statuses/${post.id}`,
+        releaseURL: post.url || `${url}/statuses/${post.id}`,
         status: 'completed',
       },
     ];
@@ -246,7 +257,8 @@ export class MastodonProvider extends SocialAbstract implements SocialProvider {
   async post(
     id: string,
     accessToken: string,
-    postDetails: PostDetails[]
+    postDetails: PostDetails[],
+    integration?: Integration
   ): Promise<PostResponse[]> {
     return this.dynamicPost(
       id,

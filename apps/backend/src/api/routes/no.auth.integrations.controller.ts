@@ -22,6 +22,7 @@ import {
   Sections,
 } from '@postsider/backend/services/auth/permissions/permission.exception.class';
 import { RefreshIntegrationService } from '@postsider/nestjs-libraries/integrations/refresh.integration.service';
+import { ssrfSafeDispatcher } from '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
 import { OrganizationService } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.service';
 import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
 
@@ -58,10 +59,14 @@ export class NoAuthIntegrationsController {
     const integrationProvider =
       this._integrationManager.getSocialIntegration(integration);
 
-    const getCodeVerifier = await ioRedis.get(`login:${body.state}`) || 'none';
-    if (!getCodeVerifier) {
+    const storedVerifier = await ioRedis.get(`login:${body.state}`);
+    // Distinguish "no verifier stored for this state" from a stored but empty
+    // value; the `|| 'none'` fallback made this guard unreachable and let a
+    // replayed/already-consumed state proceed with a bogus verifier.
+    if (storedVerifier === null) {
       throw new Error('Invalid state');
     }
+    const getCodeVerifier = storedVerifier || 'none';
 
     const organization = await ioRedis.get(`organization:${body.state}`);
     if (!organization) {
@@ -300,7 +305,7 @@ export class NoAuthIntegrationsController {
       );
 
     this._refreshIntegrationService
-      .startRefreshWorkflow(org.id, createUpdate.id, integrationProvider)
+      .startRefreshWorkflow(org.id, createUpdate.id, !!createUpdate.refreshToken)
       .catch((err) => {
         console.log(err);
       });
@@ -329,16 +334,24 @@ export class NoAuthIntegrationsController {
     const webhookUrl = await ioRedis.get(`webhookUrl:${body.state}`);
     if (webhookUrl) {
       try {
+        // The webhook URL comes from the caller's JWT — route it through the
+        // DNS-pinned SSRF-safe dispatcher and bound it so a slow/private
+        // endpoint cannot hang the request or probe internal addresses.
         await fetch(webhookUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(5000),
+          // @ts-ignore — undici option, not in lib.dom fetch types
+          dispatcher: ssrfSafeDispatcher,
           body: JSON.stringify({
             params: AuthService.signJWT({
               apiKey: org.apiKey,
             }),
           }),
         });
-      } catch (err) {}
+      } catch (err) {
+        console.warn('Connect webhook delivery failed', err);
+      }
 
       await ioRedis.del(`webhookUrl:${body.state}`);
     }
@@ -455,9 +468,10 @@ export class NoAuthIntegrationsController {
       false,
       undefined,
       undefined,
-      AuthService.signJWT(
-        JSON.parse(Buffer.from(body.cookies, 'base64').toString())
-      )
+      // Match the connect path (lines ~295-298): this column holds the
+      // encryptSecret() ciphertext, so a signed JWT here would produce a value
+      // no decrypt-side consumer can read and would leak the raw cookies.
+      AuthService.encryptSecret(Buffer.from(body.cookies, 'base64').toString())
     );
 
     return { success: true };

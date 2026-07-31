@@ -58,8 +58,12 @@ export class RefreshIntegrationService implements OnApplicationBootstrap {
     );
   }
 
-  public async startRefreshWorkflow(orgId: string, id: string, integration: SocialProvider) {
-    if (!integration.refreshCron) {
+  public async startRefreshWorkflow(orgId: string, id: string, hasRefreshToken: boolean) {
+    // Gate on whether the channel actually stores a refresh token — the old
+    // `integration.refreshCron` flag is unset on most providers that still
+    // expose a working refreshToken(), so gating on it silently skipped arming
+    // and let those tokens lapse until the next redeploy.
+    if (!hasRefreshToken) {
       return false;
     }
 
@@ -182,7 +186,15 @@ export class RefreshIntegrationService implements OnApplicationBootstrap {
   ): Promise<AuthTokenDetails | false> {
     const refresh: false | AuthTokenDetails = await socialProvider
       .refreshToken(integration.refreshToken!)
-      .catch((err) => false);
+      .catch((err) => {
+        // Log the underlying failure instead of swallowing it — a transient
+        // network/5xx otherwise looks identical to a genuinely revoked token.
+        console.error(
+          `[refresh] provider refresh failed for ${integration.providerIdentifier} (${integration.id})`,
+          err
+        );
+        return false;
+      });
 
     if (!refresh || !refresh.accessToken) {
       await this._integrationService.refreshNeeded(

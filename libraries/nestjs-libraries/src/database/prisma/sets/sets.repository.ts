@@ -36,13 +36,16 @@ export class SetsRepository {
   }
 
   async createSet(orgId: string, body: SetsDto) {
+    // Generate the id once — calling uuidv4() in both where and create produced
+    // two different ids (lookup never matched, create always fired).
+    const setId = body.id || uuidv4();
     const { id } = await this._sets.model.sets.upsert({
       where: {
-        id: body.id || uuidv4(),
+        id: setId,
         organizationId: orgId,
       },
       create: {
-        id: body.id || uuidv4(),
+        id: setId,
         organizationId: orgId,
         name: body.name,
         content: body.content,

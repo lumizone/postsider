@@ -107,11 +107,22 @@ async function uploadVideo(
   });
 
   const jobStatus = (await uploadResponse.json()) as AppBskyVideoDefs.JobStatus;
+  // An error payload yields jobId === undefined and would make the poll loop
+  // below run forever.
+  if (!uploadResponse.ok || !jobStatus?.jobId) {
+    throw new BadBody(
+      'bluesky',
+      JSON.stringify(jobStatus ?? {}),
+      {} as any,
+      'Could not upload video'
+    );
+  }
   console.log('JobId:', jobStatus.jobId);
   let blob: BlobRef | undefined = jobStatus.blob;
   const videoAgent = new AtpAgent({ service: 'https://video.bsky.app' });
 
-  while (!blob) {
+  const maxAttempts = 40; // ~20 minutes at 30s intervals
+  for (let attempt = 0; !blob && attempt < maxAttempts; attempt++) {
     const { data: status } = await videoAgent.app.bsky.video.getJobStatus({
       jobId: jobStatus.jobId,
     });
@@ -134,6 +145,15 @@ async function uploadVideo(
     }
 
     await timer(30000);
+  }
+
+  if (!blob) {
+    throw new BadBody(
+      'bluesky',
+      JSON.stringify({}),
+      {} as any,
+      'Video processing timed out'
+    );
   }
 
   console.log('posting video...');

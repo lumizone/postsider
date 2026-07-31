@@ -28,6 +28,8 @@ export class NotificationsRepository {
       total: await this._notifications.model.notifications.count({
         where: {
           organizationId,
+          // Soft-deleted notifications must not inflate the unread count.
+          deletedAt: null,
           createdAt: {
             gt: lastReadNotifications!,
           },
@@ -49,6 +51,7 @@ export class NotificationsRepository {
     return this._notifications.model.notifications.findMany({
       where: {
         organizationId,
+        deletedAt: null,
         createdAt: {
           gte: new Date(since),
         },

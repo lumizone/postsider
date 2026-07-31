@@ -350,7 +350,6 @@ export default function StorageSettingsPage() {
                   "/media/cleanup/unused",
                   {},
                 );
-                await reloadStorage();
                 setCleanupMsg({
                   kind: "success",
                   text:
@@ -358,6 +357,9 @@ export default function StorageSettingsPage() {
                       ? t("settingsStorage.removedUnused", { count: res.deleted })
                       : t("settingsStorage.noUnused"),
                 });
+                // A reload failure after a SUCCESSFUL cleanup must not overwrite
+                // the success message with a misleading failure.
+                reloadStorage().catch(() => {});
               } catch (err) {
                 setCleanupMsg({
                   kind: "error",

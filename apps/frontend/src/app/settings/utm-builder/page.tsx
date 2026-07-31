@@ -67,8 +67,14 @@ export default function UtmBuilderPage() {
     });
   };
 
+  const canSave =
+    !!form.name.trim() &&
+    !!form.utmSource.trim() &&
+    !!form.utmMedium.trim() &&
+    !!form.utmCampaign.trim();
+
   const save = async () => {
-    if (!form.name.trim() || !form.utmSource.trim() || !form.utmMedium.trim() || !form.utmCampaign.trim() || busy) return;
+    if (!canSave || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -156,7 +162,7 @@ export default function UtmBuilderPage() {
                   <input className={s.input} placeholder={t("settingsUtm.termPlaceholder")} value={form.utmTerm} onChange={set("utmTerm")} />
                 </div>
                 <div style={{ display: "flex", gap: 10 }}>
-                  <button type="button" className={s.btnPrimary} onClick={save} disabled={busy}>{busy ? t("settingsUtm.saving") : t("common.save")}</button>
+                  <button type="button" className={s.btnPrimary} onClick={save} disabled={busy || !canSave}>{busy ? t("settingsUtm.saving") : t("common.save")}</button>
                   <button type="button" className={s.btnGhost} onClick={() => setEditing(null)}>{t("common.cancel")}</button>
                 </div>
               </div>

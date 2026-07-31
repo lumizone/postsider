@@ -135,7 +135,7 @@ export class ShortLinkService {
     const mergeMessages = messages.join(' ');
     const regex = new RegExp(
       `https?://${ShortLinkService.provider.shortLinkDomain.replace(
-        '.',
+        /\./g,
         '\\.'
       )}/[^\\s]*`,
       'g'

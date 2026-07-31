@@ -498,6 +498,7 @@ const en = {
     keyCreatedDesc: "This is the only time {name} will be shown in full. Copy it now and store it securely.",
     copy: "Copy",
     copied: "Copied ✓",
+    copyFailed: "Could not copy to clipboard",
     revokeConfirmTitle: "Revoke API key",
     revokeConfirmBody: "Are you sure you want to revoke {name}? Any integrations using this key will immediately stop working.",
     revokeBtn: "Revoke key",

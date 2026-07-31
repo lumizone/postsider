@@ -53,7 +53,12 @@ export function appendUtmParams(body: string, preset: UtmPresetInput): string {
       }
     }
     if (/[?&]utm_source=/.test(clean)) return url; // already tagged
-    const sep = clean.includes('?') ? '&' : '?';
-    return clean + sep + query + trailing;
+    // Insert params before the fragment — appending after '#section' would put
+    // them inside the fragment where no URL consumer parses them.
+    const hashIdx = clean.indexOf('#');
+    const base = hashIdx === -1 ? clean : clean.slice(0, hashIdx);
+    const hash = hashIdx === -1 ? '' : clean.slice(hashIdx);
+    const sep = base.includes('?') ? '&' : '?';
+    return base + sep + query + hash + trailing;
   });
 }

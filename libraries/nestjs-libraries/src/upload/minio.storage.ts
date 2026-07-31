@@ -17,6 +17,9 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { fromBuffer } = require('file-type');
 
+// Cap for remote media downloads (matches the multipart video ceiling).
+const MAX_REMOTE_MEDIA_BYTES = 500 * 1024 * 1024;
+
 /**
  * MinIO storage provider — S3-compatible, self-hosted object storage.
  *
@@ -64,10 +67,21 @@ class MinioStorage implements IUploadProvider {
         throw new Error('Unsafe URL');
       }
       const loadImage = await fetch(input, {
+        signal: AbortSignal.timeout(15000),
         // @ts-ignore — undici option
         dispatcher: ssrfSafeDispatcher,
       });
+      if (!loadImage.ok) {
+        throw new Error(`Failed to fetch media: ${loadImage.status}`);
+      }
+      const declared = Number(loadImage.headers.get('content-length') ?? 0);
+      if (declared > MAX_REMOTE_MEDIA_BYTES) {
+        throw new Error('Remote media too large');
+      }
       body = Buffer.from(await loadImage.arrayBuffer());
+      if (body.byteLength > MAX_REMOTE_MEDIA_BYTES) {
+        throw new Error('Remote media too large');
+      }
     }
 
     const detected = await fromBuffer(body);

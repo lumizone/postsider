@@ -6,12 +6,32 @@ import {
 import { MastodonProvider } from '@postsider/nestjs-libraries/integrations/social/mastodon.provider';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import { Integration } from '@prisma/client';
+import { AuthService } from '@postsider/helpers/auth/auth.service';
 
 export class MastodonCustomProvider extends MastodonProvider {
   override identifier = 'mastodon-custom';
   override name = 'M. Instance';
   override maxConcurrentJob = 5; // Custom Mastodon instances typically have generous limits
   editor = 'normal' as const;
+
+  // Every custom instance is bound to its own server; the connect flow stores
+  // the {accessToken, instanceUrl, username} payload encrypted in
+  // integration.customInstanceDetails. Never post to the global default.
+  private resolveInstance(integration?: Integration): string {
+    if (integration?.customInstanceDetails) {
+      try {
+        const parsed = JSON.parse(
+          AuthService.decryptSecret(integration.customInstanceDetails)
+        );
+        if (parsed?.instanceUrl) {
+          return parsed.instanceUrl;
+        }
+      } catch {
+        // fall through to the env default below
+      }
+    }
+    return process.env.MASTODON_URL || 'https://mastodon.social';
+  }
 
   async externalUrl(url: string) {
     const form = new FormData();
@@ -39,12 +59,13 @@ export class MastodonCustomProvider extends MastodonProvider {
     external?: ClientInformation
   ) {
     const state = makeId(6);
+    // generateUrlDynamic takes (customUrl, state, clientId, url) — the OAuth
+    // URL has no refresh parameter, so don't pass a 5th arg (it was dropped).
     const url = this.generateUrlDynamic(
       external?.instanceUrl!,
       state,
       external?.client_id!,
-      process.env.FRONTEND_URL!,
-      refresh
+      process.env.FRONTEND_URL!
     );
 
     return {
@@ -73,12 +94,13 @@ export class MastodonCustomProvider extends MastodonProvider {
   override async post(
     id: string,
     accessToken: string,
-    postDetails: PostDetails[]
+    postDetails: PostDetails[],
+    integration?: Integration
   ): Promise<PostResponse[]> {
     return this.dynamicPost(
       id,
       accessToken,
-      process.env.MASTODON_URL || 'https://mastodon.social',
+      this.resolveInstance(integration),
       postDetails
     );
   }
@@ -96,7 +118,7 @@ export class MastodonCustomProvider extends MastodonProvider {
       postId,
       lastCommentId,
       accessToken,
-      process.env.MASTODON_URL || 'https://mastodon.social',
+      this.resolveInstance(integration),
       postDetails
     );
   }

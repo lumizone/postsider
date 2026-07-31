@@ -603,18 +603,22 @@ export class InstagramProvider
         const mediaType = hasExtension(m.path, 'mp4')
           ? firstPost?.media?.length === 1
             ? isStory
-              ? `video_url=${m.path}&media_type=STORIES`
-              : `video_url=${m.path}&media_type=REELS&thumb_offset=${
+              ? `video_url=${encodeURIComponent(m.path)}&media_type=STORIES`
+              : `video_url=${encodeURIComponent(
+                  m.path
+                )}&media_type=REELS&thumb_offset=${
                   m?.thumbnailTimestamp || 0
                 }`
             : isStory
-            ? `video_url=${m.path}&media_type=STORIES`
-            : `video_url=${m.path}&media_type=VIDEO&thumb_offset=${
+            ? `video_url=${encodeURIComponent(m.path)}&media_type=STORIES`
+            : `video_url=${encodeURIComponent(
+                m.path
+              )}&media_type=VIDEO&thumb_offset=${
                 m?.thumbnailTimestamp || 0
               }`
           : isStory
-          ? `image_url=${m.path}&media_type=STORIES`
-          : `image_url=${m.path}`;
+          ? `image_url=${encodeURIComponent(m.path)}&media_type=STORIES`
+          : `image_url=${encodeURIComponent(m.path)}`;
 
         const trialParams = isTrialReel
           ? `&trial_params=${encodeURIComponent(
@@ -627,8 +631,10 @@ export class InstagramProvider
 
         const collaborators =
           firstPost?.settings?.collaborators?.length && !isStory
-            ? `&collaborators=${JSON.stringify(
-                firstPost?.settings?.collaborators.map((p) => p.label)
+            ? `&collaborators=${encodeURIComponent(
+                JSON.stringify(
+                  firstPost?.settings?.collaborators.map((p) => p.label)
+                )
               )}`
             : ``;
 
@@ -643,7 +649,12 @@ export class InstagramProvider
         console.log('in progress2', id);
 
         let status = 'IN_PROGRESS';
-        while (status === 'IN_PROGRESS') {
+        const maxStatusAttempts = 40; // ~20 minutes at 30s intervals
+        for (
+          let attempt = 0;
+          status === 'IN_PROGRESS' && attempt < maxStatusAttempts;
+          attempt++
+        ) {
           const { status_code } = await (
             await this.fetch(
               `https://${type}/v20.0/${photoId}?access_token=${
@@ -655,8 +666,13 @@ export class InstagramProvider
               true
             )
           ).json();
+          // A missing status_code is an error payload, not "done" — keep polling
+          // so we never publish an unfinished container.
+          status = status_code || 'IN_PROGRESS';
           await timer(30000);
-          status = status_code;
+        }
+        if (status !== 'FINISHED') {
+          throw new Error(`Instagram media not ready (status: ${status})`);
         }
         console.log('in progress3', id);
 
@@ -738,7 +754,12 @@ export class InstagramProvider
       ).json();
 
       let status = 'IN_PROGRESS';
-      while (status === 'IN_PROGRESS') {
+      const maxStatusAttempts = 40; // ~20 minutes at 30s intervals
+      for (
+        let attempt = 0;
+        status === 'IN_PROGRESS' && attempt < maxStatusAttempts;
+        attempt++
+      ) {
         const { status_code } = await (
           await this.fetch(
             `https://${type}/v20.0/${containerId}?fields=status_code&access_token=${
@@ -750,8 +771,11 @@ export class InstagramProvider
             true
           )
         ).json();
+        status = status_code || 'IN_PROGRESS';
         await timer(30000);
-        status = status_code;
+      }
+      if (status !== 'FINISHED') {
+        throw new Error(`Instagram carousel not ready (status: ${status})`);
       }
 
       const { id: mediaId, ...all4 } = await (

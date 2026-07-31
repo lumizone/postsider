@@ -91,7 +91,22 @@ export class EnterpriseController {
         await ioRedis.set(`refresh:${state}`, load.refreshId, 'EX', 3600);
       }
 
-      await ioRedis.set(`webhookUrl:${state}`, load.webhookUrl, 'EX', 3600);
+      // webhookUrl is optional in the payload but (when present) is later
+      // fetch()ed server-side — validate it as an absolute http(s) URL before
+      // storing it, and never write `undefined` into Redis (ioredis rejects that
+      // and the empty catch would swallow the whole response).
+      if (load.webhookUrl) {
+        let parsed: URL;
+        try {
+          parsed = new URL(load.webhookUrl);
+        } catch {
+          throw new Error('Invalid webhookUrl');
+        }
+        if (!['http:', 'https:'].includes(parsed.protocol)) {
+          throw new Error('Invalid webhookUrl');
+        }
+        await ioRedis.set(`webhookUrl:${state}`, load.webhookUrl, 'EX', 3600);
+      }
       await ioRedis.set(`redirect:${state}`, load.redirectUrl, 'EX', 3600);
       await ioRedis.set(`organization:${state}`, org.id, 'EX', 3600);
       await ioRedis.set(`login:${state}`, codeVerifier, 'EX', 3600);

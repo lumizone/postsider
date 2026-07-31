@@ -144,18 +144,27 @@ export class LemmyProvider extends SocialAbstract implements SocialProvider {
       AuthService.decryptSecret(integration.customInstanceDetails!)
     );
 
-    const { jwt } = await (
-      await fetch(body.service + '/api/v3/user/login', {
-        body: JSON.stringify({
-          username_or_email: body.identifier,
-          password: body.password,
-        }),
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-    ).json();
+    const response = await fetch(body.service + '/api/v3/user/login', {
+      body: JSON.stringify({
+        username_or_email: body.identifier,
+        password: body.password,
+      }),
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    const { jwt } = await response.json();
+
+    // Lemmy returns 401/2FA-required as `jwt: undefined`; downstream would fail
+    // confusingly (post_view undefined), so fail loudly here instead.
+    if (!response.ok || !jwt) {
+      throw new Error(
+        `Lemmy re-login failed (${response.status}): ${
+          jwt === undefined ? 'no JWT returned (bad credentials or 2FA required)' : ''
+        }`
+      );
+    }
 
     return { jwt, service: body.service };
   }

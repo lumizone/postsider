@@ -16,6 +16,7 @@ const ENV_MAPPINGS: Record<string, Record<string, 'clientId' | 'clientSecret'>> 
   threads: { THREADS_APP_ID: 'clientId', THREADS_APP_SECRET: 'clientSecret' },
   youtube: { YOUTUBE_CLIENT_ID: 'clientId', YOUTUBE_CLIENT_SECRET: 'clientSecret' },
   gmb: { YOUTUBE_CLIENT_ID: 'clientId', YOUTUBE_CLIENT_SECRET: 'clientSecret' },
+  blogger: { YOUTUBE_CLIENT_ID: 'clientId', YOUTUBE_CLIENT_SECRET: 'clientSecret' },
   tiktok: { TIKTOK_CLIENT_ID: 'clientId', TIKTOK_CLIENT_SECRET: 'clientSecret' },
   pinterest: { PINTEREST_CLIENT_ID: 'clientId', PINTEREST_CLIENT_SECRET: 'clientSecret' },
   dribbble: { DRIBBBLE_CLIENT_ID: 'clientId', DRIBBBLE_CLIENT_SECRET: 'clientSecret' },
@@ -31,6 +32,31 @@ export class ProviderEnvHelper {
   constructor(
     private _providerCredentialsService: ProviderCredentialsService,
   ) {}
+
+  // Per-provider async mutex tails. process.env is process-global, so injecting
+  // two orgs' creds for the same provider concurrently can leak one org's
+  // secret into another org's request. Serializing per provider makes the
+  // injection window single-threaded (the race is structurally impossible),
+  // at the cost of serializing concurrent same-provider calls from different
+  // orgs. The proper long-term fix is passing creds explicitly through the
+  // provider contract instead of touching process.env at all.
+  private tails = new Map<string, Promise<void>>();
+
+  private async serialize<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    const prev = this.tails.get(key) ?? Promise.resolve();
+    let release!: () => void;
+    const tail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.tails.set(key, tail);
+    await prev;
+    try {
+      return await fn();
+    } finally {
+      release();
+      if (this.tails.get(key) === tail) this.tails.delete(key);
+    }
+  }
 
   /**
    * Executes a function with provider credentials temporarily injected into
@@ -49,41 +75,43 @@ export class ProviderEnvHelper {
       return fn();
     }
 
-    // Check if env vars are already properly set (non-empty)
-    const alreadySet = Object.keys(mapping).every(
-      (key) => !!process.env[key]?.trim()
-    );
-    if (alreadySet) {
-      // Env is already configured — no need to inject from DB
-      return fn();
-    }
-
-    // Try to get credentials from DB
-    const creds = await this._providerCredentialsService.getCredentials(
-      orgId,
-      providerIdentifier,
-    );
-    if (!creds || !creds.clientId || !creds.clientSecret) {
-      // No DB creds either — run with whatever is in env (may fail)
-      return fn();
-    }
-
-    // Inject credentials into process.env
-    const originalEnv: Record<string, string | undefined> = {};
-    for (const [envKey, credKey] of Object.entries(mapping)) {
-      originalEnv[envKey] = process.env[envKey];
-      if (credKey === 'clientId') process.env[envKey] = creds.clientId;
-      else if (credKey === 'clientSecret') process.env[envKey] = creds.clientSecret;
-    }
-
-    try {
-      return await fn();
-    } finally {
-      // Restore original env vars
-      for (const [envKey] of Object.entries(mapping)) {
-        if (originalEnv[envKey] === undefined) delete process.env[envKey];
-        else process.env[envKey] = originalEnv[envKey];
+    return this.serialize(providerIdentifier, async () => {
+      // Check if env vars are already properly set (non-empty)
+      const alreadySet = Object.keys(mapping).every(
+        (key) => !!process.env[key]?.trim()
+      );
+      if (alreadySet) {
+        // Env is already configured — no need to inject from DB
+        return fn();
       }
-    }
+
+      // Try to get credentials from DB
+      const creds = await this._providerCredentialsService.getCredentials(
+        orgId,
+        providerIdentifier,
+      );
+      if (!creds || !creds.clientId || !creds.clientSecret) {
+        // No DB creds either — run with whatever is in env (may fail)
+        return fn();
+      }
+
+      // Inject credentials into process.env
+      const originalEnv: Record<string, string | undefined> = {};
+      for (const [envKey, credKey] of Object.entries(mapping)) {
+        originalEnv[envKey] = process.env[envKey];
+        if (credKey === 'clientId') process.env[envKey] = creds.clientId;
+        else if (credKey === 'clientSecret') process.env[envKey] = creds.clientSecret;
+      }
+
+      try {
+        return await fn();
+      } finally {
+        // Restore original env vars
+        for (const [envKey] of Object.entries(mapping)) {
+          if (originalEnv[envKey] === undefined) delete process.env[envKey];
+          else process.env[envKey] = originalEnv[envKey];
+        }
+      }
+    });
   }
 }

@@ -1,6 +1,7 @@
 import { IUploadProvider, UploadedFile } from './upload.interface';
 import { mkdirSync, unlink, writeFileSync } from 'fs';
 import * as path from 'path';
+import { randomBytes } from 'crypto';
 import { isSafePublicHttpsUrl } from '@postsider/nestjs-libraries/dtos/webhooks/webhook.url.validator';
 import { ssrfSafeDispatcher } from '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
 import { parseDataUrl } from '@postsider/nestjs-libraries/upload/data.url';
@@ -11,6 +12,9 @@ import {
 } from '@postsider/nestjs-libraries/upload/mime.types';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { fromBuffer } = require('file-type');
+
+// Cap for remote media downloads (matches the multipart video ceiling).
+const MAX_REMOTE_MEDIA_BYTES = 500 * 1024 * 1024;
 
 export class LocalStorage implements IUploadProvider {
   constructor(private uploadDirectory: string) {}
@@ -31,10 +35,11 @@ export class LocalStorage implements IUploadProvider {
     const dir = `${this.uploadDirectory}${innerPath}`;
     mkdirSync(dir, { recursive: true });
 
-    const randomName = Array(32)
-      .fill(null)
-      .map(() => Math.round(Math.random() * 16).toString(16))
-      .join('');
+    // These names are the only access control on publicly served /uploads/*
+    // assets — they must be cryptographically random (Math.random is
+    // predictable, and the old rounding could emit length-31 or over-weighted
+    // 0/1 hex digits).
+    const randomName = randomBytes(16).toString('hex');
 
     return {
       filePath: `${dir}/${randomName}.${ext}`,
@@ -65,10 +70,21 @@ export class LocalStorage implements IUploadProvider {
         throw new Error('Unsafe URL');
       }
       const loadImage = await fetch(input, {
+        signal: AbortSignal.timeout(15000),
         // @ts-ignore — undici option, not in lib.dom fetch types
         dispatcher: ssrfSafeDispatcher,
       });
+      if (!loadImage.ok) {
+        throw new Error(`Failed to fetch media: ${loadImage.status}`);
+      }
+      const declared = Number(loadImage.headers.get('content-length') ?? 0);
+      if (declared > MAX_REMOTE_MEDIA_BYTES) {
+        throw new Error('Remote media too large');
+      }
       body = Buffer.from(await loadImage.arrayBuffer());
+      if (body.byteLength > MAX_REMOTE_MEDIA_BYTES) {
+        throw new Error('Remote media too large');
+      }
     }
 
     // Never trust the claimed mime/extension (data URL header, remote

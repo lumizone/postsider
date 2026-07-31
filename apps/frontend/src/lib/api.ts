@@ -134,7 +134,10 @@ async function request<T>(
     payload = JSON.stringify(body);
   }
 
-  const res = await fetch(path.startsWith("http") ? path : buildUrl(path), {
+  // `path` is already built by the public methods (buildUrl). Re-building it
+  // here double-prefixed the backend URL when NEXT_PUBLIC_BACKEND_URL is a
+  // relative path like /api → /api/api/... in production.
+  const res = await fetch(path, {
     method,
     headers: finalHeaders,
     body: payload,

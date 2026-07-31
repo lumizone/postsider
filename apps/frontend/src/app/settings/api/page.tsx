@@ -105,8 +105,11 @@ export default function ApiSettingsPage() {
   };
 
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   const onDelete = async (id: string) => {
+    if (deleteBusy) return; // prevent a duplicate DELETE
+    setDeleteBusy(true);
     try {
       await api.del(`/settings/api-keys/${id}`);
       setKeys((prev) => prev.filter((k) => k.id !== id));
@@ -114,15 +117,20 @@ export default function ApiSettingsPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
       setDeleteTarget(null);
+    } finally {
+      setDeleteBusy(false);
     }
   };
 
   const onCopy = () => {
     if (!revealedKey || !navigator?.clipboard) return;
-    navigator.clipboard.writeText(revealedKey).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+    navigator.clipboard
+      .writeText(revealedKey)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      })
+      .catch(() => setError(t("settingsApi.copyFailed")));
   };
 
   // Close the rename modal on Escape. The new-key reveal modal is deliberately

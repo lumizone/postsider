@@ -26,14 +26,14 @@ export function scrubSecrets<T>(obj: T, depth = 0): T {
         const lower = key.toLowerCase();
         const record = obj as Record<string, unknown>;
         if (
-          lower === 'authorization' ||
-          lower === 'auth' ||
-          lower === 'token' ||
-          lower === 'apikey' ||
-          lower === 'api_key' ||
-          lower === 'password' ||
-          lower === 'clientsecret' ||
-          lower === 'client_secret'
+          // Substring match — exact-match keys missed common variants like
+          // accessToken, refreshToken, secretKey, apiSecret, sessionToken.
+          lower.includes('authorization') ||
+          lower.includes('token') ||
+          lower.includes('apikey') ||
+          lower.includes('api_key') ||
+          lower.includes('password') ||
+          lower.includes('secret')
         ) {
           record[key] = REDACTED;
         } else {

@@ -31,7 +31,7 @@ function hexToUint8Array(hex: string) {
 export class WalletProvider extends AuthProviderAbstract {
   async generateLink(params: { publicKey: string }): Promise<string> {
     if (!params.publicKey) {
-      return undefined as unknown as string;
+      throw new Error('Missing public key');
     }
 
     const challenge = randomBytes(32).toString('hex');
@@ -40,30 +40,43 @@ export class WalletProvider extends AuthProviderAbstract {
     return challenge;
   }
 
+  // Stateless signature check. The challenge travels inside the signed payload,
+  // so verification does not depend on Redis state (which getUser may consume).
+  private verifySignature(
+    code: string
+  ): { publicKey: string; challenge: string } | null {
+    try {
+      const { publicKey, challenge, signature } = JSON.parse(
+        Buffer.from(code, 'base64').toString()
+      );
+
+      if (!publicKey || !challenge || !signature) {
+        return null;
+      }
+
+      const publicKeyUint8 = bs58.decode(publicKey);
+      const messageUint8 = new TextEncoder().encode(challenge);
+      const signatureUint8 = hexToUint8Array(signature);
+      const isValid = nacl.sign.detached.verify(
+        messageUint8,
+        signatureUint8,
+        publicKeyUint8
+      );
+
+      return isValid ? { publicKey, challenge } : null;
+    } catch {
+      return null;
+    }
+  }
+
   async getToken(code: string, _redirectUri?: string) {
-    const { publicKey, challenge, signature } = JSON.parse(
-      Buffer.from(code, 'base64').toString()
-    );
-
-    if (!publicKey || !challenge || !signature) {
+    const verified = this.verifySignature(code);
+    if (!verified) {
       return '';
     }
 
-    const redisGet = await ioRedis.get(`wallet:${publicKey}`);
-    if (redisGet !== challenge) {
-      return '';
-    }
-
-    const publicKeyUint8 = bs58.decode(publicKey);
-    const messageUint8 = new TextEncoder().encode(challenge);
-    const signatureUint8 = hexToUint8Array(signature);
-    const isValid = nacl.sign.detached.verify(
-      messageUint8,
-      signatureUint8,
-      publicKeyUint8
-    );
-
-    if (!isValid) {
+    const redisGet = await ioRedis.get(`wallet:${verified.publicKey}`);
+    if (redisGet !== verified.challenge) {
       return '';
     }
 
@@ -71,20 +84,24 @@ export class WalletProvider extends AuthProviderAbstract {
   }
 
   async getUser(providerToken: string) {
-    if ((await this.getToken(providerToken)) === '') {
-      return {
-        id: '',
-        email: '',
-      };
+    const verified = this.verifySignature(providerToken);
+    if (!verified) {
+      return false;
     }
 
-    const { publicKey } = JSON.parse(
-      Buffer.from(providerToken, 'base64').toString()
-    );
+    // Single-use: the challenge must still be present and is consumed on the
+    // first successful verification, so a captured signature cannot be replayed
+    // within the TTL window. (loginOrRegisterProvider calls getUser directly,
+    // so the consumption cannot live in getToken alone.)
+    const stored = await ioRedis.get(`wallet:${verified.publicKey}`);
+    if (stored !== verified.challenge) {
+      return false;
+    }
+    await ioRedis.del(`wallet:${verified.publicKey}`);
 
     return {
-      id: String(`wallet_${publicKey}`),
-      email: String(`wallet_${publicKey}`),
+      id: String(`wallet_${verified.publicKey}`),
+      email: String(`wallet_${verified.publicKey}`),
     };
   }
 }

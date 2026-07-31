@@ -11,6 +11,7 @@ import {
 import { Organization } from '@prisma/client';
 import { Request } from 'express';
 import { SubscriptionException } from './permission.exception.class';
+import { HttpForbiddenException } from '@postsider/nestjs-libraries/services/exception.filter';
 
 @Injectable()
 export class PoliciesGuard implements CanActivate {
@@ -46,8 +47,16 @@ export class PoliciesGuard implements CanActivate {
 
     const refreshChannelId = typeof request.query?.refresh === 'string' ? request.query.refresh : undefined;
 
+    // Fail closed: a route reached without the auth middleware (or with an empty
+    // users relation) must deny, not crash with a 500.
     // @ts-ignore
-    const ability = await this._authorizationService.check(org.id, org.createdAt, org.users[0].role, policyHandlers, refreshChannelId);
+    const role = org?.users?.[0]?.role;
+    if (!org?.id || !role) {
+      throw new HttpForbiddenException();
+    }
+
+    // @ts-ignore
+    const ability = await this._authorizationService.check(org.id, org.createdAt, role, policyHandlers, refreshChannelId);
 
     const item = policyHandlers.find(
       (handler) => !this.execPolicyHandler(handler, ability)

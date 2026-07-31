@@ -32,7 +32,10 @@ export class AgenciesService {
 
   async approveOrDecline(email: string, action: string, id: string) {
     await this._agenciesRepository.approveOrDecline(action, id);
-    const agency = await this._agenciesRepository.getAgencyById(id);
+    // For a decline, `getAgencyById` filters on approved:true and would return
+    // nothing after the row was just set to approved:false — the decline email
+    // was being sent with an undefined recipient. Use the admin lookup instead.
+    const agency = await this._agenciesRepository.getAgencyByIdForAdmin(id);
 
     if (action === 'approve') {
       await this._notificationService.sendEmail(
