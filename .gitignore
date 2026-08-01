@@ -71,3 +71,4 @@ i18n.cache
 # test/build artifacts
 reports/
 coverage/
+graphify-out/

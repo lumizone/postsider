@@ -393,6 +393,8 @@ export class PostsService {
               imageUpdateNeeded = true;
               const response = await axios.get(m.url, {
                 responseType: 'arraybuffer',
+                timeout: 15000,
+                maxContentLength: 50 * 1024 * 1024,
               });
 
               const imageBuffer = Buffer.from(response.data);
@@ -452,6 +454,11 @@ export class PostsService {
 
   async getPostGroupDebugExport(orgId: string, group: string) {
     const loadAll = await this._postRepository.getPostsByGroup(orgId, group);
+    // getPostsByGroup throws for nothing matching, but an unknown/foreign group
+    // can still 500 on rootPost below — guard explicitly.
+    if (!loadAll?.length) {
+      throw new BadRequestException('Post group not found');
+    }
     const errors = await this._postRepository.getErrorsByPostIds(
       loadAll.map((p) => p.id)
     );

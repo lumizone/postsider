@@ -102,13 +102,20 @@ export function useCalendarData({ year, month }: UseCalendarDataOptions): UseCal
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
+    // Capture the requested range — if a newer navigation supersedes this
+    // request while it's in flight, drop the stale result.
+    const requestStart = range.startDate;
+    const requestEnd = range.endDate;
     try {
       const [calendarPosts, draftsResp] = await Promise.all([
-        fetchCalendarPosts(range.startDate, range.endDate),
+        fetchCalendarPosts(requestStart, requestEnd),
         fetchPostsList({ state: "draft", page: 0, limit: 100 }).catch(() => ({
           posts: [],
         })),
       ]);
+      if (requestStart !== range.startDate || requestEnd !== range.endDate) {
+        return; // a newer request superseded this one
+      }
       const drafts = (draftsResp as { posts: BackendPost[] }).posts || [];
       const seen = new Set<string>();
       const merged: CalendarEvent[] = [];

@@ -116,7 +116,7 @@ export class TwitchProvider extends SocialAbstract implements SocialProvider {
   private async getUserInfo(
     accessToken: string
   ): Promise<{ id: string; name: string; username: string; picture?: string }> {
-    const userResponse = await fetch('https://api.twitch.tv/helix/users', {
+    const userResponse = await this.fetch('https://api.twitch.tv/helix/users', {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -126,6 +126,9 @@ export class TwitchProvider extends SocialAbstract implements SocialProvider {
 
     const userData = await userResponse.json();
     const user = userData.data?.[0];
+    if (!user) {
+      throw new Error('Could not load Twitch user information');
+    }
 
     return {
       id: String(user.id),
@@ -141,7 +144,7 @@ export class TwitchProvider extends SocialAbstract implements SocialProvider {
     message: string,
     color: string = 'primary'
   ): Promise<{ success: boolean }> {
-    await fetch(
+    const response = await this.fetch(
       `https://api.twitch.tv/helix/chat/announcements?broadcaster_id=${broadcasterId}&moderator_id=${broadcasterId}`,
       {
         method: 'POST',
@@ -158,7 +161,7 @@ export class TwitchProvider extends SocialAbstract implements SocialProvider {
     );
 
     // Announcements return 204 No Content on success
-    return { success: true };
+    return { success: response.status === 204 || response.ok };
   }
 
   private async sendChatMessage(
@@ -193,7 +196,9 @@ export class TwitchProvider extends SocialAbstract implements SocialProvider {
     const data = await response.json();
 
     return {
-      messageId: data.data?.[0]?.message_id || makeId(10),
+      // Only a real Twitch message id is valid; a fabricated one breaks
+      // threaded comments (it would be sent back as reply_parent_message_id).
+      messageId: data.data?.[0]?.message_id || '',
       isSent: data.data?.[0]?.is_sent ?? false,
     };
   }
@@ -220,7 +225,7 @@ export class TwitchProvider extends SocialAbstract implements SocialProvider {
       return [
         {
           id: firstPost.id,
-          postId: makeId(10), // Announcements don't return a message ID
+          postId: '', // Announcements don't return a message ID; don't fabricate one
           releaseURL: `https://twitch.tv/${integration.profile || integration.providerIdentifier}`,
           status: result.success ? 'posted' : 'error',
         },
@@ -264,7 +269,7 @@ export class TwitchProvider extends SocialAbstract implements SocialProvider {
       return [
         {
           id: commentPost.id,
-          postId: makeId(10),
+          postId: '', // Announcements don't return a message ID; don't fabricate one
           releaseURL: `https://twitch.tv/${integration.profile || integration.providerIdentifier}`,
           status: result.success ? 'posted' : 'error',
         },

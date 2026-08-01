@@ -26,6 +26,18 @@ export class OAuthController {
       query.client_id
     );
 
+    // RFC 6749 §3.1.2.3: a client that sends a redirect_uri must get a mismatch
+    // error rather than a silent redirect elsewhere.
+    if (query.redirect_uri && query.redirect_uri !== app.redirectUrl) {
+      throw new HttpException(
+        {
+          error: 'invalid_request',
+          error_description: 'redirect_uri mismatch',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     return {
       app: {
         name: app.name,

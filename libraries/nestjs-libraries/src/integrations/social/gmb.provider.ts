@@ -96,7 +96,7 @@ export class GmbProvider extends SocialAbstract implements SocialProvider {
       return {
         type: 'refresh-token',
         value:
-          'Token expired or invalid, please reconnect your YouTube account.',
+          'Token expired or invalid, please reconnect your Google My Business account.',
       };
     }
 

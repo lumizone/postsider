@@ -34,24 +34,35 @@ export class GithubProvider extends AuthProviderAbstract {
   }
 
   async getUser(access_token: string): Promise<{ email: string; id: string }> {
-    const data = await (
-      await fetch('https://api.github.com/user', {
-        headers: {
-          Authorization: `token ${access_token}`,
-        },
-      })
-    ).json();
+    const userResponse = await fetch('https://api.github.com/user', {
+      headers: {
+        Authorization: `token ${access_token}`,
+      },
+    });
+    const data = await userResponse.json();
+    if (!userResponse.ok || data?.id == null) {
+      throw new Error('Invalid GitHub token');
+    }
 
-    const [{ email }] = await (
-      await fetch('https://api.github.com/user/emails', {
-        headers: {
-          Authorization: `token ${access_token}`,
-        },
-      })
-    ).json();
+    const emailsResponse = await fetch('https://api.github.com/user/emails', {
+      headers: {
+        Authorization: `token ${access_token}`,
+      },
+    });
+    const emails = await emailsResponse.json();
+    if (!emailsResponse.ok || !Array.isArray(emails)) {
+      throw new Error('Could not load GitHub emails');
+    }
+
+    // The first entry is not guaranteed to be primary/verified — prefer one that
+    // is, so we never bind an unverified secondary address to the account.
+    const primaryEmail =
+      emails.find((e: any) => e.primary && e.verified)?.email ||
+      emails.find((e: any) => e.verified)?.email ||
+      emails[0]?.email;
 
     return {
-      email: email,
+      email: primaryEmail,
       id: String(data.id),
     };
   }

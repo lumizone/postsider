@@ -14,6 +14,8 @@ import slugify from 'slugify';
 import axios from 'axios';
 import { Tool } from '@postsider/nestjs-libraries/integrations/tool.decorator';
 import { string } from 'yup';
+import { isSafePublicHttpsUrl } from '@postsider/nestjs-libraries/dtos/webhooks/webhook.url.validator';
+import { ssrfSafeDispatcher } from '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
 
 export class WordpressProvider
   extends SocialAbstract
@@ -50,6 +52,19 @@ export class WordpressProvider
       username: '',
     };
   }
+  // The connect form lets users type a WordPress domain, and it is interpolated
+  // into every server-side request. Reject anything that is not a safe public
+  // HTTPS URL (blocks localhost, link-local/private ranges, literal IPs) and
+  // route the actual request through the DNS-pinned ssrfSafeDispatcher so a
+  // hostname that resolves to an internal address cannot be reached either.
+  private async assertSafeDomain(domain: string): Promise<void> {
+    if (!(await isSafePublicHttpsUrl(domain))) {
+      throw new Error(
+        'Invalid WordPress domain: only public https:// URLs are allowed'
+      );
+    }
+  }
+
   override handleErrors(
     body: string
   ):
@@ -101,11 +116,14 @@ export class WordpressProvider
       const auth = Buffer.from(`${body.username}:${body.password}`).toString(
         'base64'
       );
+      await this.assertSafeDomain(body.domain);
       const { id, name, avatar_urls, code } = await (
         await fetch(`${body.domain}/wp-json/wp/v2/users/me`, {
           headers: {
             Authorization: `Basic ${auth}`,
           },
+          // @ts-ignore — undici option, not in lib.dom fetch types
+          dispatcher: ssrfSafeDispatcher,
         })
       ).json();
 
@@ -153,11 +171,14 @@ export class WordpressProvider
       'base64'
     );
 
+    await this.assertSafeDomain(body.domain);
     const postTypes = await (
       await this.fetch(`${body.domain}/wp-json/wp/v2/types`, {
         headers: {
           Authorization: `Basic ${auth}`,
         },
+        // @ts-ignore — undici option, not in lib.dom fetch types
+        dispatcher: ssrfSafeDispatcher,
       })
     ).json();
 
@@ -195,6 +216,8 @@ export class WordpressProvider
       'base64'
     );
 
+    await this.assertSafeDomain(body.domain);
+
     let mediaId = '';
     if (postDetails?.[0]?.settings?.main_image?.path) {
       console.log(
@@ -217,6 +240,8 @@ export class WordpressProvider
             'Content-Type': blob.type,
           },
           body: blob,
+          // @ts-ignore — undici option, not in lib.dom fetch types
+          dispatcher: ssrfSafeDispatcher,
         })
       ).json();
 
@@ -232,6 +257,8 @@ export class WordpressProvider
             'Content-Type': 'application/json',
           },
           method: 'POST',
+          // @ts-ignore — undici option, not in lib.dom fetch types
+          dispatcher: ssrfSafeDispatcher,
           body: JSON.stringify({
             title: postDetails?.[0]?.settings?.title,
             content: postDetails?.[0]?.message,

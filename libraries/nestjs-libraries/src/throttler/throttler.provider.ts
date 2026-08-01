@@ -19,8 +19,12 @@ export class ThrottlerBehindProxyGuard extends ThrottlerGuard {
   protected override async getTracker(
     req: Record<string, any>
   ): Promise<string> {
-    return (
-      req.org?.id + '_' + (req.url.indexOf('/posts') > -1 ? 'posts' : 'other')
-    );
+    // Fall back to the client IP when the request isn't org-scoped (login,
+    // registration, signup). Without this, every unauthenticated request
+    // collapsed onto the literal key "undefined_other" — one abusive client
+    // could exhaust the shared bucket and block all other unauthenticated users.
+    const key =
+      req.org?.id || req.ips?.[0] || req.ip || req.socket?.remoteAddress;
+    return key + '_' + (req.url.indexOf('/posts') > -1 ? 'posts' : 'other');
   }
 }

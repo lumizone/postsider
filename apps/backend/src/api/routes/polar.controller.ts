@@ -36,8 +36,10 @@ export class PolarController {
     try {
       return await this._polarService.handleWebhook(event);
     } catch (e) {
+      // Do not leak internal error details back to the webhook caller.
+      console.error('Polar webhook handling failed', e);
       throw new HttpException(
-        e instanceof Error ? e.message : 'Webhook handling failed',
+        'Webhook handling failed',
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }

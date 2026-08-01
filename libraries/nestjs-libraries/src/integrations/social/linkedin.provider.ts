@@ -260,6 +260,10 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
       )
     ).json();
 
+    if (!Array.isArray(elements) || elements.length === 0) {
+      throw new Error('LinkedIn company not found');
+    }
+
     return {
       options: elements.map((e: { localizedName: string; id: string }) => ({
         label: e.localizedName,
@@ -326,10 +330,14 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
     const etags: (string | null)[] = [];
     if (isVideo) {
       // Only the Videos API uses multipart chunked uploads. Each 2MB part is
-      // PUT separately and the returned etags are passed to finalizeUpload.
-      for (let i = 0; i < picture.length; i += 1024 * 1024 * 2) {
+      // PUT separately (to ITS OWN instruction URL — every uploadInstructions[]
+      // entry points at a distinct part endpoint) and the returned etags are
+      // passed to finalizeUpload.
+      const chunkSize = 1024 * 1024 * 2;
+      for (let i = 0, chunkIndex = 0; i < picture.length; i += chunkSize, chunkIndex++) {
+        const chunkUrl = uploadInstructions?.[chunkIndex]?.uploadUrl || sendUrlRequest;
         const upload = await this.fetch(
-          sendUrlRequest,
+          chunkUrl,
           {
             method: 'PUT',
             headers: {
@@ -338,7 +346,7 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
               Authorization: `Bearer ${accessToken}`,
               'Content-Type': 'application/octet-stream',
             },
-            body: picture.slice(i, i + 1024 * 1024 * 2),
+            body: picture.slice(i, i + chunkSize),
           },
           'linkedin',
           0,

@@ -49,7 +49,10 @@ const EMAIL_CONNECTORS: ConnectorDefinition[] = [
     identifier: 'smtp',
     label: 'SMTP',
     iconUrl: '/icons/connectors/smtp.png',
-    capabilities: ['PUBLISH'],
+    // In SOURCE_CAPABLE_CONNECTORS (inbound handler is registered), so it must
+    // declare SOURCE — a UI filtering on capabilities.includes('SOURCE') would
+    // otherwise silently hide SMTP as an inbound source.
+    capabilities: ['PUBLISH', 'SOURCE'],
     requiredScopes: [],
   },
 ];

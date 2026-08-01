@@ -97,7 +97,10 @@ export default function QueuePlanPage() {
       id,
       (plans[id] || []).map((s, idx) => {
         if (idx !== i) return s;
-        const days = s.days && s.days.length ? s.days : [0, 1, 2, 3, 4, 5, 6];
+        // An explicit [] is "no days", NOT "all days" — `s.days && s.days.length`
+        // fell back to the full week for an explicitly empty array, so
+        // deselecting the last day silently re-activated every day.
+        const days = Array.isArray(s.days) ? s.days : [0, 1, 2, 3, 4, 5, 6];
         const next = days.includes(day)
           ? days.filter((d) => d !== day)
           : [...days, day].sort((a, b) => a - b);

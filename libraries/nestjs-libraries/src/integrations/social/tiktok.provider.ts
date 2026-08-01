@@ -47,15 +47,13 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     if ((firstItems?.length ?? 0) === 0) {
       return 'No video / images selected';
     }
-    if (
-      (firstItems?.length ?? 0) > 1 &&
-      firstItems?.some((p) => (p?.path?.indexOf?.('mp4') ?? -1) > -1)
-    ) {
+    // Use the extension check (matching post/buildTikok*) — a substring match
+    // would classify e.g. "promo-mp4-thumb.jpg" as a video.
+    const isVideo = (p: ValidityMedia) =>
+      p?.path ? hasExtension(p.path, 'mp4') : false;
+    if ((firstItems?.length ?? 0) > 1 && firstItems?.some(isVideo)) {
       return 'Only pictures are supported when selecting multiple items';
-    } else if (
-      firstItems?.length !== 1 &&
-      (firstItems?.[0]?.path?.indexOf?.('mp4') ?? -1) > -1
-    ) {
+    } else if (firstItems?.length !== 1 && isVideo(firstItems?.[0])) {
       return 'You need one media';
     }
     return true;
@@ -233,15 +231,9 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
       };
     }
 
-    // Server errors
-    if (body.indexOf('internal') > -1) {
-      return {
-        type: 'bad-body' as const,
-        value: 'There is a problem with TikTok servers, please try again later',
-      };
-    }
-
-    // Generic TikTok API errors
+    // Generic TikTok API errors — the more specific matches must come first,
+    // a bare 'internal' substring is far too broad (it matches any body
+    // mentioning "internal" in a message or field name).
     if (body.indexOf('picture_size_check_failed') > -1) {
       return {
         type: 'bad-body' as const,
@@ -253,6 +245,14 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
       return {
         type: 'bad-body' as const,
         value: 'TikTok API error, please try again',
+      };
+    }
+
+    // Server errors (match the actual error code)
+    if (body.indexOf('internal_error') > -1) {
+      return {
+        type: 'bad-body' as const,
+        value: 'There is a problem with TikTok servers, please try again later',
       };
     }
 
@@ -410,8 +410,17 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     publishId: string,
     accessToken: string
   ): Promise<{ url: string; id: string }> {
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
+    // Bound the poll: a container stuck in PROCESSING_UPLOAD must not pin the
+    // worker forever.
+    for (let attempt = 0; ; attempt++) {
+      if (attempt >= 60) {
+        throw new BadBody(
+          'tiktok-error-upload',
+          '{}',
+          Buffer.from('{}'),
+          'TikTok did not finish processing the upload in time'
+        );
+      }
       const post = await (
         await this.fetch(
           'https://open.tiktokapis.com/v2/post/publish/status/fetch/',
@@ -441,14 +450,12 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
       }
 
       if (status === 'PUBLISH_COMPLETE') {
+        const publicId = publicaly_available_post_id?.[0];
         return {
-          url: !publicaly_available_post_id
+          url: !publicId
             ? `https://www.tiktok.com/@${id}`
-            : `https://www.tiktok.com/@${id}/video/` +
-              publicaly_available_post_id,
-          id: !publicaly_available_post_id
-            ? publishId
-            : publicaly_available_post_id?.[0],
+            : `https://www.tiktok.com/@${id}/video/${publicId}`,
+          id: publicId || publishId,
         };
       }
 

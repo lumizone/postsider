@@ -134,6 +134,13 @@ export class UsersController {
     @Body() body: { email?: string; name?: string; password?: string },
     @Res({ passthrough: true }) response: Response,
   ) {
+    // First-time setup is only for the bootstrap admin placeholder account.
+    // Once the operator has set their real email, this route is dead, so a
+    // stolen session cannot use it to silently change the login email/password.
+    if (user.email !== 'admin@setup.local') {
+      throw new HttpForbiddenException();
+    }
+
     if (body.password && body.password.length < 8) {
       throw new HttpException('Password must be at least 8 characters', 400);
     }
@@ -141,7 +148,12 @@ export class UsersController {
     // Build an update payload — only set what was provided.
     const data: Record<string, any> = {};
     if (body.email && body.email !== user.email) {
-      data.email = body.email.toLowerCase();
+      const email = body.email.toLowerCase();
+      const existing = await this._userService.getUserByEmail(email);
+      if (existing) {
+        throw new HttpException('Email already exists', 409);
+      }
+      data.email = email;
     }
     if (body.name) {
       data.name = body.name;
@@ -151,12 +163,7 @@ export class UsersController {
     }
 
     if (Object.keys(data).length > 0) {
-      // Go through UsersService's underlying repo to keep the write within
-      // the same transactional boundary as any other change.
-      await (this._userService as any)._usersRepository._user.model.user.update({
-        where: { id: user.id },
-        data,
-      });
+      await this._userService.setupUser(user.id, data);
     }
 
     // Re-issue JWT with updated data.
@@ -280,7 +287,7 @@ export class UsersController {
   @Get('/organizations')
   async getOrgs(@GetUserFromRequest() user: User) {
     return (await this._orgService.getOrgsByUserId(user.id)).filter(
-      (f) => !f.users[0].disabled
+      (f) => !f.users?.[0]?.disabled
     );
   }
 

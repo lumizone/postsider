@@ -39,12 +39,15 @@ export async function inviteMember(
 }
 
 export async function removeMember(userId: string): Promise<void> {
-  await api.del(`/settings/team/${userId}`);
+  await api.del(`/settings/team/${encodeURIComponent(userId)}`);
 }
 
 export async function changeRole(
   userId: string,
   role: "USER" | "ADMIN",
 ): Promise<void> {
-  await api.put(`/settings/team/${userId}/role`, { role });
+  await api.put(
+    `/settings/team/${encodeURIComponent(userId)}/role`,
+    { role },
+  );
 }

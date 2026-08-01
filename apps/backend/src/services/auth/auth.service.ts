@@ -52,6 +52,8 @@ export class AuthService {
     // because NestJS ValidationPipe with intersection types doesn't always
     // produce a true class instance.
     const isRegistration = 'company' in body && !!(body as any).company;
+    const hasValidInvite =
+      !!addToOrg && typeof addToOrg !== 'boolean' && !!addToOrg.orgId;
 
     if (provider === Provider.LOCAL) {
       if (process.env.DISALLOW_PLUS && body.email.includes('+')) {
@@ -66,8 +68,6 @@ export class AuthService {
           throw new Error('Email already exists');
         }
 
-        const hasValidInvite =
-          !!addToOrg && typeof addToOrg !== 'boolean' && !!addToOrg.orgId;
         if (!(await this.canRegister(provider, hasValidInvite))) {
           throw new Error('Registration is disabled');
         }
@@ -89,12 +89,17 @@ export class AuthService {
             : false;
 
         const obj = { addedOrg, jwt: await this.jwt(create.users[0].user) };
-        await this._emailService.sendEmail(
-          body.email,
-          'Activate your account',
-          activateAccountEmail(`${process.env.FRONTEND_URL}/auth/activate/${obj.jwt}`),
-          'top'
-        );
+        // The account is already committed at this point; a mail failure must not
+        // fail the whole registration (the client could never retry — the email
+        // would already be taken).
+        this._emailService
+          .sendEmail(
+            body.email,
+            'Activate your account',
+            activateAccountEmail(`${process.env.FRONTEND_URL}/auth/activate/${obj.jwt}`),
+            'top'
+          )
+          .catch(() => {});
         return obj;
       }
 
@@ -113,7 +118,8 @@ export class AuthService {
       provider,
       body as CreateOrgUserDto,
       ip,
-      userAgent
+      userAgent,
+      hasValidInvite
     );
 
     const addedOrg =
@@ -154,7 +160,8 @@ export class AuthService {
     provider: Provider,
     body: CreateOrgUserDto,
     ip: string,
-    userAgent: string
+    userAgent: string,
+    hasValidInvite = false
   ) {
     const providerInstance = this._providerManager.getProvider(provider);
     const providerUser = await providerInstance.getUser(body.providerToken);
@@ -171,7 +178,7 @@ export class AuthService {
       return user;
     }
 
-    if (!(await this.canRegister(provider))) {
+    if (!(await this.canRegister(provider, hasValidInvite))) {
       throw new Error('Registration is disabled');
     }
 
@@ -192,7 +199,9 @@ export class AuthService {
       (err) => {}
     );
 
-    await NewsletterService.register(providerUser.email);
+    // Newsletter registration must not fail the auth flow — the org/user is
+    // already persisted by this point.
+    NewsletterService.register(providerUser.email).catch(() => {});
 
     try {
       if (providerInstance?.postRegistration) {
@@ -274,7 +283,7 @@ export class AuthService {
       await this._userService.activateUser(user.id);
       user.activated = true;
       this._track('register', user.email, tracking).catch((err) => {});
-      await NewsletterService.register(user.email);
+      NewsletterService.register(user.email).catch(() => {});
       return this.jwt(user as any);
     }
 

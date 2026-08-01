@@ -352,7 +352,9 @@ export class LinkedinPageProvider
       )
     ).json();
 
-    const analytics = [...elements2, ...elements, ...elements3].reduce(
+    // Any of the three calls can error or return a non-list payload — a spread
+    // of undefined throws.
+    const analytics = [...(elements2 || []), ...(elements || []), ...(elements3 || [])].reduce(
       (all, current) => {
         if (
           typeof current?.totalPageStatistics?.views?.allPageViews
@@ -589,7 +591,10 @@ export class LinkedinPageProvider
       )
     ).json();
 
-    if (totalLikes >= +fields.likesAmount) {
+    const threshold = +fields.likesAmount;
+    // An empty/zero threshold would fire the plug immediately; require a
+    // positive number and a real totalLikes.
+    if (threshold > 0 && totalLikes >= threshold) {
       await timer(2000);
       await this.fetch(`https://api.linkedin.com/rest/posts`, {
         body: JSON.stringify({
@@ -667,10 +672,13 @@ export class LinkedinPageProvider
       )
     ).json();
 
-    if (totalLikes >= fields.likesAmount) {
+    const threshold = +fields.likesAmount;
+    // An empty/zero threshold would fire the plug immediately; require a
+    // positive number and a real totalLikes.
+    if (threshold > 0 && totalLikes >= threshold) {
       await timer(2000);
       await this.fetch(
-        `https://api.linkedin.com/v2/socialActions/${decodeURIComponent(
+        `https://api.linkedin.com/v2/socialActions/${encodeURIComponent(
           id
         )}/comments`,
         {

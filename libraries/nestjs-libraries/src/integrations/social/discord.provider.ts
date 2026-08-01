@@ -201,29 +201,34 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
     const [commentPost] = postDetails;
     const channel = commentPost.settings.channel;
 
-    // For Discord, we create a thread from the original message for comments
-    // If we don't have a thread yet, create one
-    let threadChannel = channel;
+    // Discord threads are keyed by the original message id, so the same thread
+    // serves every comment in the chain. Always ask Discord for the thread and
+    // reuse the existing one when it reports "Thread has already been created"
+    // (code 160004, body carries existing_thread) — otherwise second and later
+    // comments would escape the thread and land in the channel.
+    const threadResponse = await (
+      await this.fetch(
+        `https://discord.com/api/channels/${channel}/messages/${postId}/threads`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN_ID}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: 'Thread',
+            auto_archive_duration: 1440,
+          }),
+        }
+      )
+    ).json();
 
-    // Create thread if this is the first comment
-    if (!lastCommentId) {
-      const { id: threadId } = await (
-        await this.fetch(
-          `https://discord.com/api/channels/${channel}/messages/${postId}/threads`,
-          {
-            method: 'POST',
-            headers: {
-              Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN_ID}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              name: 'Thread',
-              auto_archive_duration: 1440,
-            }),
-          }
-        )
-      ).json();
-      threadChannel = threadId;
+    const threadChannel =
+      threadResponse?.id ||
+      threadResponse?.existing_thread?.id ||
+      threadResponse?.thread?.id;
+    if (!threadChannel) {
+      throw new Error('Could not create or resolve Discord thread');
     }
 
     const form = new FormData();
@@ -318,7 +323,9 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
 
     const list = await (
       await this.fetch(
-        `https://discord.com/api/guilds/${id}/members/search?query=${data.query}`,
+        `https://discord.com/api/guilds/${id}/members/search?query=${encodeURIComponent(
+          data.query
+        )}`,
         {
           headers: {
             Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN_ID}`,

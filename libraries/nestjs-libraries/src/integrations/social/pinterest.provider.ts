@@ -282,7 +282,15 @@ export class PinterestProvider
       await axios.post(upload_url, formData);
 
       let statusCode = '';
-      while (statusCode !== 'succeeded') {
+      for (let attempt = 0; statusCode !== 'succeeded'; attempt++) {
+        if (attempt >= 40) {
+          throw new BadBody(
+            'pinterest',
+            JSON.stringify({}),
+            {} as any,
+            'Pinterest video processing timed out'
+          );
+        }
         const mediafile = await (
           await this.fetch(
             'https://api.pinterest.com/v5/media/' + media_id,
@@ -307,8 +315,11 @@ export class PinterestProvider
           );
         }
 
-        await timer(30000);
         statusCode = mediafile.status;
+        // Sleep only while still pending — don't cost a 30s wait after success.
+        if (statusCode !== 'succeeded') {
+          await timer(30000);
+        }
       }
 
       mediaId = media_id;

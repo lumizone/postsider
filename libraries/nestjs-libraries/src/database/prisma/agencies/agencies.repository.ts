@@ -58,6 +58,23 @@ export class AgenciesRepository {
     });
   }
 
+  // Lookup that ignores the approval state — the decline notification reads the
+  // agency AFTER approveOrDecline set approved:false, and the public
+  // `getAgencyById` filter would return nothing for it.
+  getAgencyByIdForAdmin(id: string) {
+    return this._socialMediaAgencies.model.socialMediaAgency.findFirst({
+      where: {
+        id,
+        deletedAt: null,
+      },
+      include: {
+        logo: true,
+        niches: true,
+        user: true,
+      },
+    });
+  }
+
   getAgencyById(id: string) {
     return this._socialMediaAgencies.model.socialMediaAgency.findFirst({
       where: {

@@ -3,21 +3,8 @@ import {
   Injectable,
   PipeTransform,
 } from '@nestjs/common';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { fromBuffer } = require('file-type');
-
-const ALLOWED_MIME_TYPES = new Set<string>([
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  'image/avif',
-  'image/bmp',
-  'image/tiff',
-  'video/mp4',
-  'video/webm',
-  'video/quicktime',
-]);
+import { ALLOWED_MIME } from '@postsider/nestjs-libraries/upload/mime.types';
+import { detectFileType } from '@postsider/nestjs-libraries/upload/detect-file-type';
 
 /**
  * Dangerous byte sequences that could indicate an embedded script or polyglot.
@@ -64,8 +51,8 @@ export class CustomFileValidationPipe implements PipeTransform {
     }
 
     // 1. Detect real file type from magic bytes (never trust Content-Type header)
-    const detected = await fromBuffer(value.buffer);
-    if (!detected || !ALLOWED_MIME_TYPES.has(detected.mime)) {
+    const detected = await detectFileType(value.buffer);
+    if (!detected || !ALLOWED_MIME.has(detected.mime)) {
       throw new BadRequestException(
         'Unsupported file type. Allowed: JPEG, PNG, GIF, WebP, AVIF, BMP, TIFF, MP4, WebM, MOV.'
       );

@@ -3,9 +3,12 @@ import { Injectable } from '@nestjs/common';
 export abstract class AuthProviderAbstract {
   abstract generateLink(query?: any): Promise<string> | string;
   abstract getToken(code: string, redirectUri?: string): Promise<string>;
+  // Failure contract: implementations MUST return `false` (not a truthy empty
+  // object) so the `if (!providerUser)` guards in auth.service.ts fire for
+  // rejected/invalid auth attempts.
   abstract getUser(
     providerToken: string
-  ): Promise<{ email: string; id: string }> | false;
+  ): Promise<{ email: string; id: string } | false>;
   async postRegistration(
     providerToken: string,
     orgId: string

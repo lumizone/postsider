@@ -221,7 +221,9 @@ export class IntegrationService {
           integration.organizationId,
           integration.id
         );
-        return;
+        // `return` aborted the whole batch on the first failing integration —
+        // every remaining one was skipped. `continue` keeps the sweep going.
+        continue;
       }
 
       const { refreshToken, accessToken, expiresIn } = data;

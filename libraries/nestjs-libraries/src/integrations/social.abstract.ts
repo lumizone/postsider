@@ -33,10 +33,12 @@ export class BadBody extends ApplicationFailure {
   }
 }
 
-export class NotEnoughScopes {
+export class NotEnoughScopes extends ApplicationFailure {
   constructor(
-    public message = 'Not enough scopes, when choosing a provider, please add all the scopes'
-  ) {}
+    message = 'Not enough scopes, when choosing a provider, please add all the scopes'
+  ) {
+    super(message, 'not_enough_scopes', true);
+  }
 }
 
 function safeStringify(obj: any) {

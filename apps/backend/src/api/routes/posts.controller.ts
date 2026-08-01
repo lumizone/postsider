@@ -229,8 +229,8 @@ export class PostsController {
       org.id,
       integration,
       platform,
-      count ? Number(count) : 3,
-      tz ? Number(tz) : 0
+      Number.isFinite(Number(count)) ? Number(count) : 3,
+      Number.isFinite(Number(tz)) ? Number(tz) : 0
     );
   }
 

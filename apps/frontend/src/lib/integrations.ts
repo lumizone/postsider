@@ -251,7 +251,9 @@ export async function pollTelegramUpdates(
 ): Promise<TelegramUpdateResult> {
   return api.get<TelegramUpdateResult>(
     `/integrations/telegram/updates`,
-    { word, ...(id ? { id } : {}) },
+    // `id !== undefined` preserves a zero offset — `id ? {id} : {}` dropped it
+    // and repeated earlier updates.
+    { word, ...(id !== undefined ? { id } : {}) },
     { silent: true },
   );
 }
@@ -285,16 +287,14 @@ export async function getIntegrationChannels(
   fnName = "channels",
   data: Record<string, unknown> = {},
 ): Promise<IntegrationChannel[]> {
-  try {
-    const res = await api.post<IntegrationChannel[]>(
-      `/integrations/function`,
-      { id: integrationId, name: fnName, data },
-      { silent: true },
-    );
-    return Array.isArray(res) ? res : [];
-  } catch {
-    return [];
-  }
+  // Let failures propagate — returning [] makes a network/auth/server error
+  // indistinguishable from "no selectable targets".
+  const res = await api.post<IntegrationChannel[]>(
+    `/integrations/function`,
+    { id: integrationId, name: fnName, data },
+    { silent: true },
+  );
+  return Array.isArray(res) ? res : [];
 }
 
 

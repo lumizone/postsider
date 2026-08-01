@@ -22,9 +22,20 @@ export class RootController {
   async getHealth(@Res({ passthrough: true }) res: Response) {
     const checks: Record<string, 'ok' | 'error'> = {};
 
+    // A hung Redis/Postgres must still let /health return fast with a degraded
+    // status, not block the request indefinitely (the Temporal check elsewhere
+    // is already time-boxed for the same reason).
+    const withTimeout = <T>(p: Promise<T>, ms: number) =>
+      Promise.race([
+        p,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('timeout')), ms)
+        ),
+      ]);
+
     // Redis check
     try {
-      await ioRedis.ping();
+      await withTimeout(ioRedis.ping(), 3000);
       checks.redis = 'ok';
     } catch {
       checks.redis = 'error';
@@ -32,7 +43,7 @@ export class RootController {
 
     // PostgreSQL check
     try {
-      await this.prisma.$queryRaw`SELECT 1`;
+      await withTimeout(this.prisma.$queryRaw`SELECT 1`, 3000);
       checks.database = 'ok';
     } catch {
       checks.database = 'error';

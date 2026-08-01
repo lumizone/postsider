@@ -169,10 +169,12 @@ export class BloggerProvider extends SocialAbstract implements SocialProvider {
     const { client, blogger } = clientAndBlogger();
     client.setCredentials({ access_token: accessToken });
 
-    // Split title from body: first line = title, rest = content
+    // Split title from body: first line = title, rest = content. A one-line
+    // message must NOT fall back to the full message as the body (it would
+    // publish the title twice).
     const lines = firstPost.message.split('\n');
-    const title = lines[0] || 'Untitled';
-    const content = lines.slice(1).join('\n').trim() || firstPost.message;
+    const title = lines[0]?.trim() || 'Untitled';
+    const content = lines.slice(1).join('\n').trim();
 
     const { data } = await blogger.posts.insert({
       blogId: id,

@@ -65,7 +65,7 @@ export class SlackProvider extends SocialAbstract implements SocialProvider {
     codeVerifier: string;
     refresh?: string;
   }) {
-    const { access_token, team, bot_user_id, scope } = await (
+    const tokenResponse = await (
       await this.fetch(`https://slack.com/api/oauth.v2.access`, {
         method: 'POST',
         headers: {
@@ -85,6 +85,16 @@ export class SlackProvider extends SocialAbstract implements SocialProvider {
         }),
       })
     ).json();
+
+    // Slack returns HTTP 200 with {ok:false,error} on failure — scope/team/
+    // bot_user_id are undefined then and `scope.split(',')` would throw.
+    if (!tokenResponse.ok) {
+      return `Slack authentication failed: ${
+        tokenResponse.error || 'unknown error'
+      }`;
+    }
+
+    const { access_token, team, bot_user_id, scope } = tokenResponse;
 
     this.checkScopes(this.scopes, scope.split(','));
 
@@ -153,7 +163,7 @@ export class SlackProvider extends SocialAbstract implements SocialProvider {
     });
 
     // Post the main message
-    const { ts, channel: responseChannel } = await (
+    const postResponse = await (
       await fetch(`https://slack.com/api/chat.postMessage`, {
         method: 'POST',
         headers: {
@@ -183,6 +193,15 @@ export class SlackProvider extends SocialAbstract implements SocialProvider {
         }),
       })
     ).json();
+
+    // Slack reports failures as HTTP 200 with {ok:false,error:...} — without
+    // this check a failed publish would be persisted as 'posted'.
+    if (!postResponse.ok || !postResponse.ts) {
+      throw new Error(
+        `Slack post failed: ${postResponse.error || 'unknown error'}`
+      );
+    }
+    const { ts, channel: responseChannel } = postResponse;
 
     // Get permalink for the message
     const { permalink } = await (
@@ -220,7 +239,7 @@ export class SlackProvider extends SocialAbstract implements SocialProvider {
     const threadTs = lastCommentId || postId;
 
     // Post the threaded reply
-    const { ts, channel: responseChannel } = await (
+    const commentResponse = await (
       await fetch(`https://slack.com/api/chat.postMessage`, {
         method: 'POST',
         headers: {
@@ -251,6 +270,13 @@ export class SlackProvider extends SocialAbstract implements SocialProvider {
         }),
       })
     ).json();
+
+    if (!commentResponse.ok || !commentResponse.ts) {
+      throw new Error(
+        `Slack comment failed: ${commentResponse.error || 'unknown error'}`
+      );
+    }
+    const { ts, channel: responseChannel } = commentResponse;
 
     // Get permalink for the comment
     const { permalink } = await (

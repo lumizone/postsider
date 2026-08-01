@@ -36,6 +36,15 @@ export class UsersService {
     return this._usersRepository.updatePassword(id, password);
   }
 
+  setupUser(id: string, data: { email?: string; name?: string; password?: string }) {
+    const payload: Record<string, any> = {};
+    if (data.email) payload.email = data.email;
+    if (data.name) payload.name = data.name;
+    if (data.password) payload.password = data.password;
+    if (Object.keys(payload).length === 0) return;
+    return this._usersRepository.setupUser(id, payload);
+  }
+
   getPersonal(userId: string) {
     return this._usersRepository.getPersonal(userId);
   }

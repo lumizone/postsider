@@ -33,7 +33,7 @@ export class NostrProvider extends SocialAbstract implements SocialProvider {
   isBetweenSteps = false;
   scopes = [] as string[];
   editor = 'normal' as const;
-  toolTip = 'Make sure you private a HEX key of your Nostr private key, you can get it from websites like iris.to'
+  toolTip = 'Make sure you provide a HEX version of your Nostr private key; you can get it from websites like iris.to'
 
   maxLength() {
     return 100000;
@@ -96,37 +96,30 @@ export class NostrProvider extends SocialAbstract implements SocialProvider {
     return {};
   }
 
-  private async publish(pubkey: string, event: any) {
-    let id = '';
+  // Returns true when at least one relay accepted the event (relay.publish
+  // resolves on the relay's OK ack and rejects on NOT-OK/close). The caller
+  // must use finalizeEvent's canonical event id — guessing one from a kind:1
+  // subscription returns an unrelated older note or "undefined".
+  private async publish(event: any): Promise<boolean> {
+    let published = false;
     for (const relay of list) {
       try {
         const relayInstance = await Relay.connect(relay);
-        const value = new Promise<any>((resolve) => {
-          relayInstance.subscribe([{ kinds: [1], authors: [pubkey] }], {
-            eoseTimeout: 6000,
-            onevent: (event) => {
-              resolve(event);
-            },
-            oneose: () => {
-              resolve({});
-            },
-            onclose: () => {
-              resolve({});
-            },
-          });
-        });
-
         await relayInstance.publish(event);
-        const all = await value;
+        published = true;
         relayInstance.close();
-        // relayInstance.close();
-        id = id || all?.id;
       } catch (err) {
-        /**empty**/
+        // try the next relay
       }
     }
 
-    return id;
+    return published;
+  }
+
+  private hexToBytes(hex: string): Uint8Array {
+    return Uint8Array.from(
+      hex.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16)) || []
+    );
   }
 
   async authenticate(params: {
@@ -175,6 +168,8 @@ export class NostrProvider extends SocialAbstract implements SocialProvider {
     const { password } = AuthService.verifyJWT(accessToken) as any;
     const [firstPost] = postDetails;
 
+    // finalizeEvent needs the secret key as bytes, not the hex string — passing
+    // the string would fail signing.
     const textEvent = finalizeEvent(
       {
         kind: 1, // Text note
@@ -182,10 +177,14 @@ export class NostrProvider extends SocialAbstract implements SocialProvider {
         tags: [],
         created_at: Math.floor(Date.now() / 1000),
       },
-      password
+      this.hexToBytes(password)
     );
 
-    const eventId = await this.publish(id, textEvent);
+    const published = await this.publish(textEvent);
+    if (!published) {
+      throw new Error('Failed to publish Nostr event to any relay');
+    }
+    const eventId = textEvent.id;
 
     return [
       {
@@ -219,10 +218,14 @@ export class NostrProvider extends SocialAbstract implements SocialProvider {
         ],
         created_at: Math.floor(Date.now() / 1000),
       },
-      password
+      this.hexToBytes(password)
     );
 
-    const eventId = await this.publish(id, textEvent);
+    const published = await this.publish(textEvent);
+    if (!published) {
+      throw new Error('Failed to publish Nostr event to any relay');
+    }
+    const eventId = textEvent.id;
 
     return [
       {

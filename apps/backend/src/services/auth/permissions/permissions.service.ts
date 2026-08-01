@@ -97,7 +97,10 @@ export class PermissionsService {
       if (section === Sections.WEBHOOKS) {
         const totalWebhooks = await this._webhooksService.getTotal(orgId);
         if (totalWebhooks < options.webhooks) {
-          can(AuthorizationActions.Create, section);
+          // Honor the requested action (Read/Delete too), not just Create —
+          // otherwise [Read, WEBHOOKS] / [Delete, WEBHOOKS] policies 402 even
+          // when the org is under its webhook limit.
+          can(action, section);
           continue;
         }
       }

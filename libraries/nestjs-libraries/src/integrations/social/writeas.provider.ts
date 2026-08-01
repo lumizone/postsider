@@ -74,12 +74,12 @@ export class WriteAsProvider extends SocialAbstract implements SocialProvider {
     codeVerifier: string;
     refresh?: string;
   }) {
-    const body = JSON.parse(Buffer.from(params.code, 'base64').toString()) as {
-      alias: string;
-      pass: string;
-    };
-
     try {
+      const body = JSON.parse(Buffer.from(params.code, 'base64').toString()) as {
+        alias: string;
+        pass: string;
+      };
+
       const response = await this.fetch(`${WRITEAS_API}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -136,6 +136,14 @@ export class WriteAsProvider extends SocialAbstract implements SocialProvider {
 
     const json = await response.json();
     const data = json?.data;
+
+    // A response without data means the post was not created; don't record it
+    // as published with a bogus releaseURL.
+    if (!response.ok || !data?.id) {
+      throw new Error(
+        `Write.as post failed (${response.status}): ${JSON.stringify(json)}`
+      );
+    }
 
     const releaseURL = settings.collection
       ? `https://write.as/${settings.collection}/${data?.slug || data?.id}`

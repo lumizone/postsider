@@ -152,7 +152,14 @@ export class IntegrationManager {
   }
 
   getInternalPlugs(providerName: string) {
-    const p = socialIntegrationList.find((p) => p.identifier === providerName)!;
+    const p = socialIntegrationList.find(
+      (provider) => provider.identifier === providerName
+    );
+    if (!p) {
+      throw new Error(
+        `No social integration registered for identifier "${providerName}"`
+      );
+    }
     return {
       internalPlugs:
         (
@@ -168,6 +175,17 @@ export class IntegrationManager {
     return socialIntegrationList.map((p) => p.identifier);
   }
   getSocialIntegration(integration: string): SocialProvider {
-    return socialIntegrationList.find((i) => i.identifier === integration)!;
+    const provider = socialIntegrationList.find(
+      (i) => i.identifier === integration
+    );
+    if (!provider) {
+      // Fail loudly instead of returning undefined (typed as SocialProvider) —
+      // callers immediately dereference the result and crash with a bare
+      // TypeError otherwise.
+      throw new Error(
+        `No social integration registered for identifier "${integration}"`
+      );
+    }
+    return provider;
   }
 }

@@ -106,30 +106,37 @@ export class MediumProvider extends SocialAbstract implements SocialProvider {
     integration: Integration
   ): Promise<PostResponse[]> {
     const { settings } = postDetails?.[0] || { settings: {} };
-    const { data } = await (
-      await fetch(
-        settings?.publication
-          ? `https://api.medium.com/v1/publications/${settings?.publication}/posts`
-          : `https://api.medium.com/v1/users/${id}/posts`,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            title: settings.title,
-            contentFormat: 'markdown',
-            content: postDetails?.[0].message,
-            ...(settings.canonical ? { canonicalUrl: settings.canonical } : {}),
-            ...(settings?.tags?.length
-              ? { tags: settings?.tags?.map((p: any) => p.value) }
-              : {}),
-            publishStatus: settings?.publication ? 'draft' : 'public',
-          }),
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      )
-    ).json();
+    const response = await fetch(
+      settings?.publication
+        ? `https://api.medium.com/v1/publications/${settings?.publication}/posts`
+        : `https://api.medium.com/v1/users/${id}/posts`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          title: settings.title,
+          contentFormat: 'markdown',
+          content: postDetails?.[0].message,
+          ...(settings.canonical ? { canonicalUrl: settings.canonical } : {}),
+          ...(settings?.tags?.length
+            ? { tags: settings?.tags?.map((p: any) => p.value) }
+            : {}),
+          publishStatus: settings?.publication ? 'draft' : 'public',
+        }),
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    const { data } = await response.json();
+
+    // Trusting the body blindly would report a failed publish (or crash on
+    // data.id) as completed.
+    if (!response.ok || !data?.id) {
+      throw new Error(
+        `Medium post failed (${response.status}): ${JSON.stringify(data ?? {})}`
+      );
+    }
 
     return [
       {

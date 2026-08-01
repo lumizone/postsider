@@ -33,15 +33,19 @@ export function downloadCredentialsPdf(params: {
     ctx.fillStyle = "#0F0F0F";
     ctx.fillRect(0, 0, 6, height);
 
-    // Logo (real image)
+    // Logo (real image). drawImage on a "broken" image element throws
+    // InvalidStateError — the onerror fallback runs `draw`, so skip the logo
+    // when it never loaded (network issue / blocked asset).
     const logoSize = 48;
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(36 + logoSize / 2, 36 + logoSize / 2, logoSize / 2, 0, Math.PI * 2);
-    ctx.closePath();
-    ctx.clip();
-    ctx.drawImage(logo, 36, 36, logoSize, logoSize);
-    ctx.restore();
+    if (logo.complete && logo.naturalWidth > 0) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(36 + logoSize / 2, 36 + logoSize / 2, logoSize / 2, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(logo, 36, 36, logoSize, logoSize);
+      ctx.restore();
+    }
 
     // Brand name
     ctx.fillStyle = "#0F0F0F";

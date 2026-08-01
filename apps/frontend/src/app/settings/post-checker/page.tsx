@@ -45,7 +45,9 @@ export default function PostCheckerSettingsPage() {
   const isPlatformAi = user?.isPlatformAi ?? false;
 
   useEffect(() => {
-    if (isPlatformAi) return; // No BYO config needed — platform manages AI.
+    // Platform AI needs no BYO config; non-admins must not fetch it at all
+    // (the backend GET is ADMIN-gated now).
+    if (isPlatformAi || !canManage) return;
     getCheckerConfig()
       .then((c) => {
         if (c.provider) {

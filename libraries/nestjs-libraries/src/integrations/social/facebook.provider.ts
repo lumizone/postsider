@@ -200,7 +200,9 @@ export class FacebookProvider extends SocialAbstract implements SocialProvider {
         value: 'Facebook return: No permission to publish the video',
       };
     }
-    if (body.indexOf('490') > -1) {
+    // Match the structured error code, not the substring '490' (page ids, media
+    // ids and byte counts all contain that digit sequence).
+    if (body.indexOf('"code":490') > -1) {
       return {
         type: 'refresh-token' as const,
         value: 'Access token expired, please re-authenticate',
@@ -507,7 +509,12 @@ export class FacebookProvider extends SocialAbstract implements SocialProvider {
           );
 
           let videoStatus = 'in_progress';
-          while (videoStatus !== 'ready') {
+          const maxVideoAttempts = 60; // ~10 minutes at 10s intervals
+          for (
+            let attempt = 0;
+            videoStatus !== 'ready' && attempt < maxVideoAttempts;
+            attempt++
+          ) {
             const { status } = await (
               await this.fetch(
                 `https://graph.facebook.com/v20.0/${video_id}?fields=status&access_token=${accessToken}`,
@@ -524,6 +531,9 @@ export class FacebookProvider extends SocialAbstract implements SocialProvider {
             if (videoStatus !== 'ready') {
               await timer(10000);
             }
+          }
+          if (videoStatus !== 'ready') {
+            throw new Error('Facebook video processing timed out');
           }
 
           const { post_id: storyPostId } = await (
