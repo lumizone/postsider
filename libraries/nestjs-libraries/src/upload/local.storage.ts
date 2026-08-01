@@ -10,8 +10,7 @@ import {
   classifyMime,
   MediaKind,
 } from '@postsider/nestjs-libraries/upload/mime.types';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { fromBuffer } = require('file-type');
+import { detectFileType } from '@postsider/nestjs-libraries/upload/detect-file-type';
 
 // Cap for remote media downloads (matches the multipart video ceiling).
 const MAX_REMOTE_MEDIA_BYTES = 500 * 1024 * 1024;
@@ -92,7 +91,7 @@ export class LocalStorage implements IUploadProvider {
     // only accept the allow-list, otherwise an attacker could write an
     // arbitrary file (e.g. .html/.svg with embedded script) into the
     // publicly served uploads directory on the app's own origin.
-    const detected = await fromBuffer(body);
+    const detected = await detectFileType(body);
     if (!detected || !ALLOWED_MIME.has(detected.mime)) {
       throw new Error('Unsupported file type.');
     }
@@ -106,7 +105,7 @@ export class LocalStorage implements IUploadProvider {
 
   async uploadFile(file: Express.Multer.File): Promise<UploadedFile> {
     try {
-      const detected = await fromBuffer(file.buffer);
+      const detected = await detectFileType(file.buffer);
       if (!detected || !ALLOWED_MIME.has(detected.mime)) {
         throw new Error('Unsupported file type.');
       }

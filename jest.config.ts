@@ -18,9 +18,11 @@ const config: Config = {
   testPathIgnorePatterns: ['/node_modules/', '<rootDir>/apps/mcp/'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'json'],
   // Several provider dependencies (nostr-tools, @noble/*, @scure/*) ship ESM
-  // only. Allow ts-jest/babel to transform them instead of ignoring them.
+  // only. Allow ts-jest/babel to transform them instead of ignoring them. The
+  // pattern matches the package name at ANY depth (nostr-tools vendors its own
+  // copy of @noble/curves under nostr-tools/node_modules).
   transformIgnorePatterns: [
-    'node_modules/(?!(?:.pnpm/)?(nostr-tools|@noble|@scure)/)',
+    'node_modules/(?!(?:.*[/\\\\])?(?:nostr-tools|@noble|@scure)[/\\\\])',
   ],
   moduleNameMapper: {
     '^@postsider/backend/(.*)$': '<rootDir>/apps/backend/src/$1',

@@ -14,8 +14,7 @@ import { Request, Response } from 'express';
 import crypto from 'crypto';
 import path from 'path';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { fromBuffer } = require('file-type');
+import { detectFileType } from '@postsider/nestjs-libraries/upload/detect-file-type';
 
 // Keep in sync with the shared MIME allow-list (mime.types.ts): multipart
 // uploads are the path used for LARGE files, so omitting webm/mov/mkv/audio
@@ -95,7 +94,7 @@ export async function simpleUpload(
   originalFilename: string,
   _contentType: string
 ) {
-  const detected = await fromBuffer(data);
+  const detected = await detectFileType(data);
   if (!detected || !Object.values(ALLOWED_EXT_TO_MIME).includes(detected.mime)) {
     throw new Error('Unsupported file type.');
   }
@@ -231,7 +230,7 @@ export async function completeMultipartUpload(req: Request, res: Response) {
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     }
     const prefix = Buffer.concat(chunks);
-    const detected = await fromBuffer(prefix);
+    const detected = await detectFileType(prefix);
 
     if (!detected || detected.mime !== expectedMime) {
       await R2.send(

@@ -14,8 +14,7 @@ import {
   classifyMime,
   MediaKind,
 } from '@postsider/nestjs-libraries/upload/mime.types';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { fromBuffer } = require('file-type');
+import { detectFileType } from '@postsider/nestjs-libraries/upload/detect-file-type';
 
 // Cap for remote media downloads (matches the multipart video ceiling).
 const MAX_REMOTE_MEDIA_BYTES = 500 * 1024 * 1024;
@@ -84,7 +83,7 @@ class MinioStorage implements IUploadProvider {
       }
     }
 
-    const detected = await fromBuffer(body);
+    const detected = await detectFileType(body);
     if (!detected || !ALLOWED_MIME.has(detected.mime)) {
       throw new Error('Unsupported file type.');
     }
@@ -105,7 +104,7 @@ class MinioStorage implements IUploadProvider {
 
   async uploadFile(file: Express.Multer.File): Promise<UploadedFile> {
     try {
-      const detected = await fromBuffer(file.buffer);
+      const detected = await detectFileType(file.buffer);
       if (!detected || !ALLOWED_MIME.has(detected.mime)) {
         throw new Error('Unsupported file type.');
       }

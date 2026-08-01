@@ -34,8 +34,7 @@ import { NotificationService } from '@postsider/nestjs-libraries/database/prisma
 import { GetNotificationsDto } from '@postsider/nestjs-libraries/dtos/notifications/get.notifications.dto';
 import { Readable } from 'stream';
 import { ssrfSafeDispatcher } from '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { fromBuffer } = require('file-type');
+import { detectFileType } from '@postsider/nestjs-libraries/upload/detect-file-type';
 
 const PUBLIC_API_ALLOWED_MIME = new Set<string>([
   'image/jpeg',
@@ -121,7 +120,7 @@ export class PublicIntegrationsController {
     if (buffer.length > MAX_REMOTE_MEDIA_BYTES) {
       throw new HttpException({ msg: 'File too large' }, 413);
     }
-    const detected = await fromBuffer(buffer);
+    const detected = await detectFileType(buffer);
     if (!detected || !PUBLIC_API_ALLOWED_MIME.has(detected.mime)) {
       throw new HttpException({ msg: 'Unsupported file type.' }, 400);
     }
