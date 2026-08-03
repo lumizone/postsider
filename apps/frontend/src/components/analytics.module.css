@@ -55,6 +55,20 @@
   flex-wrap: wrap;
 }
 
+.refreshBtn {
+  padding: 6px 12px;
+  border: 1px solid var(--border, #e0e0e0);
+  background: var(--bg, #fff);
+  color: var(--fg, #000);
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+.refreshBtn:hover { opacity: 0.7; }
+.refreshBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
 /* segmented control */
 .segmented {
   display: inline-flex;

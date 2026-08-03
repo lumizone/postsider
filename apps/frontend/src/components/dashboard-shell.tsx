@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
@@ -12,6 +12,8 @@ interface NavItem {
   href: string;
   labelKey: MessageKey;
   icon: ReactNode;
+  /** Minimum role required. Default: everyone. */
+  minRole?: "ADMIN" | "SUPERADMIN";
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -128,6 +130,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     href: "/settings",
     labelKey: "nav.settings",
+    minRole: "ADMIN",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" aria-hidden>
         <path
@@ -142,6 +145,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     href: "/billing",
     labelKey: "nav.billing",
+    minRole: "SUPERADMIN",
     icon: (
       <svg viewBox="0 0 16 16" fill="none" aria-hidden>
         <rect
@@ -171,6 +175,12 @@ const NAV_ITEMS: NavItem[] = [
 
 const STORAGE_KEY = "postsider:sidebar-collapsed";
 
+const ROLE_LEVEL: Record<string, number> = {
+  USER: 0,
+  ADMIN: 1,
+  SUPERADMIN: 2,
+};
+
 function ChevronCollapse({ collapsed }: { collapsed: boolean }) {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden width="14" height="14">
@@ -189,6 +199,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const t = useT();
+  const myLevel = ROLE_LEVEL[user?.role ?? "USER"] ?? 0;
   const [collapsed, setCollapsed] = useState(false);
   // Mobile off-canvas drawer (opened from the hamburger in the topbar).
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -423,7 +434,10 @@ export function DashboardShell({ children }: { children: ReactNode }) {
 
         <nav>
           <ul style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-            {NAV_ITEMS.map((item) => {
+            {NAV_ITEMS.filter((item) => {
+              if (!item.minRole) return true;
+              return myLevel >= (ROLE_LEVEL[item.minRole] ?? 0);
+            }).map((item) => {
               const isActive =
                 pathname === item.href || pathname?.startsWith(item.href + "/");
               return (
@@ -468,6 +482,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
 
         {!isCollapsed && (
           <div style={{ marginTop: "auto", padding: "0 6px", display: "flex", flexDirection: "column", gap: 10 }}>
+            <OrgSwitcher />
             <div style={{ padding: "0 8px" }}>
               <LanguageSwitcher />
             </div>
@@ -481,6 +496,11 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                   borderTop: "1px solid var(--line-soft)",
                 }}
               >
+                {(user.organizations?.length || 0) <= 1 && user.organizations?.[0]?.name && (
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 2 }}>
+                    {user.organizations[0].name}
+                  </span>
+                )}
                 <span style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.2 }}>
                   {user.name || user.email.split("@")[0]}
                 </span>
@@ -524,6 +544,149 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           )}
         {children}
       </main>
+    </div>
+  );
+}
+
+/** Org switcher — shown in the sidebar footer when the user has 2+ orgs. */
+function OrgSwitcher() {
+  const { user, switchOrg } = useAuth();
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const orgs = user?.organizations || [];
+  const currentOrgId = user?.orgId;
+
+  // Close on outside click / Escape.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onClick);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onClick);
+    };
+  }, [open]);
+
+  if (orgs.length <= 1) return null;
+
+  const currentOrg = orgs.find((o) => o.id === currentOrgId);
+  const initials = (currentOrg?.name || "?").slice(0, 2).toUpperCase();
+
+  return (
+    <div ref={ref} style={{ position: "relative", padding: "0 8px" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "8px 10px",
+          borderRadius: 10,
+          border: "1px solid var(--line-soft)",
+          background: "var(--bg)",
+          color: "var(--fg)",
+          cursor: "pointer",
+          fontSize: 13,
+          textAlign: "left",
+        }}
+      >
+        <span
+          style={{
+            width: 28, height: 28, borderRadius: 8,
+            background: "var(--fg)", color: "var(--bg)",
+            display: "grid", placeItems: "center",
+            fontSize: 11, fontWeight: 700, flexShrink: 0,
+          }}
+        >
+          {initials}
+        </span>
+        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {currentOrg?.name || "?"}
+        </span>
+        <span style={{ fontSize: 10, opacity: 0.5, flexShrink: 0 }}>▼</span>
+      </button>
+
+      {open && (
+        <ul
+          role="listbox"
+          style={{
+            position: "absolute",
+            bottom: "100%",
+            left: 8,
+            right: 8,
+            margin: "0 0 4px 0",
+            padding: 4,
+            listStyle: "none",
+            background: "var(--bg)",
+            border: "1px solid var(--line-soft)",
+            borderRadius: 10,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+            zIndex: 50,
+            display: "flex",
+            flexDirection: "column",
+            gap: 2,
+          }}
+        >
+          {orgs.map((org) => {
+            const isCurrent = org.id === currentOrgId;
+            return (
+              <li key={org.id} role="option" aria-selected={isCurrent}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!isCurrent) switchOrg(org.id);
+                    setOpen(false);
+                  }}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "7px 10px",
+                    borderRadius: 8,
+                    border: "none",
+                    background: isCurrent ? "rgba(0,0,0,0.04)" : "transparent",
+                    color: "var(--fg)",
+                    cursor: isCurrent ? "default" : "pointer",
+                    fontSize: 13,
+                    textAlign: "left",
+                    opacity: isCurrent ? 0.7 : 1,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 24, height: 24, borderRadius: 6,
+                      background: isCurrent ? "var(--fg)" : "rgba(0,0,0,0.1)",
+                      color: isCurrent ? "var(--bg)" : "var(--fg)",
+                      display: "grid", placeItems: "center",
+                      fontSize: 10, fontWeight: 700, flexShrink: 0,
+                    }}
+                  >
+                    {org.name.slice(0, 2).toUpperCase()}
+                  </span>
+                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {org.name}
+                  </span>
+                  {isCurrent && <span style={{ fontSize: 12 }}>✓</span>}
+                  <span style={{ fontSize: 10, opacity: 0.5 }}>
+                    {org.role === "SUPERADMIN" ? "Admin" : org.role === "ADMIN" ? "Admin" : "Member"}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

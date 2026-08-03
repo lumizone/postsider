@@ -282,7 +282,6 @@ export class WhopProvider extends SocialAbstract implements SocialProvider {
               headers: {
                 Authorization: `Bearer ${accessToken}`,
               },
-              },
             },
             'check file status',
             0,

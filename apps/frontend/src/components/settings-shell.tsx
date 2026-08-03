@@ -32,7 +32,6 @@ const NAV_ITEMS: NavEntry[] = [
   { href: "/settings/hashtag-groups", labelKey: "settings.hashtagGroups", minRole: "ADMIN" },
   { href: "/settings/caption-templates", labelKey: "settings.captionTemplates", minRole: "ADMIN" },
   { href: "/settings/utm-builder", labelKey: "settings.utmBuilder", minRole: "ADMIN" },
-  { href: "/settings/post-checker", labelKey: "settings.postChecker", minRole: "ADMIN", byoAiOnly: true },
 ];
 
 const ROLE_LEVEL: Record<string, number> = {

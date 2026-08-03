@@ -14,7 +14,7 @@ export function assertRequestable(
   if (post.parentPostId) {
     throw new BadRequestException('Only the main post can be sent for approval');
   }
-  if (post.state !== 'DRAFT') {
+  if (post.state !== 'DRAFT' && post.state !== 'APPROVAL') {
     throw new BadRequestException('Only draft posts can be sent for approval');
   }
 }

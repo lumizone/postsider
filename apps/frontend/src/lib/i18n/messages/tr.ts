@@ -672,6 +672,8 @@ const tr = {
     scheduleDate: "Zamanlama tarihi",
     scheduleTime: "Saat",
     saveDraft: "Taslak kaydet",
+    sendToApproval: "Onaya gönder",
+    sending: "Sending for approval…",
     schedule: "Zamanla",
     publishNow: "Şimdi yayınla",
     update: "Güncelle",
@@ -764,6 +766,9 @@ const tr = {
     approveSchedule: "Onayla ve zamanla",
     reject: "Reddet",
     pendingReview: "İnceleme bekliyor",
+    showMore: "Show more",
+    showLess: "Show less",
+    scheduledFor: "Scheduled",
   },
   csvImport: {
     eyebrow: "Gönderiler",

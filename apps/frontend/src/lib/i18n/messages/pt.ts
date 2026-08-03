@@ -672,6 +672,8 @@ const pt = {
     scheduleDate: "Data de agendamento",
     scheduleTime: "Hora",
     saveDraft: "Salvar rascunho",
+    sendToApproval: "Enviar para aprovação",
+    sending: "Sending for approval…",
     schedule: "Agendar",
     publishNow: "Publicar agora",
     update: "Atualizar",
@@ -764,6 +766,9 @@ const pt = {
     approveSchedule: "Aprovar e agendar",
     reject: "Rejeitar",
     pendingReview: "Aguardando revisão",
+    showMore: "Show more",
+    showLess: "Show less",
+    scheduledFor: "Scheduled",
   },
   csvImport: {
     eyebrow: "Posts",

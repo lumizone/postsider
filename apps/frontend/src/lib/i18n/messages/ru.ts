@@ -672,6 +672,8 @@ const ru = {
     scheduleDate: "Дата публикации",
     scheduleTime: "Время",
     saveDraft: "Сохранить черновик",
+    sendToApproval: "Отправить на утверждение",
+    sending: "Sending for approval…",
     schedule: "Запланировать",
     publishNow: "Опубликовать сейчас",
     update: "Обновить",
@@ -764,6 +766,9 @@ const ru = {
     approveSchedule: "Одобрить и запланировать",
     reject: "Отклонить",
     pendingReview: "Ожидает проверки",
+    showMore: "Show more",
+    showLess: "Show less",
+    scheduledFor: "Scheduled",
   },
   csvImport: {
     eyebrow: "Посты",

@@ -407,11 +407,13 @@ export class IntegrationService {
       }
     }
 
-    const getIntegrationData = await ioRedis.get(
-      `integration:${org.id}:${integration}:${date}`
-    );
-    if (getIntegrationData) {
-      return JSON.parse(getIntegrationData);
+    if (!forceRefresh) {
+      const getIntegrationData = await ioRedis.get(
+        `integration:${org.id}:${integration}:${date}`
+      );
+      if (getIntegrationData) {
+        return JSON.parse(getIntegrationData);
+      }
     }
 
     if (integrationProvider.analytics) {

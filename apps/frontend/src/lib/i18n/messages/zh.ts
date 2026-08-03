@@ -672,6 +672,8 @@ const zh = {
     scheduleDate: "计划日期",
     scheduleTime: "时间",
     saveDraft: "保存草稿",
+    sendToApproval: "发送审核",
+    sending: "Sending for approval…",
     schedule: "安排发布",
     publishNow: "立即发布",
     update: "更新",
@@ -764,6 +766,9 @@ const zh = {
     approveSchedule: "批准并安排",
     reject: "拒绝",
     pendingReview: "待审核",
+    showMore: "Show more",
+    showLess: "Show less",
+    scheduledFor: "Scheduled",
   },
   csvImport: {
     eyebrow: "帖子",

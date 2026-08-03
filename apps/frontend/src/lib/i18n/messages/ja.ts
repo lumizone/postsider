@@ -672,6 +672,8 @@ const ja = {
     scheduleDate: "スケジュール日",
     scheduleTime: "時間",
     saveDraft: "下書き保存",
+    sendToApproval: "承認に送信",
+    sending: "Sending for approval…",
     schedule: "スケジュール",
     publishNow: "今すぐ公開",
     update: "更新",
@@ -764,6 +766,9 @@ const ja = {
     approveSchedule: "承認してスケジュール",
     reject: "却下",
     pendingReview: "レビュー待ち",
+    showMore: "Show more",
+    showLess: "Show less",
+    scheduledFor: "Scheduled",
   },
   csvImport: {
     eyebrow: "投稿",

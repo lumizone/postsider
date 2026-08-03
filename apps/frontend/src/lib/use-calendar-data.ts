@@ -28,6 +28,8 @@ function statusFromBackend(state: BackendPost["state"]): PostStatus {
       return "failed";
     case "DRAFT":
       return "draft";
+    case "APPROVAL":
+      return "pendingApproval";
     case "QUEUE":
     default:
       return "scheduled";

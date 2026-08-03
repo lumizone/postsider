@@ -672,6 +672,8 @@ const it = {
     scheduleDate: "Data di programmazione",
     scheduleTime: "Ora",
     saveDraft: "Salva bozza",
+    sendToApproval: "Invia per approvazione",
+    sending: "Sending for approval…",
     schedule: "Programma",
     publishNow: "Pubblica ora",
     update: "Aggiorna",
@@ -764,6 +766,9 @@ const it = {
     approveSchedule: "Approva e programma",
     reject: "Rifiuta",
     pendingReview: "In attesa di revisione",
+    showMore: "Show more",
+    showLess: "Show less",
+    scheduledFor: "Scheduled",
   },
   csvImport: {
     eyebrow: "Post",

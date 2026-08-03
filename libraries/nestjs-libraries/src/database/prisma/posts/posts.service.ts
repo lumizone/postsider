@@ -1101,6 +1101,14 @@ export class PostsService {
     return { id, state };
   }
 
+  /** Set post to an explicit state (APPROVAL ↔ DRAFT for the approval flow). */
+  async setPostState(orgId: string, postId: string, state: State) {
+    const post = await this._postRepository.getPostById(postId, orgId);
+    if (!post) throw new BadRequestException('Post not found');
+    await this._postRepository.changeState(postId, state);
+    return { id: postId, state };
+  }
+
   async changeDate(
     orgId: string,
     id: string,
