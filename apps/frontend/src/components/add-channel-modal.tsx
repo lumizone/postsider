@@ -27,7 +27,7 @@ const ALL_PLATFORMS: PlatformOption[] = [
   { id: "youtube", label: "YouTube", iconKey: "YouTube" },
   { id: "linkedin", label: "LinkedIn", iconKey: "LinkedIn" },
   { id: "linkedin-page", label: "LinkedIn Page", iconKey: "LinkedInPage" },
-  { id: "threads", label: "Threads", iconKey: "Threads" },
+  // Threads hidden pending positive Meta app review — do not remove backend integration.
   {
     id: "instagram-standalone",
     label: "Instagram Personal",
