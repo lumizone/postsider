@@ -85,6 +85,19 @@ export class NotificationService {
     await this.sendEmailsToOrg(orgId, subject, message, type);
   }
 
+  /** Email only the org's approvers (ADMIN/SUPERADMIN) — used when a new
+   * post lands in the approval queue so the right people get pinged. */
+  async notifyApprovers(orgId: string, subject: string, message: string) {
+    const userOrg = await this._organizationRepository.getAllUsersOrgs(orgId);
+    const approvers = (userOrg?.users || []).filter(
+      (u: any) => u.role === 'ADMIN' || u.role === 'SUPERADMIN'
+    );
+    for (const member of approvers) {
+      if (member?.user?.sendSuccessEmails === false) continue;
+      await this.sendEmail(member.user.email, subject, message);
+    }
+  }
+
   async sendEmailsToOrg(
     orgId: string,
     subject: string,

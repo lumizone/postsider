@@ -28,10 +28,14 @@ export async function fetchIntegrationAnalytics(
   integrationId: string,
   /** Number of days to look back: backend treats this as a stringified number. */
   daysBack: number,
+  /** Bypass the Redis cache and force a fresh fetch from the provider. */
+  forceRefresh = false,
 ): Promise<IntegrationAnalyticsResponse> {
+  const params: Record<string, string> = { date: String(daysBack) };
+  if (forceRefresh) params.refresh = 'true';
   return api.get<IntegrationAnalyticsResponse>(
     `/analytics/${integrationId}`,
-    { date: String(daysBack) },
+    params,
     { silent: true },
   );
 }

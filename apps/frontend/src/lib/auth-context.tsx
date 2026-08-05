@@ -17,6 +17,12 @@ import {
   setOrgId,
 } from "./api";
 
+export interface OrgSummary {
+  id: string;
+  name: string;
+  role: "SUPERADMIN" | "ADMIN" | "USER";
+}
+
 export interface SelfUser {
   id: string;
   email: string;
@@ -34,6 +40,8 @@ export interface SelfUser {
   trialDaysLeft: number | null;
   publicApi: string;
   isPlatformAi: boolean;
+  /** All organizations the user belongs to. Populated after first /user/self load. */
+  organizations?: OrgSummary[];
   // Other fields exist on the backend but aren't used here yet.
 }
 
@@ -43,6 +51,8 @@ interface AuthState {
   loading: boolean;
   refresh: () => Promise<void>;
   logout: () => Promise<void>;
+  /** Switch to a different organization. Resolves after the new org context is loaded. */
+  switchOrg: (orgId: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -62,6 +72,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       setUser(me);
       if (me?.orgId) setOrgId(me.orgId);
+
+      // Load the full org list for the switcher. Fire-and-forget — a failure
+      // here shouldn't block the auth flow, the user just won't see a switcher.
+      try {
+        const raw = await api.get<any[]>("/user/organizations", undefined, { silent: true });
+        if (Array.isArray(raw)) {
+          const orgs: OrgSummary[] = raw
+            .filter((o: any) => o?.id && o?.name)
+            .map((o: any) => ({
+              id: o.id,
+              name: o.name,
+              role: o.users?.[0]?.role || "USER",
+            }));
+          setUser((prev) => (prev ? { ...prev, organizations: orgs } : prev));
+        }
+      } catch {}
     } catch (err) {
       // 403 means "authenticated but lacking permission/plan" — clearing the
       // session there kicks a valid user off. Only 401 (expired/missing session)
@@ -79,6 +105,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const switchOrg = useCallback(async (orgId: string) => {
+    // Let the backend set the `showorg` cookie, then reload the full shell
+    // so every data hook (channels, calendar, analytics) re-fetches against
+    // the new organization. A soft refresh isn't enough — all server-state
+    // is scoped to the org that was selected when the page loaded.
+    await api.post("/user/change-org", { id: orgId }, { silent: true });
+    window.location.href = "/";
+  }, []);
+
   useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -94,8 +129,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [router]);
 
   const value = useMemo<AuthState>(
-    () => ({ user, loading, refresh, logout }),
-    [user, loading, refresh, logout],
+    () => ({ user, loading, refresh, logout, switchOrg }),
+    [user, loading, refresh, logout, switchOrg],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -107,4 +142,23 @@ export function useAuth(): AuthState {
     throw new Error("useAuth must be used within <AuthProvider>");
   }
   return ctx;
+}
+
+/**
+ * Convenience hook — only the current org id + role. Avoids destructuring
+ * `useAuth().user` in components that just need org context.
+ */
+export function useOrg(): {
+  orgId: string | null;
+  role: string;
+  organizations: OrgSummary[];
+  switchOrg: (orgId: string) => Promise<void>;
+} {
+  const { user, switchOrg } = useAuth();
+  return {
+    orgId: user?.orgId ?? null,
+    role: user?.role ?? "USER",
+    organizations: user?.organizations ?? [],
+    switchOrg,
+  };
 }

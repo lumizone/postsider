@@ -250,12 +250,12 @@ services:
       - cluster.routing.allocation.disk.watermark.high=256mb
       - cluster.routing.allocation.disk.watermark.flood_stage=128mb
       - discovery.type=single-node
-      - ES_JAVA_OPTS=-Xms256m -Xmx256m
+      - ES_JAVA_OPTS=-Xms256m -Xmx384m
       - xpack.security.enabled=false
     deploy:
       resources:
         limits:
-          memory: 640M
+          memory: 768M
         reservations:
           memory: 384M
     networks:

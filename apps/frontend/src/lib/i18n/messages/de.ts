@@ -672,6 +672,8 @@ const de = {
     scheduleDate: "Planungsdatum",
     scheduleTime: "Uhrzeit",
     saveDraft: "Entwurf speichern",
+    sendToApproval: "Zur Freigabe senden",
+    sending: "Sending for approval…",
     schedule: "Planen",
     publishNow: "Jetzt veröffentlichen",
     update: "Aktualisieren",
@@ -764,6 +766,9 @@ const de = {
     approveSchedule: "Freigeben & planen",
     reject: "Ablehnen",
     pendingReview: "Prüfung ausstehend",
+    showMore: "Show more",
+    showLess: "Show less",
+    scheduledFor: "Scheduled",
   },
   csvImport: {
     eyebrow: "Beiträge",

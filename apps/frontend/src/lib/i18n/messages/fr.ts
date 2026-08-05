@@ -672,6 +672,8 @@ const fr = {
     scheduleDate: "Date de planification",
     scheduleTime: "Heure",
     saveDraft: "Enregistrer le brouillon",
+    sendToApproval: "Envoyer pour approbation",
+    sending: "Sending for approval…",
     schedule: "Planifier",
     publishNow: "Publier maintenant",
     update: "Mettre à jour",
@@ -764,6 +766,9 @@ const fr = {
     approveSchedule: "Valider et planifier",
     reject: "Rejeter",
     pendingReview: "En attente de relecture",
+    showMore: "Show more",
+    showLess: "Show less",
+    scheduledFor: "Scheduled",
   },
   csvImport: {
     eyebrow: "Publications",

@@ -470,24 +470,89 @@ export class ThreadsProvider extends SocialAbstract implements SocialProvider {
     const until = dayjs().endOf('day').unix();
     const since = dayjs().subtract(date, 'day').unix();
 
-    const { data, ...all } = await (
-      await fetch(
-        `https://graph.threads.net/v1.0/${id}/threads_insights?metric=views,likes,replies,reposts,quotes&access_token=${accessToken}&period=day&since=${since}&until=${until}`
-      )
-    ).json();
+    const response = await this.fetch(
+      `https://graph.threads.net/v1.0/${id}/threads_insights?metric=views,likes,replies,reposts,quotes,clicks,followers_count&access_token=${accessToken}&since=${since}&until=${until}`
+    );
+    const { data: userData } = await response.json();
 
-    return (
-      data?.map((d: any) => ({
+    const result = (
+      userData?.map((d: any) => ({
         label: capitalize(d.name),
         percentageChange: 5,
         data: d.total_value
           ? [{ total: d.total_value.value, date: dayjs().format('YYYY-MM-DD') }]
-          : d.values.map((v: any) => ({
+          : d.values?.map((v: any) => ({
               total: v.value,
               date: dayjs(v.end_time).format('YYYY-MM-DD'),
-            })),
+            })) || [],
       })) || []
     );
+
+    // Meta may return all-zero data for accounts with <100 followers (per
+    // their docs: "User insights are not guaranteed to be available"). In that
+    // case, aggregate per-post insights from the user's recent threads so the
+    // analytics panel shows something meaningful.
+    const hasAnyData = result.some(
+      (s) => Array.isArray(s.data) && s.data.some((p: any) => Number(p.total) > 0)
+    );
+
+    if (!hasAnyData) {
+      try {
+        const threadsResponse = await this.fetch(
+          `https://graph.threads.net/v1.0/${id}/threads?fields=id,permalink&limit=20&since=${since}&until=${until}&access_token=${accessToken}`
+        );
+        const { data: threads } = (await threadsResponse.json()) as {
+          data?: Array<{ id: string }>;
+        };
+
+        if (threads?.length) {
+          const agg: Record<string, number> = {};
+          const today = dayjs().format('YYYY-MM-DD');
+
+          // Serial to stay well within rate limits; cap at 15 threads.
+          for (const thread of threads.slice(0, 15)) {
+            try {
+              const insightResp = await this.fetch(
+                `https://graph.threads.net/v1.0/${thread.id}/insights?metric=views,likes,replies,reposts,quotes&access_token=${accessToken}`
+              );
+              const { data: postMetrics } =
+                (await insightResp.json()) as {
+                  data?: Array<{
+                    name: string;
+                    total_value?: { value: number };
+                    values?: Array<{ value: number }>;
+                  }>;
+                };
+
+              for (const m of postMetrics || []) {
+                const v =
+                  m.total_value?.value ?? m.values?.[0]?.value ?? 0;
+                const label = capitalize(m.name);
+                agg[label] = (agg[label] || 0) + Number(v);
+              }
+            } catch {
+              // Skip individual post failures — one broken thread won't kill
+              // the whole panel.
+            }
+          }
+
+          if (Object.keys(agg).length > 0) {
+            return Object.entries(agg).map(([label, total]) => ({
+              label,
+              percentageChange: 0,
+              data: [{ total: String(total), date: today }],
+            }));
+          }
+        }
+      } catch (e) {
+        console.error(
+          '[threads analytics] post-level fallback failed, returning user-level data',
+          e
+        );
+      }
+    }
+
+    return result;
   }
 
   @Plug({
@@ -520,7 +585,7 @@ export class ThreadsProvider extends SocialAbstract implements SocialProvider {
     fields: { likesAmount: string; post: string }
   ) {
     const { data } = await (
-      await fetch(
+      await this.fetch(
         `https://graph.threads.net/v1.0/${id}/insights?metric=likes&access_token=${integration.token}`
       )
     ).json();

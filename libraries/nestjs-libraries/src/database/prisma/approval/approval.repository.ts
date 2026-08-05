@@ -27,6 +27,7 @@ export class ApprovalRepository {
   getById(orgId: string, id: string) {
     return this._approval.model.postApproval.findFirst({
       where: { id, organizationId: orgId },
+      include: { requestedBy: { select: { email: true, name: true } } },
     });
   }
 
@@ -57,7 +58,11 @@ export class ApprovalRepository {
             id: true,
             content: true,
             group: true,
-            integration: { select: { name: true, providerIdentifier: true } },
+            state: true,
+            image: true,
+            settings: true,
+            publishDate: true,
+            integration: { select: { id: true, name: true, providerIdentifier: true } },
           },
         },
         requestedBy: { select: { name: true, email: true } },

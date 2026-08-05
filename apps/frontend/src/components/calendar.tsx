@@ -34,6 +34,7 @@ import {
   changePostDate,
   type CreatePostInput,
 } from "@/lib/posts";
+import { requestApproval, getApprovalByPost } from "@/lib/approval-api";
 import {
   CreatePostModal,
   type NewPostInput,
@@ -173,6 +174,8 @@ export function Calendar({ year, month }: CalendarProps) {
   const [editPost, setEditPost] = useState<{
     group: string;
     initial: InitialPostValue;
+    approvalStatus?: "pending" | "approved" | "rejected" | "none";
+    rejectionNote?: string;
   } | null>(null);
   const [editLoading, setEditLoading] = useState(false);
 
@@ -488,6 +491,16 @@ export function Calendar({ year, month }: CalendarProps) {
     type: "draft" | "schedule" | "now" | "update",
     group?: string,
   ) => {
+    await submitPostReturning(post, type, group);
+  };
+
+  /** Like submitPost but returns the created posts (id + integration) so the
+   * caller can chain follow-up actions (e.g. submit each to approval). */
+  const submitPostReturning = async (
+    post: NewPostInput,
+    type: "draft" | "schedule" | "now" | "update",
+    group?: string,
+  ): Promise<Array<{ postId: string; integration: string }>> => {
     const isoDate = (() => {
       if (post.date && post.time) {
         const dt = new Date(`${post.date}T${post.time}:00`);
@@ -530,7 +543,7 @@ export function Calendar({ year, month }: CalendarProps) {
       ...(group ? { group } : {}),
     };
     try {
-      await createPost(input);
+      return await createPost(input);
     } catch (err) {
       console.error("[create-post]", err);
       throw err;
@@ -565,7 +578,27 @@ export function Calendar({ year, month }: CalendarProps) {
             ? { [channelId]: stripDiscriminator(detail.settings) }
             : {},
       };
-      setEditPost({ group: detail.group, initial });
+      // Fetch approval status for the post so the composer can show a
+      // rejection banner and offer a re-submit button.
+      let approvalStatus: "pending" | "approved" | "rejected" | "none" = "none";
+      let rejectionNote: string | undefined;
+      try {
+        const approval = await getApprovalByPost(ev.id);
+        if (approval?.status === "REJECTED") {
+          approvalStatus = "rejected";
+          rejectionNote = approval.note ?? undefined;
+        } else if (approval?.status === "PENDING") {
+          approvalStatus = "pending";
+        }
+      } catch {
+        // No approval record → not an approval-tracked post, fine.
+      }
+      setEditPost({
+        group: detail.group,
+        initial,
+        approvalStatus,
+        rejectionNote,
+      });
     } catch (err) {
       console.error("[edit-post]", err);
     } finally {
@@ -972,6 +1005,16 @@ export function Calendar({ year, month }: CalendarProps) {
             setComposer(null);
             void refreshEvents();
           }}
+          onSendToApproval={async (post) => {
+            // Create as a DRAFT, then submit each created post for approval.
+            // Approval itself needs the post to already be a draft.
+            const created = await submitPostReturning(post, "draft");
+            for (const c of created ?? []) {
+              await requestApproval(c.postId);
+            }
+            setComposer(null);
+            void refreshEvents();
+          }}
           onSchedule={async (post) => {
             await submitPost(post, "schedule");
             setComposer(null);
@@ -1003,11 +1046,26 @@ export function Calendar({ year, month }: CalendarProps) {
             setEditPost(null);
             void refreshEvents();
           }}
+          onSendToApproval={
+            editPost.approvalStatus === "rejected"
+              ? async (post) => {
+                  await submitPost(post, "update", editPost.group);
+                  // Re-submit: the post is already a draft, just re-request approval
+                  for (const c of (await submitPostReturning(post, "draft", editPost.group)) ?? []) {
+                    await requestApproval(c.postId);
+                  }
+                  setEditPost(null);
+                  void refreshEvents();
+                }
+              : undefined
+          }
           onDelete={async () => {
             const group = editPost.group;
             setEditPost(null);
             setConfirm({ kind: "post", group });
           }}
+          approvalStatus={editPost.approvalStatus}
+          rejectionNote={editPost.rejectionNote}
         />
       )}
 

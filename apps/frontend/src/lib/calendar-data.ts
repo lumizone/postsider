@@ -52,7 +52,7 @@ export const CHANNEL_COLOR_PALETTE: { value: string; label: string }[] = [
   { value: "#8B5CF6", label: "Violet" },
 ];
 
-export type PostStatus = "draft" | "scheduled" | "published" | "failed";
+export type PostStatus = "draft" | "scheduled" | "published" | "failed" | "pendingApproval";
 
 export interface CalendarEvent {
   id: string;
@@ -75,6 +75,8 @@ export interface CalendarEvent {
     engagements: number;
     clicks: number;
   };
+  /** Approval status — only set when the post has an active PostApproval row. */
+  approvalStatus?: "pending" | "approved" | "rejected";
 }
 
 function iso(d: Date): string {

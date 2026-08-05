@@ -79,6 +79,7 @@ export function Analytics() {
   const [data, setData] = useState<AnalyticsSeries[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
   // Auto-select first channel once they load.
   useEffect(() => {
@@ -105,7 +106,7 @@ export function Analytics() {
   // Re-fetch whenever the selected channel or range changes. The backend
   // shapes vary per provider, so we work loosely with whatever it returns
   // and surface friendly placeholders when something is missing.
-  useEffect(() => {
+  const fetchData = (force: boolean) => {
     if (!channel) {
       setData(null);
       return;
@@ -113,10 +114,11 @@ export function Analytics() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetchIntegrationAnalytics(channel.id, RANGE_DAYS[range])
+    fetchIntegrationAnalytics(channel.id, RANGE_DAYS[range], force)
       .then((res) => {
         if (cancelled) return;
         setData(Array.isArray(res) ? (res as AnalyticsSeries[]) : []);
+        setLastRefresh(new Date());
       })
       .catch((err) => {
         if (cancelled) return;
@@ -131,6 +133,11 @@ export function Analytics() {
     return () => {
       cancelled = true;
     };
+  };
+
+  useEffect(() => {
+    const cancel = fetchData(false);
+    return () => cancel?.();
   }, [channel, range]);
 
   const impressionsSeries = useMemo(
@@ -248,6 +255,19 @@ export function Analytics() {
           </div>
 
           <div className={styles.headerControls}>
+            <button
+              type="button"
+              className={styles.refreshBtn}
+              onClick={() => fetchData(true)}
+              disabled={loading}
+              title={
+                lastRefresh
+                  ? `Last refresh: ${lastRefresh.toLocaleTimeString()}`
+                  : "Force refresh (bypass cache)"
+              }
+            >
+              {loading ? "↻" : "↻"} Refresh
+            </button>
             <div className={styles.segmented} role="tablist" aria-label={t("analytics.range")}>
               {(Object.keys(RANGE_DAYS) as Range[]).map((r) => (
                 <button

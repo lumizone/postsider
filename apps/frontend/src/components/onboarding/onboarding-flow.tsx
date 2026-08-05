@@ -28,7 +28,6 @@ const PLATFORMS = [
   { id: "instagram", name: "Instagram", icon: "/platforms/instagram.png" },
   { id: "tiktok", name: "TikTok", icon: "/platforms/tiktok.png" },
   { id: "youtube", name: "YouTube", icon: "/platforms/youtube.png" },
-  { id: "threads", name: "Threads", icon: "/platforms/threads.png" },
   { id: "bluesky", name: "Bluesky", icon: "/platforms/bluesky.png" },
   { id: "pinterest", name: "Pinterest", icon: "/platforms/pinterest.png" },
   { id: "telegram", name: "Telegram", icon: "/platforms/telegram.png" },

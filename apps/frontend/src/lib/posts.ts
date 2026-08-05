@@ -34,7 +34,7 @@ export async function uploadMedia(
   return { id: res.id, path: res.path };
 }
 
-export type BackendPostState = "QUEUE" | "PUBLISHED" | "ERROR" | "DRAFT";
+export type BackendPostState = "QUEUE" | "PUBLISHED" | "ERROR" | "DRAFT" | "APPROVAL";
 
 export interface BackendPost {
   id: string;
@@ -137,7 +137,9 @@ export interface CreatePostInput {
   group?: string;
 }
 
-export async function createPost(input: CreatePostInput): Promise<unknown> {
+export async function createPost(
+  input: CreatePostInput,
+): Promise<Array<{ postId: string; integration: string }>> {
   const group = input.group || "";
   const posts = input.channelIds.map((cid) => {
     const main = input.perChannelBody[cid] ?? input.body;
@@ -170,7 +172,7 @@ export async function createPost(input: CreatePostInput): Promise<unknown> {
     };
   });
 
-  return api.post("/posts", {
+  return api.post<Array<{ postId: string; integration: string }>>("/posts", {
     type: input.type,
     date: input.date,
     shortLink: input.shortLink ?? false,

@@ -672,6 +672,8 @@ const ko = {
     scheduleDate: "예약 날짜",
     scheduleTime: "시간",
     saveDraft: "초안 저장",
+    sendToApproval: "승인 요청",
+    sending: "Sending for approval…",
     schedule: "예약",
     publishNow: "지금 게시",
     update: "업데이트",
@@ -764,6 +766,9 @@ const ko = {
     approveSchedule: "승인 후 예약",
     reject: "거부",
     pendingReview: "검토 대기 중",
+    showMore: "Show more",
+    showLess: "Show less",
+    scheduledFor: "Scheduled",
   },
   csvImport: {
     eyebrow: "게시물",

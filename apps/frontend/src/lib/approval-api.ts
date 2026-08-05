@@ -12,7 +12,15 @@ export interface PendingApproval {
     id: string;
     content: string;
     group: string;
-    integration?: { name: string; providerIdentifier: string };
+    state?: string;
+    image?: string;             // JSON-stringified media array
+    settings?: string;          // JSON-stringified provider settings
+    publishDate?: string;
+    integration?: {
+      id?: string;
+      name: string;
+      providerIdentifier: string;
+    };
   };
   requestedBy?: { name: string | null; email: string };
 }
@@ -27,3 +35,8 @@ export const approvePost = (id: string) => api.put(`/approval/${id}/approve`);
 
 export const rejectPost = (id: string, note?: string) =>
   api.put(`/approval/${id}/reject`, { note });
+
+export const getApprovalByPost = (postId: string) =>
+  api.get<{ status: string; note?: string | null; requestedAt?: string }>(
+    `/approval/post/${postId}`,
+  );

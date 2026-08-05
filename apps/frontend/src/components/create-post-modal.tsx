@@ -47,6 +47,11 @@ interface CreatePostModalProps {
   onSchedule: (post: NewPostInput) => void;
   /** Publish immediately. When provided, a "Publish now" button is shown. */
   onPublishNow?: (post: NewPostInput) => void;
+  /**
+   * Save as a DRAFT and submit it for approval (admin/approver then approves
+   * or rejects before it reaches the queue). Only shown when provided.
+   */
+  onSendToApproval?: (post: NewPostInput) => void;
   /** Delete the post. When provided (edit mode), a "Delete" button is shown. */
   onDelete?: () => void;
   /**
@@ -54,6 +59,13 @@ interface CreatePostModalProps {
    * the primary action updates the existing post instead of creating one.
    */
   initialValue?: InitialPostValue;
+  /**
+   * Approval status of the post being edited. When "rejected", the modal shows
+   * a banner and the "Send to Approval" button for re-submission.
+   */
+  approvalStatus?: "pending" | "approved" | "rejected" | "none";
+  /** The rejection note to display when the post was previously rejected. */
+  rejectionNote?: string;
 }
 
 /** Prefill data for opening the modal in edit mode. */
@@ -289,8 +301,11 @@ export function CreatePostModal({
   onSaveDraft,
   onSchedule,
   onPublishNow,
+  onSendToApproval,
   onDelete,
   initialValue,
+  approvalStatus,
+  rejectionNote,
 }: CreatePostModalProps) {
   const t = useT();
   const isEdit = !!initialValue;
@@ -343,7 +358,7 @@ export function CreatePostModal({
 
   // Submit lifecycle: which action is in-flight, and any error to surface.
   const [submitting, setSubmitting] = useState<
-    null | "draft" | "schedule" | "now"
+    null | "draft" | "schedule" | "now" | "approval"
   >(null);
   // System / backend error (e.g. validation rejected server-side, network).
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -855,7 +870,7 @@ export function CreatePostModal({
   // friendly banner instead of an unhandled rejection.
   const runSubmit = useCallback(
     async (
-      kind: "draft" | "schedule" | "now",
+      kind: "draft" | "schedule" | "now" | "approval",
       handler?: (post: NewPostInput) => void | Promise<void>,
     ) => {
       if (!handler) return;
@@ -976,6 +991,51 @@ export function CreatePostModal({
           className={`${styles.body} ${showChecker || showSnippets || showRewrite ? styles.bodyWithChecker : ""}`}
         >
           <section className={styles.editor}>
+            {approvalStatus === "rejected" && (
+              <div
+                role="alert"
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 8,
+                  background: "rgba(220,38,38,0.06)",
+                  border: "1px solid rgba(220,38,38,0.2)",
+                  color: "#DC2626",
+                  fontSize: 13,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                  marginBottom: 12,
+                }}
+              >
+                <span style={{ fontWeight: 600 }}>
+                  {t("createPost.rejectedTitle")}
+                </span>
+                <span style={{ opacity: 0.85 }}>
+                  {rejectionNote
+                    ? t("createPost.rejectedWithNote", { note: rejectionNote })
+                    : t("createPost.rejectedNoNote")}
+                </span>
+                <span style={{ opacity: 0.7 }}>
+                  {t("createPost.editAndResubmit")}
+                </span>
+              </div>
+            )}
+            {approvalStatus === "pending" && (
+              <div
+                role="status"
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 8,
+                  background: "rgba(245,158,11,0.06)",
+                  border: "1px solid rgba(245,158,11,0.25)",
+                  color: "#D97706",
+                  fontSize: 13,
+                  marginBottom: 12,
+                }}
+              >
+                {t("createPost.pendingApprovalBanner")}
+              </div>
+            )}
             {submitError && (
               <div className={styles.submitError} role="alert">
                 <span className={styles.submitErrorIcon} aria-hidden>
@@ -1360,6 +1420,18 @@ export function CreatePostModal({
                 {submitting === "draft"
                   ? t("createPost.saving")
                   : t("createPost.saveDraft")}
+              </button>
+            )}
+            {!isEdit && onSendToApproval && (
+              <button
+                type="button"
+                className={styles.btnSecondary}
+                disabled={submitting !== null}
+                onClick={() => runSubmit("approval", onSendToApproval)}
+              >
+                {submitting === "approval"
+                  ? t("createPost.sending")
+                  : t("createPost.sendToApproval")}
               </button>
             )}
             {onPublishNow && (

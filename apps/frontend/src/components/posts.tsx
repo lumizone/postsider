@@ -21,6 +21,7 @@ type StatusFilter = "all" | PostStatus;
 
 const STATUS_LABEL_KEYS: Record<PostStatus, string> = {
   draft: "posts.status.draft",
+  pendingApproval: "posts.status.pendingApproval",
   scheduled: "posts.status.scheduled",
   published: "posts.status.published",
   failed: "posts.status.error",
@@ -217,6 +218,7 @@ export function Posts() {
     const c: Record<StatusFilter, number> = {
       all: allWithStatus.length,
       draft: 0,
+      pendingApproval: 0,
       scheduled: 0,
       published: 0,
       failed: 0,
@@ -229,9 +231,10 @@ export function Posts() {
     const q = query.trim().toLowerCase();
     const STATUS_ORDER: Record<PostStatus, number> = {
       failed: 0,
-      scheduled: 1,
-      draft: 2,
-      published: 3,
+      pendingApproval: 1,
+      scheduled: 2,
+      draft: 3,
+      published: 4,
     };
     return allWithStatus
       .filter(({ status }) => filter === "all" || status === filter)
@@ -326,7 +329,7 @@ export function Posts() {
 
       <div className={styles.filters}>
         <div className={styles.tabs} role="tablist" aria-label={t("posts.statusFilter")}>
-          {(["all", "scheduled", "draft", "published", "failed"] as StatusFilter[]).map(
+          {(["all", "scheduled", "draft", "published", "failed", "pendingApproval"] as StatusFilter[]).map(
             (f) => (
               <button
                 key={f}

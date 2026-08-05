@@ -20,10 +20,21 @@ export class ApprovalService {
     const post = await this._repo.getPost(orgId, postId);
     assertRequestable(post);
     const approval = await this._repo.upsertRequest(orgId, postId, requestedById);
+    // Distinguish pending-approval posts from plain drafts in the calendar and
+    // filters. The State.APPROVAL enum was unused before — now it means "draft
+    // that is waiting for approval" so calendars and lists can surface them.
+    await this._posts.setPostState(orgId, postId, 'APPROVAL' as any);
+    // In-app notification for everyone in the org (badge/dropdown) + email to
+    // the org's approvers so a pending review doesn't sit unseen.
     await this._notifications.inAppNotification(
       orgId,
       'Approval requested',
       'A post has been submitted for approval.'
+    );
+    await this._notifications.notifyApprovers(
+      orgId,
+      'New post awaiting approval',
+      'A post has been submitted for approval and is waiting in the approval queue.'
     );
     return approval;
   }
@@ -61,6 +72,18 @@ export class ApprovalService {
       'Post approved',
       'A post was approved and scheduled.'
     );
+    // Also email the original requester so they know the post moved to the queue
+    // without having to check the app.
+    const requesterEmail = (approval as any)?.requestedBy?.email;
+    if (requesterEmail) {
+      try {
+        await this._notifications.sendEmail(
+          requesterEmail,
+          'Post approved',
+          'Your post has been approved and is now scheduled for publishing.'
+        );
+      } catch {} // non-critical
+    }
     return { approved: true, postId: approval!.postId };
   }
 
@@ -83,12 +106,27 @@ export class ApprovalService {
     if (!count) {
       throw new BadRequestException('This approval has already been resolved');
     }
-    // The post stays a DRAFT so the author can edit and resubmit.
+    // Reset post state to DRAFT so the author can edit and resubmit.
+    // (State.APPROVAL was set in requestApproval — rejection restores it.)
+    await this._posts.setPostState(orgId, approval!.postId, 'DRAFT' as any);
     await this._notifications.inAppNotification(
       orgId,
       'Post rejected',
       note ? `A post was rejected: ${note}` : 'A post was rejected.'
     );
+    // Email the original requester about the rejection + feedback.
+    const requesterEmail = (approval as any)?.requestedBy?.email;
+    if (requesterEmail) {
+      try {
+        await this._notifications.sendEmail(
+          requesterEmail,
+          'Post rejected',
+          note
+            ? `Your post was rejected with feedback: "${note}". You can edit and resubmit it.`
+            : 'Your post was rejected. You can edit and resubmit it.'
+        );
+      } catch {} // non-critical
+    }
     return { rejected: true, postId: approval!.postId };
   }
 }
