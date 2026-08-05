@@ -7,14 +7,45 @@ import {
 } from './approval.rules';
 import { PostsService } from '@postsider/nestjs-libraries/database/prisma/posts/posts.service';
 import { NotificationService } from '@postsider/nestjs-libraries/database/prisma/notifications/notification.service';
+import { OrganizationRepository } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.repository';
 
 @Injectable()
 export class ApprovalService {
   constructor(
     private _repo: ApprovalRepository,
     private _posts: PostsService,
-    private _notifications: NotificationService
+    private _notifications: NotificationService,
+    private _organizations: OrganizationRepository
   ) {}
+
+  /**
+   * Public-API entry point (agency content-gen pipelines, n8n, etc.): no
+   * session user exists to attribute the request to, so it's attributed to
+   * the org's own SUPERADMIN (falling back to any ADMIN, then any member) —
+   * "the org itself, via API" rather than a specific human.
+   */
+  async requestApprovalFromApi(orgId: string, postId: string) {
+    const requestedById = await this.resolveApiRequester(orgId);
+    return this.requestApproval(orgId, postId, requestedById);
+  }
+
+  private async resolveApiRequester(orgId: string): Promise<string> {
+    const org = await this._organizations.getAllUsersOrgs(orgId);
+    const users = (org?.users || []) as Array<{
+      role: string;
+      user: { id: string };
+    }>;
+    const chosen =
+      users.find((u) => u.role === 'SUPERADMIN') ||
+      users.find((u) => u.role === 'ADMIN') ||
+      users[0];
+    if (!chosen) {
+      throw new BadRequestException(
+        'Organization has no users to attribute this approval request to'
+      );
+    }
+    return chosen.user.id;
+  }
 
   async requestApproval(orgId: string, postId: string, requestedById: string) {
     const post = await this._repo.getPost(orgId, postId);
