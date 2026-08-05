@@ -106,7 +106,9 @@ export class MediaService {
     filePath: string,
     originalName?: string,
     type: 'image' | 'video' | 'audio' = 'image',
-    fileSize?: number
+    fileSize?: number,
+    width?: number,
+    height?: number
   ) {
     return this._mediaRepository.saveFile(
       org,
@@ -114,7 +116,9 @@ export class MediaService {
       filePath,
       originalName,
       type,
-      fileSize
+      fileSize,
+      width,
+      height
     );
   }
 

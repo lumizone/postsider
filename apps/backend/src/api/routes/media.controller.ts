@@ -14,6 +14,7 @@ import {
   UsePipes,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import sharp from 'sharp';
 import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
 import { GetUserFromRequest } from '@postsider/nestjs-libraries/user/user.from.request';
 import { Organization, User } from '@prisma/client';
@@ -36,6 +37,24 @@ export class MediaController {
     private _mediaService: MediaService,
     private _subscriptionService: SubscriptionService
   ) {}
+
+  /**
+   * Reads pixel dimensions from an in-memory upload buffer (multer's default
+   * MemoryStorage — no disk round-trip). Images only; returns undefined for
+   * anything else or on a decode failure, so a corrupt/unsupported file never
+   * blocks the upload itself.
+   */
+  private async probeImageDimensions(
+    file: Express.Multer.File
+  ): Promise<{ width?: number; height?: number }> {
+    if (!file?.mimetype?.startsWith('image/') || !file.buffer) return {};
+    try {
+      const { width, height } = await sharp(file.buffer).metadata();
+      return { width, height };
+    } catch {
+      return {};
+    }
+  }
 
   @Delete('/:id')
   deleteMedia(@GetOrgFromRequest() org: Organization, @Param('id') id: string) {
@@ -79,13 +98,16 @@ export class MediaController {
   ) {
     const originalName = file?.originalname || '';
     const uploadedFile = await this.storage.uploadFile(file);
+    const { width, height } = await this.probeImageDimensions(file);
     return this._mediaService.saveFile(
       org.id,
       uploadedFile.originalname,
       uploadedFile.path,
       originalName,
       uploadedFile.kind,
-      file?.size
+      file?.size,
+      width,
+      height
     );
   }
 
@@ -131,13 +153,16 @@ export class MediaController {
       return { path };
     }
 
+    const { width, height } = await this.probeImageDimensions(file);
     return this._mediaService.saveFile(
       org.id,
       getFile.originalname,
       getFile.path,
       originalName,
       getFile.kind,
-      file.size
+      file.size,
+      width,
+      height
     );
   }
 

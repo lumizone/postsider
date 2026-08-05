@@ -11,6 +11,8 @@ export interface BackendMedia {
   type: "image" | "video" | "audio";
   thumbnailTimestamp?: number | null;
   fileSize?: number;
+  width?: number | null;
+  height?: number | null;
   createdAt: string;
 }
 
@@ -38,6 +40,8 @@ export function backendMediaToItem(m: BackendMedia): MediaItem {
     name: m.originalName || m.name,
     kind,
     size: m.fileSize ?? 0,
+    width: m.width ?? undefined,
+    height: m.height ?? undefined,
     uploadedAt: m.createdAt,
     channelId: null,
   };

@@ -227,6 +227,8 @@ model Media {
   deletedAt          DateTime?
   fileSize           Int                 @default(0)
   type               String              @default("image")
+  width              Int?
+  height             Int?
   thumbnail          String?
   alt                String?
   thumbnailTimestamp Int?
