@@ -35,6 +35,8 @@ export default function CsvImportPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<CsvImportResult[] | null>(null);
+  const [asDraft, setAsDraft] = useState(false);
+  const [importedAsDraft, setImportedAsDraft] = useState(false);
 
   const pick = (f: File | null | undefined) => {
     if (!f) return;
@@ -52,7 +54,8 @@ export default function CsvImportPage() {
     setBusy(true);
     setError(null);
     try {
-      setResults(await uploadCsv(file));
+      setResults(await uploadCsv(file, asDraft));
+      setImportedAsDraft(asDraft);
     } catch (e) {
       setError(e instanceof Error ? e.message : t("csvImport.importFailed"));
     } finally {
@@ -102,6 +105,15 @@ export default function CsvImportPage() {
         <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>{file ? `${(file.size / 1024).toFixed(1)} KB` : t("csvImport.maxSize")}</div>
       </div>
 
+      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+        <input
+          type="checkbox"
+          checked={asDraft}
+          onChange={(e) => setAsDraft(e.target.checked)}
+        />
+        {t("csvImport.asDraft")}
+      </label>
+
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <button type="button" style={{ ...primaryBtn, opacity: file && !busy ? 1 : 0.5, cursor: file && !busy ? "pointer" : "default" }} onClick={onImport} disabled={!file || busy}>
           {busy ? t("csvImport.importing") : t("csvImport.importBtn")}
@@ -137,7 +149,7 @@ export default function CsvImportPage() {
             {results.map((r) => (
               <div key={r.row} style={{ display: "grid", gridTemplateColumns: "56px 1fr 1.4fr", gap: 8, padding: "10px 12px", borderBottom: "1px solid rgba(0,0,0,0.05)", fontSize: 13, alignItems: "center" }}>
                 <span style={{ color: "var(--muted)" }}>{r.row}</span>
-                <span style={{ fontWeight: 600, color: r.ok ? "#15803d" : "#DC2626" }}>{r.ok ? t("csvImport.statusScheduled") : t("csvImport.statusError")}</span>
+                <span style={{ fontWeight: 600, color: r.ok ? "#15803d" : "#DC2626" }}>{r.ok ? (importedAsDraft ? t("csvImport.statusDraft") : t("csvImport.statusScheduled")) : t("csvImport.statusError")}</span>
                 <span style={{ color: "var(--muted)" }}>{r.ok ? `${r.channels ?? ""}${r.scheduledFor ? ` · ${r.scheduledFor.replace("T", " ")}` : ""}` : r.error}</span>
               </div>
             ))}

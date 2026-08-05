@@ -802,7 +802,9 @@ settingsStorage: {
     statusHeader: "Status",
     detailHeader: "Detail",
     statusScheduled: "Scheduled",
+    statusDraft: "Draft",
     statusError: "Error",
+    asDraft: "Import as drafts (send through approval instead of scheduling directly)",
   },
   evergreen: {
     title: "Evergreen",

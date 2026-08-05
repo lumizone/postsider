@@ -26,7 +26,11 @@ export class CsvImportService {
     private _integrations: IntegrationService
   ) {}
 
-  async importCSV(orgId: string, buffer: Buffer): Promise<CsvImportResult[]> {
+  async importCSV(
+    orgId: string,
+    buffer: Buffer,
+    asDraft = false
+  ): Promise<CsvImportResult[]> {
     const rows = parseCSV(buffer.toString('utf-8'));
     const { headers, records } = rowsToRecords(rows);
 
@@ -108,7 +112,9 @@ export class CsvImportService {
         ];
 
         const dto: any = {
-          type: 'schedule',
+          // Opt-in: land as DRAFT so the batch can go through the (still
+          // fully optional) approval flow instead of publishing unreviewed.
+          type: asDraft ? 'draft' : 'schedule',
           shortLink: false,
           date,
           tags: [],

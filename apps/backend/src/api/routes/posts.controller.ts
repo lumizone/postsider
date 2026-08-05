@@ -245,7 +245,11 @@ export class PostsController {
       mimetype?: string;
       size?: number;
       buffer?: Buffer;
-    }
+    },
+    // Opt-in: import as DRAFT instead of straight to QUEUE, so a batch can go
+    // through the (still fully optional) approval flow instead of publishing
+    // unreviewed. Off by default — unchanged behavior for existing callers.
+    @Body('asDraft') asDraft?: string
   ) {
     if (!file?.buffer) {
       throw new BadRequestException('No file uploaded.');
@@ -260,7 +264,7 @@ export class PostsController {
     if ((file.size ?? 0) > 2 * 1024 * 1024) {
       throw new BadRequestException('CSV exceeds the 2 MB limit.');
     }
-    return this._csvImport.importCSV(org.id, file.buffer);
+    return this._csvImport.importCSV(org.id, file.buffer, asDraft === 'true');
   }
 
   @Get('/comment-providers')

@@ -293,6 +293,28 @@ export class PublicIntegrationsController {
     return this._approvalService.requestApprovalFromApi(org.id, id);
   }
 
+  // Read-side counterpart to request-approval: lets a pipeline that pushed a
+  // post into the approval queue poll for the outcome (state alone, from
+  // GET /posts, can't distinguish "rejected" from "never submitted", and
+  // never carries the reviewer's note).
+  @Get('/posts/:id/approval')
+  async getApprovalStatus(
+    @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string
+  ) {
+    Sentry.metrics.count('public_api-request', 1);
+    const approval = await this._approvalService.getForPost(org.id, id);
+    if (!approval) {
+      return { status: 'NONE' as const };
+    }
+    return {
+      status: approval.status,
+      note: approval.note,
+      requestedAt: approval.requestedAt,
+      resolvedAt: approval.resolvedAt,
+    };
+  }
+
   @Get('/is-connected')
   async getActiveIntegrations(@GetOrgFromRequest() org: Organization) {
     Sentry.metrics.count('public_api-request', 1);
