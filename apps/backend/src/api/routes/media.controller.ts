@@ -84,7 +84,8 @@ export class MediaController {
       uploadedFile.originalname,
       uploadedFile.path,
       originalName,
-      uploadedFile.kind
+      uploadedFile.kind,
+      file?.size
     );
   }
 
@@ -135,7 +136,8 @@ export class MediaController {
       getFile.originalname,
       getFile.path,
       originalName,
-      getFile.kind
+      getFile.kind,
+      file.size
     );
   }
 

@@ -105,14 +105,16 @@ export class MediaService {
     fileName: string,
     filePath: string,
     originalName?: string,
-    type: 'image' | 'video' | 'audio' = 'image'
+    type: 'image' | 'video' | 'audio' = 'image',
+    fileSize?: number
   ) {
     return this._mediaRepository.saveFile(
       org,
       fileName,
       filePath,
       originalName,
-      type
+      type,
+      fileSize
     );
   }
 

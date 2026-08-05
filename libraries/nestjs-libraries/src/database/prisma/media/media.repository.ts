@@ -52,7 +52,8 @@ export class MediaRepository {
     fileName: string,
     filePath: string,
     originalName?: string,
-    type: 'image' | 'video' | 'audio' = 'image'
+    type: 'image' | 'video' | 'audio' = 'image',
+    fileSize?: number
   ) {
     return this._media.model.media.create({
       data: {
@@ -65,6 +66,7 @@ export class MediaRepository {
         path: filePath,
         originalName: originalName || null,
         type,
+        fileSize: fileSize ?? 0,
       },
       select: {
         id: true,
@@ -74,6 +76,7 @@ export class MediaRepository {
         thumbnail: true,
         alt: true,
         type: true,
+        fileSize: true,
       },
     });
   }
@@ -160,6 +163,9 @@ export class MediaRepository {
         thumbnail: true,
         alt: true,
         thumbnailTimestamp: true,
+        fileSize: true,
+        type: true,
+        createdAt: true,
       },
       skip: pageNum * 18,
       take: 18,
