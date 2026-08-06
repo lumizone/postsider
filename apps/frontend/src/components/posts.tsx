@@ -14,7 +14,7 @@ import { fetchPostsList, duplicatePost, type BackendPost } from "@/lib/posts";
 import { backendPostToEvent } from "@/lib/use-calendar-data";
 import { EmptyState } from "./empty-state";
 import { useI18n, useT } from "@/lib/i18n";
-import { toggleEvergreen, listEvergreen } from "@/lib/evergreen-api";
+import { toggleEvergreen, listEvergreen, getEvergreenSettings } from "@/lib/evergreen-api";
 import { requestApproval } from "@/lib/approval-api";
 import { PostDetailDrawer } from "./post-detail-drawer";
 
@@ -147,6 +147,7 @@ export function Posts() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [evergreenGroups, setEvergreenGroups] = useState<Set<string>>(new Set());
+  const [evergreenOrgEnabled, setEvergreenOrgEnabled] = useState(true);
   const [detailPost, setDetailPost] = useState<{ id: string; status: PostStatus } | null>(null);
 
   // Load which post groups are evergreen so each row's toggle shows the real state.
@@ -155,6 +156,22 @@ export function Posts() {
     listEvergreen()
       .then((rows) => {
         if (!cancelled) setEvergreenGroups(new Set(rows.map((r) => r.group)));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Marking a post evergreen does nothing unless the org-level switch
+  // (Settings -> Evergreen) is also on — surfaced as a toast on toggle
+  // below instead of leaving that discoverable only after a month of
+  // silence.
+  useEffect(() => {
+    let cancelled = false;
+    getEvergreenSettings()
+      .then((s) => {
+        if (!cancelled) setEvergreenOrgEnabled(s.enabled);
       })
       .catch(() => undefined);
     return () => {
@@ -398,6 +415,8 @@ export function Posts() {
               onRequestApproval={() => void handleRequestApproval(ev.id)}
               onViewDetails={() => setDetailPost({ id: ev.id, status })}
               initialEvergreen={evergreenGroups.has(ev.group)}
+              evergreenOrgEnabled={evergreenOrgEnabled}
+              onEvergreenOrgDisabledWarning={() => setToast(t("evergreen.orgDisabledWarning"))}
             />
           ))}
         </div>
@@ -423,9 +442,11 @@ interface PostRowProps {
   onRequestApproval: () => void;
   onViewDetails: () => void;
   initialEvergreen?: boolean;
+  evergreenOrgEnabled?: boolean;
+  onEvergreenOrgDisabledWarning?: () => void;
 }
 
-function PostRow({ ev, status, channel, onDuplicate, onDuplicateTo, onRequestApproval, onViewDetails, initialEvergreen }: PostRowProps) {
+function PostRow({ ev, status, channel, onDuplicate, onDuplicateTo, onRequestApproval, onViewDetails, initialEvergreen, evergreenOrgEnabled, onEvergreenOrgDisabledWarning }: PostRowProps) {
   const date = parseDate(ev.date);
   const [menuOpen, setMenuOpen] = useState(false);
   const [evergreenOn, setEvergreenOn] = useState<boolean>(initialEvergreen ?? false);
@@ -440,6 +461,7 @@ function PostRow({ ev, status, channel, onDuplicate, onDuplicateTo, onRequestApp
     const next = !evergreenOn;
     setEvergreenOn(next); // optimistic
     void toggleEvergreen(ev.group, next).catch(() => setEvergreenOn(!next));
+    if (next && evergreenOrgEnabled === false) onEvergreenOrgDisabledWarning?.();
   };
 
   const statusClass = `statusPill${status[0].toUpperCase()}${status.slice(1)}`;

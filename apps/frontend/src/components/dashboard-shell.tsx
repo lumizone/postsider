@@ -719,6 +719,9 @@ function OrgSwitcher() {
                     background: "var(--bg)", color: "var(--fg)", fontSize: 13,
                   }}
                 />
+                <span style={{ fontSize: 11, opacity: 0.6, lineHeight: 1.4 }}>
+                  {t("orgSwitcher.newOrgHint")}
+                </span>
                 {createError && (
                   <span style={{ fontSize: 11, color: "#DC2626" }}>{createError}</span>
                 )}

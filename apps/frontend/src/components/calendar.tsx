@@ -12,6 +12,7 @@ import { FarcasterConnectModal } from "./farcaster-connect-modal";
 import { DayPopup } from "./day-popup";
 import { ConfirmDialog } from "./confirm-dialog";
 import { EmptyState } from "./empty-state";
+import { SetupChecklist } from "./setup-checklist";
 import { useI18n, useT } from "@/lib/i18n";
 import {
   type CalendarEvent,
@@ -184,6 +185,7 @@ export function Calendar({ year, month }: CalendarProps) {
 
   const {
     channels,
+    raw: rawChannels,
     setChannels,
     loading: channelsLoading,
     error: channelsError,
@@ -221,6 +223,17 @@ export function Calendar({ year, month }: CalendarProps) {
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [openChannelId, setOpenChannelId] = useState<string | null>(null);
   const [addChannelOpen, setAddChannelOpen] = useState(false);
+  // Onboarding hands off here with ?connect=1 rather than reimplementing the
+  // per-provider connect branching. Strip the param once consumed so a later
+  // refresh or back-navigation doesn't reopen the picker.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("connect") !== "1") return;
+    setAddChannelOpen(true);
+    url.searchParams.delete("connect");
+    window.history.replaceState({}, "", url.pathname + url.search);
+  }, []);
   const [customFieldsState, setCustomFieldsState] = useState<{
     provider: string;
     label: string;
@@ -785,6 +798,15 @@ export function Calendar({ year, month }: CalendarProps) {
             </button>
           </div>
         )}
+        {!isMember && (
+          <SetupChecklist
+            channels={channels}
+            raw={rawChannels}
+            loading={channelsLoading}
+            onConnect={() => setAddChannelOpen(true)}
+          />
+        )}
+
         <div className={styles.header}>
           <div className={styles.title}>
             <span className={styles.titleMain}>{headerTitle}</span>
