@@ -40,3 +40,9 @@ export const getApprovalByPost = (postId: string) =>
   api.get<{ status: string; note?: string | null; requestedAt?: string }>(
     `/approval/post/${postId}`,
   );
+
+export const createGuestLink = (id: string) =>
+  api.post<{ token: string; expiresAt: string }>(`/approval/${id}/guest-link`);
+
+export const revokeGuestLink = (id: string) =>
+  api.del(`/approval/${id}/guest-link`);
