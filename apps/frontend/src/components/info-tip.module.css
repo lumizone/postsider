@@ -46,7 +46,20 @@
   line-height: 1.45;
   text-align: left;
   white-space: normal;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  /* Matches the popover treatment used by the post row menu and the modals. */
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  /*
+   * Opacity only, deliberately. The shared scaleIn keyframes animate
+   * `transform`, which would clobber the translateX(-50%) that centres this
+   * bubble on desktop (and the media query below drops that transform on
+   * narrow screens, so a single keyframe set cannot serve both).
+   */
+  animation: fadeIn 120ms var(--ease);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /*

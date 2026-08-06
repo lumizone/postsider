@@ -5,13 +5,8 @@
   padding: 14px 16px;
   margin-bottom: 18px;
   border: 1px solid var(--line-soft);
-  border-radius: var(--radius-md);
-  background: rgba(0, 0, 0, 0.02);
-}
-
-:global(:root[data-theme="dark"]) .card,
-:global(.dark) .card {
-  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-lg);
+  background: var(--hover);
 }
 
 .text {
