@@ -676,6 +676,8 @@ settingsStorage: {
     scheduleTime: "Time",
     saveDraft: "Save draft",
     sendToApproval: "Send for approval",
+    moveMediaUp: "Move up",
+    moveMediaDown: "Move down",
     sending: "Sending for approval…",
     discardChangesConfirm: "Discard your changes? This can't be undone.",
     restoreDraftConfirm: "Restore your unsaved draft from last time?",

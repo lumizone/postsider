@@ -788,6 +788,19 @@ export function CreatePostModal({
     });
   };
 
+  // Carousel order matters on Instagram/LinkedIn/X — swapping images used to
+  // require delete-and-re-add, which silently put the re-added image LAST.
+  const moveMedia = (id: string, direction: -1 | 1) => {
+    setMedia((prev) => {
+      const idx = prev.findIndex((m) => m.id === id);
+      const swapWith = idx + direction;
+      if (idx === -1 || swapWith < 0 || swapWith >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[swapWith]] = [next[swapWith], next[idx]];
+      return next;
+    });
+  };
+
   const addThreadPart = () => setThreadParts((prev) => [...prev, ""]);
   const updateThreadPart = (i: number, value: string) =>
     setThreadParts((prev) => prev.map((p, idx) => (idx === i ? value : p)));
@@ -1295,7 +1308,7 @@ export function CreatePostModal({
 
             {media.length > 0 && (
               <div className={styles.mediaList}>
-                {media.map((m) => (
+                {media.map((m, i) => (
                   <div key={m.id} className={styles.mediaItem}>
                     {m.kind === "image" ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -1318,6 +1331,30 @@ export function CreatePostModal({
                         {m.kind === "image" ? "Image" : "Video"} · {formatBytes(m.size)}
                       </span>
                     </div>
+                    {media.length > 1 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                        <button
+                          type="button"
+                          className={styles.mediaRemove}
+                          onClick={() => moveMedia(m.id, -1)}
+                          disabled={i === 0}
+                          aria-label={t("createPost.moveMediaUp")}
+                          style={{ opacity: i === 0 ? 0.3 : 1 }}
+                        >
+                          ▲
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.mediaRemove}
+                          onClick={() => moveMedia(m.id, 1)}
+                          disabled={i === media.length - 1}
+                          aria-label={t("createPost.moveMediaDown")}
+                          style={{ opacity: i === media.length - 1 ? 0.3 : 1 }}
+                        >
+                          ▼
+                        </button>
+                      </div>
+                    )}
                     <button
                       type="button"
                       className={styles.mediaRemove}
