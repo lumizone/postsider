@@ -677,6 +677,8 @@ settingsStorage: {
     saveDraft: "Save draft",
     sendToApproval: "Send for approval",
     sending: "Sending for approval…",
+    discardChangesConfirm: "Discard your changes? This can't be undone.",
+    restoreDraftConfirm: "Restore your unsaved draft from last time?",
     rejectedTitle: "Post was rejected",
     rejectedWithNote: 'Feedback: "{note}"',
     rejectedNoNote: "The reviewer did not leave a note.",
