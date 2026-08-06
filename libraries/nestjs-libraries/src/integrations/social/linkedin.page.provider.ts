@@ -422,7 +422,9 @@ export class LinkedinPageProvider
       data: analytics[
         key as 'Page Views' | 'Organic Followers' | 'Paid Followers'
       ],
-      percentageChange: 5,
+      // No percentage change: the platform API returns a point-in-time value
+      // and nothing is persisted to compare against, so any number here is
+      // invented. The frontend hides the badge when this is absent.
     }));
   }
 

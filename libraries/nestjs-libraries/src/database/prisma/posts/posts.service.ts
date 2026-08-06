@@ -1045,15 +1045,30 @@ export class PostsService {
       image: JSON.parse(p.image || '[]'),
     }));
 
+    // firstComment lives only on the group's main row. It was omitted here
+    // while thread parts were copied, so duplicating a post silently dropped
+    // it — invisible until after publish, and it is where hashtags usually
+    // live.
+    const firstComment =
+      loadAll.find((p: any) => p.firstComment)?.firstComment || undefined;
+
+    // Without an explicit date every duplicate landed on tomorrow at the
+    // current minute, so duplicating a batch stacked them all on one
+    // timestamp. Fall back to the next free queue slot for the target
+    // channel, the same way the CSV importer does.
+    const resolvedDate =
+      date || (await this.findFreeDateTime(orgId, integrationId));
+
     const postPayload = {
       type: 'draft' as const,
-      date: date || dayjs().add(1, 'day').format('YYYY-MM-DDTHH:mm:00'),
+      date: resolvedDate,
       shortLink: false,
       tags: [] as any[],
       posts: [
         {
           integration: { id: integrationId },
           value,
+          ...(firstComment ? { firstComment } : {}),
           settings: {
             __type: integration.providerIdentifier,
           },
@@ -1064,11 +1079,24 @@ export class PostsService {
 
     const mapped = await this.mapTypeToPost(postPayload as any, orgId);
     const result = await this.createPost(orgId, mapped, 'WEB');
+    const createdId = result[0]?.postId;
+
+    // createPost returns post ids, not the group uuid it generated. `group`
+    // used to carry that post id, so GET /posts/group/<value> 404'd on the
+    // duplicate — every other posts route is group-keyed. Resolve the real
+    // group and return the post id under its own name.
+    const created = createdId
+      ? await this._postRepository.getPost(createdId, false, orgId)
+      : null;
 
     return {
       duplicated: true,
       source: { group, integration: firstPost.integrationId },
-      target: { group: result[0]?.postId, integration: integrationId },
+      target: {
+        group: created?.group ?? null,
+        postId: createdId,
+        integration: integrationId,
+      },
     };
   }
 

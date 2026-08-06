@@ -478,7 +478,9 @@ export class ThreadsProvider extends SocialAbstract implements SocialProvider {
     const result = (
       userData?.map((d: any) => ({
         label: capitalize(d.name),
-        percentageChange: 5,
+        // No percentage change: the platform API returns a point-in-time value
+        // and nothing is persisted to compare against, so any number here is
+        // invented. The frontend hides the badge when this is absent.
         data: d.total_value
           ? [{ total: d.total_value.value, date: dayjs().format('YYYY-MM-DD') }]
           : d.values?.map((v: any) => ({

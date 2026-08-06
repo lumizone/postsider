@@ -53,7 +53,15 @@ export interface IAuthenticator {
 export interface AnalyticsData {
   label: string;
   data: Array<{ total: string; date: string }>;
-  percentageChange: number;
+  /**
+   * Period-over-period change, omitted when the provider has nothing real to
+   * compare against. Several providers used to hardcode `5` here, which the
+   * frontend rendered as a confident "+5.0%" next to genuine figures; no post
+   * analytics are persisted, so there was no prior period to compute from.
+   * The frontend hides the badge when this is absent, so leaving it out is the
+   * honest option.
+   */
+  percentageChange?: number;
   /**
    * True when `data` is a single aggregate total split across two points
    * (start/end of the range) rather than a real per-day series — e.g. X's

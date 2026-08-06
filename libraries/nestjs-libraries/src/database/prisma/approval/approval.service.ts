@@ -215,7 +215,11 @@ export class ApprovalService {
         requesterEmail
       );
     }
-    return { [action + 'd']: true } as Record<string, boolean>;
+    // `action + 'd'` produced "rejectd" for rejections (and only worked at all
+    // for "approve"). Callers branch on this, so spell both keys out.
+    return action === 'approve'
+      ? { approved: true }
+      : ({ rejected: true } as Record<string, boolean>);
   }
 
   private async onApproved(

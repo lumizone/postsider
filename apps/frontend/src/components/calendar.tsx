@@ -638,7 +638,11 @@ export function Calendar({ year, month }: CalendarProps) {
   const moveEvent = async (eventId: string, target: Date, newTime?: string) => {
     if (isMember) return;
     const ev = events.find((e) => e.id === eventId);
-    if (!ev || ev.status !== "scheduled") return;
+    // Published posts can't move; everything else can. This used to allow only
+    // "scheduled", silently refusing to drag drafts even though
+    // PUT /posts/:id/date accepts them and updates correctly — which defeated
+    // the "import as drafts, then arrange them" flow entirely.
+    if (!ev || ev.status === "published") return;
 
     const time = newTime || ev.time || "09:00";
     const newDate = iso(target);
