@@ -103,6 +103,12 @@
   text-decoration: line-through;
 }
 
+/* Steps that need a connected channel first: shown, explained, not clickable. */
+.itemLocked .itemTitle,
+.itemLocked .itemDesc {
+  opacity: 0.55;
+}
+
 .itemDesc {
   font-size: 12px;
   color: var(--muted);

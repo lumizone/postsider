@@ -125,7 +125,12 @@ function BillingInner() {
     t("billing.features.multiPlatform"),
     t("billing.features.calendar"),
     t("billing.features.analytics"),
-    t("billing.features.smartAgent"),
+    // "Smart Agent (AI tools)" was listed on every plan card unconditionally
+    // while `ai` is false on every tier in the backend pricing table, and the
+    // platform OpenAI key is unset in production, so /posts/check answers
+    // 409 "No AI key configured" and the settings page for a per-org key is
+    // not in the nav. Advertising it made the whole card untrustworthy.
+    t("billing.features.approvals"),
   ];
 
   const loadBilling = useCallback(async () => {

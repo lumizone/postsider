@@ -33,6 +33,8 @@ interface Props {
   /** True while channels are still loading — suppresses a flash of "0 done". */
   loading?: boolean;
   onConnect: () => void;
+  /** Opens the composer. Undefined when there is nothing to post to yet. */
+  onCompose?: () => void;
 }
 
 /**
@@ -48,7 +50,13 @@ interface Props {
  * persisted, and only in localStorage, since it is a per-person display
  * preference and not worth a migration.
  */
-export function SetupChecklist({ channels, raw, loading, onConnect }: Props) {
+export function SetupChecklist({
+  channels,
+  raw,
+  loading,
+  onConnect,
+  onCompose,
+}: Props) {
   const t = useT();
   const { user } = useAuth();
   const [postCount, setPostCount] = useState<number | null>(null);
@@ -78,11 +86,19 @@ export function SetupChecklist({ channels, raw, loading, onConnect }: Props) {
     };
   }, [channels.length]);
 
+  // Steps 2 and 3 are meaningless without a channel: the composer has nothing
+  // to post to and the queue-plan page renders "No channels connected yet".
+  // They are marked locked rather than given a live button, because a CTA that
+  // silently goes nowhere reads as a broken product (both testers in the
+  // 2026-08-06 audit hit exactly that and assumed the app was broken).
+  const hasChannel = channels.length > 0;
+
   const items = useMemo(
     () => [
       {
         id: "connect",
-        done: channels.length > 0,
+        done: hasChannel,
+        locked: false,
         title: t("setupChecklist.connectTitle"),
         desc: t("setupChecklist.connectDesc"),
         cta: t("setupChecklist.connectCta"),
@@ -92,23 +108,29 @@ export function SetupChecklist({ channels, raw, loading, onConnect }: Props) {
       {
         id: "post",
         done: (postCount ?? 0) > 0,
+        locked: !hasChannel,
         title: t("setupChecklist.postTitle"),
-        desc: t("setupChecklist.postDesc"),
+        desc: hasChannel
+          ? t("setupChecklist.postDesc")
+          : t("setupChecklist.needsChannel"),
         cta: t("setupChecklist.postCta"),
-        onClick: undefined,
-        href: "/calendar",
+        onClick: onCompose,
+        href: undefined as string | undefined,
       },
       {
         id: "schedule",
         done: hasCustomPostingTimes(raw),
+        locked: !hasChannel,
         title: t("setupChecklist.scheduleTitle"),
-        desc: t("setupChecklist.scheduleDesc"),
+        desc: hasChannel
+          ? t("setupChecklist.scheduleDesc")
+          : t("setupChecklist.needsChannel"),
         cta: t("setupChecklist.scheduleCta"),
         onClick: undefined,
         href: "/settings/queue-plan",
       },
     ],
-    [channels.length, postCount, raw, t, onConnect],
+    [hasChannel, postCount, raw, t, onConnect, onCompose],
   );
 
   const doneCount = items.filter((i) => i.done).length;
@@ -148,7 +170,9 @@ export function SetupChecklist({ channels, raw, loading, onConnect }: Props) {
         {items.map((item) => (
           <li
             key={item.id}
-            className={`${styles.item} ${item.done ? styles.itemDone : ""}`}
+            className={`${styles.item} ${item.done ? styles.itemDone : ""} ${
+              item.locked ? styles.itemLocked : ""
+            }`}
           >
             <span className={styles.check} aria-hidden>
               {item.done ? <CheckIcon /> : <span className={styles.dot} />}
@@ -158,6 +182,7 @@ export function SetupChecklist({ channels, raw, loading, onConnect }: Props) {
               <span className={styles.itemDesc}>{item.desc}</span>
             </span>
             {!item.done &&
+              !item.locked &&
               (item.href ? (
                 <Link href={item.href} className={styles.itemCta}>
                   {item.cta}

@@ -392,7 +392,10 @@ export function Posts() {
           title={t("empty.channelTitle")}
           description={t("empty.channelDescAdmin")}
           actionLabel={t("empty.channelAction")}
-          actionHref="/settings/general"
+          // Settings > General has no channel UI at all, so the old target was
+          // a dead end for the one action this empty state exists to prompt.
+          // ?connect=1 opens the calendar's real add-channel picker.
+          actionHref="/calendar?connect=1"
         />
       ) : items.length === 0 ? (
         <EmptyState

@@ -804,6 +804,14 @@ export function Calendar({ year, month }: CalendarProps) {
             raw={rawChannels}
             loading={channelsLoading}
             onConnect={() => setAddChannelOpen(true)}
+            onCompose={() => {
+              const now = new Date();
+              const pad = (n: number) => String(n).padStart(2, "0");
+              setComposer({
+                date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+                time: `${pad(now.getHours())}:${pad(now.getMinutes())}`,
+              });
+            }}
           />
         )}
 
