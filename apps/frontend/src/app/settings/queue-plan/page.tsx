@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { PageHeader, Card, settingsStyles as s } from "@/components/settings-ui";
 import { useAuth } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n";
+import { InfoTip } from "@/components/info-tip";
 import { listChannels } from "@/lib/integrations";
 import type { Channel } from "@/lib/calendar-data";
 import {
@@ -286,6 +287,7 @@ export default function QueuePlanPage() {
                 )}
                 <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
                   <button type="button" className={s.btnGhost} onClick={() => addSlot(c.id)}>{t("settingsQueuePlan.addSlot")}</button>
+                  <InfoTip textKey="infoTip.slot" />
                   <button type="button" className={s.btnPrimary} onClick={() => save(c.id)} disabled={savingId === c.id}>
                     {savingId === c.id ? t("settingsQueuePlan.saving") : savedId === c.id ? t("settingsQueuePlan.saved") : t("common.save")}
                   </button>

@@ -408,8 +408,7 @@ const en = {
     whatIsThis: "What is this?",
     channel:
       "One connected social account, for example one Instagram account or one LinkedIn page. Your plan limits how many you can connect.",
-    queue: "Your recurring posting schedule. Posts added to the queue fill the next free slot automatically.",
-    slot: "A time of day you have set aside for posting, for example Tuesday at 9am. The queue fills your slots in order.",
+    slot: "A time of day you have set aside for posting, for example Tuesday at 9am. Your queue fills these slots automatically, in order.",
     evergreen:
       "Marks a post to be published again automatically later. It only runs if evergreen is also switched on for the whole organization in Settings.",
     firstComment:
@@ -417,8 +416,6 @@ const en = {
     snippets: "Your saved captions and hashtag groups, ready to drop into a post instead of retyping them.",
     globalWrite:
       "Write once and send the same text to every selected channel. Switch to per channel when you want to tailor the wording for one of them.",
-    approval:
-      "Sends the post to a reviewer instead of scheduling it. Nothing is published until someone approves it. Optional, you can always schedule directly.",
     draft: "A saved post with no publish date yet. It stays here until you schedule it.",
   },
   setupChecklist: {

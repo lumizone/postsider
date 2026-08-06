@@ -18,14 +18,34 @@ import { useChannels } from "@/lib/use-channels";
  * datetime into the next free queue slot, which is both the friendliest default
  * and impossible to get wrong.
  */
+/** CSV-quotes a field, doubling any embedded `"` per RFC 4180. Channel names
+ *  come straight from the connected platform and can legitimately contain
+ *  one (an Instagram display name, for instance) — leaving it unescaped
+ *  produced invalid CSV the app's own parser would misread. */
+function csvField(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
 function buildTemplate(channelNames: string[]): string {
   const sample = channelNames.length
     ? channelNames.slice(0, 2).join(", ")
     : "Your channel name";
   const rows = [
     "content,channels,datetime,first_comment,thread",
-    `"Big news! Our summer collection just dropped. Tell us which piece is your favourite.","${sample}",,"Shop the full collection here: https://example.com/summer",`,
-    `"Leave datetime empty and this post drops into your next free queue slot.","${sample}",,,`,
+    [
+      csvField("Big news! Our summer collection just dropped. Tell us which piece is your favourite."),
+      csvField(sample),
+      "",
+      csvField("Shop the full collection here: https://example.com/summer"),
+      "",
+    ].join(","),
+    [
+      csvField("Leave datetime empty and this post drops into your next free queue slot."),
+      csvField(sample),
+      "",
+      "",
+      "",
+    ].join(","),
   ];
   return rows.join("\n") + "\n";
 }

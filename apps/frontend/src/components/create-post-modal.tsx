@@ -33,6 +33,7 @@ import {
   type MediaLike,
 } from "@/lib/provider-requirements";
 import { useT } from "@/lib/i18n";
+import { InfoTip } from "./info-tip";
 import { suggestSlots, type SlotSuggestion } from "@/lib/smart-slots-api";
 import { getCommentProviders } from "@/lib/comment-providers";
 
@@ -1227,6 +1228,9 @@ export function CreatePostModal({
                   {t("createPost.perChannel")}
                 </button>
               </div>
+              {/* Outside the tablist: InfoTip isn't a tab, and ARIA tablist
+                  children are expected to all be role="tab". */}
+              <InfoTip textKey="infoTip.globalWrite" />
 
               {mode === "per-channel" && (
                 <div className={styles.targetTabs} role="tablist">
@@ -1271,6 +1275,7 @@ export function CreatePostModal({
               <div className={styles.field}>
                 <label className={styles.fieldLabel}>
                   {t("firstComment.label")}
+                  <InfoTip textKey="infoTip.firstComment" />
                 </label>
                 <textarea
                   value={firstComment}

@@ -36,6 +36,13 @@ interface Props {
   onConnect: () => void;
   /** Opens the composer. Undefined when there is nothing to post to yet. */
   onCompose?: () => void;
+  /**
+   * Bump this after a post is created anywhere on the page to re-fetch the
+   * post count. Without it, using the checklist's own "Write a post" button
+   * left the item stuck un-done until a full page reload, because the count
+   * was only re-fetched when the channel list changed.
+   */
+  refreshSignal?: number;
 }
 
 /**
@@ -57,6 +64,7 @@ export function SetupChecklist({
   loading,
   onConnect,
   onCompose,
+  refreshSignal,
 }: Props) {
   const t = useT();
   const { user } = useAuth();
@@ -85,7 +93,7 @@ export function SetupChecklist({
     return () => {
       cancelled = true;
     };
-  }, [channels.length]);
+  }, [channels.length, refreshSignal]);
 
   // Steps 2 and 3 are meaningless without a channel: the composer has nothing
   // to post to and the queue-plan page renders "No channels connected yet".

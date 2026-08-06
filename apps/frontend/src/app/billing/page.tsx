@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PageHeader, Card } from "@/components/settings-ui";
+import { SectionIntro } from "@/components/section-intro";
 import { useAuth } from "@/lib/auth-context";
 import { useT, useI18n } from "@/lib/i18n";
 import {
@@ -264,6 +265,11 @@ function BillingInner() {
         eyebrow={t("billing.eyebrow")}
         title={t("billing.title")}
         subtitle={t("billing.subtitle")}
+      />
+      <SectionIntro
+        id="billing"
+        titleKey="sectionIntro.billingTitle"
+        bodyKey="sectionIntro.billingBody"
       />
 
       {error && (
