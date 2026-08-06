@@ -840,6 +840,30 @@ export class PostsRepository {
     });
   }
 
+  /**
+   * Internal team-facing variant (dashboard, not the public preview): scoped
+   * to the org AND includes the commenter's identity, since this is only
+   * ever reached after the caller has proven org membership.
+   */
+  async getCommentsForOrg(orgId: string, postId: string) {
+    return this._comments.model.comments.findMany({
+      where: {
+        postId,
+        organizationId: orgId,
+        deletedAt: null,
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+      select: {
+        id: true,
+        content: true,
+        createdAt: true,
+        user: { select: { id: true, name: true, email: true } },
+      },
+    });
+  }
+
   async getTags(orgId: string) {
     return this._tags.model.tags.findMany({
       where: {

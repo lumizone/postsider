@@ -1271,4 +1271,12 @@ export class PostsService {
     }
     return this._postRepository.createComment(orgId, userId, postId, comment);
   }
+
+  async getCommentsForOrg(orgId: string, postId: string) {
+    const post = await this._postRepository.getPostById(postId, orgId);
+    if (!post) {
+      throw new BadRequestException('Post not found');
+    }
+    return this._postRepository.getCommentsForOrg(orgId, postId);
+  }
 }

@@ -16,6 +16,7 @@ import { EmptyState } from "./empty-state";
 import { useI18n, useT } from "@/lib/i18n";
 import { toggleEvergreen, listEvergreen } from "@/lib/evergreen-api";
 import { requestApproval } from "@/lib/approval-api";
+import { PostDetailDrawer } from "./post-detail-drawer";
 
 type StatusFilter = "all" | PostStatus;
 
@@ -146,6 +147,7 @@ export function Posts() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [evergreenGroups, setEvergreenGroups] = useState<Set<string>>(new Set());
+  const [detailPost, setDetailPost] = useState<{ id: string; status: PostStatus } | null>(null);
 
   // Load which post groups are evergreen so each row's toggle shows the real state.
   useEffect(() => {
@@ -394,10 +396,19 @@ export function Posts() {
               onDuplicate={() => void handleDuplicate(ev.group)}
               onDuplicateTo={() => setDuplicateTargetGroup(ev.group)}
               onRequestApproval={() => void handleRequestApproval(ev.id)}
+              onViewDetails={() => setDetailPost({ id: ev.id, status })}
               initialEvergreen={evergreenGroups.has(ev.group)}
             />
           ))}
         </div>
+      )}
+
+      {detailPost && (
+        <PostDetailDrawer
+          postId={detailPost.id}
+          status={detailPost.status}
+          onClose={() => setDetailPost(null)}
+        />
       )}
     </section>
   );
@@ -410,10 +421,11 @@ interface PostRowProps {
   onDuplicate: () => void;
   onDuplicateTo: () => void;
   onRequestApproval: () => void;
+  onViewDetails: () => void;
   initialEvergreen?: boolean;
 }
 
-function PostRow({ ev, status, channel, onDuplicate, onDuplicateTo, onRequestApproval, initialEvergreen }: PostRowProps) {
+function PostRow({ ev, status, channel, onDuplicate, onDuplicateTo, onRequestApproval, onViewDetails, initialEvergreen }: PostRowProps) {
   const date = parseDate(ev.date);
   const [menuOpen, setMenuOpen] = useState(false);
   const [evergreenOn, setEvergreenOn] = useState<boolean>(initialEvergreen ?? false);
@@ -513,6 +525,9 @@ function PostRow({ ev, status, channel, onDuplicate, onDuplicateTo, onRequestApp
         </button>
         {menuOpen && (
           <div className={styles.menu} onClick={() => setMenuOpen(false)} role="menu">
+            <button type="button" className={styles.menuItem} onClick={onViewDetails} role="menuitem">
+              {t("postDetail.viewDetails")}
+            </button>
             <button type="button" className={styles.menuItem} onClick={onDuplicate} role="menuitem">
               {t("posts.duplicate")}
             </button>
