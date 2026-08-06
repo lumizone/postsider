@@ -363,7 +363,7 @@ export class IntegrationService {
     date: string,
     forceRefresh = false,
     _retryCount = 0
-  ): Promise<AnalyticsData[]> {
+  ): Promise<AnalyticsData[] | { unsupported: true }> {
     const getIntegration = await this.getIntegrationById(org.id, integration);
 
     if (!getIntegration) {
@@ -380,6 +380,16 @@ export class IntegrationService {
 
     if (!integrationProvider) {
       return [];
+    }
+
+    // Distinguish "this platform doesn't support analytics at all" from a
+    // genuinely empty/quiet channel — both used to render as the same blank
+    // chart, so a customer on e.g. Mastodon/Bluesky/personal LinkedIn/
+    // Discord/Slack/Telegram/WordPress (no `analytics()` implemented) had no
+    // way to tell whether the feature was broken or the channel had zero
+    // engagement.
+    if (!integrationProvider.analytics) {
+      return { unsupported: true };
     }
 
     if (

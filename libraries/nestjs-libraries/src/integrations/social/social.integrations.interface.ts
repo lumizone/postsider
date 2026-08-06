@@ -54,6 +54,14 @@ export interface AnalyticsData {
   label: string;
   data: Array<{ total: string; date: string }>;
   percentageChange: number;
+  /**
+   * True when `data` is a single aggregate total split across two points
+   * (start/end of the range) rather than a real per-day series — e.g. X's
+   * range analytics sums the whole window into one number. The frontend
+   * renders these as a stat, not a line chart, so a fabricated trend line
+   * isn't drawn from what is really just one data point.
+   */
+  isSnapshot?: boolean;
 }
 
 

@@ -19,6 +19,8 @@ export interface AnalyticsSeries {
   label: string;
   percentageChange?: number;
   data: AnalyticsSeriesPoint[];
+  /** A single aggregate total, not a real per-day series — see AnalyticsData. */
+  isSnapshot?: boolean;
 }
 
 export type IntegrationAnalyticsResponse = AnalyticsSeries[] | Record<string, unknown>;
