@@ -55,21 +55,38 @@ export class OrganizationRepository {
     });
   }
 
-  getOrgByApiKey(api: string) {
-    return this._organization.model.organization.findFirst({
-      where: {
-        apiKey: api,
-      },
-      include: {
-        subscription: {
-          select: {
-            subscriptionTier: true,
-            totalChannels: true,
-            isLifetime: true,
-          },
+  async getOrgByApiKey(api: string) {
+    const subscriptionInclude = {
+      subscription: {
+        select: {
+          subscriptionTier: true,
+          totalChannels: true,
+          isLifetime: true,
         },
       },
+    } as const;
+
+    // Legacy single per-org key (Organization.apiKey), still issued at org
+    // creation and shown as `publicApi` in Settings — checked first since
+    // it's the common path for every existing org.
+    const legacy = await this._organization.model.organization.findFirst({
+      where: { apiKey: api },
+      include: subscriptionInclude,
     });
+    if (legacy) return legacy;
+
+    // Self-service keys from Settings -> API (`ps_...`, multiple per org,
+    // individually revocable) live in the ApiKey table and were never
+    // checked here — every key generated through that flow 401'd on every
+    // Public API / MCP call. Stored via AuthService.fixedEncryption at
+    // creation (organization.repository.ts createApiKey), so the lookup
+    // applies the same deterministic transform to the incoming header.
+    const db = this._organization.model as any;
+    const selfService = await db.apiKey.findFirst({
+      where: { key: AuthService.fixedEncryption(api), deletedAt: null },
+      include: { organization: { include: subscriptionInclude } },
+    });
+    return selfService?.organization ?? null;
   }
 
   getCount() {
