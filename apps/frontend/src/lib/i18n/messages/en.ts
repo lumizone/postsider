@@ -379,6 +379,48 @@ const en = {
     connectCta: "Choose a platform",
     skipLater: "Skip, I'll connect later",
   },
+  sectionIntro: {
+    gotIt: "Got it",
+    dismiss: "Dismiss this explanation",
+    calendarTitle: "This is your calendar",
+    calendarBody:
+      "Every scheduled and published post, laid out by date. Click any empty day or time to write a post, and drag a post to move it.",
+    postsTitle: "This is every post you have",
+    postsBody:
+      "One list of drafts, scheduled posts and published ones. Filter by status, search the text, and open any post to see its comments and performance.",
+    mediaTitle: "This is your media library",
+    mediaBody:
+      "Images and videos you have uploaded, reusable across any post. Files are stored as you uploaded them, at full quality.",
+    analyticsTitle: "This is how your posts performed",
+    analyticsBody:
+      "Pick a channel and a date range to see its numbers. Export to CSV when you need to hand the figures to someone.",
+    approvalTitle: "This is the review queue",
+    approvalBody:
+      "Posts waiting for a decision before they go out. You can also send a client a review link that needs no account.",
+    settingsTitle: "This is where you set things up once",
+    settingsBody:
+      "Your posting schedule, saved captions and hashtags, team access and connected accounts. Set these up once and the composer reuses them.",
+    billingTitle: "This is your plan",
+    billingBody:
+      "Your channel limit and monthly post allowance live here. Each organization is billed separately.",
+  },
+  infoTip: {
+    whatIsThis: "What is this?",
+    channel:
+      "One connected social account, for example one Instagram account or one LinkedIn page. Your plan limits how many you can connect.",
+    queue: "Your recurring posting schedule. Posts added to the queue fill the next free slot automatically.",
+    slot: "A time of day you have set aside for posting, for example Tuesday at 9am. The queue fills your slots in order.",
+    evergreen:
+      "Marks a post to be published again automatically later. It only runs if evergreen is also switched on for the whole organization in Settings.",
+    firstComment:
+      "Text published as a comment immediately after the post. Commonly used for hashtags so they stay out of the caption.",
+    snippets: "Your saved captions and hashtag groups, ready to drop into a post instead of retyping them.",
+    globalWrite:
+      "Write once and send the same text to every selected channel. Switch to per channel when you want to tailor the wording for one of them.",
+    approval:
+      "Sends the post to a reviewer instead of scheduling it. Nothing is published until someone approves it. Optional, you can always schedule directly.",
+    draft: "A saved post with no publish date yet. It stays here until you schedule it.",
+  },
   setupChecklist: {
     title: "Finish setting up",
     subtitle: "{done} of {total} done",

@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import styles from "./setup-checklist.module.css";
-import { useT } from "@/lib/i18n";
+import { useT, type MessageKey } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { fetchPostsList } from "@/lib/posts";
+import { InfoTip } from "./info-tip";
 import type { BackendIntegration } from "@/lib/integrations";
 
 /**
@@ -104,6 +105,10 @@ export function SetupChecklist({
         cta: t("setupChecklist.connectCta"),
         onClick: onConnect,
         href: undefined as string | undefined,
+        // "Channel" was the single most confusing word for a first-run tester:
+        // it is the thing the whole checklist asks you to create, and it was
+        // defined nowhere outside a FAQ on the billing page.
+        tip: "infoTip.channel" as MessageKey,
       },
       {
         id: "post",
@@ -116,6 +121,7 @@ export function SetupChecklist({
         cta: t("setupChecklist.postCta"),
         onClick: onCompose,
         href: undefined as string | undefined,
+        tip: "infoTip.draft" as MessageKey,
       },
       {
         id: "schedule",
@@ -128,6 +134,7 @@ export function SetupChecklist({
         cta: t("setupChecklist.scheduleCta"),
         onClick: undefined,
         href: "/settings/queue-plan",
+        tip: "infoTip.slot" as MessageKey,
       },
     ],
     [hasChannel, postCount, raw, t, onConnect, onCompose],
@@ -178,7 +185,10 @@ export function SetupChecklist({
               {item.done ? <CheckIcon /> : <span className={styles.dot} />}
             </span>
             <span className={styles.itemText}>
-              <span className={styles.itemTitle}>{item.title}</span>
+              <span className={styles.itemTitle}>
+                {item.title}
+                {item.tip && <InfoTip textKey={item.tip} />}
+              </span>
               <span className={styles.itemDesc}>{item.desc}</span>
             </span>
             {!item.done &&

@@ -1,0 +1,67 @@
+.card {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+:global(:root[data-theme="dark"]) .card,
+:global(.dark) .card {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  margin: 0 0 3px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.dismiss {
+  flex-shrink: 0;
+  /* 44px min touch target: this is the escape hatch from a card covering
+     content, and on a phone it must not be the smallest thing on screen. */
+  min-height: 44px;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-soft);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 120ms var(--ease), background 120ms var(--ease);
+}
+
+.dismiss:hover {
+  border-color: var(--fg);
+  background: var(--fg);
+  color: var(--bg);
+}
+
+@media (max-width: 640px) {
+  .card {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .dismiss {
+    width: 100%;
+  }
+}
