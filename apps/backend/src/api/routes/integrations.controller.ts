@@ -545,7 +545,7 @@ export class IntegrationsController {
     const slots = integration?.postingTimes
       ? JSON.parse(integration.postingTimes)
       : [];
-    return { slots };
+    return { slots, timezone: integration?.timezone ?? 'UTC' };
   }
 
   @Put('/:id/queue-plan')

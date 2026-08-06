@@ -342,6 +342,10 @@ model Integration {
   inBetweenSteps        Boolean                @default(false)
   refreshNeeded         Boolean                @default(false)
   postingTimes          String                 @default("[{\"time\":120}, {\"time\":400}, {\"time\":700}]")
+  // IANA name (e.g. "America/New_York"). postingTimes.time is minutes-from-
+  // midnight in THIS zone, not UTC. Default 'UTC' keeps every pre-existing
+  // channel's behavior byte-identical (local time == UTC time when zone is UTC).
+  timezone              String                 @default("UTC")
   customInstanceDetails String?
   customerId            String?
   rootInternalId        String?

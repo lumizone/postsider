@@ -109,6 +109,7 @@ export class IntegrationRepository {
       },
       data: {
         postingTimes: JSON.stringify(times.time),
+        ...(times.timezone ? { timezone: times.timezone } : {}),
       },
     });
   }
@@ -238,12 +239,17 @@ export class IntegrationRepository {
     timezone?: number,
     customInstanceDetails?: string
   ) {
+    // Default posting times are LOCAL minutes-from-midnight (Integration.timezone,
+    // default 'UTC') — no longer baked against a raw browser-offset number, which
+    // (a) can't be reversed into an actual IANA zone (many zones share an offset)
+    // and (b) isn't DST-safe. The channel starts on 'UTC' until the operator sets
+    // a real zone on the Queue Plan page; `timezone` here is otherwise unused now.
     const postTimes = timezone
       ? {
           postingTimes: JSON.stringify([
-            { time: 560 - timezone },
-            { time: 850 - timezone },
-            { time: 1140 - timezone },
+            { time: 560 },
+            { time: 850 },
+            { time: 1140 },
           ]),
         }
       : {};
@@ -736,6 +742,7 @@ export class IntegrationRepository {
       },
       select: {
         postingTimes: true,
+        timezone: true,
       },
     });
   }

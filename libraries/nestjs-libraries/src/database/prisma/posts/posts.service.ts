@@ -23,6 +23,7 @@ import { shuffle } from 'lodash';
 import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
 import { MediaService } from '@postsider/nestjs-libraries/database/prisma/media/media.service';
 import { ShortLinkService } from '@postsider/nestjs-libraries/short-linking/short.link.service';
 import { CreateTagDto } from '@postsider/nestjs-libraries/dtos/posts/create.tag.dto';
@@ -36,6 +37,7 @@ import { UploadFactory } from '@postsider/nestjs-libraries/upload/upload.factory
 import { Readable } from 'stream';
 import { OpenaiService } from '@postsider/nestjs-libraries/openai/openai.service';
 dayjs.extend(utc);
+dayjs.extend(timezone);
 import * as Sentry from '@sentry/nestjs';
 import { TemporalService } from 'nestjs-temporal-core';
 import { TypedSearchAttributes } from '@temporalio/common';
@@ -1161,7 +1163,7 @@ export class PostsService {
   }
 
   async findFreeDateTime(orgId: string, integrationId?: string) {
-    const slots = await this._integrationService.findFreeDateTime(
+    const { slots, timezone } = await this._integrationService.findFreeDateTime(
       orgId,
       integrationId
     );
@@ -1173,7 +1175,11 @@ export class PostsService {
       slots?.length > 0
         ? slots
         : [9, 12, 15, 18].map((h) => ({ time: h * 60 }));
-    const start = dayjs.utc().startOf('day');
+    // Anchored in the channel's own timezone (default 'UTC' — identical to
+    // the old behavior for every channel that hasn't set one) so a "9am"
+    // slot resolves to the correct UTC instant for the actual calendar date,
+    // DST included, instead of a frozen offset baked in once.
+    const start = dayjs().tz(timezone).startOf('day');
     return this.findFreeDateTimeRecursive(
       orgId,
       effective,
@@ -1243,7 +1249,10 @@ export class PostsService {
       return prev;
     }, null) as number;
 
-    return date.clone().add(num, 'minutes').format('YYYY-MM-DDTHH:mm:00');
+    // `date` may be anchored in the channel's own timezone (not UTC) — the
+    // documented contract of this function is a UTC wall-clock string
+    // (callers append 'Z'), so convert back to UTC before formatting.
+    return date.clone().add(num, 'minutes').utc().format('YYYY-MM-DDTHH:mm:00');
   }
 
   getComments(postId: string) {

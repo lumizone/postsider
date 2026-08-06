@@ -230,15 +230,16 @@ export class PostsController {
     @GetOrgFromRequest() org: Organization,
     @Query('integration') integration: string,
     @Query('platform') platform: string,
-    @Query('count') count?: string,
-    @Query('tz') tz?: string
+    @Query('count') count?: string
   ) {
+    // Audience timezone is resolved server-side from the channel's own
+    // Integration.timezone, not a client-supplied offset (was the viewing
+    // staff member's browser zone, not the channel's).
     return this._smartSlots.suggest(
       org.id,
       integration,
       platform,
-      Number.isFinite(Number(count)) ? Number(count) : 3,
-      Number.isFinite(Number(tz)) ? Number(tz) : 0
+      Number.isFinite(Number(count)) ? Number(count) : 3
     );
   }
 

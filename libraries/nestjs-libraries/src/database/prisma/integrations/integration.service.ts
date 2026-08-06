@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   forwardRef,
   HttpException,
   HttpStatus,
@@ -60,6 +61,17 @@ export class IntegrationService {
     integrationId: string,
     times: IntegrationTimeDto
   ) {
+    if (times.timezone) {
+      try {
+        // Throws RangeError for anything that isn't a real IANA zone name —
+        // cheaper and more correct than a hand-maintained allowlist.
+        Intl.DateTimeFormat(undefined, { timeZone: times.timezone });
+      } catch {
+        throw new BadRequestException(
+          `"${times.timezone}" is not a valid timezone name.`
+        );
+      }
+    }
     return this._integrationRepository.setTimes(orgId, integrationId, times);
   }
 
@@ -621,7 +633,10 @@ export class IntegrationService {
   async findFreeDateTime(
     orgId: string,
     integrationsId?: string
-  ): Promise<{ time: number; days?: number[] }[]> {
+  ): Promise<{
+    slots: { time: number; days?: number[] }[];
+    timezone: string;
+  }> {
     const findTimes = await this._integrationRepository.getPostingTimes(
       orgId,
       integrationsId
@@ -646,6 +661,11 @@ export class IntegrationService {
         .join(',')}`;
       if (!seen.has(key)) seen.set(key, slot);
     }
-    return Array.from(seen.values());
+    // A specific channel has one unambiguous timezone. The org-wide lookup
+    // (no integrationsId — merges slots across every channel) has no single
+    // meaningful zone, so it stays UTC-anchored, same as before this feature.
+    const timezone =
+      integrationsId && findTimes[0]?.timezone ? findTimes[0].timezone : 'UTC';
+    return { slots: Array.from(seen.values()), timezone };
   }
 }

@@ -656,10 +656,11 @@ settingsStorage: {
   },
   settingsQueuePlan: {
     noPermission: "You don't have permission to manage the queue plan.",
-    subtitle: "Set recurring posting times per channel (times are in UTC). Use Add to queue in the composer to fill the next open slot.",
+    subtitle: "Set recurring posting times per channel, in that channel's own timezone. Use Add to queue in the composer to fill the next open slot.",
     noChannels: "No channels connected yet.",
     noSlots: "No slots yet. Add one to enable queuing for this channel.",
     addSlot: "+ Add slot",
+    timezone: "Timezone",
     saving: "Saving…",
     saved: "Saved",
     loadError: "Could not load channels",

@@ -5,13 +5,18 @@ import { api } from "@/lib/api";
 export type QueueSlot = { time: number; days?: number[] };
 
 export const getQueuePlan = (integrationId: string) =>
-  api.get<{ slots: QueueSlot[] }>(
+  api.get<{ slots: QueueSlot[]; timezone: string }>(
     `/integrations/${encodeURIComponent(integrationId)}/queue-plan`
   );
 
-export const saveQueuePlan = (integrationId: string, slots: QueueSlot[]) =>
+export const saveQueuePlan = (
+  integrationId: string,
+  slots: QueueSlot[],
+  timezone?: string,
+) =>
   api.put(`/integrations/${encodeURIComponent(integrationId)}/queue-plan`, {
     time: slots,
+    ...(timezone ? { timezone } : {}),
   });
 
 export const findNextSlot = (integrationId: string) =>
