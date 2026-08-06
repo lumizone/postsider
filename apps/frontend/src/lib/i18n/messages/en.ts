@@ -781,6 +781,13 @@ settingsStorage: {
     close: "Close",
     viewDetails: "View details",
   },
+  orgSwitcher: {
+    newOrg: "New organization",
+    namePlaceholder: "Organization name",
+    create: "Create",
+    creating: "Creating…",
+    createError: "Could not create organization",
+  },
   approval: {
     requestBtn: "Request approval",
     eyebrow: "Approval",

@@ -496,11 +496,6 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                   borderTop: "1px solid var(--line-soft)",
                 }}
               >
-                {(user.organizations?.length || 0) <= 1 && user.organizations?.[0]?.name && (
-                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 2 }}>
-                    {user.organizations[0].name}
-                  </span>
-                )}
                 <span style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.2 }}>
                   {user.name || user.email.split("@")[0]}
                 </span>
@@ -550,9 +545,13 @@ export function DashboardShell({ children }: { children: ReactNode }) {
 
 /** Org switcher — shown in the sidebar footer when the user has 2+ orgs. */
 function OrgSwitcher() {
-  const { user, switchOrg } = useAuth();
+  const { user, switchOrg, createOrg } = useAuth();
   const t = useT();
   const [open, setOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [newOrgName, setNewOrgName] = useState("");
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   const orgs = user?.organizations || [];
@@ -573,7 +572,25 @@ function OrgSwitcher() {
     };
   }, [open]);
 
-  if (orgs.length <= 1) return null;
+  // Always reachable — even with a single org, "+ New organization" must
+  // have somewhere to live. Was hidden entirely below 2 orgs, which meant
+  // an agency starting with one client had no way to add a second.
+  if (orgs.length === 0) return null;
+
+  const submitCreate = async () => {
+    const name = newOrgName.trim();
+    if (!name || createBusy) return;
+    setCreateBusy(true);
+    setCreateError(null);
+    try {
+      await createOrg(name);
+      // createOrg reloads the page on success (same as switchOrg) — no need
+      // to reset local state, but guard anyway in case that ever changes.
+    } catch (e) {
+      setCreateError(e instanceof Error ? e.message : t("orgSwitcher.createError"));
+      setCreateBusy(false);
+    }
+  };
 
   const currentOrg = orgs.find((o) => o.id === currentOrgId);
   const initials = (currentOrg?.name || "?").slice(0, 2).toUpperCase();
@@ -685,6 +702,75 @@ function OrgSwitcher() {
               </li>
             );
           })}
+
+          <li style={{ borderTop: "1px solid var(--line-soft)", marginTop: 2, paddingTop: 4 }}>
+            {creating ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "4px 6px" }}>
+                <input
+                  autoFocus
+                  type="text"
+                  value={newOrgName}
+                  onChange={(e) => setNewOrgName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") void submitCreate(); }}
+                  placeholder={t("orgSwitcher.namePlaceholder")}
+                  style={{
+                    padding: "6px 8px", borderRadius: 6,
+                    border: "1px solid var(--line-soft)",
+                    background: "var(--bg)", color: "var(--fg)", fontSize: 13,
+                  }}
+                />
+                {createError && (
+                  <span style={{ fontSize: 11, color: "#DC2626" }}>{createError}</span>
+                )}
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button
+                    type="button"
+                    disabled={createBusy || !newOrgName.trim()}
+                    onClick={() => void submitCreate()}
+                    style={{
+                      flex: 1, padding: "6px 8px", borderRadius: 6, border: "none",
+                      background: "var(--fg)", color: "var(--bg)", fontSize: 12,
+                      fontWeight: 600, cursor: "pointer",
+                      opacity: createBusy || !newOrgName.trim() ? 0.5 : 1,
+                    }}
+                  >
+                    {createBusy ? t("orgSwitcher.creating") : t("orgSwitcher.create")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setCreating(false); setNewOrgName(""); setCreateError(null); }}
+                    style={{
+                      padding: "6px 8px", borderRadius: 6,
+                      border: "1px solid var(--line-soft)", background: "var(--bg)",
+                      color: "var(--fg)", fontSize: 12, cursor: "pointer",
+                    }}
+                  >
+                    {t("common.cancel")}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setCreating(true)}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", gap: 10,
+                  padding: "7px 10px", borderRadius: 8, border: "none",
+                  background: "transparent", color: "var(--fg)", cursor: "pointer",
+                  fontSize: 13, textAlign: "left",
+                }}
+              >
+                <span style={{
+                  width: 24, height: 24, borderRadius: 6,
+                  border: "1px dashed var(--line-soft)",
+                  display: "grid", placeItems: "center", fontSize: 13, flexShrink: 0,
+                }}>
+                  +
+                </span>
+                {t("orgSwitcher.newOrg")}
+              </button>
+            )}
+          </li>
         </ul>
       )}
     </div>

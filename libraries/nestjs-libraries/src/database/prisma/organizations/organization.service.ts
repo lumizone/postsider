@@ -45,6 +45,23 @@ export class OrganizationService {
     return created;
   }
 
+  /** New org for a user who's already logged in — see repository method for why. */
+  async createOrgForCurrentUser(userId: string, email: string, name: string) {
+    const alreadyUsedTrial = await this._organizationRepository.hasUsedTrial(
+      email
+    );
+    const allowTrial = !alreadyUsedTrial;
+    const created = await this._organizationRepository.createOrgForExistingUser(
+      userId,
+      name,
+      allowTrial
+    );
+    if (allowTrial) {
+      await this._organizationRepository.markTrialUsed(email);
+    }
+    return created;
+  }
+
   async getCount() {
     return this._organizationRepository.getCount();
   }

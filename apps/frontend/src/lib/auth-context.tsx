@@ -53,6 +53,8 @@ interface AuthState {
   logout: () => Promise<void>;
   /** Switch to a different organization. Resolves after the new org context is loaded. */
   switchOrg: (orgId: string) => Promise<void>;
+  /** Create an additional organization owned by the current user and switch to it. */
+  createOrg: (name: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -114,6 +116,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = "/";
   }, []);
 
+  const createOrg = useCallback(async (name: string) => {
+    const created = await api.post<{ id: string; name: string }>(
+      "/user/organizations",
+      { name },
+    );
+    await switchOrg(created.id);
+  }, [switchOrg]);
+
   useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -129,8 +139,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [router]);
 
   const value = useMemo<AuthState>(
-    () => ({ user, loading, refresh, logout, switchOrg }),
-    [user, loading, refresh, logout, switchOrg],
+    () => ({ user, loading, refresh, logout, switchOrg, createOrg }),
+    [user, loading, refresh, logout, switchOrg, createOrg],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -153,12 +163,14 @@ export function useOrg(): {
   role: string;
   organizations: OrgSummary[];
   switchOrg: (orgId: string) => Promise<void>;
+  createOrg: (name: string) => Promise<void>;
 } {
-  const { user, switchOrg } = useAuth();
+  const { user, switchOrg, createOrg } = useAuth();
   return {
     orgId: user?.orgId ?? null,
     role: user?.role ?? "USER",
     organizations: user?.organizations ?? [],
     switchOrg,
+    createOrg,
   };
 }
