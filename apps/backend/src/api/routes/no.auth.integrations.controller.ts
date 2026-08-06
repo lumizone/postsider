@@ -25,6 +25,7 @@ import { RefreshIntegrationService } from '@postsider/nestjs-libraries/integrati
 import { ssrfSafeDispatcher } from '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
 import { OrganizationService } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.service';
 import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
+import { PermissionsService } from '@postsider/backend/services/auth/permissions/permissions.service';
 
 @ApiTags('Integrations')
 @Controller('/integrations')
@@ -33,7 +34,8 @@ export class NoAuthIntegrationsController {
     private _integrationManager: IntegrationManager,
     private _integrationService: IntegrationService,
     private _refreshIntegrationService: RefreshIntegrationService,
-    private _organizationService: OrganizationService
+    private _organizationService: OrganizationService,
+    private _permissionsService: PermissionsService
   ) {}
 
   @Get('/')
@@ -272,6 +274,37 @@ export class NoAuthIntegrationsController {
       ))
     ) {
       throw new HttpException('', 412);
+    }
+
+    // BILLING AUDIT FIX (2026-08-06): this endpoint runs entirely outside
+    // AuthMiddleware (NoAuthIntegrationsController isn't in
+    // api.module.ts's authenticatedController list — org context here comes
+    // from Redis state, not req.org), so the global PoliciesGuard
+    // unconditionally bypasses `/integrations/social-connect/*` (it has to —
+    // req.org is never set here, so the guard's own fail-closed check would
+    // otherwise 403 every legitimate connect). That makes the
+    // @CheckPolicies([Create, CHANNEL]) decorator above dead code: it's
+    // never evaluated. Concretely, every account — FREE (0 channels) or any
+    // paid tier — could connect UNLIMITED channels through this endpoint
+    // with the plan limit fully unenforced. `refresh` truthy means this is
+    // reconnecting an EXISTING channel (already counted), not a new one, so
+    // it's exempt — same exemption the guard's CHANNEL branch makes via
+    // `refreshChannelId`.
+    if (!refresh && isBillingEnabled()) {
+      const { options, subscription } =
+        await this._permissionsService.getPackageOptions(org.id);
+      const totalChannels = (
+        await this._integrationService.getIntegrationsList(org.id)
+      ).filter((f) => !f.refreshNeeded).length;
+      const hasCapacity =
+        (options.channel && options.channel > totalChannels) ||
+        (subscription?.totalChannels || 0) > totalChannels;
+      if (!hasCapacity) {
+        throw new HttpException(
+          'Channel limit reached for your plan. Upgrade to connect more channels.',
+          402
+        );
+      }
     }
 
     const createUpdate =
