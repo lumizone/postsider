@@ -258,6 +258,8 @@ const en = {
     title: "Analytics",
     eyebrow: "Insights",
     subtitle: "Track performance across all your social channels.",
+    exportCsv: "Export CSV",
+    exportCsvHint: "Download every metric for the selected channel and range as a CSV — ready to hand to a client or drop into a spreadsheet.",
     last7: "7d",
     last30: "30d",
     last90: "90d",

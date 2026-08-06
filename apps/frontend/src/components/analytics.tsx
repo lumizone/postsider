@@ -12,6 +12,7 @@ import {
   fetchIntegrationAnalytics,
   type AnalyticsSeries,
 } from "@/lib/analytics-api";
+import { rowsToCsv, downloadCsv } from "@/lib/csv-export";
 
 type Range = "7d" | "30d" | "90d";
 
@@ -248,6 +249,28 @@ export function Analytics() {
       ? (totals.engagements / totals.impressions) * 100
       : 0;
 
+  // Client-facing export: agencies otherwise had no way to hand a client
+  // their numbers except a screenshot of this page (audit finding — the
+  // #1 blocker to "prove ROI to your own client", the core retention job
+  // for a tool like this). Works off data already loaded, one row per
+  // (metric, date) so it drops straight into a pivot table.
+  const exportCsv = () => {
+    if (!data || data.length === 0 || !channel) return;
+    const rows: (string | number)[][] = [];
+    for (const series of data) {
+      for (const point of series.data) {
+        rows.push([series.label, point.date, point.total]);
+      }
+    }
+    const csv = rowsToCsv(["Metric", "Date", "Value"], rows);
+    const rangeLabel = RANGE_DAYS[range];
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadCsv(
+      `${channel.name}-analytics-${rangeLabel}d-${stamp}.csv`,
+      csv,
+    );
+  };
+
   return (
     <div className={styles.shell}>
       <ChannelsPanel
@@ -273,6 +296,15 @@ export function Analytics() {
           </div>
 
           <div className={styles.headerControls}>
+            <button
+              type="button"
+              className={styles.refreshBtn}
+              onClick={exportCsv}
+              disabled={!data || data.length === 0}
+              title={t("analytics.exportCsvHint")}
+            >
+              {t("analytics.exportCsv")}
+            </button>
             <button
               type="button"
               className={styles.refreshBtn}
