@@ -1174,7 +1174,13 @@ export class PostsService {
         ? slots
         : [9, 12, 15, 18].map((h) => ({ time: h * 60 }));
     const start = dayjs.utc().startOf('day');
-    return this.findFreeDateTimeRecursive(orgId, effective, start, start);
+    return this.findFreeDateTimeRecursive(
+      orgId,
+      effective,
+      start,
+      start,
+      integrationId
+    );
   }
 
   async createPopularPosts(post: {
@@ -1190,7 +1196,8 @@ export class PostsService {
     orgId: string,
     slots: { time: number; days?: number[] }[],
     date: dayjs.Dayjs,
-    start: dayjs.Dayjs
+    start: dayjs.Dayjs,
+    integrationId?: string
   ): Promise<string> {
     // Safety guard: never loop forever when a channel has no posting times.
     if (date.diff(start, 'day') > 365) {
@@ -1207,14 +1214,16 @@ export class PostsService {
         orgId,
         slots,
         date.add(1, 'day'),
-        start
+        start,
+        integrationId
       );
     }
 
     const list = await this._postRepository.getPostsCountsByDates(
       orgId,
       times,
-      date
+      date,
+      integrationId
     );
 
     if (!list.length) {
@@ -1222,7 +1231,8 @@ export class PostsService {
         orgId,
         slots,
         date.add(1, 'day'),
-        start
+        start,
+        integrationId
       );
     }
 

@@ -791,12 +791,17 @@ export class PostsRepository {
   async getPostsCountsByDates(
     orgId: string,
     times: number[],
-    date: dayjs.Dayjs
+    date: dayjs.Dayjs,
+    integrationId?: string
   ) {
     const dates = await this._post.model.post.findMany({
       where: {
         deletedAt: null,
         organizationId: orgId,
+        // Scoped to the target channel when known, so a busy slot on one
+        // client's channel doesn't block an unrelated channel from using the
+        // same UTC instant — cross-channel simultaneous posting is normal.
+        ...(integrationId ? { integrationId } : {}),
         publishDate: {
           in: times.map((time) => {
             return date.clone().add(time, 'minutes').toDate();
