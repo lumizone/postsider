@@ -13,7 +13,13 @@ export class ApprovalRepository {
   getPost(orgId: string, postId: string) {
     return this._post.model.post.findFirst({
       where: { id: postId, organizationId: orgId, deletedAt: null },
-      select: { id: true, state: true, parentPostId: true, group: true },
+      select: {
+        id: true,
+        state: true,
+        parentPostId: true,
+        group: true,
+        integrationId: true,
+      },
     });
   }
 

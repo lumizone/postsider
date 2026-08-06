@@ -65,7 +65,8 @@ export class ApprovalService {
     await this._notifications.notifyApprovers(
       orgId,
       'New post awaiting approval',
-      'A post has been submitted for approval and is waiting in the approval queue.'
+      'A post has been submitted for approval and is waiting in the approval queue.',
+      post?.integrationId
     );
     return approval;
   }

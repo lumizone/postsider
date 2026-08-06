@@ -13,6 +13,11 @@ import {
   minutesToHHMM,
   hhmmToMinutes,
 } from "@/lib/queue-plan-api";
+import { getTeam, type TeamMember } from "@/lib/team-api";
+import {
+  getChannelAssignments,
+  setChannelAssignments,
+} from "@/lib/channel-assignment-api";
 
 function dayChip(active: boolean): React.CSSProperties {
   return {
@@ -50,6 +55,8 @@ export default function QueuePlanPage() {
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
+  const [team, setTeam] = useState<TeamMember[]>([]);
+  const [assignments, setAssignments] = useState<Record<string, string[]>>({});
 
   // Falls back to a short list on runtimes without Intl.supportedValuesOf
   // (older browsers) rather than hand-maintaining every IANA zone.
@@ -94,6 +101,24 @@ export default function QueuePlanPage() {
         }
         setPlans(nextPlans);
         setTimezones(nextTimezones);
+
+        const [{ users: members }, assignmentEntries] = await Promise.all([
+          getTeam().catch(() => ({ users: [] as TeamMember[] })),
+          Promise.all(
+            channels.map(async (c) => {
+              try {
+                const { users } = await getChannelAssignments(c.id);
+                return { id: c.id, userIds: users.map((u) => u.id) };
+              } catch {
+                return { id: c.id, userIds: [] as string[] };
+              }
+            })
+          ),
+        ]);
+        setTeam(members);
+        const nextAssignments: Record<string, string[]> = {};
+        for (const a of assignmentEntries) nextAssignments[a.id] = a.userIds;
+        setAssignments(nextAssignments);
       } catch (e) {
         setError(e instanceof Error ? e.message : t("settingsQueuePlan.loadError"));
       } finally {
@@ -102,6 +127,15 @@ export default function QueuePlanPage() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const toggleAssignment = (channelId: string, userId: string) =>
+    setAssignments((prev) => {
+      const current = prev[channelId] || [];
+      const next = current.includes(userId)
+        ? current.filter((id) => id !== userId)
+        : [...current, userId];
+      return { ...prev, [channelId]: next };
+    });
 
   const update = (id: string, slots: QueueSlot[]) =>
     setPlans((p) => ({ ...p, [id]: slots }));
@@ -140,7 +174,10 @@ export default function QueuePlanPage() {
     setSavingId(id);
     setError(null);
     try {
-      await saveQueuePlan(id, plans[id] || [], timezones[id]);
+      await Promise.all([
+        saveQueuePlan(id, plans[id] || [], timezones[id]),
+        setChannelAssignments(id, assignments[id] || []),
+      ]);
       setSavedId(id);
       setTimeout(() => setSavedId((cur) => (cur === id ? null : cur)), 2000);
     } catch (e) {
@@ -223,6 +260,30 @@ export default function QueuePlanPage() {
                     </div>
                   );
                 })}
+                {team.length > 0 && (
+                  <div style={{ borderTop: "1px solid var(--line-soft)", paddingTop: 10, marginTop: 4 }}>
+                    <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>
+                      {t("settingsQueuePlan.assignedTo")}
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                      {team.map((m) => (
+                        <label key={m.user.id} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}>
+                          <input
+                            type="checkbox"
+                            checked={(assignments[c.id] || []).includes(m.user.id)}
+                            onChange={() => toggleAssignment(c.id, m.user.id)}
+                          />
+                          {m.user.email}
+                        </label>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>
+                      {(assignments[c.id] || []).length === 0
+                        ? t("settingsQueuePlan.assignedNone")
+                        : t("settingsQueuePlan.assignedSome")}
+                    </div>
+                  </div>
+                )}
                 <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
                   <button type="button" className={s.btnGhost} onClick={() => addSlot(c.id)}>{t("settingsQueuePlan.addSlot")}</button>
                   <button type="button" className={s.btnPrimary} onClick={() => save(c.id)} disabled={savingId === c.id}>
