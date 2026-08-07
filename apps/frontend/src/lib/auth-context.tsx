@@ -21,6 +21,7 @@ export interface OrgSummary {
   id: string;
   name: string;
   role: "SUPERADMIN" | "ADMIN" | "USER";
+  logo?: string | null;
 }
 
 export interface SelfUser {
@@ -88,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               id: o.id,
               name: o.name,
               role: o.users?.[0]?.role || "USER",
+              logo: o.logo ?? null,
             }));
           setUser((prev) => (prev ? { ...prev, organizations: orgs } : prev));
         }

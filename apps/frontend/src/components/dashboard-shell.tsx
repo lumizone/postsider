@@ -543,6 +543,58 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   );
 }
 
+/** Logo when the org has one, initials otherwise — shared by the trigger and the dropdown list. */
+function OrgAvatar({
+  name,
+  logo,
+  size,
+  invert,
+}: {
+  name: string;
+  logo?: string | null;
+  size: number;
+  invert: boolean;
+}) {
+  if (logo) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={logo}
+        alt=""
+        width={size}
+        height={size}
+        aria-hidden
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size >= 28 ? 8 : 6,
+          objectFit: "cover",
+          flexShrink: 0,
+          display: "block",
+        }}
+      />
+    );
+  }
+  return (
+    <span
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size >= 28 ? 8 : 6,
+        background: invert ? "var(--fg)" : "rgba(0,0,0,0.1)",
+        color: invert ? "var(--bg)" : "var(--fg)",
+        display: "grid",
+        placeItems: "center",
+        fontSize: size >= 28 ? 11 : 10,
+        fontWeight: 700,
+        flexShrink: 0,
+      }}
+    >
+      {name.slice(0, 2).toUpperCase()}
+    </span>
+  );
+}
+
 /** Org switcher — shown in the sidebar footer when the user has 2+ orgs. */
 function OrgSwitcher() {
   const { user, switchOrg, createOrg } = useAuth();
@@ -593,7 +645,6 @@ function OrgSwitcher() {
   };
 
   const currentOrg = orgs.find((o) => o.id === currentOrgId);
-  const initials = (currentOrg?.name || "?").slice(0, 2).toUpperCase();
 
   return (
     <div ref={ref} style={{ position: "relative", padding: "0 8px" }}>
@@ -617,16 +668,7 @@ function OrgSwitcher() {
           textAlign: "left",
         }}
       >
-        <span
-          style={{
-            width: 28, height: 28, borderRadius: 8,
-            background: "var(--fg)", color: "var(--bg)",
-            display: "grid", placeItems: "center",
-            fontSize: 11, fontWeight: 700, flexShrink: 0,
-          }}
-        >
-          {initials}
-        </span>
+        <OrgAvatar name={currentOrg?.name || "?"} logo={currentOrg?.logo} size={28} invert />
         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {currentOrg?.name || "?"}
         </span>
@@ -680,17 +722,7 @@ function OrgSwitcher() {
                     opacity: isCurrent ? 0.7 : 1,
                   }}
                 >
-                  <span
-                    style={{
-                      width: 24, height: 24, borderRadius: 6,
-                      background: isCurrent ? "var(--fg)" : "rgba(0,0,0,0.1)",
-                      color: isCurrent ? "var(--bg)" : "var(--fg)",
-                      display: "grid", placeItems: "center",
-                      fontSize: 10, fontWeight: 700, flexShrink: 0,
-                    }}
-                  >
-                    {org.name.slice(0, 2).toUpperCase()}
-                  </span>
+                  <OrgAvatar name={org.name} logo={org.logo} size={24} invert={isCurrent} />
                   <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {org.name}
                   </span>
