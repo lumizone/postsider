@@ -648,6 +648,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
           result.push({
             label: 'Followers',
             percentageChange: 0,
+            isSnapshot: true,
             data: [{ total: String(userStats.follower_count), date: today }],
           });
         }
@@ -656,6 +657,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
           result.push({
             label: 'Following',
             percentageChange: 0,
+            isSnapshot: true,
             data: [{ total: String(userStats.following_count), date: today }],
           });
         }
@@ -664,6 +666,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
           result.push({
             label: 'Total Likes',
             percentageChange: 0,
+            isSnapshot: true,
             data: [{ total: String(userStats.likes_count), date: today }],
           });
         }
@@ -672,6 +675,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
           result.push({
             label: 'Videos',
             percentageChange: 0,
+            isSnapshot: true,
             data: [{ total: String(userStats.video_count), date: today }],
           });
         }
@@ -730,24 +734,28 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
           result.push({
             label: 'Views',
             percentageChange: 0,
+            isSnapshot: true,
             data: [{ total: String(totalViews), date: today }],
           });
 
           result.push({
             label: 'Recent Likes',
             percentageChange: 0,
+            isSnapshot: true,
             data: [{ total: String(totalLikes), date: today }],
           });
 
           result.push({
             label: 'Recent Comments',
             percentageChange: 0,
+            isSnapshot: true,
             data: [{ total: String(totalComments), date: today }],
           });
 
           result.push({
             label: 'Recent Shares',
             percentageChange: 0,
+            isSnapshot: true,
             data: [{ total: String(totalShares), date: today }],
           });
         }

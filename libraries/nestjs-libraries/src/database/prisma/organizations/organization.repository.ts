@@ -55,21 +55,38 @@ export class OrganizationRepository {
     });
   }
 
-  getOrgByApiKey(api: string) {
-    return this._organization.model.organization.findFirst({
-      where: {
-        apiKey: api,
-      },
-      include: {
-        subscription: {
-          select: {
-            subscriptionTier: true,
-            totalChannels: true,
-            isLifetime: true,
-          },
+  async getOrgByApiKey(api: string) {
+    const subscriptionInclude = {
+      subscription: {
+        select: {
+          subscriptionTier: true,
+          totalChannels: true,
+          isLifetime: true,
         },
       },
+    } as const;
+
+    // Legacy single per-org key (Organization.apiKey), still issued at org
+    // creation and shown as `publicApi` in Settings — checked first since
+    // it's the common path for every existing org.
+    const legacy = await this._organization.model.organization.findFirst({
+      where: { apiKey: api },
+      include: subscriptionInclude,
     });
+    if (legacy) return legacy;
+
+    // Self-service keys from Settings -> API (`ps_...`, multiple per org,
+    // individually revocable) live in the ApiKey table and were never
+    // checked here — every key generated through that flow 401'd on every
+    // Public API / MCP call. Stored via AuthService.fixedEncryption at
+    // creation (organization.repository.ts createApiKey), so the lookup
+    // applies the same deterministic transform to the incoming header.
+    const db = this._organization.model as any;
+    const selfService = await db.apiKey.findFirst({
+      where: { key: AuthService.fixedEncryption(api), deletedAt: null },
+      include: { organization: { include: subscriptionInclude } },
+    });
+    return selfService?.organization ?? null;
   }
 
   getCount() {
@@ -206,6 +223,21 @@ export class OrganizationRepository {
     });
   }
 
+  async updateOrganizationProfile(
+    id: string,
+    data: {
+      name?: string;
+      description?: string | null;
+      logo?: string | null;
+      defaultTimezone?: string | null;
+    }
+  ) {
+    return this._organization.model.organization.update({
+      where: { id },
+      data,
+    });
+  }
+
   async addUserToOrg(
     userId: string,
     id: string,
@@ -324,6 +356,54 @@ export class OrganizationRepository {
           },
         },
       },
+    });
+  }
+
+  /**
+   * Lets an ALREADY-authenticated user spin up an additional organization
+   * (e.g. an agency onboarding client #21) without going through the public
+   * signup flow — no new User row, just a new Organization with the caller
+   * linked as its SUPERADMIN. Deliberately unrelated to DISABLE_REGISTRATION:
+   * that gate is about new PEOPLE joining the platform; this creates more
+   * orgs under someone who is already a vetted, logged-in user.
+   */
+  async createOrgForExistingUser(
+    userId: string,
+    name: string,
+    allowTrial: boolean
+  ) {
+    const TRIAL_DAYS = 7;
+    const grantTrial = allowTrial && isBillingEnabled();
+    return this._organization.model.organization.create({
+      data: {
+        name,
+        apiKey: AuthService.fixedEncryption(makeId(20)),
+        allowTrial,
+        isTrailing: allowTrial,
+        ...(grantTrial
+          ? {
+              subscription: {
+                create: {
+                  subscriptionTier: SubscriptionTier.STANDARD,
+                  totalChannels: pricing.STANDARD.channel ?? 5,
+                  period: 'MONTHLY',
+                  isLifetime: false,
+                  identifier: 'trial',
+                  cancelAt: new Date(
+                    Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000
+                  ),
+                },
+              },
+            }
+          : {}),
+        users: {
+          create: {
+            role: Role.SUPERADMIN,
+            userId,
+          },
+        },
+      },
+      select: { id: true, name: true },
     });
   }
 

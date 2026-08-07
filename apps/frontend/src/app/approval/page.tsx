@@ -8,7 +8,9 @@ import {
   getPendingApprovals,
   approvePost,
   rejectPost,
+  createGuestLink,
 } from "@/lib/approval-api";
+import { SectionIntro } from "@/components/section-intro";
 import ap from "./approval.module.css";
 
 const ghostBtn: React.CSSProperties = {
@@ -90,6 +92,31 @@ export default function ApprovalPage() {
     }
   };
 
+  const [linkBusyId, setLinkBusyId] = useState<string | null>(null);
+  const [linkMsgFor, setLinkMsgFor] = useState<string | null>(null);
+
+  const getGuestLink = async (id: string) => {
+    if (linkBusyId) return;
+    setLinkBusyId(id);
+    setLinkMsgFor(null);
+    setError(null);
+    try {
+      const { token } = await createGuestLink(id);
+      const url = `${window.location.origin}/review/${token}`;
+      try {
+        await navigator.clipboard.writeText(url);
+      } catch {
+        // Clipboard API can be denied — the message below still shows the ask.
+      }
+      setLinkMsgFor(id);
+      setTimeout(() => setLinkMsgFor((cur) => (cur === id ? null : cur)), 5000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("approval.guestLinkError"));
+    } finally {
+      setLinkBusyId(null);
+    }
+  };
+
   const toggleExpand = (id: string) => {
     setExpanded((s) => {
       const n = new Set(s);
@@ -109,6 +136,12 @@ export default function ApprovalPage() {
             : t("approval.subtitleMember")}
         </p>
       </div>
+
+      <SectionIntro
+        id="approval"
+        titleKey="sectionIntro.approvalTitle"
+        bodyKey="sectionIntro.approvalBody"
+      />
 
       {error && (
         <div role="alert" style={{ padding: "10px 12px", borderRadius: 8, background: "rgba(192,57,43,0.08)", color: "#c0392b", fontSize: 13 }}>{error}</div>
@@ -192,9 +225,15 @@ export default function ApprovalPage() {
                       </div>
                     </div>
                   ) : (
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <button type="button" style={{ ...ghostBtn, background: "var(--fg)", color: "var(--bg)", border: "none", fontWeight: 600 }} disabled={busyIds.has(a.id)} onClick={() => act(a.id, () => approvePost(a.id))}>{t("approval.approveSchedule")}</button>
-                      <button type="button" style={ghostBtn} disabled={busyIds.has(a.id)} onClick={() => { setRejectFor(a.id); setNote(""); }}>{t("approval.reject")}</button>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <button type="button" style={{ ...ghostBtn, background: "var(--fg)", color: "var(--bg)", border: "none", fontWeight: 600 }} disabled={busyIds.has(a.id)} onClick={() => act(a.id, () => approvePost(a.id))}>{t("approval.approveSchedule")}</button>
+                        <button type="button" style={ghostBtn} disabled={busyIds.has(a.id)} onClick={() => { setRejectFor(a.id); setNote(""); }}>{t("approval.reject")}</button>
+                        <button type="button" style={ghostBtn} disabled={linkBusyId === a.id} onClick={() => getGuestLink(a.id)}>{t("approval.guestLink")}</button>
+                      </div>
+                      {linkMsgFor === a.id && (
+                        <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("approval.guestLinkCreated")}</span>
+                      )}
                     </div>
                   )
                 )}

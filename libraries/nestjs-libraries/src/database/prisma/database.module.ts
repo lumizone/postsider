@@ -51,6 +51,8 @@ import { ConnectorCatalogService } from '@postsider/nestjs-libraries/integration
 import { InboundSubscriptionRepository } from '@postsider/nestjs-libraries/database/prisma/inbound/inbound-subscription.repository';
 import { InboundService } from '@postsider/nestjs-libraries/database/prisma/inbound/inbound.service';
 import { InboundSourceRegistry } from '@postsider/nestjs-libraries/integrations/inbound/inbound.registry';
+import { ChannelAssignmentRepository } from '@postsider/nestjs-libraries/database/prisma/channel-assignment/channel-assignment.repository';
+import { ChannelAssignmentService } from '@postsider/nestjs-libraries/database/prisma/channel-assignment/channel-assignment.service';
 
 @Global()
 @Module({
@@ -111,6 +113,8 @@ import { InboundSourceRegistry } from '@postsider/nestjs-libraries/integrations/
     ComposerHelpersService,
     ApprovalRepository,
     ApprovalService,
+    ChannelAssignmentRepository,
+    ChannelAssignmentService,
   ],
   get exports() {
     return this.providers;

@@ -19,6 +19,9 @@ const PUBLIC_PATHS = [
   "/auth/activate",
   // OAuth callbacks
   "/integrations/social",
+  // Guest approval review link: /review/<token> — no account, gated by an
+  // unguessable expiring token, not a login session.
+  "/review",
 ];
 
 /** Pages that render without the dashboard shell but require auth. */

@@ -33,6 +33,7 @@ import {
   type MediaLike,
 } from "@/lib/provider-requirements";
 import { useT } from "@/lib/i18n";
+import { InfoTip } from "./info-tip";
 import { suggestSlots, type SlotSuggestion } from "@/lib/smart-slots-api";
 import { getCommentProviders } from "@/lib/comment-providers";
 
@@ -389,10 +390,102 @@ export function CreatePostModal({
     mainTextareaRef.current?.focus();
   }, []);
 
+  // Unsaved-changes guard + lightweight autosave (new posts only — editing an
+  // existing post has its own save/update flow via onSchedule/onSaveDraft,
+  // and offering to "restore" over an in-progress edit would be confusing).
+  // A single accidental backdrop click or Escape used to silently discard
+  // everything typed with zero recovery path.
+  const hasUnsavedContent =
+    Object.values(bodies).some((b) => b.trim().length > 0) ||
+    threadParts.some((p) => p.trim().length > 0) ||
+    media.length > 0;
+
+  const DRAFT_KEY = "postsider:composer:draft";
+
+  // Restore-on-mount: only for a brand-new post, only once.
+  useEffect(() => {
+    if (isEdit) return;
+    try {
+      const raw = window.localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as {
+        bodies?: Record<string, string>;
+        threadParts?: string[];
+        selectedIds?: string[];
+      };
+      const hasContent =
+        Object.values(saved.bodies ?? {}).some((b) => b.trim()) ||
+        (saved.threadParts ?? []).some((p) => p.trim());
+      if (!hasContent) return;
+      if (window.confirm(t("createPost.restoreDraftConfirm"))) {
+        if (saved.bodies) setBodies(saved.bodies);
+        if (saved.threadParts) setThreadParts(saved.threadParts);
+        if (saved.selectedIds) setSelectedIds(new Set(saved.selectedIds));
+      } else {
+        window.localStorage.removeItem(DRAFT_KEY);
+      }
+    } catch {
+      // Corrupt/inaccessible storage — not worth surfacing, just skip restore.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Debounced autosave (new posts only). Media isn't persisted (object URLs
+  // don't survive a reload anyway) — text is the expensive-to-retype part.
+  useEffect(() => {
+    if (isEdit) return;
+    const handle = window.setTimeout(() => {
+      try {
+        if (hasUnsavedContent) {
+          window.localStorage.setItem(
+            DRAFT_KEY,
+            JSON.stringify({
+              bodies,
+              threadParts,
+              selectedIds: Array.from(selectedIds),
+            }),
+          );
+        }
+      } catch {
+        // Storage full/unavailable — autosave is best-effort, never blocking.
+      }
+    }, 800);
+    return () => window.clearTimeout(handle);
+  }, [isEdit, bodies, threadParts, selectedIds, hasUnsavedContent]);
+
+  const clearDraft = () => {
+    try {
+      window.localStorage.removeItem(DRAFT_KEY);
+    } catch {
+      // Best-effort.
+    }
+  };
+
+  const requestClose = useCallback(() => {
+    if (
+      hasUnsavedContent &&
+      !window.confirm(t("createPost.discardChangesConfirm"))
+    ) {
+      return;
+    }
+    onClose();
+  }, [hasUnsavedContent, onClose, t]);
+
+  // Warn on tab close/refresh too — the composer is otherwise silently gone.
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!hasUnsavedContent) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [hasUnsavedContent]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        onClose();
+        requestClose();
         return;
       }
       // Simple focus trap: keep Tab / Shift+Tab cycling inside the dialog.
@@ -428,7 +521,7 @@ export function CreatePostModal({
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
     };
-  }, [onClose]);
+  }, [requestClose]);
 
   // Fetch which providers support a first comment. Errors stay quiet: the
   // field simply doesn't appear if we can't load the capability list.
@@ -696,6 +789,19 @@ export function CreatePostModal({
     });
   };
 
+  // Carousel order matters on Instagram/LinkedIn/X — swapping images used to
+  // require delete-and-re-add, which silently put the re-added image LAST.
+  const moveMedia = (id: string, direction: -1 | 1) => {
+    setMedia((prev) => {
+      const idx = prev.findIndex((m) => m.id === id);
+      const swapWith = idx + direction;
+      if (idx === -1 || swapWith < 0 || swapWith >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[swapWith]] = [next[swapWith], next[idx]];
+      return next;
+    });
+  };
+
   const addThreadPart = () => setThreadParts((prev) => [...prev, ""]);
   const updateThreadPart = (i: number, value: string) =>
     setThreadParts((prev) => prev.map((p, idx) => (idx === i ? value : p)));
@@ -900,6 +1006,7 @@ export function CreatePostModal({
       try {
         await handler(buildPost());
         // Parent closes the modal on success; nothing else to do here.
+        clearDraft();
       } catch (err) {
         console.error("[submit-post]", err);
         setSubmitError(humanizeSubmitError(err, t));
@@ -966,7 +1073,7 @@ export function CreatePostModal({
       role="dialog"
       aria-modal="true"
       aria-label="Create post"
-      onClick={onClose}
+      onClick={requestClose}
     >
       <div
         ref={modalRef}
@@ -980,7 +1087,7 @@ export function CreatePostModal({
           <button
             type="button"
             className={styles.closeBtn}
-            onClick={onClose}
+            onClick={requestClose}
             aria-label="Close"
           >
             <CloseIcon />
@@ -1121,6 +1228,9 @@ export function CreatePostModal({
                   {t("createPost.perChannel")}
                 </button>
               </div>
+              {/* Outside the tablist: InfoTip isn't a tab, and ARIA tablist
+                  children are expected to all be role="tab". */}
+              <InfoTip textKey="infoTip.globalWrite" />
 
               {mode === "per-channel" && (
                 <div className={styles.targetTabs} role="tablist">
@@ -1165,6 +1275,7 @@ export function CreatePostModal({
               <div className={styles.field}>
                 <label className={styles.fieldLabel}>
                   {t("firstComment.label")}
+                  <InfoTip textKey="infoTip.firstComment" />
                 </label>
                 <textarea
                   value={firstComment}
@@ -1202,7 +1313,7 @@ export function CreatePostModal({
 
             {media.length > 0 && (
               <div className={styles.mediaList}>
-                {media.map((m) => (
+                {media.map((m, i) => (
                   <div key={m.id} className={styles.mediaItem}>
                     {m.kind === "image" ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -1225,6 +1336,30 @@ export function CreatePostModal({
                         {m.kind === "image" ? "Image" : "Video"} · {formatBytes(m.size)}
                       </span>
                     </div>
+                    {media.length > 1 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                        <button
+                          type="button"
+                          className={styles.mediaRemove}
+                          onClick={() => moveMedia(m.id, -1)}
+                          disabled={i === 0}
+                          aria-label={t("createPost.moveMediaUp")}
+                          style={{ opacity: i === 0 ? 0.3 : 1 }}
+                        >
+                          ▲
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.mediaRemove}
+                          onClick={() => moveMedia(m.id, 1)}
+                          disabled={i === media.length - 1}
+                          aria-label={t("createPost.moveMediaDown")}
+                          style={{ opacity: i === media.length - 1 ? 0.3 : 1 }}
+                        >
+                          ▼
+                        </button>
+                      </div>
+                    )}
                     <button
                       type="button"
                       className={styles.mediaRemove}

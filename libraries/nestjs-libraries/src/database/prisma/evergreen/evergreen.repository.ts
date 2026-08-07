@@ -14,6 +14,9 @@ export class EvergreenRepository {
         organizationId: orgId,
         evergreen: true,
         deletedAt: null,
+        // A disconnected/deleted channel can't publish anything — recycling
+        // into it just piles up posts that will error at publish time.
+        integration: { disabled: false, deletedAt: null },
       },
       select: {
         id: true,

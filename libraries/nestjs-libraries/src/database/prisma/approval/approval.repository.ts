@@ -13,7 +13,13 @@ export class ApprovalRepository {
   getPost(orgId: string, postId: string) {
     return this._post.model.post.findFirst({
       where: { id: postId, organizationId: orgId, deletedAt: null },
-      select: { id: true, state: true, parentPostId: true, group: true },
+      select: {
+        id: true,
+        state: true,
+        parentPostId: true,
+        group: true,
+        integrationId: true,
+      },
     });
   }
 
@@ -43,6 +49,10 @@ export class ApprovalRepository {
         note: null,
         requestedAt: new Date(),
         resolvedAt: null,
+        // A resubmit is a fresh round — any link from a prior round pointed
+        // at now-stale content/decision and must stop working.
+        guestToken: null,
+        guestTokenExpiresAt: null,
       },
       create: { postId, organizationId: orgId, requestedById, status: 'PENDING' },
     });
@@ -74,13 +84,92 @@ export class ApprovalRepository {
   // resolving the same approval concurrently. Returns the affected row count.
   async resolve(
     id: string,
-    approverId: string,
+    approverId: string | null,
     status: ResolveStatus,
     note: string | null
   ) {
     const res = await this._approval.model.postApproval.updateMany({
       where: { id, status: 'PENDING' },
       data: { status, approverId, note, resolvedAt: new Date() },
+    });
+    return res.count;
+  }
+
+  // --- Guest (external reviewer) link ---------------------------------
+
+  async setGuestToken(
+    orgId: string,
+    id: string,
+    token: string,
+    expiresAt: Date
+  ) {
+    const res = await this._approval.model.postApproval.updateMany({
+      where: { id, organizationId: orgId },
+      data: { guestToken: token, guestTokenExpiresAt: expiresAt },
+    });
+    return res.count;
+  }
+
+  async revokeGuestToken(orgId: string, id: string) {
+    const res = await this._approval.model.postApproval.updateMany({
+      where: { id, organizationId: orgId },
+      data: { guestToken: null, guestTokenExpiresAt: null },
+    });
+    return res.count;
+  }
+
+  /** Public lookup — no org context, gated entirely by the unguessable token. */
+  getByGuestToken(token: string) {
+    return this._approval.model.postApproval.findFirst({
+      where: {
+        guestToken: token,
+        status: 'PENDING',
+        guestTokenExpiresAt: { gt: new Date() },
+      },
+      select: {
+        id: true,
+        note: true,
+        organizationId: true,
+        requestedBy: { select: { email: true } },
+        post: {
+          select: {
+            id: true,
+            content: true,
+            image: true,
+            publishDate: true,
+            integration: {
+              select: { name: true, providerIdentifier: true, picture: true },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * Atomically checks token + PENDING + not-expired, resolves, and consumes
+   * the token (cleared in the same update) — single-use, no separate step
+   * that could race between "check" and "consume".
+   */
+  async resolveByGuestToken(
+    token: string,
+    status: ResolveStatus,
+    note: string | null
+  ) {
+    const res = await this._approval.model.postApproval.updateMany({
+      where: {
+        guestToken: token,
+        status: 'PENDING',
+        guestTokenExpiresAt: { gt: new Date() },
+      },
+      data: {
+        status,
+        approverId: null,
+        note,
+        resolvedAt: new Date(),
+        guestToken: null,
+        guestTokenExpiresAt: null,
+      },
     });
     return res.count;
   }

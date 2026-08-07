@@ -47,11 +47,19 @@ export class SubscriptionService {
   }
 
   async deleteSubscription(customerId: string) {
-    await this.modifySubscription(
+    // modifySubscription refuses to touch a lifetime (code-redeemed)
+    // subscription and returns false — deleting the row here too would undo
+    // that protection the moment a matching customerId shows up (e.g. a
+    // Polar cancellation webhook for an org that also happens to hold a
+    // manually-granted lifetime plan).
+    const modified = await this.modifySubscription(
       customerId,
       pricing.FREE.channel || 0,
       'FREE'
     );
+    if (!modified) {
+      return;
+    }
     return this._subscriptionRepository.deleteSubscriptionByCustomerId(
       customerId
     );

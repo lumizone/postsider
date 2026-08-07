@@ -86,6 +86,34 @@
   line-height: 1.5;
 }
 
+.valueProps {
+  list-style: none;
+  margin: 0 0 28px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.valueProps li {
+  padding-left: 16px;
+  border-left: 2px solid var(--line-soft);
+}
+
+.valuePropTitle {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.valuePropDesc {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
 /* Buttons */
 
 .primaryButton {
@@ -126,76 +154,4 @@
 
 .skipButton:hover {
   color: var(--fg);
-}
-
-/* Source grid (how did you find us) */
-
-.sourceGrid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-  margin-bottom: 28px;
-}
-
-.sourceChip {
-  padding: 8px 16px;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-pill);
-  background: var(--bg);
-  color: var(--fg);
-  font-size: 13px;
-  cursor: pointer;
-  transition: border-color 120ms var(--ease), background 120ms var(--ease);
-}
-
-.sourceChip:hover {
-  border-color: var(--fg);
-}
-
-.sourceChipActive {
-  border-color: var(--fg);
-  background: var(--fg);
-  color: var(--bg);
-}
-
-/* Platform grid (connect channel) */
-
-.platformGrid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-  margin-bottom: 24px;
-}
-
-.platformCard {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 14px 8px;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-md);
-  background: var(--bg);
-  cursor: pointer;
-  transition: border-color 120ms var(--ease), box-shadow 120ms var(--ease);
-}
-
-.platformCard:hover {
-  border-color: var(--fg);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-}
-
-.platformIcon {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  object-fit: contain;
-}
-
-.platformName {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--fg);
-  text-align: center;
 }

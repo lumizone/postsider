@@ -5,6 +5,7 @@ import { CheckPolicies } from '@postsider/backend/services/auth/permissions/perm
 import { OrganizationService } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.service';
 import { AddTeamMemberDto } from '@postsider/nestjs-libraries/dtos/settings/add.team.member.dto';
 import { ShortlinkPreferenceDto } from '@postsider/nestjs-libraries/dtos/settings/shortlink-preference.dto';
+import { UpdateOrganizationDto } from '@postsider/nestjs-libraries/dtos/settings/update-organization.dto';
 import { ApiTags } from '@nestjs/swagger';
 import { AuthorizationActions, Sections } from '@postsider/backend/services/auth/permissions/permission.exception.class';
 import { GetUserFromRequest } from '@postsider/nestjs-libraries/user/user.from.request';
@@ -14,6 +15,7 @@ import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/
 import { PostCheckerService } from '@postsider/nestjs-libraries/post-checker/post-checker.service';
 import { SaveCheckerConfigDto } from '@postsider/nestjs-libraries/dtos/post-checker/save.checker.config.dto';
 import { isPlatformAiEnabled } from '@postsider/nestjs-libraries/services/ai.flag';
+import { PolarService } from '@postsider/nestjs-libraries/services/polar.service';
 
 @ApiTags('Settings')
 @Controller('/settings')
@@ -23,6 +25,7 @@ export class SettingsController {
     private _providerCredentialsService: ProviderCredentialsService,
     private _integrationService: IntegrationService,
     private _postChecker: PostCheckerService,
+    private _polarService: PolarService,
   ) {}
 
   @Get('/post-checker')
@@ -84,6 +87,21 @@ export class SettingsController {
     @Param('id') id: string
   ) {
     return this._organizationService.deleteTeamMember(org, id);
+  }
+
+  @Get('/organization')
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  async getOrganizationProfile(@GetOrgFromRequest() org: Organization) {
+    return this._organizationService.getOrganizationProfile(org.id);
+  }
+
+  @Put('/organization')
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  async updateOrganizationProfile(
+    @GetOrgFromRequest() org: Organization,
+    @Body() body: UpdateOrganizationDto
+  ) {
+    return this._organizationService.updateOrganizationProfile(org.id, body);
   }
 
   @Get('/shortlink')
@@ -321,6 +339,11 @@ export class SettingsController {
     if (org.users?.[0]?.role !== 'SUPERADMIN') {
       throw new HttpException('Only the owner can delete the account', 403);
     }
+    // Cancel the real Polar subscription BEFORE the org's rows are gone —
+    // deleteAccount only ever wiped the local Subscription row, so Polar kept
+    // billing a customer whose org (and any way to manage or even see the
+    // subscription) no longer existed.
+    await this._polarService.cancelActiveSubscriptionBestEffort(org.id);
     return this._organizationService.deleteAccount(org.id, user.id);
   }
 }

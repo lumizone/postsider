@@ -252,7 +252,13 @@ export interface DuplicatePostInput {
 export interface DuplicatePostResult {
   duplicated: boolean;
   source: { group: string; integration: string };
-  target: { group: string; integration: string };
+  target: {
+    // Resolved from the newly created row; theoretically null only if that
+    // row could not be re-fetched immediately after creation.
+    group: string | null;
+    postId: string;
+    integration: string;
+  };
 }
 
 /**

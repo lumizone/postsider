@@ -404,6 +404,56 @@ server.registerTool(
   }
 );
 
+server.registerTool(
+  'postsider_request_approval',
+  {
+    title: 'Send a draft for approval',
+    description:
+      'Push a draft post into the human approval queue for review, instead of publishing or scheduling it directly. The post must already exist as a draft (see postsider_create_post with type "draft"). Approval is optional in PostSider — most posts can also be scheduled directly without ever going through this.',
+    inputSchema: {
+      postId: z.string().describe('Draft post id to submit for approval.'),
+    },
+    annotations: {
+      readOnlyHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+  },
+  async ({ postId }) => {
+    try {
+      return ok(
+        await client.post(`/posts/${encodeURIComponent(postId)}/request-approval`)
+      );
+    } catch (e) {
+      return fail(e);
+    }
+  }
+);
+
+server.registerTool(
+  'postsider_get_approval_status',
+  {
+    title: 'Get a post\'s approval status',
+    description:
+      'Check whether a post submitted via postsider_request_approval has been approved, rejected (with the reviewer\'s note, if any), or is still pending. Returns status "NONE" if the post was never sent for approval.',
+    inputSchema: {
+      postId: z.string().describe('Post id to check.'),
+    },
+    annotations: {
+      readOnlyHint: true,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+  },
+  async ({ postId }) => {
+    try {
+      return ok(await client.get(`/posts/${encodeURIComponent(postId)}/approval`));
+    } catch (e) {
+      return fail(e);
+    }
+  }
+);
+
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);

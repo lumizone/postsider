@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
 import { GetUserFromRequest } from '@postsider/nestjs-libraries/user/user.from.request';
@@ -59,5 +59,23 @@ export class ApprovalController {
     @Param('postId') postId: string
   ) {
     return this._approval.getForPost(org.id, postId);
+  }
+
+  // External-reviewer link (e.g. the agency's own client) — ADMIN/SUPERADMIN
+  // only, same as approve/reject.
+  @Post('/:id/guest-link')
+  createGuestLink(
+    @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string
+  ) {
+    return this._approval.createGuestLink(org.id, id, this.roleOf(org));
+  }
+
+  @Delete('/:id/guest-link')
+  revokeGuestLink(
+    @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string
+  ) {
+    return this._approval.revokeGuestLink(org.id, id, this.roleOf(org));
   }
 }

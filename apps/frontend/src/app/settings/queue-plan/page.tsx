@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { PageHeader, Card, settingsStyles as s } from "@/components/settings-ui";
 import { useAuth } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n";
+import { InfoTip } from "@/components/info-tip";
 import { listChannels } from "@/lib/integrations";
 import type { Channel } from "@/lib/calendar-data";
 import {
@@ -13,6 +14,11 @@ import {
   minutesToHHMM,
   hhmmToMinutes,
 } from "@/lib/queue-plan-api";
+import { getTeam, type TeamMember } from "@/lib/team-api";
+import {
+  getChannelAssignments,
+  setChannelAssignments,
+} from "@/lib/channel-assignment-api";
 
 function dayChip(active: boolean): React.CSSProperties {
   return {
@@ -45,10 +51,29 @@ export default function QueuePlanPage() {
 
   const [channels, setChannels] = useState<Channel[]>([]);
   const [plans, setPlans] = useState<Record<string, QueueSlot[]>>({});
+  const [timezones, setTimezones] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
+  const [team, setTeam] = useState<TeamMember[]>([]);
+  const [assignments, setAssignments] = useState<Record<string, string[]>>({});
+
+  // Falls back to a short list on runtimes without Intl.supportedValuesOf
+  // (older browsers) rather than hand-maintaining every IANA zone.
+  const zoneOptions = useMemo<string[]>(() => {
+    try {
+      return (Intl as any).supportedValuesOf?.("timeZone") ?? [];
+    } catch {
+      return [];
+    }
+  }, []);
+  const FALLBACK_ZONES = [
+    "UTC", "America/New_York", "America/Chicago", "America/Denver",
+    "America/Los_Angeles", "Europe/London", "Europe/Paris", "Europe/Warsaw",
+    "Europe/Berlin", "Asia/Tokyo", "Asia/Singapore", "Asia/Kolkata",
+    "Australia/Sydney",
+  ];
 
   useEffect(() => {
     (async () => {
@@ -58,14 +83,43 @@ export default function QueuePlanPage() {
         const entries = await Promise.all(
           channels.map(async (c) => {
             try {
-              const { slots } = await getQueuePlan(c.id);
-              return [c.id, Array.isArray(slots) ? slots : []] as const;
+              const { slots, timezone } = await getQueuePlan(c.id);
+              return {
+                id: c.id,
+                slots: Array.isArray(slots) ? slots : ([] as QueueSlot[]),
+                timezone: timezone || "UTC",
+              };
             } catch {
-              return [c.id, []] as const;
+              return { id: c.id, slots: [] as QueueSlot[], timezone: "UTC" };
             }
           })
         );
-        setPlans(Object.fromEntries(entries));
+        const nextPlans: Record<string, QueueSlot[]> = {};
+        const nextTimezones: Record<string, string> = {};
+        for (const e of entries) {
+          nextPlans[e.id] = e.slots;
+          nextTimezones[e.id] = e.timezone;
+        }
+        setPlans(nextPlans);
+        setTimezones(nextTimezones);
+
+        const [{ users: members }, assignmentEntries] = await Promise.all([
+          getTeam().catch(() => ({ users: [] as TeamMember[] })),
+          Promise.all(
+            channels.map(async (c) => {
+              try {
+                const { users } = await getChannelAssignments(c.id);
+                return { id: c.id, userIds: users.map((u) => u.id) };
+              } catch {
+                return { id: c.id, userIds: [] as string[] };
+              }
+            })
+          ),
+        ]);
+        setTeam(members);
+        const nextAssignments: Record<string, string[]> = {};
+        for (const a of assignmentEntries) nextAssignments[a.id] = a.userIds;
+        setAssignments(nextAssignments);
       } catch (e) {
         setError(e instanceof Error ? e.message : t("settingsQueuePlan.loadError"));
       } finally {
@@ -74,6 +128,15 @@ export default function QueuePlanPage() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const toggleAssignment = (channelId: string, userId: string) =>
+    setAssignments((prev) => {
+      const current = prev[channelId] || [];
+      const next = current.includes(userId)
+        ? current.filter((id) => id !== userId)
+        : [...current, userId];
+      return { ...prev, [channelId]: next };
+    });
 
   const update = (id: string, slots: QueueSlot[]) =>
     setPlans((p) => ({ ...p, [id]: slots }));
@@ -112,7 +175,10 @@ export default function QueuePlanPage() {
     setSavingId(id);
     setError(null);
     try {
-      await saveQueuePlan(id, plans[id] || []);
+      await Promise.all([
+        saveQueuePlan(id, plans[id] || [], timezones[id]),
+        setChannelAssignments(id, assignments[id] || []),
+      ]);
       setSavedId(id);
       setTimeout(() => setSavedId((cur) => (cur === id ? null : cur)), 2000);
     } catch (e) {
@@ -156,6 +222,18 @@ export default function QueuePlanPage() {
           return (
             <Card key={c.id} title={c.name}>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--muted)" }}>
+                  {t("settingsQueuePlan.timezone")}
+                  <select
+                    className={s.input}
+                    value={timezones[c.id] || "UTC"}
+                    onChange={(e) => setTimezones((tz) => ({ ...tz, [c.id]: e.target.value }))}
+                  >
+                    {(zoneOptions.length > 0 ? zoneOptions : FALLBACK_ZONES).map((z) => (
+                      <option key={z} value={z}>{z}</option>
+                    ))}
+                  </select>
+                </label>
                 {slots.length === 0 && (
                   <div style={{ fontSize: 13, color: "var(--muted)" }}>{t("settingsQueuePlan.noSlots")}</div>
                 )}
@@ -164,7 +242,6 @@ export default function QueuePlanPage() {
                   return (
                     <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       <input type="time" className={s.input} style={{ width: 120 }} value={minutesToHHMM(slot.time)} onChange={(e) => setTime(c.id, i, e.target.value)} />
-                      <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600 }}>UTC</span>
                       <div style={{ display: "flex", gap: 4 }}>
                         {dayLabels.map((lbl, d) => (
                           <button
@@ -184,8 +261,33 @@ export default function QueuePlanPage() {
                     </div>
                   );
                 })}
+                {team.length > 0 && (
+                  <div style={{ borderTop: "1px solid var(--line-soft)", paddingTop: 10, marginTop: 4 }}>
+                    <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>
+                      {t("settingsQueuePlan.assignedTo")}
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                      {team.map((m) => (
+                        <label key={m.user.id} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}>
+                          <input
+                            type="checkbox"
+                            checked={(assignments[c.id] || []).includes(m.user.id)}
+                            onChange={() => toggleAssignment(c.id, m.user.id)}
+                          />
+                          {m.user.email}
+                        </label>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>
+                      {(assignments[c.id] || []).length === 0
+                        ? t("settingsQueuePlan.assignedNone")
+                        : t("settingsQueuePlan.assignedSome")}
+                    </div>
+                  </div>
+                )}
                 <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
                   <button type="button" className={s.btnGhost} onClick={() => addSlot(c.id)}>{t("settingsQueuePlan.addSlot")}</button>
+                  <InfoTip textKey="infoTip.slot" />
                   <button type="button" className={s.btnPrimary} onClick={() => save(c.id)} disabled={savingId === c.id}>
                     {savingId === c.id ? t("settingsQueuePlan.saving") : savedId === c.id ? t("settingsQueuePlan.saved") : t("common.save")}
                   </button>

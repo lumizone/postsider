@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PageHeader, Card } from "@/components/settings-ui";
+import { SectionIntro } from "@/components/section-intro";
 import { useAuth } from "@/lib/auth-context";
 import { useT, useI18n } from "@/lib/i18n";
 import {
@@ -74,7 +75,9 @@ function BillingInner() {
   const { user, refresh: refreshUser } = useAuth();
   const searchParams = useSearchParams();
 
-  const canManage = user?.role === "ADMIN" || user?.role === "SUPERADMIN";
+  // Billing is owner-only — mirrors the backend's assertOwner() in
+  // billing.controller.ts and the sidebar nav's minRole: "SUPERADMIN".
+  const canManage = user?.role === "SUPERADMIN";
 
   const [period, setPeriod] = useState<BillingPeriod>("MONTHLY");
   const [current, setCurrent] = useState<CurrentSubscription | null>(null);
@@ -125,7 +128,12 @@ function BillingInner() {
     t("billing.features.multiPlatform"),
     t("billing.features.calendar"),
     t("billing.features.analytics"),
-    t("billing.features.smartAgent"),
+    // "Smart Agent (AI tools)" was listed on every plan card unconditionally
+    // while `ai` is false on every tier in the backend pricing table, and the
+    // platform OpenAI key is unset in production, so /posts/check answers
+    // 409 "No AI key configured" and the settings page for a per-org key is
+    // not in the nav. Advertising it made the whole card untrustworthy.
+    t("billing.features.approvals"),
   ];
 
   const loadBilling = useCallback(async () => {
@@ -259,6 +267,11 @@ function BillingInner() {
         eyebrow={t("billing.eyebrow")}
         title={t("billing.title")}
         subtitle={t("billing.subtitle")}
+      />
+      <SectionIntro
+        id="billing"
+        titleKey="sectionIntro.billingTitle"
+        bodyKey="sectionIntro.billingBody"
       />
 
       {error && (

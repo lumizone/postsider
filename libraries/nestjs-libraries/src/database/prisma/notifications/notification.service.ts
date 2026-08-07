@@ -5,6 +5,7 @@ import { OrganizationRepository } from '@postsider/nestjs-libraries/database/pri
 import { TemporalService } from 'nestjs-temporal-core';
 import { TypedSearchAttributes } from '@temporalio/common';
 import { organizationId } from '@postsider/nestjs-libraries/temporal/temporal.search.attribute';
+import { ChannelAssignmentService } from '@postsider/nestjs-libraries/database/prisma/channel-assignment/channel-assignment.service';
 
 export type NotificationType = 'success' | 'fail' | 'info';
 
@@ -14,7 +15,8 @@ export class NotificationService {
     private _notificationRepository: NotificationsRepository,
     private _emailService: EmailService,
     private _organizationRepository: OrganizationRepository,
-    private _temporalService: TemporalService
+    private _temporalService: TemporalService,
+    private _channelAssignments: ChannelAssignmentService
   ) {}
 
   getMainPageCount(organizationId: string, userId: string) {
@@ -85,13 +87,40 @@ export class NotificationService {
     await this.sendEmailsToOrg(orgId, subject, message, type);
   }
 
-  /** Email only the org's approvers (ADMIN/SUPERADMIN) — used when a new
-   * post lands in the approval queue so the right people get pinged. */
-  async notifyApprovers(orgId: string, subject: string, message: string) {
+  /**
+   * Email only the org's approvers (ADMIN/SUPERADMIN) — used when a new post
+   * lands in the approval queue so the right people get pinged.
+   *
+   * When `integrationId` is given and that channel has explicit
+   * ChannelAssignment rows, only ASSIGNED approvers are emailed — an agency
+   * with 50 client channels and 10 staff no longer pings everyone for every
+   * client's approval request. No assignments for that channel (the
+   * default) falls back to every org approver, unchanged.
+   */
+  async notifyApprovers(
+    orgId: string,
+    subject: string,
+    message: string,
+    integrationId?: string
+  ) {
     const userOrg = await this._organizationRepository.getAllUsersOrgs(orgId);
-    const approvers = (userOrg?.users || []).filter(
+    let approvers = (userOrg?.users || []).filter(
       (u: any) => u.role === 'ADMIN' || u.role === 'SUPERADMIN'
     );
+    if (integrationId) {
+      const assigned = await this._channelAssignments.listForIntegration(
+        orgId,
+        integrationId
+      );
+      if (assigned.length > 0) {
+        const assignedIds = new Set(assigned.map((a) => a.userId));
+        const scoped = approvers.filter((a: any) => assignedIds.has(a.user.id));
+        // Only narrow if at least one assigned user is ALSO an approver —
+        // otherwise a channel assigned to non-admin staff would silently
+        // notify nobody about a request only an admin can actually resolve.
+        if (scoped.length > 0) approvers = scoped;
+      }
+    }
     for (const member of approvers) {
       if (member?.user?.sendSuccessEmails === false) continue;
       await this.sendEmail(member.user.email, subject, message);

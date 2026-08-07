@@ -791,12 +791,17 @@ export class PostsRepository {
   async getPostsCountsByDates(
     orgId: string,
     times: number[],
-    date: dayjs.Dayjs
+    date: dayjs.Dayjs,
+    integrationId?: string
   ) {
     const dates = await this._post.model.post.findMany({
       where: {
         deletedAt: null,
         organizationId: orgId,
+        // Scoped to the target channel when known, so a busy slot on one
+        // client's channel doesn't block an unrelated channel from using the
+        // same UTC instant — cross-channel simultaneous posting is normal.
+        ...(integrationId ? { integrationId } : {}),
         publishDate: {
           in: times.map((time) => {
             return date.clone().add(time, 'minutes').toDate();
@@ -836,6 +841,30 @@ export class PostsRepository {
         id: true,
         content: true,
         createdAt: true,
+      },
+    });
+  }
+
+  /**
+   * Internal team-facing variant (dashboard, not the public preview): scoped
+   * to the org AND includes the commenter's identity, since this is only
+   * ever reached after the caller has proven org membership.
+   */
+  async getCommentsForOrg(orgId: string, postId: string) {
+    return this._comments.model.comments.findMany({
+      where: {
+        postId,
+        organizationId: orgId,
+        deletedAt: null,
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+      select: {
+        id: true,
+        content: true,
+        createdAt: true,
+        user: { select: { id: true, name: true, email: true } },
       },
     });
   }

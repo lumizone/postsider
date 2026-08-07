@@ -1,0 +1,76 @@
+.wrap {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 5px;
+}
+
+.trigger {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--line-soft);
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 120ms var(--ease), color 120ms var(--ease);
+}
+
+.trigger:hover,
+.trigger[aria-expanded="true"] {
+  border-color: var(--fg);
+  color: var(--fg);
+}
+
+.bubble {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 260px;
+  padding: 9px 11px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-soft);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+  /* Matches the popover treatment used by the post row menu and the modals. */
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  /*
+   * Opacity only, deliberately. The shared scaleIn keyframes animate
+   * `transform`, which would clobber the translateX(-50%) that centres this
+   * bubble on desktop (and the media query below drops that transform on
+   * narrow screens, so a single keyframe set cannot serve both).
+   */
+  animation: fadeIn 120ms var(--ease);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/*
+ * Near the right edge a centred bubble overflows the viewport; on narrow
+ * screens pin it so it stays on screen instead of forcing a horizontal scroll.
+ */
+@media (max-width: 640px) {
+  .bubble {
+    left: auto;
+    right: 0;
+    transform: none;
+    max-width: min(260px, calc(100vw - 48px));
+  }
+}

@@ -225,7 +225,11 @@ export async function connectIntegration(
   provider: string,
   payload: { code: string; state: string; refresh?: string; timezone?: string },
 ): Promise<ConnectResult> {
-  // Backend requires timezone (UTC offset in minutes as a string).
+  // Any truthy value just tells the backend to seed default posting-time
+  // slots on connect (local minutes-from-midnight — see Integration.timezone,
+  // default 'UTC'; set the channel's real audience zone afterward on the
+  // Queue Plan settings page, since the connecting person's own browser zone
+  // usually isn't the audience's).
   const timezone = payload.timezone ?? String(new Date().getTimezoneOffset() * -1);
   return api.post<ConnectResult>(
     `/integrations/social-connect/${provider}`,

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useT } from "@/lib/i18n";
+import { SectionIntro } from "./section-intro";
 import styles from "./settings-shell.module.css";
 
 interface NavEntry {
@@ -23,6 +24,7 @@ interface NavEntry {
 
 const NAV_ITEMS: NavEntry[] = [
   { href: "/settings/general", labelKey: "settings.general" },
+  { href: "/settings/organization", labelKey: "settings.organization", minRole: "ADMIN" },
   { href: "/settings/users", labelKey: "settings.users", minRole: "ADMIN" },
   { href: "/settings/security", labelKey: "settings.security" },
   { href: "/settings/api", labelKey: "settings.api", minRole: "ADMIN" },
@@ -48,8 +50,10 @@ export function SettingsShell({ children }: { children: ReactNode }) {
 
   const visibleItems = NAV_ITEMS.filter((item) => {
     // Hide self-hosted-only pages in SaaS mode.
-    // SaaS mode = no NEXT_PUBLIC_SELF_HOSTED env var set.
-    const isSaaS = !process.env.NEXT_PUBLIC_SELF_HOSTED;
+    // SaaS mode = NEXT_PUBLIC_SELF_HOSTED !== 'true' (matches settings.controller.ts
+    // backend check — was `!process.env.X`, which treats ANY set string, including
+    // the literal "false", as truthy self-hosted mode).
+    const isSaaS = process.env.NEXT_PUBLIC_SELF_HOSTED !== "true";
     if (isSaaS && item.selfHostedOnly) return false;
     // Hide BYO-AI pages when the platform AI key is present.
     if (item.byoAiOnly && user?.isPlatformAi) return false;
@@ -80,7 +84,14 @@ export function SettingsShell({ children }: { children: ReactNode }) {
           })}
         </nav>
       </aside>
-      <main className={styles.content}>{children}</main>
+      <main className={styles.content}>
+        <SectionIntro
+          id="settings"
+          titleKey="sectionIntro.settingsTitle"
+          bodyKey="sectionIntro.settingsBody"
+        />
+        {children}
+      </main>
     </div>
   );
 }
