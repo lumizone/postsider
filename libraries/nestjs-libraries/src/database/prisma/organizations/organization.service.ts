@@ -66,6 +66,34 @@ export class OrganizationService {
     return this._organizationRepository.getCount();
   }
 
+  async getOrganizationProfile(id: string) {
+    const org = await this._organizationRepository.getOrgById(id);
+    return {
+      name: org?.name ?? '',
+      description: org?.description ?? '',
+      logo: org?.logo ?? null,
+      defaultTimezone: org?.defaultTimezone ?? null,
+    };
+  }
+
+  async updateOrganizationProfile(
+    id: string,
+    data: {
+      name?: string;
+      description?: string | null;
+      logo?: string | null;
+      defaultTimezone?: string | null;
+    }
+  ) {
+    const org = await this._organizationRepository.updateOrganizationProfile(id, data);
+    return {
+      name: org.name,
+      description: org.description ?? '',
+      logo: org.logo ?? null,
+      defaultTimezone: org.defaultTimezone ?? null,
+    };
+  }
+
   async createMaxUser(id: string, name: string, saasName: string, email: string) {
     return this._organizationRepository.createMaxUser(id, name, saasName, email);
   }

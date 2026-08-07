@@ -5,6 +5,7 @@ import { CheckPolicies } from '@postsider/backend/services/auth/permissions/perm
 import { OrganizationService } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.service';
 import { AddTeamMemberDto } from '@postsider/nestjs-libraries/dtos/settings/add.team.member.dto';
 import { ShortlinkPreferenceDto } from '@postsider/nestjs-libraries/dtos/settings/shortlink-preference.dto';
+import { UpdateOrganizationDto } from '@postsider/nestjs-libraries/dtos/settings/update-organization.dto';
 import { ApiTags } from '@nestjs/swagger';
 import { AuthorizationActions, Sections } from '@postsider/backend/services/auth/permissions/permission.exception.class';
 import { GetUserFromRequest } from '@postsider/nestjs-libraries/user/user.from.request';
@@ -84,6 +85,21 @@ export class SettingsController {
     @Param('id') id: string
   ) {
     return this._organizationService.deleteTeamMember(org, id);
+  }
+
+  @Get('/organization')
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  async getOrganizationProfile(@GetOrgFromRequest() org: Organization) {
+    return this._organizationService.getOrganizationProfile(org.id);
+  }
+
+  @Put('/organization')
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  async updateOrganizationProfile(
+    @GetOrgFromRequest() org: Organization,
+    @Body() body: UpdateOrganizationDto
+  ) {
+    return this._organizationService.updateOrganizationProfile(org.id, body);
   }
 
   @Get('/shortlink')

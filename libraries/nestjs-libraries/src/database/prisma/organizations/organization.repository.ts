@@ -223,6 +223,21 @@ export class OrganizationRepository {
     });
   }
 
+  async updateOrganizationProfile(
+    id: string,
+    data: {
+      name?: string;
+      description?: string | null;
+      logo?: string | null;
+      defaultTimezone?: string | null;
+    }
+  ) {
+    return this._organization.model.organization.update({
+      where: { id },
+      data,
+    });
+  }
+
   async addUserToOrg(
     userId: string,
     id: string,

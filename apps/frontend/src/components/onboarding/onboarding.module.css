@@ -86,6 +86,34 @@
   line-height: 1.5;
 }
 
+.valueProps {
+  list-style: none;
+  margin: 0 0 28px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.valueProps li {
+  padding-left: 16px;
+  border-left: 2px solid var(--line-soft);
+}
+
+.valuePropTitle {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.valuePropDesc {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
 /* Buttons */
 
 .primaryButton {

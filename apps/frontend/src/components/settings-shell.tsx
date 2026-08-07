@@ -24,6 +24,7 @@ interface NavEntry {
 
 const NAV_ITEMS: NavEntry[] = [
   { href: "/settings/general", labelKey: "settings.general" },
+  { href: "/settings/organization", labelKey: "settings.organization", minRole: "ADMIN" },
   { href: "/settings/users", labelKey: "settings.users", minRole: "ADMIN" },
   { href: "/settings/security", labelKey: "settings.security" },
   { href: "/settings/api", labelKey: "settings.api", minRole: "ADMIN" },

@@ -59,6 +59,32 @@ export function OnboardingFlow() {
                 })}
               </h1>
               <p className={styles.subtitle}>{t("onboarding.welcomeSubtitle")}</p>
+              <ul className={styles.valueProps}>
+                <li>
+                  <span className={styles.valuePropTitle}>
+                    {t("onboarding.valueProp1Title")}
+                  </span>
+                  <span className={styles.valuePropDesc}>
+                    {t("onboarding.valueProp1Desc")}
+                  </span>
+                </li>
+                <li>
+                  <span className={styles.valuePropTitle}>
+                    {t("onboarding.valueProp2Title")}
+                  </span>
+                  <span className={styles.valuePropDesc}>
+                    {t("onboarding.valueProp2Desc")}
+                  </span>
+                </li>
+                <li>
+                  <span className={styles.valuePropTitle}>
+                    {t("onboarding.valueProp3Title")}
+                  </span>
+                  <span className={styles.valuePropDesc}>
+                    {t("onboarding.valueProp3Desc")}
+                  </span>
+                </li>
+              </ul>
               <button
                 className={styles.primaryButton}
                 onClick={() => setStep("connect")}

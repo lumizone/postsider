@@ -41,6 +41,21 @@
   color: var(--fg);
 }
 
+.progress {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-soft);
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--fg);
+  border-radius: 2px;
+  transition: width 240ms var(--ease);
+}
+
 .list {
   list-style: none;
   margin: 0;

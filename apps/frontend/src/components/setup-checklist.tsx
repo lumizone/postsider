@@ -181,6 +181,19 @@ export function SetupChecklist({
         </button>
       </div>
 
+      <div
+        className={styles.progress}
+        role="progressbar"
+        aria-valuenow={doneCount}
+        aria-valuemin={0}
+        aria-valuemax={items.length}
+      >
+        <div
+          className={styles.progressFill}
+          style={{ width: `${(doneCount / items.length) * 100}%` }}
+        />
+      </div>
+
       <ol className={styles.list}>
         {items.map((item) => (
           <li

@@ -47,7 +47,7 @@ export function backendMediaToItem(m: BackendMedia): MediaItem {
   };
 }
 
-export function backendMediaToUrl(m: BackendMedia): string {
+export function backendMediaToUrl(m: Pick<BackendMedia, "path">): string {
   return withBase(m.path);
 }
 

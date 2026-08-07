@@ -593,7 +593,12 @@ export class IntegrationsController {
     const slots = integration?.postingTimes
       ? JSON.parse(integration.postingTimes)
       : [];
-    return { slots, timezone: integration?.timezone ?? 'UTC' };
+    // Per-channel timezone wins when set; otherwise fall back to the org's
+    // configured default (Organization Settings) before the hard 'UTC'.
+    return {
+      slots,
+      timezone: integration?.timezone ?? org.defaultTimezone ?? 'UTC',
+    };
   }
 
   @Put('/:id/queue-plan')

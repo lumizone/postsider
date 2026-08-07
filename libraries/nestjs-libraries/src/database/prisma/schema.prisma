@@ -12,6 +12,8 @@ model Organization {
   id                   String                     @id @default(uuid())
   name                 String
   description          String?
+  logo                 String?
+  defaultTimezone      String?
   apiKey               String?
   paymentId            String?
   streakSince          DateTime?
