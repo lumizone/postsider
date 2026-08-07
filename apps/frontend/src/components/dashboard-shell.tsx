@@ -518,6 +518,16 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                 >
                   {t("nav.signOut")}
                 </button>
+                <a
+                  href="mailto:contact@postsider.com"
+                  style={{
+                    marginTop: 6,
+                    color: "var(--muted)",
+                    fontSize: 12,
+                  }}
+                >
+                  {t("nav.support")}
+                </a>
               </div>
             )}
           </div>
