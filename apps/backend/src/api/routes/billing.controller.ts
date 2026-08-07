@@ -8,6 +8,11 @@ import { ApiTags } from '@nestjs/swagger';
 import { GetUserFromRequest } from '@postsider/nestjs-libraries/user/user.from.request';
 import { NotificationService } from '@postsider/nestjs-libraries/database/prisma/notifications/notification.service';
 import { Request } from 'express';
+import { CheckPolicies } from '@postsider/backend/services/auth/permissions/permissions.ability';
+import {
+  AuthorizationActions,
+  Sections,
+} from '@postsider/backend/services/auth/permissions/permission.exception.class';
 
 @ApiTags('Billing')
 @Controller('/billing')
@@ -35,6 +40,14 @@ export class BillingController {
     };
   }
 
+  // Billing state-changing routes are ADMIN-only — the frontend already hides
+  // the whole /billing page from non-managers (`canManage` in billing/page.tsx),
+  // but that's a client-side gate only. Without @CheckPolicies here any
+  // authenticated org member (role USER) could hit these directly and start a
+  // checkout, open the Polar customer portal, or cancel the org's paid
+  // subscription. Reads (GET /, /is-trial-finished, /check/:id) stay open to
+  // any org member — same as other org-scoped read endpoints elsewhere.
+  @CheckPolicies([AuthorizationActions.Update, Sections.ADMIN])
   @Post('/embedded')
   embedded(
     @GetOrgFromRequest() org: Organization,
@@ -52,6 +65,7 @@ export class BillingController {
     );
   }
 
+  @CheckPolicies([AuthorizationActions.Update, Sections.ADMIN])
   @Post('/subscribe')
   subscribe(
     @GetOrgFromRequest() org: Organization,
@@ -69,6 +83,7 @@ export class BillingController {
     );
   }
 
+  @CheckPolicies([AuthorizationActions.Update, Sections.ADMIN])
   @Get('/portal')
   async modifyPayment(@GetOrgFromRequest() org: Organization) {
     const customerId = await this._polarService.getCustomerByOrganizationId(
@@ -86,6 +101,7 @@ export class BillingController {
     return this._subscriptionService.getSubscriptionByOrganizationId(org.id);
   }
 
+  @CheckPolicies([AuthorizationActions.Delete, Sections.ADMIN])
   @Post('/cancel')
   async cancel(
     @GetOrgFromRequest() org: Organization,

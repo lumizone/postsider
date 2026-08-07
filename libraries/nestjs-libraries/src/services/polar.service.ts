@@ -225,6 +225,39 @@ export class PolarService {
       );
     }
 
+    // If the org already has a real Polar-managed subscription (not a local
+    // trial, not a manually-granted lifetime code), swap the product on that
+    // SAME subscription instead of creating a second checkout. Polar checkout
+    // does not cancel/replace an existing paid subscription for the same
+    // customer — a second checkout would mean two concurrent recurring
+    // charges for one org, silently, since our DB only ever keeps one
+    // Subscription row per org and the newest webhook overwrites it.
+    const existing = await this._subscriptionService.getSubscription(
+      organizationId
+    );
+    if (existing?.identifier && existing.identifier !== 'trial' && !existing.isLifetime) {
+      try {
+        const updated = await this._polar.subscriptions.update({
+          id: existing.identifier,
+          subscriptionUpdate: { productId },
+        });
+        // Reuse the same handler the webhook uses so the DB reflects the new
+        // tier immediately, without waiting on the async subscription.updated
+        // event (which will arrive too and just no-op via the upsert).
+        await this.onSubscriptionUpserted(updated);
+        return {};
+      } catch (err) {
+        // Not a real Polar subscription (e.g. a manually-granted id that
+        // never existed on Polar) or a transient API error — fall back to a
+        // normal checkout below rather than failing the whole request.
+        this._logger.warn(
+          `Could not update existing Polar subscription ${existing.identifier} in place, falling back to a new checkout: ${
+            err instanceof Error ? err.message : err
+          }`
+        );
+      }
+    }
+
     const org = await this._organizationService.getOrgById(organizationId);
 
     const checkout = await this._polar.checkouts.create({
@@ -402,12 +435,23 @@ export class PolarService {
    *   0 — nothing found
    */
   async checkSubscription(organizationId: string, checkoutId: string) {
-    const sub = await this._subscriptionService.getSubscription(organizationId);
-    if (sub) {
-      return 2;
-    }
+    let resultingSubscriptionId: string | null = null;
     try {
       const checkout = await this._polar.checkouts.get({ id: checkoutId });
+      resultingSubscriptionId = (checkout as any)?.subscriptionId || null;
+      const sub = await this._subscriptionService.getSubscription(organizationId);
+      // On a plain first-time subscribe there is no prior subscription, so
+      // any subscription showing up means THIS checkout provisioned it. But
+      // on an upgrade the org can already have an older subscription while
+      // this checkout's webhook hasn't landed yet — match it to the
+      // checkout's own resulting subscription id when Polar gives us one, so
+      // we don't report "done" against the stale pre-upgrade tier.
+      if (
+        sub &&
+        (!resultingSubscriptionId || sub.identifier === resultingSubscriptionId)
+      ) {
+        return 2;
+      }
       if (checkout?.status === 'confirmed' || checkout?.status === 'succeeded') {
         return 1;
       }
