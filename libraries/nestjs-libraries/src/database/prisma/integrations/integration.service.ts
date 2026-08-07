@@ -352,6 +352,20 @@ export class IntegrationService {
       data
     );
 
+    // A provider's fetchPageInformation can come back without a resolvable
+    // id (an upstream API error/edge-case response shape) — persisting that
+    // anyway wrote the literal string "undefined" as internalId in one real
+    // case (Instagram), which then silently 100%-failed every publish for
+    // that channel (every post/media call is built as `${internalId}/media`).
+    // Fail the connect step instead so the user can retry, rather than
+    // completing "successfully" into a channel that can never publish.
+    if (!getIntegrationInformation?.id) {
+      throw new HttpException(
+        'Could not resolve the selected page/account — please try again',
+        HttpStatus.BAD_GATEWAY
+      );
+    }
+
     await this.checkForDeletedOnceAndUpdate(
       org,
       String(getIntegrationInformation.id)
