@@ -228,7 +228,10 @@ export class ApprovalService {
     requesterEmail?: string
   ) {
     // Flip the draft to a scheduled (QUEUE) post and start its workflow.
-    await this._posts.changePostStatus(orgId, postId, 'schedule');
+    // allowApprovalTransition=true: the caller chain (assertCanApprove +
+    // assertPending, above) already authorized moving this specific post out
+    // of APPROVAL — see changePostStatus's guard comment.
+    await this._posts.changePostStatus(orgId, postId, 'schedule', true);
     await this._notifications.inAppNotification(
       orgId,
       'Post approved',

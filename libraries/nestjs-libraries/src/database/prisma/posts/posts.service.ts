@@ -1104,14 +1104,41 @@ export class PostsService {
     return this._postRepository.changeState(id, state, err, body);
   }
 
+  /**
+   * Blocks changeDate/changePostStatus from touching a post that is
+   * PUBLISHED (already went out — not this endpoint's job) or in APPROVAL
+   * (pending human review — moving it must go through the dedicated
+   * approve/reject endpoints in ApprovalService, which are role-gated and
+   * resolve the Approval record; this generic status/date endpoint is open
+   * to any org member and any Public API key, so leaving it able to flip
+   * APPROVAL -> QUEUE silently pulls a post out of review). Mirrors the
+   * frontend's own isDraggableStatus() exclusion, which only ever guarded
+   * the calendar drag handler, not the API these requests ultimately hit.
+   */
+  private assertMutable(post: { state: string }): void {
+    if (post.state === 'PUBLISHED' || post.state === 'APPROVAL') {
+      throw new BadRequestException(
+        `Cannot change a post that is ${post.state === 'APPROVAL' ? 'pending approval' : 'already published'}`
+      );
+    }
+  }
+
   async changePostStatus(
     orgId: string,
     id: string,
-    status: 'draft' | 'schedule'
+    status: 'draft' | 'schedule',
+    // Only ApprovalService.onApproved sets this — it has already run
+    // assertCanApprove(role) + assertPending(approval) before calling in, so
+    // an APPROVAL post reaching here IS the authorized approve action, not
+    // the bypass this guard exists to stop.
+    allowApprovalTransition = false
   ) {
     const getPostById = await this._postRepository.getPostById(id, orgId);
     if (!getPostById) {
       throw new BadRequestException('Post not found');
+    }
+    if (!(allowApprovalTransition && getPostById.state === 'APPROVAL')) {
+      this.assertMutable(getPostById);
     }
 
     const state: State = status === 'draft' ? 'DRAFT' : 'QUEUE';
@@ -1150,6 +1177,7 @@ export class PostsService {
     if (!getPostById) {
       throw new BadRequestException('Post not found');
     }
+    this.assertMutable(getPostById);
 
     // schedule: Set status to QUEUE and change date (reschedule the post)
     // update: Just change the date without changing the status
