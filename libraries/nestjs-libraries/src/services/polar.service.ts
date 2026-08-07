@@ -7,6 +7,7 @@ import {
 import { Organization } from '@prisma/client';
 import { SubscriptionService } from '@postsider/nestjs-libraries/database/prisma/subscriptions/subscription.service';
 import { OrganizationService } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.service';
+import { NotificationService } from '@postsider/nestjs-libraries/database/prisma/notifications/notification.service';
 import { BillingSubscribeDto } from '@postsider/nestjs-libraries/dtos/billing/billing.subscribe.dto';
 import { pricing } from '@postsider/nestjs-libraries/database/prisma/subscriptions/pricing';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
@@ -42,7 +43,8 @@ export class PolarService {
 
   constructor(
     private _subscriptionService: SubscriptionService,
-    private _organizationService: OrganizationService
+    private _organizationService: OrganizationService,
+    private _notificationService: NotificationService
   ) {}
 
   /**
@@ -132,6 +134,18 @@ export class PolarService {
       await this._subscriptionService.updateCustomerId(orgId, customerId);
     }
 
+    // Snapshot before the upsert so we can tell a genuine plan change (worth
+    // emailing the org's admins about) apart from a duplicate/retry webhook
+    // delivery or an unrelated field update on the same tier — Polar can
+    // resend 'subscription.updated' for reasons that aren't a tier change.
+    const previous = await this._subscriptionService.getSubscriptionByOrganizationId(
+      orgId
+    );
+    const planChanged =
+      !previous ||
+      previous.subscriptionTier !== ref.tier ||
+      previous.period !== ref.period;
+
     await this._subscriptionService.createOrUpdateSubscription(
       isTrailing,
       subscription?.id || makeId(10),
@@ -143,6 +157,14 @@ export class PolarService {
       undefined,
       orgId
     );
+
+    if (planChanged) {
+      await this._notificationService.notifyApprovers(
+        orgId,
+        'Subscription plan updated',
+        `Your organization's plan is now ${ref.tier} (billed ${ref.period.toLowerCase()}).`
+      );
+    }
 
     return { ok: true };
   }
@@ -379,6 +401,34 @@ export class PolarService {
       id,
       cancel_at: endsAt ? new Date(endsAt) : undefined,
     };
+  }
+
+  /**
+   * Cancel the org's real Polar subscription as part of deleting the org
+   * itself. Best-effort and never throws: account deletion is irreversible
+   * local state (the caller runs it right before wiping the org's rows) and
+   * must not be blocked by a Polar API hiccup — but a swallowed failure here
+   * would leave the customer billed forever with no PostSider org left to
+   * manage or even see it from, so a failure is logged loudly instead.
+   * No-ops for trial/lifetime/no-subscription orgs, same as subscribe()'s
+   * upgrade guard — there is no real Polar subscription to revoke there.
+   */
+  async cancelActiveSubscriptionBestEffort(organizationId: string) {
+    const sub = await this._subscriptionService.getSubscription(organizationId);
+    if (!sub?.identifier || sub.identifier === 'trial' || sub.isLifetime) {
+      return;
+    }
+    try {
+      await this._polar.subscriptions.revoke({ id: sub.identifier });
+    } catch (err) {
+      this._logger.error(
+        `Account deletion for org ${organizationId} could not cancel its Polar subscription ${
+          sub.identifier
+        } — it may keep billing the customer and needs manual cancellation in the Polar dashboard: ${
+          err instanceof Error ? err.message : err
+        }`
+      );
+    }
   }
 
   /**
