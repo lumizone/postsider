@@ -74,6 +74,15 @@ export class SettingsController {
     @GetOrgFromRequest() org: Organization,
     @Body() body: AddTeamMemberDto
   ) {
+    // Only the owner can grant ADMIN — mirrors changeTeamMemberRole's SUPERADMIN
+    // gate below. The @CheckPolicies above only requires ADMIN-or-above to call
+    // this endpoint at all, so without this a plain ADMIN could invite (or
+    // re-link an existing user as) a peer ADMIN via a raw API call — the
+    // frontend hides the ADMIN option for non-owners, but that's UI only.
+    // @ts-ignore — role is attached to org.users[0] by the auth middleware.
+    if (body.role === 'ADMIN' && org.users?.[0]?.role !== 'SUPERADMIN') {
+      throw new HttpException('Only the owner can grant the ADMIN role', 403);
+    }
     return this._organizationService.inviteTeamMember(org.id, body);
   }
 
