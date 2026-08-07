@@ -3,7 +3,6 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PageHeader, Card } from "@/components/settings-ui";
-import { SectionIntro } from "@/components/section-intro";
 import { useAuth } from "@/lib/auth-context";
 import { useT, useI18n } from "@/lib/i18n";
 import {
@@ -268,12 +267,6 @@ function BillingInner() {
         title={t("billing.title")}
         subtitle={t("billing.subtitle")}
       />
-      <SectionIntro
-        id="billing"
-        titleKey="sectionIntro.billingTitle"
-        bodyKey="sectionIntro.billingBody"
-      />
-
       {error && (
         <div role="alert" className={`${styles.banner} ${styles.bannerError}`}>
           {error}

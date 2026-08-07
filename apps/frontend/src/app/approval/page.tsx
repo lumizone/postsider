@@ -10,7 +10,6 @@ import {
   rejectPost,
   createGuestLink,
 } from "@/lib/approval-api";
-import { SectionIntro } from "@/components/section-intro";
 import ap from "./approval.module.css";
 
 const ghostBtn: React.CSSProperties = {
@@ -136,12 +135,6 @@ export default function ApprovalPage() {
             : t("approval.subtitleMember")}
         </p>
       </div>
-
-      <SectionIntro
-        id="approval"
-        titleKey="sectionIntro.approvalTitle"
-        bodyKey="sectionIntro.approvalBody"
-      />
 
       {error && (
         <div role="alert" style={{ padding: "10px 12px", borderRadius: 8, background: "rgba(192,57,43,0.08)", color: "#c0392b", fontSize: 13 }}>{error}</div>

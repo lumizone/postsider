@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useT } from "@/lib/i18n";
-import { SectionIntro } from "./section-intro";
 import styles from "./settings-shell.module.css";
 
 interface NavEntry {
@@ -85,11 +84,6 @@ export function SettingsShell({ children }: { children: ReactNode }) {
         </nav>
       </aside>
       <main className={styles.content}>
-        <SectionIntro
-          id="settings"
-          titleKey="sectionIntro.settingsTitle"
-          bodyKey="sectionIntro.settingsBody"
-        />
         {children}
       </main>
     </div>

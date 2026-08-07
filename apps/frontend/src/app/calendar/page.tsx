@@ -1,7 +1,6 @@
 "use client";
 
 import { Calendar } from "@/components/calendar";
-import { SectionIntro } from "@/components/section-intro";
 import { useT } from "@/lib/i18n";
 
 export default function CalendarPage() {
@@ -20,11 +19,6 @@ export default function CalendarPage() {
       >
         {t("calendar.eyebrow")}
       </span>
-      <SectionIntro
-        id="calendar"
-        titleKey="sectionIntro.calendarTitle"
-        bodyKey="sectionIntro.calendarBody"
-      />
       <Calendar year={today.getFullYear()} month={today.getMonth()} />
     </section>
   );
