@@ -267,7 +267,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         <span className={styles.topbarBrand}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/brand/postsider-logo.png"
+            src={user?.orgLogo || "/brand/postsider-logo.png"}
             alt=""
             width={28}
             height={28}
@@ -325,7 +325,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/brand/postsider-logo.png"
+                src={user?.orgLogo || "/brand/postsider-logo.png"}
                 alt=""
                 width={32}
                 height={32}
@@ -353,7 +353,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src="/brand/postsider-logo.png"
+              src={user?.orgLogo || "/brand/postsider-logo.png"}
               alt=""
               width={32}
               height={32}
@@ -518,16 +518,6 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                 >
                   {t("nav.signOut")}
                 </button>
-                <a
-                  href="mailto:contact@postsider.com"
-                  style={{
-                    marginTop: 6,
-                    color: "var(--muted)",
-                    fontSize: 12,
-                  }}
-                >
-                  {t("nav.support")}
-                </a>
               </div>
             )}
           </div>

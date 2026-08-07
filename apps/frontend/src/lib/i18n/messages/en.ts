@@ -42,7 +42,6 @@ const en = {
     billing: "Billing",
     approval: "Approval",
     signOut: "Sign out",
-    support: "Support",
   },
   settings: {
     title: "Settings",
@@ -338,7 +337,6 @@ const en = {
     legalTerms: "Terms of Service",
     legalAnd: "and",
     legalPrivacy: "Privacy Policy",
-    contactSupport: "Need help?",
     forgotTitle: "Reset your password",
     forgotSubtitle: "Enter your email and we'll send you a reset link.",
     forgotSubmit: "Send reset link",

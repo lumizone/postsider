@@ -42,6 +42,8 @@ export interface SelfUser {
   isPlatformAi: boolean;
   /** All organizations the user belongs to. Populated after first /user/self load. */
   organizations?: OrgSummary[];
+  /** Current org's uploaded logo (Settings → Organization). Null falls back to the PostSider brand mark. */
+  orgLogo?: string | null;
   // Other fields exist on the backend but aren't used here yet.
 }
 

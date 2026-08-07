@@ -87,6 +87,7 @@ export class UsersController {
       onTrial,
       trialDaysLeft,
       streakSince: organization?.streakSince || null,
+      orgLogo: organization?.logo || null,
       // @ts-ignore
       publicApi: organization?.users[0]?.role === 'SUPERADMIN' || organization?.users[0]?.role === 'ADMIN' ? organization?.apiKey : '',
       isPlatformAi: isPlatformAiEnabled(),

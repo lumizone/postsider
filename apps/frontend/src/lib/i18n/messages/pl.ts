@@ -32,7 +32,6 @@ const pl = {
     billing: "Płatności",
     approval: "Akceptacja",
     signOut: "Wyloguj",
-    support: "Wsparcie",
   },
   settings: {
     title: "Ustawienia",
@@ -337,7 +336,6 @@ const pl = {
     legalTerms: "Warunki korzystania",
     legalAnd: "oraz",
     legalPrivacy: "Politykę prywatności",
-    contactSupport: "Potrzebujesz pomocy?",
     forgotTitle: "Zresetuj hasło",
     forgotSubtitle: "Podaj swój e-mail, a wyślemy Ci link do resetu.",
     forgotSubmit: "Wyślij link resetujący",

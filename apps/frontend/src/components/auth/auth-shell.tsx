@@ -57,9 +57,6 @@ export function AuthShell({
           </a>
           .
         </div>
-        <div className={styles.legal}>
-          {t("auth.contactSupport")} <a href="mailto:contact@postsider.com">contact@postsider.com</a>
-        </div>
       </div>
     </div>
   );

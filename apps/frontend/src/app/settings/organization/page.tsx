@@ -28,7 +28,7 @@ const FALLBACK_ZONES = [
 
 export default function OrganizationSettingsPage() {
   const t = useT();
-  const { user } = useAuth();
+  const { user, refresh } = useAuth();
   const canManage = user?.role === "ADMIN" || user?.role === "SUPERADMIN";
 
   const zoneOptions = useMemo<string[]>(() => {
@@ -83,6 +83,11 @@ export default function OrganizationSettingsPage() {
       const saved = await updateOrganizationProfile(next);
       setProfile(saved);
       setSavedAt(Date.now());
+      // The sidebar brand mark reads orgLogo off the cached /user/self
+      // payload (auth-context), not this page's own state — without this,
+      // uploading a new logo saved fine but never appeared in the sidebar
+      // until the next full page load / login.
+      void refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : t("settingsOrganization.saveFailed"));
     } finally {
