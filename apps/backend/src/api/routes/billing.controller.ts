@@ -8,11 +8,6 @@ import { ApiTags } from '@nestjs/swagger';
 import { GetUserFromRequest } from '@postsider/nestjs-libraries/user/user.from.request';
 import { NotificationService } from '@postsider/nestjs-libraries/database/prisma/notifications/notification.service';
 import { Request } from 'express';
-import { CheckPolicies } from '@postsider/backend/services/auth/permissions/permissions.ability';
-import {
-  AuthorizationActions,
-  Sections,
-} from '@postsider/backend/services/auth/permissions/permission.exception.class';
 
 @ApiTags('Billing')
 @Controller('/billing')
@@ -22,6 +17,21 @@ export class BillingController {
     private _polarService: PolarService,
     private _notificationService: NotificationService
   ) {}
+
+  // Billing is owner-only: only the org's SUPERADMIN (the account that
+  // created it, mirrors deleteAccount's "only the owner" gate below in
+  // settings.controller.ts) can start a checkout, open the Polar customer
+  // portal, or cancel the subscription. Plain ADMIN team members do not
+  // manage billing. `Sections.ADMIN` via @CheckPolicies is the wrong tool
+  // here — that ability check treats ADMIN and SUPERADMIN as equivalent
+  // (see permissions.service.ts), so this is a manual role check instead,
+  // same pattern deleteAccount already uses.
+  private assertOwner(org: Organization) {
+    // @ts-ignore — role is attached to org.users[0] by the auth middleware.
+    if (org.users?.[0]?.role !== 'SUPERADMIN') {
+      throw new HttpException('Only the account owner can manage billing', 403);
+    }
+  }
 
   @Get('/check/:id')
   async checkId(
@@ -40,14 +50,6 @@ export class BillingController {
     };
   }
 
-  // Billing state-changing routes are ADMIN-only — the frontend already hides
-  // the whole /billing page from non-managers (`canManage` in billing/page.tsx),
-  // but that's a client-side gate only. Without @CheckPolicies here any
-  // authenticated org member (role USER) could hit these directly and start a
-  // checkout, open the Polar customer portal, or cancel the org's paid
-  // subscription. Reads (GET /, /is-trial-finished, /check/:id) stay open to
-  // any org member — same as other org-scoped read endpoints elsewhere.
-  @CheckPolicies([AuthorizationActions.Update, Sections.ADMIN])
   @Post('/embedded')
   embedded(
     @GetOrgFromRequest() org: Organization,
@@ -55,6 +57,7 @@ export class BillingController {
     @Body() body: BillingSubscribeDto,
     @Req() req: Request
   ) {
+    this.assertOwner(org);
     const uniqueId = req?.cookies?.track;
     return this._polarService.embedded(
       uniqueId,
@@ -65,7 +68,6 @@ export class BillingController {
     );
   }
 
-  @CheckPolicies([AuthorizationActions.Update, Sections.ADMIN])
   @Post('/subscribe')
   subscribe(
     @GetOrgFromRequest() org: Organization,
@@ -73,6 +75,7 @@ export class BillingController {
     @Body() body: BillingSubscribeDto,
     @Req() req: Request
   ) {
+    this.assertOwner(org);
     const uniqueId = req?.cookies?.track;
     return this._polarService.subscribe(
       uniqueId,
@@ -83,9 +86,9 @@ export class BillingController {
     );
   }
 
-  @CheckPolicies([AuthorizationActions.Update, Sections.ADMIN])
   @Get('/portal')
   async modifyPayment(@GetOrgFromRequest() org: Organization) {
+    this.assertOwner(org);
     const customerId = await this._polarService.getCustomerByOrganizationId(
       org.id
     );
@@ -101,13 +104,13 @@ export class BillingController {
     return this._subscriptionService.getSubscriptionByOrganizationId(org.id);
   }
 
-  @CheckPolicies([AuthorizationActions.Delete, Sections.ADMIN])
   @Post('/cancel')
   async cancel(
     @GetOrgFromRequest() org: Organization,
     @GetUserFromRequest() user: User,
     @Body() body: { feedback: string }
   ) {
+    this.assertOwner(org);
     await this._notificationService.sendEmail(
       process.env.EMAIL_FROM_ADDRESS || '',
       'Subscription Cancelled',

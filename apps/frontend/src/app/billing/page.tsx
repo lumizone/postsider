@@ -75,7 +75,9 @@ function BillingInner() {
   const { user, refresh: refreshUser } = useAuth();
   const searchParams = useSearchParams();
 
-  const canManage = user?.role === "ADMIN" || user?.role === "SUPERADMIN";
+  // Billing is owner-only — mirrors the backend's assertOwner() in
+  // billing.controller.ts and the sidebar nav's minRole: "SUPERADMIN".
+  const canManage = user?.role === "SUPERADMIN";
 
   const [period, setPeriod] = useState<BillingPeriod>("MONTHLY");
   const [current, setCurrent] = useState<CurrentSubscription | null>(null);
