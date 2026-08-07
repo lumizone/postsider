@@ -230,6 +230,7 @@ export class OrganizationRepository {
       description?: string | null;
       logo?: string | null;
       defaultTimezone?: string | null;
+      referralSource?: string | null;
     }
   ) {
     return this._organization.model.organization.update({

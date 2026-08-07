@@ -7,6 +7,7 @@ export interface OrganizationProfile {
   description: string;
   logo: string | null;
   defaultTimezone: string | null;
+  referralSource: string | null;
 }
 
 export async function getOrganizationProfile(): Promise<OrganizationProfile> {

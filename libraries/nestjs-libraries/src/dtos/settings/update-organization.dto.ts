@@ -20,4 +20,9 @@ export class UpdateOrganizationDto {
   @IsString()
   @MaxLength(64)
   defaultTimezone?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  referralSource?: string | null;
 }

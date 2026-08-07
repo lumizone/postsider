@@ -14,6 +14,7 @@ model Organization {
   description          String?
   logo                 String?
   defaultTimezone      String?
+  referralSource       String?
   apiKey               String?
   paymentId            String?
   streakSince          DateTime?

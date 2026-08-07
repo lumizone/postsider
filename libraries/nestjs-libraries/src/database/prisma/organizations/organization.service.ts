@@ -73,6 +73,7 @@ export class OrganizationService {
       description: org?.description ?? '',
       logo: org?.logo ?? null,
       defaultTimezone: org?.defaultTimezone ?? null,
+      referralSource: org?.referralSource ?? null,
     };
   }
 
@@ -83,6 +84,7 @@ export class OrganizationService {
       description?: string | null;
       logo?: string | null;
       defaultTimezone?: string | null;
+      referralSource?: string | null;
     }
   ) {
     const org = await this._organizationRepository.updateOrganizationProfile(id, data);
@@ -91,6 +93,7 @@ export class OrganizationService {
       description: org.description ?? '',
       logo: org.logo ?? null,
       defaultTimezone: org.defaultTimezone ?? null,
+      referralSource: org.referralSource ?? null,
     };
   }
 
