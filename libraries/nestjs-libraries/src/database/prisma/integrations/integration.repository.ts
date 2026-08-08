@@ -293,6 +293,18 @@ export class IntegrationRepository {
               inBetweenSteps: isBetweenSteps,
             }
           : {}),
+        // `name` was missing here (only set in `create`), so reconnecting an
+        // EXISTING integration (matched by internalId+org) never refreshed
+        // its display name — only `picture` did. Found live via Discord: a
+        // fix that made `authenticate()` resolve the real server name
+        // instead of the shared bot's own name appeared to do nothing on
+        // reconnect, because the corrected value was computed but then
+        // silently dropped by this update clause. The silent token-refresh
+        // path (RefreshIntegrationService) round-trips the integration's
+        // own existing `name`/`picture` back through this same function, so
+        // writing it unconditionally here is a no-op for that path, not a
+        // behavior change.
+        name,
         ...(picture ? { picture } : {}),
         profile: username,
         providerIdentifier: provider,
