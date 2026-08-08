@@ -286,11 +286,15 @@ export class IntegrationsController {
 
       // Determine if this provider is OAuth-capable (has env mapping defined).
       // In SaaS mode, OAuth providers never expose manual credential fields to
-      // the end user — only API-key-only providers get customFields.
+      // the end user — only API-key-only providers get customFields. Discord
+      // is the one deliberate exception: it offers BOTH the shared-bot OAuth
+      // flow and a bring-your-own-bot customFields form as a user choice
+      // (DiscordBotChoiceModal), so it needs customFields even though it's
+      // also OAuth-capable.
       const isOAuthCapable = Object.keys(this.getEnvMapping(integration)).length > 0;
 
       let customFields: any[] | undefined;
-      if (!isOAuthCapable) {
+      if (!isOAuthCapable || integration === 'discord') {
         // Manual-only provider — return the credential form fields.
         if (integrationProvider.customFields) {
           customFields = await integrationProvider.customFields();
