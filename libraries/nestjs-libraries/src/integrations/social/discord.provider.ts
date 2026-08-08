@@ -118,15 +118,27 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
     // like "PostSider" regardless of which server it was. Falls back to
     // the bot's avatar only if the server has no icon set (common for
     // small/new servers) or the guild lookup fails for any reason.
-    const guildInfo = await (
-      await this.fetch(`https://discord.com/api/guilds/${guild.id}`, {
-        headers: {
-          Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN_ID}`,
-        },
-      })
-    )
-      .json()
-      .catch(() => ({}));
+    // this.fetch() itself throws (not just json() parse failures) on a
+    // non-2xx response after its internal retries, so the whole block is
+    // guarded — an earlier version only chained .catch() onto .json(),
+    // which would have let a thrown BadBody/RefreshToken crash the entire
+    // connect instead of falling back, and gave no visibility into WHY a
+    // guild lookup failed when the fallback silently kicked in.
+    let guildInfo: any = {};
+    try {
+      guildInfo = await (
+        await this.fetch(`https://discord.com/api/guilds/${guild.id}`, {
+          headers: {
+            Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN_ID}`,
+          },
+        })
+      ).json();
+    } catch (err) {
+      console.error(
+        `[discord] GET /guilds/${guild.id} failed, falling back to the bot's own name/avatar:`,
+        err instanceof Error ? err.message : err
+      );
+    }
 
     return {
       id: guild.id,
@@ -202,7 +214,11 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
       return created?.id && created?.token
         ? { id: created.id, token: created.token }
         : null;
-    } catch {
+    } catch (err) {
+      console.error(
+        `[discord] webhook get-or-create failed for channel ${channel}, falling back to the bot API (likely missing MANAGE_WEBHOOKS — server needs to re-invite the bot):`,
+        err instanceof Error ? err.message : err
+      );
       return null;
     }
   }
