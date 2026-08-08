@@ -62,9 +62,15 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
   async generateAuthUrl() {
     const state = makeId(6);
     return {
+      // 377957124096 + MANAGE_WEBHOOKS (1<<29). Needed so posts can go out
+      // through a per-channel webhook (shows the server's own name/icon)
+      // instead of the shared bot's identity — see getOrCreateWebhook().
+      // Servers that invited the bot before this change won't have the new
+      // permission until they re-invite/reauthorize it; post() falls back
+      // to the old bot-API path when webhook creation fails for that reason.
       url: `https://discord.com/oauth2/authorize?client_id=${
         process.env.DISCORD_CLIENT_ID
-      }&permissions=377957124096&response_type=code&redirect_uri=${encodeURIComponent(
+      }&permissions=378493995008&response_type=code&redirect_uri=${encodeURIComponent(
         `${process.env.FRONTEND_URL}/integrations/social/discord`
       )}&integration_type=0&scope=bot+identify+guilds&state=${state}`,
       codeVerifier: makeId(10),
@@ -106,13 +112,31 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
       })
     ).json();
 
+    // The channel/server list and the "connected as" identity should show
+    // the actual Discord server (name + icon), not the shared bot's own
+    // application name/avatar — that's what made every connection look
+    // like "PostSider" regardless of which server it was. Falls back to
+    // the bot's avatar only if the server has no icon set (common for
+    // small/new servers) or the guild lookup fails for any reason.
+    const guildInfo = await (
+      await this.fetch(`https://discord.com/api/guilds/${guild.id}`, {
+        headers: {
+          Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN_ID}`,
+        },
+      })
+    )
+      .json()
+      .catch(() => ({}));
+
     return {
       id: guild.id,
-      name: application.name,
+      name: guildInfo?.name || application.name,
       accessToken: access_token,
       refreshToken: refresh_token,
       expiresIn: expires_in,
-      picture: `https://cdn.discordapp.com/avatars/${application.bot.id}/${application.bot.avatar}.png`,
+      picture: guildInfo?.icon
+        ? `https://cdn.discordapp.com/icons/${guild.id}/${guildInfo.icon}.png`
+        : `https://cdn.discordapp.com/avatars/${application.bot.id}/${application.bot.avatar}.png`,
       username: application.bot.username,
     };
   }
@@ -135,13 +159,64 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
       }));
   }
 
+  /**
+   * A webhook lets each message show the SERVER's own name/icon instead of
+   * the shared bot's identity (the bot API has no per-message override —
+   * that is exclusively a webhook feature). Reused across posts by name
+   * rather than persisted anywhere: cheap to look up (Discord's rate limits
+   * here are generous, per maxConcurrentJob above), self-healing if the
+   * webhook is deleted on Discord's side, and needs no schema change.
+   * Returns null (never throws) so callers can fall back to the bot API —
+   * servers that invited the bot before MANAGE_WEBHOOKS was added to the
+   * OAuth scope (see generateAuthUrl) will 403 here until they re-invite it.
+   */
+  private async getOrCreateWebhook(
+    channel: string
+  ): Promise<{ id: string; token: string } | null> {
+    const WEBHOOK_NAME = 'PostSider Publisher';
+    try {
+      const existing = await (
+        await this.fetch(`https://discord.com/api/channels/${channel}/webhooks`, {
+          headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN_ID}` },
+        })
+      ).json();
+
+      const found = Array.isArray(existing)
+        ? existing.find((w: any) => w.name === WEBHOOK_NAME && w.token)
+        : undefined;
+      if (found) {
+        return { id: found.id, token: found.token };
+      }
+
+      const created = await (
+        await this.fetch(`https://discord.com/api/channels/${channel}/webhooks`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN_ID}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ name: WEBHOOK_NAME }),
+        })
+      ).json();
+
+      return created?.id && created?.token
+        ? { id: created.id, token: created.token }
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
   async post(
     id: string,
     accessToken: string,
-    postDetails: PostDetails[]
+    postDetails: PostDetails[],
+    integration: Integration
   ): Promise<PostResponse[]> {
     const [firstPost] = postDetails;
     const channel = firstPost.settings.channel;
+
+    const webhook = await this.getOrCreateWebhook(channel);
 
     const form = new FormData();
     form.append(
@@ -155,6 +230,11 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
           description: `Picture ${index}`,
           filename: p.path.split('/').pop(),
         })),
+        // Only meaningful on the webhook path — the bot-API path ignores
+        // these fields and always shows the bot's own identity instead.
+        ...(webhook
+          ? { username: integration.name, avatar_url: integration.picture }
+          : {}),
       })
     );
 
@@ -170,12 +250,16 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
       index++;
     }
 
+    const postUrl = webhook
+      ? `https://discord.com/api/webhooks/${webhook.id}/${webhook.token}?wait=true`
+      : `https://discord.com/api/channels/${channel}/messages`;
+
     const data = await (
-      await this.fetch(`https://discord.com/api/channels/${channel}/messages`, {
+      await this.fetch(postUrl, {
         method: 'POST',
-        headers: {
-          Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN_ID}`,
-        },
+        headers: webhook
+          ? {}
+          : { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN_ID}` },
         body: form,
       })
     ).json();
@@ -231,6 +315,11 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
       throw new Error('Could not create or resolve Discord thread');
     }
 
+    // Same webhook the original post used (it belongs to the parent channel,
+    // not the thread) — keeps the comment branded the same way instead of
+    // suddenly switching to the bot's identity mid-conversation.
+    const webhook = await this.getOrCreateWebhook(channel);
+
     const form = new FormData();
     form.append(
       'payload_json',
@@ -243,6 +332,9 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
           description: `Picture ${index}`,
           filename: p.path.split('/').pop(),
         })),
+        ...(webhook
+          ? { username: integration.name, avatar_url: integration.picture }
+          : {}),
       })
     );
 
@@ -258,17 +350,18 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
       index++;
     }
 
+    const commentUrl = webhook
+      ? `https://discord.com/api/webhooks/${webhook.id}/${webhook.token}?wait=true&thread_id=${threadChannel}`
+      : `https://discord.com/api/channels/${threadChannel}/messages`;
+
     const data = await (
-      await this.fetch(
-        `https://discord.com/api/channels/${threadChannel}/messages`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN_ID}`,
-          },
-          body: form,
-        }
-      )
+      await this.fetch(commentUrl, {
+        method: 'POST',
+        headers: webhook
+          ? {}
+          : { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN_ID}` },
+        body: form,
+      })
     ).json();
 
     return [
