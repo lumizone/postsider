@@ -11,7 +11,7 @@ import { DiscordDto } from '@postsider/nestjs-libraries/dtos/posts/providers-set
 import { Tool } from '@postsider/nestjs-libraries/integrations/tool.decorator';
 
 export class DiscordProvider extends SocialAbstract implements SocialProvider {
-  override maxConcurrentJob = 5; // Discord has generous rate limits for webhook posting
+  override maxConcurrentJob = 5; // Discord has generous rate limits
   identifier = 'discord';
   name = 'Discord';
   isBetweenSteps = false;
@@ -62,15 +62,9 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
   async generateAuthUrl() {
     const state = makeId(6);
     return {
-      // 377957124096 + MANAGE_WEBHOOKS (1<<29). Needed so posts can go out
-      // through a per-channel webhook (shows the server's own name/icon)
-      // instead of the shared bot's identity — see getOrCreateWebhook().
-      // Servers that invited the bot before this change won't have the new
-      // permission until they re-invite/reauthorize it; post() falls back
-      // to the old bot-API path when webhook creation fails for that reason.
       url: `https://discord.com/oauth2/authorize?client_id=${
         process.env.DISCORD_CLIENT_ID
-      }&permissions=378493995008&response_type=code&redirect_uri=${encodeURIComponent(
+      }&permissions=377957124096&response_type=code&redirect_uri=${encodeURIComponent(
         `${process.env.FRONTEND_URL}/integrations/social/discord`
       )}&integration_type=0&scope=bot+identify+guilds&state=${state}`,
       codeVerifier: makeId(10),
@@ -78,11 +72,63 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
     };
   }
 
+  /**
+   * Lets the user connect with THEIR OWN bot instead of the shared one, so
+   * posts show up under their own bot's identity (name/avatar) on Discord —
+   * the shared bot always posts as itself regardless of which server, and
+   * Discord's Bot API has no per-message override for that (only webhooks
+   * do, which is more moving parts than pasting a token). Offered as a
+   * choice at connect time in the frontend (DiscordConnectModal), not a
+   * replacement for the shared-bot OAuth flow above.
+   */
+  async customFields() {
+    return [
+      {
+        key: 'botToken',
+        label: 'Bot Token (Discord Developer Portal → your app → Bot → Reset Token)',
+        validation: `/.+/`,
+        type: 'password' as const,
+      },
+      {
+        key: 'guildId',
+        label: 'Server ID (enable Developer Mode in Discord, right-click your server icon → Copy Server ID)',
+        validation: `/^\\d+$/`,
+        type: 'text' as const,
+      },
+    ];
+  }
+
+  /** Bot token to use for API calls on this integration: the org's own bot
+   * (stored token prefixed at connect time, see authenticate()'s custom
+   * branch) if they brought one, otherwise the shared platform bot. */
+  private resolveBotToken(accessToken?: string): string {
+    return accessToken?.startsWith('custom:')
+      ? accessToken.slice('custom:'.length)
+      : process.env.DISCORD_BOT_TOKEN_ID || '';
+  }
+
   async authenticate(params: {
     code: string;
     codeVerifier: string;
     refresh?: string;
   }) {
+    // Bring-your-own-bot path: the customFields form base64-JSON-encodes the
+    // field values into `code` (same convention every other customFields
+    // provider uses, e.g. wordpress.provider.ts) instead of a real Discord
+    // OAuth code, which is why this is a parse-and-check rather than a
+    // dedicated params field — Discord is the only provider offering BOTH
+    // an OAuth and a customFields path for the same connect action.
+    try {
+      const decoded = JSON.parse(
+        Buffer.from(params.code, 'base64').toString()
+      );
+      if (decoded?.botToken && decoded?.guildId) {
+        return this.authenticateWithOwnBot(decoded.botToken, decoded.guildId);
+      }
+    } catch {
+      // Not base64 JSON — a real Discord OAuth code, fall through below.
+    }
+
     const { access_token, expires_in, refresh_token, scope, guild } = await (
       await this.fetch('https://discord.com/api/oauth2/token', {
         method: 'POST',
@@ -112,18 +158,20 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
       })
     ).json();
 
-    // The channel/server list and the "connected as" identity should show
-    // the actual Discord server (name + icon), not the shared bot's own
-    // application name/avatar — that's what made every connection look
-    // like "PostSider" regardless of which server it was. Falls back to
-    // the bot's avatar only if the server has no icon set (common for
-    // small/new servers) or the guild lookup fails for any reason.
+    // The channel/server list and the "connected as" identity in OUR OWN
+    // dashboard should show the actual Discord server (name + icon), not
+    // the shared bot's own application name/avatar — that's what made
+    // every connection look like "PostSider" in the channel picker
+    // regardless of which server it was. Posting itself still always shows
+    // the bot's own identity on Discord (a platform limitation, not
+    // something this fixes) — see customFields()/authenticateWithOwnBot
+    // above for the option that actually changes what Discord displays.
     // this.fetch() itself throws (not just json() parse failures) on a
     // non-2xx response after its internal retries, so the whole block is
-    // guarded — an earlier version only chained .catch() onto .json(),
-    // which would have let a thrown BadBody/RefreshToken crash the entire
-    // connect instead of falling back, and gave no visibility into WHY a
-    // guild lookup failed when the fallback silently kicked in.
+    // guarded — chaining .catch() only onto .json() would have let a
+    // thrown BadBody/RefreshToken crash the entire connect instead of
+    // falling back, and gave no visibility into WHY a guild lookup failed
+    // when the fallback silently kicked in.
     let guildInfo: any = {};
     try {
       guildInfo = await (
@@ -153,12 +201,44 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
     };
   }
 
+  private async authenticateWithOwnBot(botToken: string, guildId: string) {
+    const guildInfo = await (
+      await this.fetch(`https://discord.com/api/guilds/${guildId}`, {
+        headers: { Authorization: `Bot ${botToken}` },
+      })
+    ).json();
+
+    if (!guildInfo?.id) {
+      throw new Error(
+        'Could not find that server — check the bot token and Server ID, and make sure your bot has already been invited to that server.'
+      );
+    }
+
+    return {
+      id: guildId,
+      name: guildInfo.name,
+      // Prefixed so post()/channels()/etc. know to use THIS token instead
+      // of the shared platform bot — see resolveBotToken(). Bot tokens
+      // don't expire the way OAuth access tokens do, so there is no
+      // refresh token/cycle for this path (empty refreshToken already
+      // excludes it from the token-refresh workflow, see
+      // RefreshIntegrationService.startRefreshWorkflow's hasRefreshToken gate).
+      accessToken: `custom:${botToken}`,
+      refreshToken: '',
+      expiresIn: 100 * 365 * 24 * 60 * 60,
+      picture: guildInfo.icon
+        ? `https://cdn.discordapp.com/icons/${guildId}/${guildInfo.icon}.png`
+        : '',
+      username: '',
+    };
+  }
+
   @Tool({ description: 'Channels', dataSchema: [] })
   async channels(accessToken: string, params: any, id: string) {
     const list = await (
       await this.fetch(`https://discord.com/api/guilds/${id}/channels`, {
         headers: {
-          Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN_ID}`,
+          Authorization: `Bot ${this.resolveBotToken(accessToken)}`,
         },
       })
     ).json();
@@ -171,68 +251,14 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
       }));
   }
 
-  /**
-   * A webhook lets each message show the SERVER's own name/icon instead of
-   * the shared bot's identity (the bot API has no per-message override —
-   * that is exclusively a webhook feature). Reused across posts by name
-   * rather than persisted anywhere: cheap to look up (Discord's rate limits
-   * here are generous, per maxConcurrentJob above), self-healing if the
-   * webhook is deleted on Discord's side, and needs no schema change.
-   * Returns null (never throws) so callers can fall back to the bot API —
-   * servers that invited the bot before MANAGE_WEBHOOKS was added to the
-   * OAuth scope (see generateAuthUrl) will 403 here until they re-invite it.
-   */
-  private async getOrCreateWebhook(
-    channel: string
-  ): Promise<{ id: string; token: string } | null> {
-    const WEBHOOK_NAME = 'PostSider Publisher';
-    try {
-      const existing = await (
-        await this.fetch(`https://discord.com/api/channels/${channel}/webhooks`, {
-          headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN_ID}` },
-        })
-      ).json();
-
-      const found = Array.isArray(existing)
-        ? existing.find((w: any) => w.name === WEBHOOK_NAME && w.token)
-        : undefined;
-      if (found) {
-        return { id: found.id, token: found.token };
-      }
-
-      const created = await (
-        await this.fetch(`https://discord.com/api/channels/${channel}/webhooks`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN_ID}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ name: WEBHOOK_NAME }),
-        })
-      ).json();
-
-      return created?.id && created?.token
-        ? { id: created.id, token: created.token }
-        : null;
-    } catch (err) {
-      console.error(
-        `[discord] webhook get-or-create failed for channel ${channel}, falling back to the bot API (likely missing MANAGE_WEBHOOKS — server needs to re-invite the bot):`,
-        err instanceof Error ? err.message : err
-      );
-      return null;
-    }
-  }
-
   async post(
     id: string,
     accessToken: string,
-    postDetails: PostDetails[],
-    integration: Integration
+    postDetails: PostDetails[]
   ): Promise<PostResponse[]> {
     const [firstPost] = postDetails;
     const channel = firstPost.settings.channel;
-
-    const webhook = await this.getOrCreateWebhook(channel);
+    const botToken = this.resolveBotToken(accessToken);
 
     const form = new FormData();
     form.append(
@@ -246,11 +272,6 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
           description: `Picture ${index}`,
           filename: p.path.split('/').pop(),
         })),
-        // Only meaningful on the webhook path — the bot-API path ignores
-        // these fields and always shows the bot's own identity instead.
-        ...(webhook
-          ? { username: integration.name, avatar_url: integration.picture }
-          : {}),
       })
     );
 
@@ -266,16 +287,12 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
       index++;
     }
 
-    const postUrl = webhook
-      ? `https://discord.com/api/webhooks/${webhook.id}/${webhook.token}?wait=true`
-      : `https://discord.com/api/channels/${channel}/messages`;
-
     const data = await (
-      await this.fetch(postUrl, {
+      await this.fetch(`https://discord.com/api/channels/${channel}/messages`, {
         method: 'POST',
-        headers: webhook
-          ? {}
-          : { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN_ID}` },
+        headers: {
+          Authorization: `Bot ${botToken}`,
+        },
         body: form,
       })
     ).json();
@@ -300,6 +317,7 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
   ): Promise<PostResponse[]> {
     const [commentPost] = postDetails;
     const channel = commentPost.settings.channel;
+    const botToken = this.resolveBotToken(accessToken);
 
     // Discord threads are keyed by the original message id, so the same thread
     // serves every comment in the chain. Always ask Discord for the thread and
@@ -312,7 +330,7 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
         {
           method: 'POST',
           headers: {
-            Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN_ID}`,
+            Authorization: `Bot ${botToken}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -331,11 +349,6 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
       throw new Error('Could not create or resolve Discord thread');
     }
 
-    // Same webhook the original post used (it belongs to the parent channel,
-    // not the thread) — keeps the comment branded the same way instead of
-    // suddenly switching to the bot's identity mid-conversation.
-    const webhook = await this.getOrCreateWebhook(channel);
-
     const form = new FormData();
     form.append(
       'payload_json',
@@ -348,9 +361,6 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
           description: `Picture ${index}`,
           filename: p.path.split('/').pop(),
         })),
-        ...(webhook
-          ? { username: integration.name, avatar_url: integration.picture }
-          : {}),
       })
     );
 
@@ -366,18 +376,17 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
       index++;
     }
 
-    const commentUrl = webhook
-      ? `https://discord.com/api/webhooks/${webhook.id}/${webhook.token}?wait=true&thread_id=${threadChannel}`
-      : `https://discord.com/api/channels/${threadChannel}/messages`;
-
     const data = await (
-      await this.fetch(commentUrl, {
-        method: 'POST',
-        headers: webhook
-          ? {}
-          : { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN_ID}` },
-        body: form,
-      })
+      await this.fetch(
+        `https://discord.com/api/channels/${threadChannel}/messages`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bot ${botToken}`,
+          },
+          body: form,
+        }
+      )
     ).json();
 
     return [
@@ -395,7 +404,7 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
       await this.fetch(`https://discord.com/api/guilds/${id}/members/@me`, {
         method: 'PATCH',
         headers: {
-          Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN_ID}`,
+          Authorization: `Bot ${this.resolveBotToken(accessToken)}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -415,10 +424,11 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
     id: string,
     integration: Integration
   ) {
+    const botToken = this.resolveBotToken(token);
     const allRoles = await (
       await this.fetch(`https://discord.com/api/guilds/${id}/roles`, {
         headers: {
-          Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN_ID}`,
+          Authorization: `Bot ${botToken}`,
           'Content-Type': 'application/json',
         },
       })
@@ -437,7 +447,7 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
         )}`,
         {
           headers: {
-            Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN_ID}`,
+            Authorization: `Bot ${botToken}`,
             'Content-Type': 'application/json',
           },
         }

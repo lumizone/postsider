@@ -402,6 +402,14 @@ const pl = {
     connectCta: "Zacznij publikować treści",
     skipLater: "Pomiń, podłączę później",
   },
+  discordChoice: {
+    title: "Podłącz Discord",
+    subtitle: "Wybierz który bot publikuje twoją treść.",
+    sharedTitle: "Użyj bota PostSider",
+    sharedDesc: "Nic do skonfigurowania. Posty pokazują się pod nazwą i ikoną PostSider na Discordzie.",
+    ownTitle: "Użyj własnego bota",
+    ownDesc: "Wklej token swojego bota Discord i ID serwera. Posty pokażą się pod nazwą i ikoną twojego bota.",
+  },
   security: {
     title: "Bezpieczeństwo",
     subtitle: "Zarządzaj hasłem konta.",

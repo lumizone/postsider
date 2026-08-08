@@ -9,6 +9,7 @@ import { AddChannelModal } from "./add-channel-modal";
 import { CustomFieldsModal } from "./custom-fields-modal";
 import { TelegramConnectModal } from "./telegram-connect-modal";
 import { FarcasterConnectModal } from "./farcaster-connect-modal";
+import { DiscordBotChoiceModal } from "./discord-bot-choice-modal";
 import { DayPopup } from "./day-popup";
 import { ConfirmDialog } from "./confirm-dialog";
 import { EmptyState } from "./empty-state";
@@ -276,6 +277,17 @@ export function Calendar({ year, month }: CalendarProps) {
     clientId: string;
     state: string;
   } | null>(null);
+  // Discord offers a choice at connect time: PostSider's shared bot (zero
+  // setup, but every post shows the shared bot's own name/avatar — Discord's
+  // Bot API has no per-message override for that) or the org's own bot
+  // (pasted token + server ID, posts show up under their own bot's identity
+  // instead). Reuses the existing customFields modal/submit flow below for
+  // the "own bot" branch — no separate submit path needed.
+  const [discordChoice, setDiscordChoice] = useState<{
+    oauthUrl: string;
+    customFields: CustomFieldDef[];
+    state: string;
+  } | null>(null);
   // Surfaced when a plan limit (e.g. channel cap) or other error blocks adding
   // a channel. Shown as a dismissible banner.
   const [channelError, setChannelError] = useState<string | null>(null);
@@ -376,6 +388,17 @@ export function Calendar({ year, month }: CalendarProps) {
 
       const hasOAuth = !!res?.oauthUrl;
       const hasCustomFields = !!(res?.customFields && res.customFields.length > 0);
+
+      // Discord uniquely offers both — let the user pick instead of
+      // silently always redirecting to the shared-bot OAuth flow.
+      if (platformId === "discord" && hasOAuth && hasCustomFields) {
+        setDiscordChoice({
+          oauthUrl: res.oauthUrl!,
+          customFields: res.customFields!,
+          state: res.url || "",
+        });
+        return;
+      }
 
       // OAuth provider — configured and ready: redirect immediately.
       if (hasOAuth) {
@@ -1033,6 +1056,26 @@ export function Calendar({ year, month }: CalendarProps) {
           onConnected={() => {
             setFarcasterConnect(null);
             void refreshChannels();
+          }}
+        />
+      )}
+
+      {discordChoice && (
+        <DiscordBotChoiceModal
+          onCancel={() => setDiscordChoice(null)}
+          onChooseShared={() => {
+            const url = discordChoice.oauthUrl;
+            setDiscordChoice(null);
+            window.location.href = url;
+          }}
+          onChooseOwn={() => {
+            setCustomFieldsState({
+              provider: "discord",
+              label: "Discord",
+              fields: discordChoice.customFields,
+              state: discordChoice.state,
+            });
+            setDiscordChoice(null);
           }}
         />
       )}

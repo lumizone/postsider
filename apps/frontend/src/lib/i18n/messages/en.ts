@@ -407,6 +407,14 @@ const en = {
     connectCta: "Let's publish your content",
     skipLater: "Skip, I'll connect later",
   },
+  discordChoice: {
+    title: "Connect Discord",
+    subtitle: "Choose which bot posts your content.",
+    sharedTitle: "Use PostSider's bot",
+    sharedDesc: "Nothing to set up. Posts show up under PostSider's own name and icon on Discord.",
+    ownTitle: "Use your own bot",
+    ownDesc: "Paste your Discord bot's token and server ID. Posts show up under your own bot's name and icon instead.",
+  },
   infoTip: {
     whatIsThis: "What is this?",
     channel:
