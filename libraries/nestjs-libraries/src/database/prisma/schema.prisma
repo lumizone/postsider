@@ -459,6 +459,7 @@ model Post {
   evergreen                  Boolean                   @default(false)
   lastRecycledAt             DateTime?
   firstComment               String?
+  shareToken                 String?                   @unique
   createdAt                  DateTime                  @default(now())
   updatedAt                  DateTime                  @updatedAt
   deletedAt                  DateTime?

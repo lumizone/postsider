@@ -81,8 +81,8 @@ export class PostsService {
     return this._postRepository.searchForMissingThreeHoursPosts();
   }
 
-  updatePost(id: string, postId: string, releaseURL: string) {
-    return this._postRepository.updatePost(id, postId, releaseURL);
+  updatePost(id: string, postId: string, releaseURL: string, orgId?: string) {
+    return this._postRepository.updatePost(id, postId, releaseURL, orgId);
   }
 
   async getMissingContent(
@@ -330,6 +330,19 @@ export class PostsService {
           )
         : []),
     ];
+  }
+
+  /**
+   * Public post preview gated by share token. Returns the flat post row
+   * (no recursive children), stripped of internal fields. The share token is
+   * crypto-random — knowing a post id is not enough to reach this.
+   */
+  async getPublicPost(shareToken: string) {
+    const post = await this._postRepository.findByShareToken(shareToken);
+    if (!post) return null;
+
+    const { error, childrenPost, ...safe } = post as any;
+    return safe;
   }
 
   async getPosts(orgId: string, query: GetPostsDto) {
@@ -720,8 +733,8 @@ export class PostsService {
     return this._postRepository.countPostsFromDay(orgId, date);
   }
 
-  getPostByForWebhookId(id: string) {
-    return this._postRepository.getPostByForWebhookId(id);
+  getPostByForWebhookId(id: string, orgId?: string) {
+    return this._postRepository.getPostByForWebhookId(id, orgId);
   }
 
   async startWorkflow(
@@ -807,7 +820,9 @@ export class PostsService {
         await this._postRepository.changeState(
           postId,
           'ERROR',
-          'Could not schedule the publish workflow (scheduler unavailable). Please re-schedule this post.'
+          'Could not schedule the publish workflow (scheduler unavailable). Please re-schedule this post.',
+          undefined,
+          orgId
         );
       } catch (stateErr) {
         this._logger.error(
@@ -1100,8 +1115,8 @@ export class PostsService {
     };
   }
 
-  async changeState(id: string, state: State, err?: any, body?: any) {
-    return this._postRepository.changeState(id, state, err, body);
+  async changeState(id: string, state: State, err?: any, body?: any, orgId?: string) {
+    return this._postRepository.changeState(id, state, err, body, orgId);
   }
 
   /**
@@ -1142,7 +1157,7 @@ export class PostsService {
     }
 
     const state: State = status === 'draft' ? 'DRAFT' : 'QUEUE';
-    await this._postRepository.changeState(id, state);
+    await this._postRepository.changeState(id, state, undefined, undefined, orgId);
 
     // No swallow: if the workflow cannot be scheduled the post is already
     // marked ERROR (inside startWorkflow) and the user must see the failure
@@ -1162,7 +1177,7 @@ export class PostsService {
   async setPostState(orgId: string, postId: string, state: State) {
     const post = await this._postRepository.getPostById(postId, orgId);
     if (!post) throw new BadRequestException('Post not found');
-    await this._postRepository.changeState(postId, state);
+    await this._postRepository.changeState(postId, state, undefined, undefined, orgId);
     return { id: postId, state };
   }
 

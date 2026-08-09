@@ -27,6 +27,7 @@ import { isSafePublicHttpsUrl } from '@postsider/nestjs-libraries/dtos/webhooks/
 import { ssrfSafeDispatcher } from '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
 import { ApprovalService } from '@postsider/nestjs-libraries/database/prisma/approval/approval.service';
 import { AuthRateLimitGuard } from '@postsider/nestjs-libraries/services/auth-rate-limit.guard';
+import { HttpForbiddenException } from '@postsider/nestjs-libraries/services/exception.filter';
 
 const pump = promisify(pipeline);
 
@@ -64,27 +65,15 @@ export class PublicController {
     );
   }
 
-  @Get(`/posts/:id`)
-  async getPreview(@Param('id') id: string) {
-    // Public preview (no auth, gated only by the post id). Drop internal-only
-    // fields like `error` (platform failure messages) that a shared preview
-    // link must never expose. A share-token gate is the fuller fix (product).
-    return (await this._postsService.getPostsRecursively(id, true)).map(
-      ({ childrenPost, error, ...p }) => ({
-        ...p,
-        ...(p.integration
-          ? {
-              integration: {
-                id: p.integration.id,
-                name: p.integration.name,
-                picture: p.integration.picture,
-                providerIdentifier: p.integration.providerIdentifier,
-                profile: p.integration.profile,
-              },
-            }
-          : {}),
-      })
-    );
+  @Get(`/posts/shared/:shareToken`)
+  async getSharedPreview(@Param('shareToken') shareToken: string) {
+    // Public preview gated by crypto-random share token. Without a valid token
+    // the post is not reachable — knowing the post id is not enough.
+    const post = await this._postsService.getPublicPost(shareToken);
+    if (!post) {
+      throw new HttpForbiddenException();
+    }
+    return post;
   }
 
   @Get(`/posts/:id/comments`)

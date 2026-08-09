@@ -86,7 +86,7 @@ services:
     container_name: postsider-postgres
     restart: always
     environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postsider-secure-pwd-change-me}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set (remove the hardcoded fallback)}
       POSTGRES_USER: ${POSTGRES_USER:-postsider}
       POSTGRES_DB: ${POSTGRES_DB:-postsider_prod}
     deploy:
@@ -219,7 +219,7 @@ services:
       LABEL_con1: PostSider Production
       SERVER_con1: postsider-postgres
       USER_con1: ${POSTGRES_USER:-postsider}
-      PASSWORD_con1: ${POSTGRES_PASSWORD:-postsider-secure-pwd-change-me}
+      PASSWORD_con1: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set (remove the hardcoded fallback)}
       PORT_con1: 5432
       ENGINE_con1: postgres@dbgate-plugin-postgres
       DATABASE_con1: ${POSTGRES_DB:-postsider_prod}

@@ -265,15 +265,18 @@ export class NoAuthIntegrationsController {
       }
     }
 
+    // Duplicate check: block re-connect within same org (same-org dupes
+    // are already handled by the upsert in createOrUpdateIntegration, but
+    // an explicit check here gives a clean 409 before the OAuth round-trip).
+    // Cross-org probing removed (2026-08-09 audit fix) — was leaking which
+    // orgs had connected a given social account via the trial 412 code path.
     if (
-      isBillingEnabled() &&
-      org.isTrailing &&
-      (await this._integrationService.checkPreviousConnections(
+      await this._integrationService.checkPreviousConnections(
         org.id,
         String(id)
-      ))
+      )
     ) {
-      throw new HttpException('', 412);
+      throw new HttpException('', 409);
     }
 
     // BILLING AUDIT FIX (2026-08-06): this endpoint runs entirely outside

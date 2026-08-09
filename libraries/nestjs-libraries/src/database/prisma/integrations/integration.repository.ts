@@ -68,22 +68,23 @@ export class IntegrationRepository {
     });
   }
 
+  /**
+   * Check whether this social media account is already connected to the CURRENT
+   * org. Previously queried across ALL orgs, which let an attacker probe whether
+   * a particular account was connected to ANY PostSider organization (cross-tenant
+   * data leak through the OAuth connect flow). Now scoped to the caller's own org
+   * — same-org duplicate detection still works, cross-org enumeration is blocked.
+   */
   async checkPreviousConnections(org: string, id: string) {
-    const findIt = await this._integration.model.integration.findMany({
+    const existing = await this._integration.model.integration.findFirst({
       where: {
         rootInternalId: id,
+        organizationId: org,
       },
-      select: {
-        organizationId: true,
-        id: true,
-      },
+      select: { id: true },
     });
 
-    if (findIt.some((f) => f.organizationId === org)) {
-      return false;
-    }
-
-    return findIt.length > 0;
+    return !!existing;
   }
 
   updateProviderSettings(org: string, id: string, settings: string) {
