@@ -265,19 +265,18 @@ export class NoAuthIntegrationsController {
       }
     }
 
-    // Duplicate check: block re-connect within same org (same-org dupes
-    // are already handled by the upsert in createOrUpdateIntegration, but
-    // an explicit check here gives a clean 409 before the OAuth round-trip).
-    // Cross-org probing removed (2026-08-09 audit fix) — was leaking which
-    // orgs had connected a given social account via the trial 412 code path.
-    if (
-      await this._integrationService.checkPreviousConnections(
-        org.id,
-        String(id)
-      )
-    ) {
-      throw new HttpException('', 409);
-    }
+    // NOTE (2026-08-09, follow-up): the old duplicate check here
+    // (checkPreviousConnections) is REMOVED. The original OSS version probed
+    // ALL orgs by rootInternalId and returned true only for a CROSS-org match —
+    // it was a trial anti-abuse block ("account already used by another org")
+    // that leaked which orgs had connected a given account (the audit's HIGH
+    // finding). The 2026-08-09 fix scoped the query to the current org, but
+    // that INVERTED the semantics: same-org connections (the legitimate
+    // reconnect / switch-a-server-from-shared-bot-to-own-bot case) started
+    // 409ing, blocking real connects. Same-org duplicates are already handled
+    // idempotently by the upsert in createOrUpdateIntegration (keyed on
+    // organizationId_internalId), so no check is needed here at all — and
+    // without one there is no cross-org probe to leak anything.
 
     // BILLING AUDIT FIX (2026-08-06): this endpoint runs entirely outside
     // AuthMiddleware (NoAuthIntegrationsController isn't in

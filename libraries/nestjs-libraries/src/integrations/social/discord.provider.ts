@@ -5,7 +5,10 @@ import {
   SocialProvider,
 } from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
-import { SocialAbstract } from '@postsider/nestjs-libraries/integrations/social.abstract';
+import {
+  NotEnoughScopes,
+  SocialAbstract,
+} from '@postsider/nestjs-libraries/integrations/social.abstract';
 import { Integration } from '@prisma/client';
 import { DiscordDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/discord.dto';
 import { Tool } from '@postsider/nestjs-libraries/integrations/tool.decorator';
@@ -202,15 +205,45 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
   }
 
   private async authenticateWithOwnBot(botToken: string, guildId: string) {
-    const guildInfo = await (
-      await this.fetch(`https://discord.com/api/guilds/${guildId}`, {
-        headers: { Authorization: `Bot ${botToken}` },
-      })
-    ).json();
+    // Raw fetch, not this.fetch(): the shared fetch() throws BadBody/RefreshToken
+    // whose message is 'Unknown Error' (Discord's actual response lives in
+    // ApplicationFailure.details), which the connect endpoint turns into a
+    // useless generic "Authentication failed". We want the user to SEE why their
+    // own-bot connect failed. guildId is digits-only per the customFields regex,
+    // and the host is fixed — no SSRF surface here.
+    const safeGuildId = String(guildId).replace(/\D/g, '');
+    const res = await fetch(`https://discord.com/api/guilds/${safeGuildId}`, {
+      headers: { Authorization: `Bot ${botToken}` },
+      signal: AbortSignal.timeout(10000),
+    });
+    const bodyText = await res.text();
+
+    if (res.status === 401) {
+      throw new NotEnoughScopes(
+        'Invalid bot token — reset it in the Discord Developer Portal (Your App → Bot → Reset Token), then try again.'
+      );
+    }
+    if (res.status === 404) {
+      throw new NotEnoughScopes(
+        'Your bot is not a member of that server — invite it via the OAuth2 URL in the Discord Developer Portal, then try again.'
+      );
+    }
+    if (!res.ok) {
+      throw new NotEnoughScopes(
+        `Discord rejected the request (HTTP ${res.status}) — check the bot token and Server ID and try again.`
+      );
+    }
+
+    let guildInfo: any = {};
+    try {
+      guildInfo = JSON.parse(bodyText);
+    } catch {
+      // fall through — the id check below will fail with a clear message
+    }
 
     if (!guildInfo?.id) {
-      throw new Error(
-        'Could not find that server — check the bot token and Server ID, and make sure your bot has already been invited to that server.'
+      throw new NotEnoughScopes(
+        'Could not verify that server — check the Server ID and that your bot has been invited.'
       );
     }
 
