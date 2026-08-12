@@ -1,10 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import {
   PrismaRepository,
-  PrismaTransaction,
+  PrismaService,
 } from '@postsider/nestjs-libraries/database/prisma/prisma.service';
 import dayjs from 'dayjs';
 import { Organization } from '@prisma/client';
+import {
+  TRIAL_X_POSTS_LIMIT,
+  TRIAL_X_RESERVATION_TTL_MS,
+  TRIAL_X_RESERVATION_TYPE,
+} from './trial.x.limit';
 
 @Injectable()
 export class SubscriptionRepository {
@@ -13,7 +18,8 @@ export class SubscriptionRepository {
     private readonly _organization: PrismaRepository<'organization'>,
     private readonly _user: PrismaRepository<'user'>,
     private readonly _credits: PrismaRepository<'credits'>,
-    private _usedCodes: PrismaRepository<'usedCodes'>
+    private _usedCodes: PrismaRepository<'usedCodes'>,
+    private readonly _prisma: PrismaService
   ) {}
 
   getUserAccount(userId: string) {
@@ -281,6 +287,74 @@ export class SubscriptionRepository {
       });
       throw err;
     }
+  }
+
+  async reserveCredits(
+    organizationId: string,
+    type: string,
+    from: Date,
+    amount: number,
+    limit: number
+  ) {
+    return this._prisma.$transaction(async (tx) => {
+      // Serialize aggregate-and-insert for this organization and usage type.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${organizationId}:${type}`}))`;
+      const used = await tx.credits.aggregate({
+        where: { organizationId, type, createdAt: { gte: from } },
+        _sum: { credits: true },
+      });
+      if ((used._sum.credits || 0) + amount > limit) return null;
+      return tx.credits.create({
+        data: { organizationId, type, credits: amount },
+      });
+    });
+  }
+
+  refundCredit(id: string) {
+    return this._credits.model.credits.delete({ where: { id } });
+  }
+
+  refundCredits(id: string, amount: number) {
+    if (amount <= 0) return Promise.resolve();
+    return this._credits.model.credits.update({
+      where: { id },
+      data: { credits: { decrement: amount } },
+    });
+  }
+
+  async reserveTrialXPosts(organizationId: string, from: Date, amount: number) {
+    const pendingSince = new Date(Date.now() - TRIAL_X_RESERVATION_TTL_MS);
+    return this._prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${organizationId}:${TRIAL_X_RESERVATION_TYPE}`}))`;
+      const [existing, pending] = await Promise.all([
+        tx.post.count({
+          where: {
+            organizationId,
+            createdAt: { gte: from },
+            parentPostId: null,
+            integration: { providerIdentifier: 'x' },
+          },
+        }),
+        tx.credits.aggregate({
+          where: {
+            organizationId,
+            type: TRIAL_X_RESERVATION_TYPE,
+            createdAt: { gte: pendingSince },
+          },
+          _sum: { credits: true },
+        }),
+      ]);
+      if (existing + (pending._sum.credits || 0) + amount > TRIAL_X_POSTS_LIMIT) {
+        return null;
+      }
+      return tx.credits.create({
+        data: {
+          organizationId,
+          type: TRIAL_X_RESERVATION_TYPE,
+          credits: amount,
+        },
+      });
+    });
   }
 
   setCustomerId(orgId: string, customerId: string) {

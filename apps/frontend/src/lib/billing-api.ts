@@ -5,10 +5,11 @@ import { api } from "./api";
 /**
  * Billing tiers. Mirrors the backend `pricing.ts` for display purposes.
  *
- * Only `channels`, `postsPerMonth` and `teamMembers` are enforced today; the
- * other product features are intentionally not advertised because they aren't
- * built yet. Prices here are for display only — Polar holds the source
- * of truth and the backend validates against its own pricing table.
+ * Plan limits are enforced by the backend pricing table. Public API and
+ * webhooks are available to paid tiers; their quotas live in the backend
+ * because this descriptor only contains billing-card structure.
+ * Prices here are for display only — Polar holds the source of truth and the
+ * backend validates against its own pricing table.
  */
 export type TierName = "STANDARD" | "TEAM" | "PRO" | "ULTIMATE";
 /** Includes the internal SAMURAI plan that may appear on a subscription. */

@@ -2,12 +2,14 @@
 import { useEffect, useState } from "react";
 import { useT } from "@/lib/i18n";
 import { checkPost, type CheckResults } from "@/lib/post-checker-api";
+import { useAuth } from "@/lib/auth-context";
 import styles from "./post-checker-panel.module.css";
 
 type Props = { content: string; hasMedia: boolean; mediaType?: "image" | "video" | "mixed"; platforms: string[]; onClose: () => void; };
 
 export function PostCheckerPanel({ content, hasMedia, mediaType, platforms, onClose }: Props) {
   const t = useT();
+  const { user, refresh } = useAuth();
   const [state, setState] = useState<"loading" | "done" | "error">("loading");
   const [results, setResults] = useState<CheckResults>({});
   const [active, setActive] = useState(platforms[0]);
@@ -15,7 +17,7 @@ export function PostCheckerPanel({ content, hasMedia, mediaType, platforms, onCl
   useEffect(() => {
     let cancelled = false;
     checkPost({ content, hasMedia, mediaType, platforms })
-      .then((r) => { if (!cancelled) { setResults(r); setState("done"); } })
+      .then((r) => { if (!cancelled) { setResults(r); setState("done"); void refresh(); } })
       .catch(() => { if (!cancelled) setState("error"); });
     return () => { cancelled = true; };
   }, []);
@@ -28,6 +30,9 @@ export function PostCheckerPanel({ content, hasMedia, mediaType, platforms, onCl
       </div>
       {state === "loading" && <p className={styles.muted}>{t("postChecker.analysing")}</p>}
       {state === "error" && <p className={styles.muted}>{t("postChecker.error")}</p>}
+      {state !== "loading" && user?.aiUsage && <p className={styles.muted}>
+        {user.aiUsage.remaining === null ? t("postChecker.unlimitedUses") : t("postChecker.usesRemaining", { count: user.aiUsage.remaining })}
+      </p>}
       {state === "done" && (
         <>
           {platforms.length > 1 && (

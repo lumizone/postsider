@@ -101,7 +101,7 @@ const it = {
         tagline: "Ideale per le agenzie",
       },
       SAMURAI: {
-        label: "Samurai",
+        label: "Piano interno",
         tagline: "Piano interno",
       },
     },

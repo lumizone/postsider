@@ -331,8 +331,8 @@ const channels = await client.integrations();
 ## AI agents (MCP)
 
 PostSider ships an MCP server so AI agents (Claude Code, Claude Desktop, Codex,
-and any MCP-compatible client) can drive the platform directly: list channels,
-schedule and publish posts, upload media, and read analytics. It is a thin,
+and any MCP-compatible client) can use the platform through the public API: list
+channels, schedule and publish posts, upload media, and read analytics. It is a thin,
 dependency-light wrapper over the public API.
 
 ```bash

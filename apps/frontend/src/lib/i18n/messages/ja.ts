@@ -101,7 +101,7 @@ const ja = {
         tagline: "代理店に最適",
       },
       SAMURAI: {
-        label: "Samurai",
+        label: "内部プラン",
         tagline: "内部プラン",
       },
     },

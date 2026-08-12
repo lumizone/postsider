@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import styles from "./add-channel-modal.module.css";
 import { PlatformIcon } from "./platform-icon";
 import { useT } from "@/lib/i18n";
@@ -86,7 +86,11 @@ function CloseIcon() {
 
 export function AddChannelModal({ onClose, onPick }: AddChannelModalProps) {
   const t = useT();
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
+    previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
+    closeButtonRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
@@ -96,6 +100,7 @@ export function AddChannelModal({ onClose, onPick }: AddChannelModalProps) {
     return () => {
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
+      previouslyFocusedRef.current?.focus();
     };
   }, [onClose]);
 
@@ -116,6 +121,7 @@ export function AddChannelModal({ onClose, onPick }: AddChannelModalProps) {
           <button
             type="button"
             className={styles.closeBtn}
+            ref={closeButtonRef}
             onClick={onClose}
             aria-label={t("common.close")}
           >

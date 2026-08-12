@@ -101,7 +101,7 @@ const ko = {
         tagline: "에이전시에 적합",
       },
       SAMURAI: {
-        label: "Samurai",
+        label: "내부 플랜",
         tagline: "내부 플랜",
       },
     },

@@ -30,7 +30,6 @@ src/
       email/         # Resend / SMTP / Listmonk + delivery log
       api/           # tokens, quick start, limits
       webhooks/      # endpoints, events, signing secret
-      mcp/           # MCP servers + CLI / client setup
     icon.png         # 32×31 favicon (auto-wired by Next.js)
     apple-icon.png   # 180×174 apple-touch-icon
   components/
@@ -81,16 +80,15 @@ leave behind in this monorepo.
 
 ## Wiring to the backend
 
-All views currently read from in-memory demo data in `src/lib/`. Each demo
-module mirrors the shape returned by the matching backend route, so swapping
-in real fetches is a one-file change per surface:
+The data modules used by the dashboard mirror the shapes returned by the
+matching backend routes:
 
 | Frontend module        | Backend route(s) (NestJS)                    |
 | ---------------------- | --------------------------------------------- |
 | `calendar-data.ts`     | `posts.controller.ts`, `integrations.controller.ts`, `analytics.controller.ts` |
 | `media-data.ts`        | `media.controller.ts`                         |
 | Add Channel modal      | `oauth.controller.ts`, `oauth-app.controller.ts` |
-| Settings → MCP         | (separate MCP server config)                  |
+| Settings → API         | Generate organization API keys for REST API and MCP |
 | Settings → API/Webhooks| (existing token + webhook endpoints)          |
 
 ## Conventions

@@ -1,9 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import pLimit from 'p-limit';
-import { OpenaiService } from '@postsider/nestjs-libraries/openai/openai.service';
 import { ProviderCredentialsService } from '@postsider/nestjs-libraries/database/prisma/integrations/provider-credentials.service';
 import { OrganizationRepository } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.repository';
-import { isPlatformAiEnabled } from '@postsider/nestjs-libraries/services/ai.flag';
+import { getPlatformAiConfig, isPlatformAiEnabled } from '@postsider/nestjs-libraries/services/ai.flag';
+import {
+  AiQuotaExceededError,
+  SubscriptionService,
+} from '@postsider/nestjs-libraries/database/prisma/subscriptions/subscription.service';
 import { OpenaiCheckProvider } from './providers/openai.check.provider';
 import { DeepseekCheckProvider } from './providers/deepseek.check.provider';
 import { GeminiCheckProvider } from './providers/gemini.check.provider';
@@ -23,19 +26,22 @@ import {
 import type { BrandContext } from './brand-context';
 
 const STORE_KEY = 'post-checker';
+const CHECK_MAX_TOKENS = 400;
+const REWRITE_MAX_TOKENS = 600;
 export class NoCheckerConfigError extends Error {}
 
 // Unified Post Checker / caption rewrite.
-//  - Platform AI on  (OPENAI_API_KEY set, cloud): use OpenaiService.
+//  - Platform AI on (AI_API_KEY or OPENAI_API_KEY set, cloud): use the shared
+//    provider, quota-bound by subscription tier.
 //  - Platform AI off (self-host): use the per-org bring-your-own-key stored in
 //    ProviderCredentials. No stored key -> NoCheckerConfigError (controller -> 409).
 @Injectable()
 export class PostCheckerService {
   private providers: LlmProvider[];
   constructor(
-    private _openai: OpenaiService,
     private _creds: ProviderCredentialsService,
     private _organizations: OrganizationRepository,
+    private _subscriptions: SubscriptionService,
     openaiByo: OpenaiCheckProvider,
     deepseek: DeepseekCheckProvider,
     gemini: GeminiCheckProvider
@@ -93,7 +99,8 @@ export class PostCheckerService {
 
   private async runChecks(
     platforms: string[],
-    run: (platform: string) => Promise<string>
+    run: (platform: string) => Promise<CheckResult>,
+    onSuccess?: () => void
   ) {
     const limit = pLimit(3);
     const entries = await Promise.all(
@@ -101,8 +108,11 @@ export class PostCheckerService {
         limit(
           async (): Promise<[string, CheckResult | { error: string }]> => {
             try {
-              return [platform, parseCheckResult(await run(platform))];
+              const result = await run(platform);
+              onSuccess?.();
+              return [platform, result];
             } catch (e: any) {
+              if (e instanceof AiQuotaExceededError) throw e;
               return [platform, { error: e?.message || 'failed' }];
             }
           }
@@ -119,14 +129,43 @@ export class PostCheckerService {
   ) {
     const brandContext = await this.loadBrandContext(orgId);
     if (isPlatformAiEnabled()) {
-      return this.runChecks(platforms, (platform) =>
-        this._openai.complete(buildCheckPrompt({ ...base, platform, brandContext }))
-      );
+      const config = getPlatformAiConfig()!;
+      const provider = pickProvider(this.providers, config.provider);
+      const reservationId = await this._subscriptions.reserveAiCredits(orgId, platforms.length);
+      let completed = 0;
+      try {
+        return await this.runChecks(
+          platforms,
+          async (platform) =>
+            // Successful provider responses consume one reserved action.
+            parseCheckResult(
+              await provider.complete(
+                config,
+                buildCheckPrompt({ ...base, platform, brandContext }),
+                0.3,
+                CHECK_MAX_TOKENS
+              )
+            ),
+          () => { completed += 1; }
+        );
+      } finally {
+        await this._subscriptions.releaseAiCredits(
+          reservationId,
+          platforms.length - completed
+        );
+      }
     }
     const config = await this.loadLlmConfig(orgId); // throws -> 409
     const provider = pickProvider(this.providers, config.provider);
-    return this.runChecks(platforms, (platform) =>
-      provider.complete(config, buildCheckPrompt({ ...base, platform, brandContext }))
+    return this.runChecks(platforms, async (platform) =>
+      parseCheckResult(
+        await provider.complete(
+          config,
+          buildCheckPrompt({ ...base, platform, brandContext }),
+          0.3,
+          CHECK_MAX_TOKENS
+        )
+      )
     );
   }
 
@@ -134,12 +173,28 @@ export class PostCheckerService {
     const brandContext = await this.loadBrandContext(orgId);
     const contextualInput = { ...input, brandContext };
     if (isPlatformAiEnabled()) {
-      const raw = await this._openai.complete(buildRewritePrompt(contextualInput), undefined, 0.7);
-      return parseRewriteResult(raw, input.count ?? 3);
+      const config = getPlatformAiConfig()!;
+      const provider = pickProvider(this.providers, config.provider);
+      return this._subscriptions.useAiCredits(orgId, 1, async () =>
+        parseRewriteResult(
+          await provider.complete(
+            config,
+            buildRewritePrompt(contextualInput),
+            0.7,
+            REWRITE_MAX_TOKENS
+          ),
+          input.count ?? 3
+        )
+      );
     }
     const config = await this.loadLlmConfig(orgId); // throws -> 409
     const provider = pickProvider(this.providers, config.provider);
-    const raw = await provider.complete(config, buildRewritePrompt(contextualInput), 0.7);
+    const raw = await provider.complete(
+      config,
+      buildRewritePrompt(contextualInput),
+      0.7,
+      REWRITE_MAX_TOKENS
+    );
     return parseRewriteResult(raw, input.count ?? 3);
   }
 }

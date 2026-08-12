@@ -8,6 +8,9 @@ export interface PricingInnerInterface {
   community_features: boolean;
   featured_by_postsider: boolean;
   ai: boolean;
+  // User-facing AI actions, not underlying provider input/output tokens.
+  // `null` is reserved for the owner-only unlimited SAMURAI tier.
+  ai_uses_per_month: number | null;
   import_from_channels: boolean;
   image_generator?: boolean;
   image_generation_count: number;
@@ -19,11 +22,10 @@ export interface PricingInterface {
   [key: string]: PricingInnerInterface;
 }
 
-// NOTE: Only `channel`, `posts_per_month` and `team_members` are actually
-// enforced right now. Every other feature flag (ai, image/video generation,
-// public_api, webhooks, community_features, etc.) is disabled across
-// all tiers because those features are not built/available yet. Re-enable them
-// per tier when the corresponding feature ships.
+// NOTE: `channel`, `posts_per_month`, `team_members`, `ai`, and `webhooks` are
+// enforced. Public API access is authenticated by API key and rate-limited at
+// the public API boundary, so `public_api` documents plan availability rather
+// than adding a second route-level gate.
 export const pricing: PricingInterface = {
   FREE: {
     current: 'FREE',
@@ -35,6 +37,7 @@ export const pricing: PricingInterface = {
     community_features: false,
     featured_by_postsider: false,
     ai: false,
+    ai_uses_per_month: 0,
     import_from_channels: false,
     image_generator: false,
     image_generation_count: 0,
@@ -51,13 +54,14 @@ export const pricing: PricingInterface = {
     team_members: false,
     community_features: false,
     featured_by_postsider: false,
-    ai: false,
+    ai: true,
+    ai_uses_per_month: 50,
     import_from_channels: false,
     image_generator: false,
     image_generation_count: 0,
     generate_videos: 0,
-    public_api: false,
-    webhooks: 0,
+    public_api: true,
+    webhooks: 2,
   },
   TEAM: {
     current: 'TEAM',
@@ -68,13 +72,14 @@ export const pricing: PricingInterface = {
     team_members: true,
     community_features: false,
     featured_by_postsider: false,
-    ai: false,
+    ai: true,
+    ai_uses_per_month: 150,
     import_from_channels: false,
     image_generator: false,
     image_generation_count: 0,
     generate_videos: 0,
-    public_api: false,
-    webhooks: 0,
+    public_api: true,
+    webhooks: 10,
   },
   PRO: {
     current: 'PRO',
@@ -85,13 +90,14 @@ export const pricing: PricingInterface = {
     team_members: true,
     community_features: false,
     featured_by_postsider: false,
-    ai: false,
+    ai: true,
+    ai_uses_per_month: 500,
     import_from_channels: false,
     image_generator: false,
     image_generation_count: 0,
     generate_videos: 0,
-    public_api: false,
-    webhooks: 0,
+    public_api: true,
+    webhooks: 30,
   },
   ULTIMATE: {
     current: 'ULTIMATE',
@@ -102,15 +108,16 @@ export const pricing: PricingInterface = {
     team_members: true,
     community_features: false,
     featured_by_postsider: false,
-    ai: false,
+    ai: true,
+    ai_uses_per_month: 1000,
     import_from_channels: false,
     image_generator: false,
     image_generation_count: 0,
     generate_videos: 0,
-    public_api: false,
-    webhooks: 0,
+    public_api: true,
+    webhooks: 10000,
   },
-  // SAMURAI — internal owner-only plan. Same access as ULTIMATE but free and
+  // SAMURAI - internal owner-only plan. Same access as ULTIMATE but free and
   // never charged. Not shown in checkout/pricing UI. Set manually in the DB
   // (subscription.subscriptionTier = 'SAMURAI') for owner accounts only.
   SAMURAI: {
@@ -122,12 +129,13 @@ export const pricing: PricingInterface = {
     team_members: true,
     community_features: false,
     featured_by_postsider: false,
-    ai: false,
+    ai: true,
+    ai_uses_per_month: null,
     import_from_channels: false,
     image_generator: false,
     image_generation_count: 0,
     generate_videos: 0,
-    public_api: false,
-    webhooks: 0,
+    public_api: true,
+    webhooks: 10000,
   },
 };

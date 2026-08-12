@@ -1,5 +1,7 @@
 import {
   IsArray,
+  ArrayMaxSize,
+  ArrayUnique,
   IsBoolean,
   IsIn,
   IsOptional,
@@ -10,7 +12,7 @@ import {
 
 export class CheckPostDto {
   @IsString()
-  @MaxLength(10000)
+  @MaxLength(4000)
   content: string;
 
   @IsBoolean()
@@ -22,6 +24,8 @@ export class CheckPostDto {
 
   @IsArray()
   @ArrayNotEmpty()
+  @ArrayMaxSize(3)
+  @ArrayUnique()
   @IsString({ each: true })
   platforms: string[];
 }

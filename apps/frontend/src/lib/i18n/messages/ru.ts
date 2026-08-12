@@ -101,7 +101,7 @@ const ru = {
         tagline: "Лучший выбор для агентств",
       },
       SAMURAI: {
-        label: "Samurai",
+        label: "Внутренний план",
         tagline: "Внутренний план",
       },
     },

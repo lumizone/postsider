@@ -101,7 +101,7 @@ const tr = {
         tagline: "Ajanslar için ideal",
       },
       SAMURAI: {
-        label: "Samurai",
+        label: "Dahili plan",
         tagline: "Dahili plan",
       },
     },

@@ -5,6 +5,8 @@ export interface BrandContext {
   forbiddenWords?: string | null;
 }
 
+const MAX_BRAND_CONTEXT_CHARS = 2000;
+
 export function formatBrandContext(context?: BrandContext | null): string {
   if (!context) return '';
   const lines = [
@@ -13,5 +15,6 @@ export function formatBrandContext(context?: BrandContext | null): string {
     context.rules && `Brand rules: ${context.rules}`,
     context.forbiddenWords && `Forbidden words or phrases: ${context.forbiddenWords}`,
   ].filter(Boolean);
-  return lines.length ? `\nBRAND CONTEXT:\n${lines.join('\n')}` : '';
+  const formatted = lines.length ? `\nBRAND CONTEXT:\n${lines.join('\n')}` : '';
+  return formatted.slice(0, MAX_BRAND_CONTEXT_CHARS);
 }

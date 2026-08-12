@@ -12,7 +12,7 @@ import {
 export class RewritePostDto {
   @IsString()
   @MinLength(1)
-  @MaxLength(10000)
+  @MaxLength(4000)
   content: string;
 
   @IsOptional()

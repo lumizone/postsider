@@ -7,6 +7,12 @@ import { Organization } from '@prisma/client';
 import dayjs from 'dayjs';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 
+export class AiQuotaExceededError extends Error {}
+export class TrialUsageLimitError extends Error {}
+
+const AI_TEXT_CREDIT_TYPE = 'ai_text';
+const TRIAL_AI_USES_PER_MONTH = 10;
+
 @Injectable()
 export class SubscriptionService {
   constructor(
@@ -292,6 +298,107 @@ export class SubscriptionService {
     return {
       credits: imageGenerationCount - totalUse,
     };
+  }
+
+  private aiPeriodStart(createdAt: Date) {
+    let date = dayjs(createdAt);
+    while (date.add(1, 'month').isBefore(dayjs())) {
+      date = date.add(1, 'month');
+    }
+    return date.toDate();
+  }
+
+  private aiPeriod(createdAt: Date) {
+    const startsAt = this.aiPeriodStart(createdAt);
+    return { startsAt, renewsAt: dayjs(startsAt).add(1, 'month').toDate() };
+  }
+
+  async getAiQuota(organizationId: string) {
+    const subscription = await this.getSubscriptionByOrganizationId(organizationId);
+    const tier = subscription?.subscriptionTier || 'FREE';
+    const isTrial = subscription?.identifier === 'trial';
+    const limit = isTrial
+      ? TRIAL_AI_USES_PER_MONTH
+      : pricing[tier]?.ai_uses_per_month ?? 0;
+    const period = this.aiPeriod(subscription?.createdAt || new Date());
+    const used = await this._subscriptionRepository.getCreditsFrom(
+      organizationId,
+      dayjs(period.startsAt),
+      AI_TEXT_CREDIT_TYPE
+    );
+
+    return {
+      limit,
+      used,
+      remaining: limit === null ? null : Math.max(0, limit - used),
+      renewsAt: period.renewsAt,
+    };
+  }
+
+  async useAiCredits<T>(organizationId: string, amount: number, func: () => Promise<T>) {
+    const subscription = await this.getSubscriptionByOrganizationId(organizationId);
+    const tier = subscription?.subscriptionTier || 'FREE';
+    const limit = subscription?.identifier === 'trial'
+      ? TRIAL_AI_USES_PER_MONTH
+      : pricing[tier]?.ai_uses_per_month ?? 0;
+    if (limit === null) return func();
+
+    const credit = await this._subscriptionRepository.reserveCredits(
+      organizationId,
+      AI_TEXT_CREDIT_TYPE,
+      this.aiPeriodStart(subscription?.createdAt || new Date()),
+      amount,
+      limit
+    );
+    if (!credit) throw new AiQuotaExceededError('Monthly AI limit reached');
+
+    try {
+      return await func();
+    } catch (error) {
+      await this._subscriptionRepository.refundCredit(credit.id);
+      throw error;
+    }
+  }
+
+  async reserveAiCredits(organizationId: string, amount: number) {
+    const subscription = await this.getSubscriptionByOrganizationId(organizationId);
+    const tier = subscription?.subscriptionTier || 'FREE';
+    const limit = subscription?.identifier === 'trial'
+      ? TRIAL_AI_USES_PER_MONTH
+      : pricing[tier]?.ai_uses_per_month ?? 0;
+    if (limit === null) return null;
+
+    const credit = await this._subscriptionRepository.reserveCredits(
+      organizationId,
+      AI_TEXT_CREDIT_TYPE,
+      this.aiPeriodStart(subscription?.createdAt || new Date()),
+      amount,
+      limit
+    );
+    if (!credit) throw new AiQuotaExceededError('Monthly AI limit reached');
+    return credit.id;
+  }
+
+  releaseAiCredits(id: string | null, amount: number) {
+    return id ? this._subscriptionRepository.refundCredits(id, amount) : undefined;
+  }
+
+  async reserveTrialXPosts(organizationId: string, amount: number) {
+    if (!amount) return null;
+    const subscription = await this.getSubscriptionByOrganizationId(organizationId);
+    if (subscription?.identifier !== 'trial') return null;
+
+    const reservation = await this._subscriptionRepository.reserveTrialXPosts(
+      organizationId,
+      subscription.createdAt,
+      amount
+    );
+    if (!reservation) throw new TrialUsageLimitError('Trial usage limit reached');
+    return reservation.id;
+  }
+
+  releaseTrialXReservation(id: string | null) {
+    return id ? this._subscriptionRepository.refundCredit(id) : undefined;
   }
 
   async addSubscription(orgId: string, userId: string, subscription: any) {

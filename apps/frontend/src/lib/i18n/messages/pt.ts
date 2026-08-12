@@ -101,7 +101,7 @@ const pt = {
         tagline: "Ideal para agências",
       },
       SAMURAI: {
-        label: "Samurai",
+        label: "Plano interno",
         tagline: "Plano interno",
       },
     },

@@ -23,9 +23,11 @@ interface NavEntry {
 
 const NAV_ITEMS: NavEntry[] = [
   { href: "/settings/general", labelKey: "settings.general" },
+  { href: "/settings/ai-usage", labelKey: "settings.aiUsage" },
   { href: "/settings/organization", labelKey: "settings.organization", minRole: "ADMIN" },
   { href: "/settings/users", labelKey: "settings.users", minRole: "ADMIN" },
   { href: "/settings/security", labelKey: "settings.security" },
+  { href: "/settings/storage", labelKey: "settings.storage", minRole: "ADMIN" },
   { href: "/settings/api", labelKey: "settings.api", minRole: "ADMIN" },
   { href: "/settings/webhooks", labelKey: "settings.webhooks", minRole: "ADMIN" },
 { href: "/settings/evergreen", labelKey: "settings.evergreen", minRole: "ADMIN" },

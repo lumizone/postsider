@@ -101,7 +101,7 @@ const de = {
         tagline: "Ideal für Agenturen",
       },
       SAMURAI: {
-        label: "Samurai",
+        label: "Interner Plan",
         tagline: "Interner Plan",
       },
     },

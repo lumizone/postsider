@@ -4,6 +4,7 @@ import { OrganizationService } from '@postsider/nestjs-libraries/database/prisma
 import { OAuthService } from '@postsider/nestjs-libraries/database/prisma/oauth/oauth.service';
 import { HttpForbiddenException } from '@postsider/nestjs-libraries/services/exception.filter';
 import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
+import { pricing } from '@postsider/nestjs-libraries/database/prisma/subscriptions/pricing';
 
 @Injectable()
 export class PublicAuthMiddleware implements NestMiddleware {
@@ -35,6 +36,10 @@ export class PublicAuthMiddleware implements NestMiddleware {
             .json({ msg: 'No subscription found' });
           return;
         }
+        if (isBillingEnabled() && !pricing[org.subscription?.subscriptionTier || 'FREE']?.public_api) {
+          res.status(HttpStatus.PAYMENT_REQUIRED).json({ msg: 'Public API is not available on this plan' });
+          return;
+        }
 
         // @ts-ignore
         req.org = { ...org, users: [{ role: 'SUPERADMIN', disabled: false }] };
@@ -51,6 +56,10 @@ export class PublicAuthMiddleware implements NestMiddleware {
           res
             .status(HttpStatus.UNAUTHORIZED)
             .json({ msg: 'No subscription found' });
+          return;
+        }
+        if (isBillingEnabled() && !pricing[org.subscription?.subscriptionTier || 'FREE']?.public_api) {
+          res.status(HttpStatus.PAYMENT_REQUIRED).json({ msg: 'Public API is not available on this plan' });
           return;
         }
 

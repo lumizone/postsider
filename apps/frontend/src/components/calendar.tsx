@@ -202,6 +202,8 @@ export function Calendar({ year, month }: CalendarProps) {
     rejectionNote?: string;
   } | null>(null);
   const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editRetryEvent, setEditRetryEvent] = useState<CalendarEvent | null>(null);
 
   const { user } = useAuth();
   const isMember = user?.role === "USER";
@@ -618,6 +620,8 @@ export function Calendar({ year, month }: CalendarProps) {
   const openEventForEdit = async (ev: CalendarEvent) => {
     if (editLoading) return;
     setOpenDay(null);
+    setEditError(null);
+    setEditRetryEvent(null);
     setEditLoading(true);
     try {
       const detail = await fetchPostDetail(ev.id);
@@ -662,6 +666,8 @@ export function Calendar({ year, month }: CalendarProps) {
       });
     } catch (err) {
       console.error("[edit-post]", err);
+      setEditError(t("errors.postEdit"));
+      setEditRetryEvent(ev);
     } finally {
       setEditLoading(false);
     }
@@ -844,6 +850,44 @@ export function Calendar({ year, month }: CalendarProps) {
             >
               {t("calendar.retry")}
             </button>
+          </div>
+        )}
+        {editError && (
+          <div
+            role="alert"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "12px 14px",
+              borderRadius: "var(--radius-md)",
+              background: "rgba(220, 38, 38, 0.08)",
+              color: "#c0392b",
+              fontSize: 13,
+              marginBottom: 16,
+            }}
+          >
+            <span style={{ flex: 1 }}>{editError}</span>
+            {editRetryEvent && (
+              <button
+                type="button"
+                onClick={() => void openEventForEdit(editRetryEvent)}
+                disabled={editLoading}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  fontWeight: 600,
+                  color: "#c0392b",
+                  textDecoration: "underline",
+                  whiteSpace: "nowrap",
+                  cursor: editLoading ? "default" : "pointer",
+                  fontSize: 13,
+                  padding: 0,
+                }}
+              >
+                {t("calendar.retry")}
+              </button>
+            )}
           </div>
         )}
         {!isMember && (

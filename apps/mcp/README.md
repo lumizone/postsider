@@ -1,7 +1,7 @@
 # @postsider/mcp
 
-MCP (Model Context Protocol) server that gives AI agents full access to a
-PostSider instance over its public API. Works with Claude Code, Claude Desktop,
+MCP (Model Context Protocol) server that gives AI agents selected access to a
+PostSider instance through its public API. Works with Claude Code, Claude Desktop,
 Codex, and any MCP-compatible client. Talks to cloud (`api.postsider.com`) or a
 self-hosted instance, authenticated with an organization API key.
 
@@ -75,7 +75,7 @@ plus `/api`, e.g. `https://social.example.com/api`. The server appends
 
 ## Design
 
-This server is a thin wrapper over the public `/public/v1` REST API: one MCP
-tool per endpoint, authenticated with the raw API key. It has no dependency on
+This server is a thin wrapper over selected `/public/v1` REST API endpoints,
+authenticated with the raw API key. It has no dependency on
 the backend and pulls in only `@modelcontextprotocol/sdk` and `zod`, so it stays
 lean and easy to maintain.

@@ -38,6 +38,7 @@ import {
   Sections,
 } from '@postsider/backend/services/auth/permissions/permission.exception.class';
 import { PostValidationException } from '@postsider/backend/api/routes/posts.validation.exception';
+import { AiQuotaExceededError } from '@postsider/nestjs-libraries/database/prisma/subscriptions/subscription.service';
 
 @ApiTags('Posts')
 @Controller('/posts')
@@ -69,6 +70,9 @@ export class PostsController {
       if (e instanceof NoCheckerConfigError) {
         throw new HttpException('No AI key configured', HttpStatus.CONFLICT);
       }
+      if (e instanceof AiQuotaExceededError) {
+        throw new HttpException({ section: Sections.AI }, HttpStatus.PAYMENT_REQUIRED);
+      }
       throw e;
     }
   }
@@ -88,6 +92,9 @@ export class PostsController {
     } catch (e) {
       if (e instanceof NoCheckerConfigError) {
         throw new HttpException('No AI key configured', HttpStatus.CONFLICT);
+      }
+      if (e instanceof AiQuotaExceededError) {
+        throw new HttpException({ section: Sections.AI }, HttpStatus.PAYMENT_REQUIRED);
       }
       throw e;
     }

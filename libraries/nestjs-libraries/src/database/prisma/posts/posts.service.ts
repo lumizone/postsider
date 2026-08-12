@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  HttpException,
+  HttpStatus,
   Injectable,
   Logger,
   ValidationPipe,
@@ -57,6 +59,10 @@ import { plainToInstance } from 'class-transformer';
 import { stripHtmlValidation } from '@postsider/helpers/utils/strip.html.validation';
 import { weightedLength } from '@postsider/helpers/utils/count.length';
 import { PostAnalyticsService } from '@postsider/nestjs-libraries/database/prisma/post-analytics/post-analytics.service';
+import {
+  SubscriptionService,
+  TrialUsageLimitError,
+} from '@postsider/nestjs-libraries/database/prisma/subscriptions/subscription.service';
 
 type PostWithConditionals = Post & {
   integration?: Integration;
@@ -77,6 +83,7 @@ export class PostsService {
     private _temporalService: TemporalService,
     private _refreshIntegrationService: RefreshIntegrationService,
     private _postAnalyticsService: PostAnalyticsService,
+    private _subscriptionService: SubscriptionService,
   ) {}
 
   searchForMissingThreeHoursPosts() {
@@ -980,6 +987,31 @@ export class PostsService {
     body: CreatePostDto,
     creationMethod: CreationMethod
   ): Promise<any[]> {
+    // Apply the private trial safety cap centrally so dashboard, API, CSV,
+    // duplicate, and evergreen creation all follow the same rule.
+    const newXIntegrationIds = body.type === 'update'
+      ? []
+      : body.posts.map((post) => post.integration?.id).filter(Boolean);
+    const xTargets = await Promise.all(
+      newXIntegrationIds.map((id) => this._integrationService.getIntegrationById(orgId, id))
+    );
+    let trialReservation: string | null = null;
+    try {
+      trialReservation = await this._subscriptionService.reserveTrialXPosts(
+        orgId,
+        xTargets.filter((integration) => integration?.providerIdentifier === 'x').length
+      );
+    } catch (error) {
+      if (error instanceof TrialUsageLimitError) {
+        throw new HttpException(
+          'Your trial includes usage limits. Choose a plan to continue.',
+          HttpStatus.PAYMENT_REQUIRED
+        );
+      }
+      throw error;
+    }
+
+    try {
     const postList: any[] = [];
     for (const post of body.posts) {
       const provider = this._integrationManager.getSocialIntegration(
@@ -1005,7 +1037,9 @@ export class PostsService {
       const { posts } = await this._postRepository.createOrUpdatePost(
         body.type,
         orgId,
-        body.type === 'now' ? dayjs().format('YYYY-MM-DDTHH:mm:00') : body.date,
+        body.type === 'now'
+          ? dayjs().format('YYYY-MM-DDTHH:mm:00')
+          : body.date ?? dayjs().format('YYYY-MM-DDTHH:mm:00'),
         post,
         body.tags,
         creationMethod,
@@ -1042,7 +1076,12 @@ export class PostsService {
       });
     }
 
-    return postList;
+      return postList;
+    } finally {
+      // Created posts become the durable count. The short-lived reservation
+      // only closes races while concurrent requests are still being created.
+      await this._subscriptionService.releaseTrialXReservation(trialReservation);
+    }
   }
 
 

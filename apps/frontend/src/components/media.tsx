@@ -628,6 +628,15 @@ interface MediaPreviewProps {
 
 function MediaPreview({ item, src, channel, onClose, onDelete }: MediaPreviewProps) {
   const t = useT();
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
+    closeButtonRef.current?.focus();
+    return () => previouslyFocusedRef.current?.focus();
+  }, []);
+
   return (
     <div
       className={styles.modalBackdrop}
@@ -679,6 +688,7 @@ function MediaPreview({ item, src, channel, onClose, onDelete }: MediaPreviewPro
             <button
               type="button"
               className={styles.modalClose}
+              ref={closeButtonRef}
               onClick={onClose}
               aria-label={t("common.close")}
             >

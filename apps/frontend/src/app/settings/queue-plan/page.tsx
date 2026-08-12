@@ -58,6 +58,7 @@ export default function QueuePlanPage() {
   const [savedId, setSavedId] = useState<string | null>(null);
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [assignments, setAssignments] = useState<Record<string, string[]>>({});
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   // Falls back to a short list on runtimes without Intl.supportedValuesOf
   // (older browsers) rather than hand-maintaining every IANA zone.
@@ -80,7 +81,7 @@ export default function QueuePlanPage() {
       try {
         const { channels } = await listChannels();
         setChannels(channels);
-        const entries = await Promise.all(
+        const planResults = await Promise.all(
           channels.map(async (c) => {
             try {
               const { slots, timezone } = await getQueuePlan(c.id);
@@ -88,15 +89,20 @@ export default function QueuePlanPage() {
                 id: c.id,
                 slots: Array.isArray(slots) ? slots : ([] as QueueSlot[]),
                 timezone: timezone || "UTC",
+                failed: false,
               };
             } catch {
-              return { id: c.id, slots: [] as QueueSlot[], timezone: "UTC" };
+              return { id: c.id, slots: [] as QueueSlot[], timezone: "UTC", failed: true };
             }
           })
         );
+        const failedPlans = planResults.filter((entry) => entry.failed);
+        if (failedPlans.length > 0) {
+          setError(t("settingsQueuePlan.loadError"));
+        }
         const nextPlans: Record<string, QueueSlot[]> = {};
         const nextTimezones: Record<string, string> = {};
-        for (const e of entries) {
+        for (const e of planResults) {
           nextPlans[e.id] = e.slots;
           nextTimezones[e.id] = e.timezone;
         }
@@ -126,8 +132,7 @@ export default function QueuePlanPage() {
         setLoading(false);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadAttempt, t]);
 
   const toggleAssignment = (channelId: string, userId: string) =>
     setAssignments((prev) => {
@@ -206,7 +211,12 @@ export default function QueuePlanPage() {
         subtitle={t("settingsQueuePlan.subtitle")}
       />
       {error && (
-        <div role="alert" style={{ margin: "0 0 16px", padding: "10px 12px", borderRadius: 8, background: "rgba(192,57,43,0.08)", color: "#c0392b", fontSize: 13 }}>{error}</div>
+        <div role="alert" style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 0 16px", padding: "10px 12px", borderRadius: 8, background: "rgba(192,57,43,0.08)", color: "#c0392b", fontSize: 13 }}>
+          <span style={{ flex: 1 }}>{error}</span>
+          <button type="button" onClick={() => setLoadAttempt((attempt) => attempt + 1)} style={{ border: 0, background: "transparent", color: "inherit", cursor: "pointer", fontWeight: 600, textDecoration: "underline" }}>
+            {t("calendar.retry")}
+          </button>
+        </div>
       )}
       {loading ? (
         <Card title="">

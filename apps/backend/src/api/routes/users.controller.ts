@@ -91,6 +91,9 @@ export class UsersController {
       // @ts-ignore
       publicApi: organization?.users[0]?.role === 'SUPERADMIN' || organization?.users[0]?.role === 'ADMIN' ? organization?.apiKey : '',
       isPlatformAi: isPlatformAiEnabled(),
+      aiUsage: isPlatformAiEnabled()
+        ? await this._subscriptionService.getAiQuota(organization.id)
+        : null,
     };
   }
 

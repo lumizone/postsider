@@ -25,5 +25,10 @@ export interface CheckResult {
 
 export interface LlmProvider {
   readonly name: CheckProvider;
-  complete(config: LlmConfig, prompt: string, temperature?: number): Promise<string>;
+  complete(
+    config: LlmConfig,
+    prompt: string,
+    temperature?: number,
+    maxTokens?: number
+  ): Promise<string>;
 }

@@ -213,6 +213,8 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   // Mobile off-canvas drawer (opened from the hamburger in the topbar).
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const drawerCloseRef = useRef<HTMLButtonElement | null>(null);
 
   // Restore collapsed state from localStorage on mount.
   useEffect(() => {
@@ -230,12 +232,21 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   // Escape closes the drawer.
   useEffect(() => {
     if (!mobileNavOpen) return;
+    drawerCloseRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMobileNavOpen(false);
+      if (e.key === "Escape") {
+        setMobileNavOpen(false);
+        menuButtonRef.current?.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [mobileNavOpen]);
+
+  const closeMobileNav = () => {
+    setMobileNavOpen(false);
+    menuButtonRef.current?.focus();
+  };
 
   const toggleCollapsed = () => {
     setCollapsed((prev) => {
@@ -261,6 +272,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         <button
           type="button"
           className={styles.menuButton}
+          ref={menuButtonRef}
           onClick={() => setMobileNavOpen(true)}
           aria-label={t("calendar.openMenu")}
           aria-expanded={mobileNavOpen}
@@ -303,7 +315,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
       {mobileNavOpen && (
         <div
           className={styles.backdrop}
-          onClick={() => setMobileNavOpen(false)}
+          onClick={closeMobileNav}
           aria-hidden
         />
       )}
@@ -314,7 +326,21 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           (isCollapsed ? " " + styles.sidebarCollapsed : "") +
           (mobileNavOpen ? " " + styles.sidebarOpen : "")
         }
+        role={mobileNavOpen ? "dialog" : undefined}
+        aria-modal={mobileNavOpen ? "true" : undefined}
+        aria-label={mobileNavOpen ? t("calendar.openMenu") : undefined}
       >
+        {mobileNavOpen && (
+          <button
+            type="button"
+            className={styles.mobileCloseButton}
+            ref={drawerCloseRef}
+            onClick={closeMobileNav}
+            aria-label={t("calendar.closeMenu")}
+          >
+            ×
+          </button>
+        )}
         <div
           style={{
             display: "flex",

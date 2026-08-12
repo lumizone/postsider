@@ -362,7 +362,7 @@ server.registerTool(
       date: z
         .string()
         .describe(
-          'When to publish, ISO 8601 UTC (e.g. 2026-07-01T10:00:00Z). For "now" use the current time.'
+          'Required publish date, ISO 8601 UTC (e.g. 2026-07-01T10:00:00Z). For "now" use the current time; drafts still require a date in the current API contract.'
         ),
       shortLink: z
         .boolean()

@@ -101,7 +101,7 @@ const pl = {
         tagline: "Najlepszy dla agencji",
       },
       SAMURAI: {
-        label: "Samurai",
+        label: "Plan wewnętrzny",
         tagline: "Plan wewnętrzny",
       },
     },
@@ -133,7 +133,7 @@ const pl = {
     daysLeft: "Pozostało {days} dni okresu próbnego",
     oneDayLeft: "Pozostał 1 dzień okresu próbnego",
     endsToday: "Twój okres próbny kończy się dzisiaj",
-    cta: "Wybierz plan, aby kontynuować publikowanie i łączenie kanałów.",
+    cta: "Dostęp próbny obejmuje limity użycia. Wybierz plan, aby kontynuować publikowanie i łączenie kanałów.",
     chooseAPlan: "Wybierz plan",
   },
   calendar: {

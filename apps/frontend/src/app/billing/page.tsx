@@ -93,6 +93,7 @@ function BillingInner() {
   // Status returned after coming back from a checkout.
   const checkoutId = searchParams.get("check");
   const [provisioning, setProvisioning] = useState(false);
+  const [provisioningTimedOut, setProvisioningTimedOut] = useState(false);
 
   // Esc closes the cancel modal (mirrors the overlay click behavior).
   useEffect(() => {
@@ -127,13 +128,14 @@ function BillingInner() {
     t("billing.features.multiPlatform"),
     t("billing.features.calendar"),
     t("billing.features.analytics"),
-    // "Smart Agent (AI tools)" was listed on every plan card unconditionally
-    // while `ai` is false on every tier in the backend pricing table, and the
-    // platform OpenAI key is unset in production, so /posts/check answers
-    // 409 "No AI key configured" and the settings page for a per-org key is
-    // not in the nav. Advertising it made the whole card untrustworthy.
+    // AI usage is billed as simple per-action credits rather than provider
+    // input/output tokens, so plans stay understandable to customers.
+    plan.name === "STANDARD" ? t("billing.features.aiUses", { count: 50 }) :
+    plan.name === "TEAM" ? t("billing.features.aiUses", { count: 150 }) :
+    plan.name === "PRO" ? t("billing.features.aiUses", { count: 500 }) :
+    plan.name === "ULTIMATE" ? t("billing.features.aiUses", { count: 1000 }) : null,
     t("billing.features.approvals"),
-  ];
+  ].filter((feature): feature is string => !!feature);
 
   const loadBilling = useCallback(async () => {
     try {
@@ -160,6 +162,7 @@ function BillingInner() {
     let cancelled = false;
     let attempts = 0;
     setProvisioning(true);
+    setProvisioningTimedOut(false);
 
     const poll = async () => {
       attempts += 1;
@@ -178,6 +181,7 @@ function BillingInner() {
         setTimeout(poll, 2000);
       } else if (!cancelled) {
         setProvisioning(false);
+        setProvisioningTimedOut(true);
       }
     };
 
@@ -276,6 +280,12 @@ function BillingInner() {
       {provisioning && (
         <div className={`${styles.banner} ${styles.bannerInfo}`}>
           {t("billing.finalizing")}
+        </div>
+      )}
+      {provisioningTimedOut && (
+        <div role="alert" className={`${styles.banner} ${styles.bannerWarn}`}>
+          {t("billing.stillFinalizing")} {" "}
+          <button type="button" onClick={() => window.location.reload()}>{t("calendar.retry")}</button>
         </div>
       )}
 

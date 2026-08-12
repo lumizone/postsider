@@ -101,7 +101,7 @@ const zh = {
         tagline: "最适合代理机构",
       },
       SAMURAI: {
-        label: "Samurai",
+        label: "内部方案",
         tagline: "内部方案",
       },
     },

@@ -41,6 +41,7 @@ export interface SelfUser {
   trialDaysLeft: number | null;
   publicApi: string;
   isPlatformAi: boolean;
+  aiUsage: { limit: number | null; used: number; remaining: number | null; renewsAt: string } | null;
   /** All organizations the user belongs to. Populated after first /user/self load. */
   organizations?: OrgSummary[];
   /** Current org's uploaded logo (Settings → Organization). Null falls back to the PostSider brand mark. */

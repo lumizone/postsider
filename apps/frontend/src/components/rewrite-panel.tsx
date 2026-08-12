@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { rewritePost, RewriteTone } from "@/lib/post-checker-api";
+import { useAuth } from "@/lib/auth-context";
+import { useT } from "@/lib/i18n";
 
 const TONES: { id: RewriteTone; label: string }[] = [
   { id: "rephrase", label: "Rephrase" },
@@ -19,6 +21,8 @@ interface Props {
 }
 
 export function RewritePanel({ content, platform, onInsert, onClose }: Props) {
+  const { user, refresh } = useAuth();
+  const t = useT();
   const [tone, setTone] = useState<RewriteTone>("rephrase");
   const [count, setCount] = useState(3);
   const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
@@ -30,6 +34,7 @@ export function RewritePanel({ content, platform, onInsert, onClose }: Props) {
       const res = await rewritePost({ content, tone, count, platform });
       setVariants(res.variants || []);
       setState("done");
+      void refresh();
     } catch {
       setState("error");
     }
@@ -69,6 +74,10 @@ export function RewritePanel({ content, platform, onInsert, onClose }: Props) {
         <button type="button" onClick={run} disabled={state === "loading" || content.trim().length === 0} style={{ padding: "9px 14px", borderRadius: 8, border: "none", background: "var(--fg)", color: "var(--bg)", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: content.trim().length === 0 ? 0.5 : 1 }}>
           {state === "loading" ? "Generating…" : "Rewrite"}
         </button>
+
+        {user?.aiUsage && <p style={{ fontSize: 11, color: "var(--muted)", margin: 0 }}>
+          {user.aiUsage.remaining === null ? t("postChecker.unlimitedUses") : t("postChecker.usesRemaining", { count: user.aiUsage.remaining })}
+        </p>}
 
         {state === "error" && <p style={{ fontSize: 12, color: "#DC2626", margin: 0 }}>Could not generate. Try again.</p>}
 
