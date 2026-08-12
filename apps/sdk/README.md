@@ -11,14 +11,24 @@ npm install @postsider/node
 ## Usage
 ```typescript
 import Postsider from '@postsider/node';
-const postsider = new Postsider('your api key', 'your self-hosted instance (optional)');
+const postsider = new Postsider('your api key');
+
+// Self-hosted instances served below /api:
+const selfHosted = new Postsider('your api key', 'https://your-instance.com', {
+  apiBasePath: '/api',
+});
+
+const result = await postsider.post(posts, 'stable-request-key');
 ```
 
 The available methods are:
-- `post(posts: CreatePostDto)` - Schedule a post to Postsider
+- `post(posts: CreatePostDto, idempotencyKey?: string)` - Schedule a post; reuse the key safely when retrying
 - `postList(filters: GetPostsDto)` - Get a list of posts
 - `upload(file: Buffer, extension: string)` - Upload a file to Postsider
 - `integrations()` - Get a list of connected channels
 - `deletePost(id: string)` - Delete a post by ID
+
+All non-2xx responses throw `PostsiderApiError` with `status`, `method`, `path`, and parsed response `details`.
+`deletePost()` now returns the parsed response body (or `null` for an empty `204` response), rather than the raw `fetch` `Response`. This is a breaking change in SDK `2.0.0`; use `PostsiderApiError.status` and `PostsiderApiError.details` for failed deletes.
 
 Alternatively you can use the SDK with curl, check the [Postsider API documentation](https://docs.postsider.com/public-api) for more information.

@@ -59,7 +59,7 @@ pnpm audit --prod
 
 - Set a strong, unique `JWT_SECRET` and a separate `ENCRYPTION_KEY`.
 - Serve only over HTTPS (terminate TLS at your reverse proxy).
-- Keep `NOT_SECURED=false` (the default).
+- Leave `NOT_SECURED` unset (any set value enables insecure mode).
 - Set `DISABLE_REGISTRATION=true` after creating your account.
 - Restrict database / Redis / MinIO ports to localhost or a private network.
 - Keep `POLAR_*` and OAuth secrets out of version control (use `.env.production`,

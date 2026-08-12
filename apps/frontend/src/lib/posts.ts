@@ -81,7 +81,13 @@ export async function fetchCalendarPosts(
 export async function fetchPostsList(params: {
   page?: number;
   limit?: number;
-  state?: "all" | "scheduled" | "draft" | "published";
+  state?:
+    | "all"
+    | "scheduled"
+    | "draft"
+    | "published"
+    | "failed"
+    | "approval";
 }): Promise<PostsListResponse> {
   const minified = await api.get<unknown>("/posts/list", {
     page: params.page ?? 0,

@@ -293,6 +293,7 @@ export function Calendar({ year, month }: CalendarProps) {
   // Surfaced when a plan limit (e.g. channel cap) or other error blocks adding
   // a channel. Shown as a dismissible banner.
   const [channelError, setChannelError] = useState<string | null>(null);
+  const [channelErrorIsPlanLimit, setChannelErrorIsPlanLimit] = useState(false);
   // Pending destructive action awaiting confirmation.
   const [confirm, setConfirm] = useState<
     | { kind: "channel"; id: string; name: string }
@@ -350,6 +351,7 @@ export function Calendar({ year, month }: CalendarProps) {
       console.error("[delete-channel]", err);
       setChannels(prev);
       setChannelError(t("errors.channelDelete"));
+      setChannelErrorIsPlanLimit(false);
       void refreshChannels();
     }
   };
@@ -385,6 +387,7 @@ export function Calendar({ year, month }: CalendarProps) {
 
   const addChannelForPlatform = async (platformId: string, platformLabel?: string) => {
     setChannelError(null);
+    setChannelErrorIsPlanLimit(false);
     try {
       const res = await getOauthUrl(platformId);
 
@@ -446,8 +449,10 @@ export function Calendar({ year, month }: CalendarProps) {
       const status = (err as { status?: number })?.status;
       if (status === 402) {
         setChannelError(t("limits.channels"));
+        setChannelErrorIsPlanLimit(true);
       } else {
         setChannelError(t("errors.channelConnect"));
+        setChannelErrorIsPlanLimit(false);
       }
     }
   };
@@ -680,6 +685,7 @@ export function Calendar({ year, month }: CalendarProps) {
     } catch (err) {
       console.error("[delete-post]", err);
       setChannelError(t("errors.postDelete"));
+      setChannelErrorIsPlanLimit(false);
     }
   };
 
@@ -723,6 +729,7 @@ export function Calendar({ year, month }: CalendarProps) {
       console.error("[reschedule]", err);
       setEvents(prev);
       setChannelError(t("errors.postReschedule"));
+      setChannelErrorIsPlanLimit(false);
     }
   };
 
@@ -785,17 +792,19 @@ export function Calendar({ year, month }: CalendarProps) {
             }}
           >
             <span style={{ flex: 1 }}>{channelError}</span>
-            <a
-              href="/billing"
-              style={{
-                fontWeight: 600,
-                color: "#c0392b",
-                textDecoration: "underline",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {t("common.viewPlans")}
-            </a>
+            {channelErrorIsPlanLimit && (
+              <a
+                href="/billing"
+                style={{
+                  fontWeight: 600,
+                  color: "#c0392b",
+                  textDecoration: "underline",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {t("common.viewPlans")}
+              </a>
+            )}
             <button
               type="button"
               onClick={() => setChannelError(null)}

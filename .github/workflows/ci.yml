@@ -64,6 +64,10 @@ jobs:
         run: pnpm test
       - name: MCP server tests
         run: NODE_OPTIONS=--experimental-vm-modules pnpm exec jest -c apps/mcp/jest.config.cjs
+      - name: SDK build
+        run: pnpm run build:sdk
+      - name: SDK tests
+        run: pnpm --filter @postsider/node test
 
   audit:
     name: Dependency audit

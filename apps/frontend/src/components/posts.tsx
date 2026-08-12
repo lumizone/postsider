@@ -143,8 +143,10 @@ export function Posts() {
   const [query, setQuery] = useState("");
   const { channels } = useChannels();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [listTruncated, setListTruncated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const [evergreenGroups, setEvergreenGroups] = useState<Set<string>>(new Set());
   const [evergreenOrgEnabled, setEvergreenOrgEnabled] = useState(true);
@@ -161,7 +163,7 @@ export function Posts() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadAttempt]);
 
   // Marking a post evergreen does nothing unless the org-level switch
   // (Settings -> Evergreen) is also on — surfaced as a toast on toggle
@@ -195,12 +197,15 @@ export function Posts() {
     setError(null);
     (async () => {
       try {
-        const states: ("all" | "scheduled" | "draft" | "published")[] = [
+        const states: ("all" | "scheduled" | "draft" | "published" | "failed" | "approval")[] = [
           "scheduled",
           "draft",
           "published",
+          "failed",
+          "approval",
         ];
         const collected: BackendPost[] = [];
+        let truncated = false;
         for (const state of states) {
           let page = 0;
           // Cap at 5 pages (500 posts) per state — reasonable for a UI list.
@@ -212,10 +217,14 @@ export function Posts() {
             });
             collected.push(...((res.posts as unknown) as BackendPost[]));
             if (!res.hasMore) break;
+            if (i === 4) truncated = true;
             page += 1;
           }
         }
-        if (!cancelled) setEvents(collected.map(backendPostToEvent));
+        if (!cancelled) {
+          setEvents(collected.map(backendPostToEvent));
+          setListTruncated(truncated);
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Could not load posts");
@@ -277,6 +286,7 @@ export function Posts() {
   const handleRequestApproval = useCallback(async (postId: string) => {
     try {
       await requestApproval(postId);
+      setEvents((current) => current.filter((event) => event.id !== postId));
       setToast(t("posts.toastApprovalSent"));
     } catch (err) {
       setToast(err instanceof Error ? err.message : t("posts.toastApprovalError"));
@@ -292,13 +302,27 @@ export function Posts() {
         setTimeout(() => setToast(null), 3000);
         // Refresh the list
         setLoading(true);
-        const states: ("all" | "scheduled" | "draft" | "published")[] = ["scheduled", "draft", "published"];
+        const states: ("all" | "scheduled" | "draft" | "published" | "failed" | "approval")[] = [
+          "scheduled",
+          "draft",
+          "published",
+          "failed",
+          "approval",
+        ];
         const collected: BackendPost[] = [];
+        let truncated = false;
         for (const state of states) {
-          const res = await fetchPostsList({ page: 0, limit: 100, state });
-          collected.push(...((res.posts as unknown) as BackendPost[]));
+          let page = 0;
+          for (let i = 0; i < 5; i++) {
+            const res = await fetchPostsList({ page, limit: 100, state });
+            collected.push(...((res.posts as unknown) as BackendPost[]));
+            if (!res.hasMore) break;
+            if (i === 4) truncated = true;
+            page += 1;
+          }
         }
         setEvents(collected.map(backendPostToEvent));
+        setListTruncated(truncated);
       } catch (err) {
         setToast(t("posts.toastDuplicateFailed"));
         setTimeout(() => setToast(null), 3000);
@@ -381,11 +405,21 @@ export function Posts() {
           />
         </div>
       </div>
+      {listTruncated && (
+        <div role="status" style={{ margin: "12px 0", padding: "10px 12px", borderRadius: 8, background: "rgba(0,0,0,0.04)", color: "var(--muted)", fontSize: 12 }}>
+          {t("posts.listTruncated")}
+        </div>
+      )}
 
       {loading ? (
         <div className={styles.empty}>{t("common.loading")}</div>
       ) : error ? (
-        <div className={styles.empty}>{error}</div>
+        <div className={styles.empty}>
+          <p>{error}</p>
+          <button type="button" className={styles.importBtn} onClick={() => setLoadAttempt((attempt) => attempt + 1)}>
+            {t("calendar.retry")}
+          </button>
+        </div>
       ) : items.length === 0 && channels.length === 0 ? (
         <EmptyState
           icon="channel"

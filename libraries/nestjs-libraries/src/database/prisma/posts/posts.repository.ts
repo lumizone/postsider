@@ -244,9 +244,19 @@ export class PostsRepository {
         ? { state: State.DRAFT }
         : stateFilter === 'published'
         ? { state: State.PUBLISHED }
+        : stateFilter === 'failed'
+        ? { state: State.ERROR }
+        : stateFilter === 'approval'
+        ? { state: State.APPROVAL }
         : {
-            state: {
-              in: [State.QUEUE, State.DRAFT, State.PUBLISHED, State.ERROR],
+          state: {
+              in: [
+                State.QUEUE,
+                State.DRAFT,
+                State.PUBLISHED,
+                State.ERROR,
+                State.APPROVAL,
+              ],
             },
           };
 

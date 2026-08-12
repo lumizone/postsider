@@ -126,27 +126,9 @@ export class BillingController {
     @GetUserFromRequest() user: User,
     @GetOrgFromRequest() org: Organization
   ) {
-    if (!user.isSuperAdmin) {
-      throw new HttpException('Unauthorized', 400);
-    }
+    this.assertOwner(org);
 
     return this._polarService.cancelSubscription(org.id);
   }
 
-  @Post('/add-subscription')
-  async addSubscription(
-    @Body() body: { subscription: string },
-    @GetUserFromRequest() user: User,
-    @GetOrgFromRequest() org: Organization
-  ) {
-    if (!user.isSuperAdmin) {
-      throw new Error('Unauthorized');
-    }
-
-    await this._subscriptionService.addSubscription(
-      org.id,
-      user.id,
-      body.subscription
-    );
-  }
 }

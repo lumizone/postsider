@@ -303,37 +303,10 @@ export class PolarService {
       );
     }
 
-    // If the org already has a real Polar-managed subscription (not a local
-    // trial, not a manually-granted lifetime code), swap the product on that
-    // SAME subscription instead of creating a second checkout. Polar checkout
-    // does not cancel/replace an existing paid subscription for the same
-    // customer — a second checkout would mean two concurrent recurring
-    // charges for one org, silently, since our DB only ever keeps one
-    // Subscription row per org and the newest webhook overwrites it.
-    const existing = await this._subscriptionService.getSubscription(
-      organizationId
-    );
-    if (existing?.identifier && existing.identifier !== 'trial' && !existing.isLifetime) {
-      try {
-        const updated = await this._polar.subscriptions.update({
-          id: existing.identifier,
-          subscriptionUpdate: { productId },
-        });
-        // Reuse the same handler the webhook uses so the DB reflects the new
-        // tier immediately, without waiting on the async subscription.updated
-        // event (which will arrive too and just no-op via the upsert).
-        await this.onSubscriptionUpserted(updated);
-        return {};
-      } catch (err) {
-        // Not a real Polar subscription (e.g. a manually-granted id that
-        // never existed on Polar) or a transient API error — fall back to a
-        // normal checkout below rather than failing the whole request.
-        this._logger.warn(
-          `Could not update existing Polar subscription ${existing.identifier} in place, falling back to a new checkout: ${
-            err instanceof Error ? err.message : err
-          }`
-        );
-      }
+    // Change an existing Polar subscription in place. Creating another
+    // checkout for the same customer would create a second recurring charge.
+    if (await this.updateExistingSubscription(organizationId, productId)) {
+      return {};
     }
 
     const org = await this._organizationService.getOrgById(organizationId);
@@ -379,6 +352,12 @@ export class PolarService {
       );
     }
 
+    // Embedded checkout must use the same duplicate-safe path as hosted
+    // subscribe. Polar does not replace an existing subscription on checkout.
+    if (await this.updateExistingSubscription(organizationId, productId)) {
+      return {};
+    }
+
     const checkout = await this._polar.checkouts.create({
       products: [productId],
       externalCustomerId: organizationId,
@@ -397,6 +376,41 @@ export class PolarService {
     });
 
     return { client_secret: checkout.clientSecret };
+  }
+
+  private async updateExistingSubscription(
+    organizationId: string,
+    productId: string
+  ) {
+    const existing = await this._subscriptionService.getSubscription(
+      organizationId
+    );
+    if (!existing?.identifier || existing.identifier === 'trial' || existing.isLifetime) {
+      return false;
+    }
+
+    let updated: any;
+    try {
+      updated = await this._polar.subscriptions.update({
+        id: existing.identifier,
+        subscriptionUpdate: { productId },
+      });
+    } catch (err) {
+      // Never create a second recurring checkout after an update failure. The
+      // owner can retry once Polar is reachable; a duplicate charge is worse
+      // than a temporarily failed upgrade.
+      this._logger.error(
+        `Could not update existing Polar subscription ${existing.identifier}: ${
+          err instanceof Error ? err.message : err
+        }`
+      );
+      throw new Error('Could not update the existing subscription');
+    }
+
+    // Keep local limits in sync immediately; the webhook is still expected
+    // and is idempotent.
+    await this.onSubscriptionUpserted(updated);
+    return true;
   }
 
   // ──────────────────────────────────────────────────────────────────────
@@ -445,6 +459,9 @@ export class PolarService {
     const sub = await this._subscriptionService.getSubscription(organizationId);
     if (!sub?.identifier) {
       return { id, cancel_at: new Date() };
+    }
+    if (sub.identifier === 'trial') {
+      return { id, cancel_at: sub.cancelAt || new Date() };
     }
 
     const updated = await this._polar.subscriptions.update({
@@ -495,6 +512,9 @@ export class PolarService {
     if (!sub?.identifier) {
       throw new Error('No active subscription found');
     }
+    if (sub.identifier === 'trial') {
+      return { cancelled: true };
+    }
     await this._polar.subscriptions.revoke({ id: sub.identifier });
     if (sub.organizationId) {
       const customerId = await this.getCustomerByOrganizationId(organizationId);
@@ -544,6 +564,15 @@ export class PolarService {
     let resultingSubscriptionId: string | null = null;
     try {
       const checkout = await this._polar.checkouts.get({ id: checkoutId });
+      const checkoutOrgId =
+        (checkout as any)?.externalCustomerId ||
+        (checkout as any)?.metadata?.orgId ||
+        null;
+      // A checkout id is user-supplied. Never report another organization's
+      // checkout as the current org's billing result.
+      if (checkoutOrgId !== organizationId) {
+        return 0;
+      }
       resultingSubscriptionId = (checkout as any)?.subscriptionId || null;
       const sub = await this._subscriptionService.getSubscription(organizationId);
       // On a plain first-time subscribe there is no prior subscription, so

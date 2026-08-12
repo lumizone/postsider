@@ -58,9 +58,11 @@ export class UsersController {
 
     const impersonate = req.cookies.impersonate || req.headers.impersonate;
     const billingOn = isBillingEnabled();
-    // @ts-ignore
-    const hasPaidSub = !!organization?.subscription;
-    const onTrial = billingOn && !!organization?.isTrailing && !hasPaidSub;
+    const activeSubscription = billingOn
+      ? await this._subscriptionService.getSubscriptionByOrganizationId(organization.id)
+      : (organization as any).subscription;
+    const hasPaidSub = !!activeSubscription && activeSubscription.identifier !== 'trial';
+    const onTrial = billingOn && activeSubscription?.identifier === 'trial';
     // Trial runs 7 days from org creation. Clamp at 0.
     let trialDaysLeft: number | null = null;
     if (onTrial && organization?.createdAt) {
@@ -73,13 +75,13 @@ export class UsersController {
       ...user,
       orgId: organization.id,
       // @ts-ignore
-      totalChannels: !billingOn ? 10000 : organization?.subscription?.totalChannels || pricing.FREE.channel,
+      totalChannels: !billingOn ? 10000 : activeSubscription?.totalChannels || pricing.FREE.channel,
       // @ts-ignore
-      tier: organization?.subscription?.subscriptionTier || (!billingOn ? 'ULTIMATE' : 'FREE'),
+      tier: activeSubscription?.subscriptionTier || (!billingOn ? 'ULTIMATE' : 'FREE'),
       // @ts-ignore
       role: organization?.users[0]?.role,
       // @ts-ignore
-      isLifetime: !!organization?.subscription?.isLifetime,
+      isLifetime: !!activeSubscription?.isLifetime,
       admin: !!user.isSuperAdmin,
       impersonate: !!impersonate,
       isTrailing: !billingOn ? false : organization?.isTrailing,

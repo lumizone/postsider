@@ -81,7 +81,6 @@ async function start() {
   // Security headers (equivalent to helmet — no extra dependency needed)
   app.use((req: any, res: any, next: any) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '0'); // Modern browsers don't need this; disabled to avoid false positives
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
@@ -93,14 +92,15 @@ async function start() {
     // needed for many UI libraries. Adjust connect-src if you add external APIs.
     const frontendUrl = process.env.FRONTEND_URL || '';
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || '';
-    const cspDirectives = [
+     const cspDirectives = [
       "default-src 'self'",
       `script-src 'self'`,
       `style-src 'self' 'unsafe-inline'`,
       `img-src 'self' data: blob: ${frontendUrl} ${backendUrl}`,
       `connect-src 'self' ${frontendUrl} ${backendUrl} https://*.sentry.io`,
       "font-src 'self' data:",
-      "frame-ancestors 'none'",
+       // The dashboard is embedded by Whop; do not emit a conflicting global
+       // frame restriction here. Host proxies can add a product-specific CSP.
       "base-uri 'self'",
       "form-action 'self'",
       "object-src 'none'",

@@ -22,6 +22,8 @@ CLAUDE.md
 # Migration guide intentionally documents legacy env var names and the rebrand
 # check itself, so it references the legacy names by design (Requirement 22.1).
 docs/MIGRATION.md
+DEPLOYMENT.md
+docs/PRODUCTION.md
 
 # The check tooling itself and its allowlist contain the patterns as literals.
 .rebrand-allowlist

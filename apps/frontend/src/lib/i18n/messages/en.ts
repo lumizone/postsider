@@ -255,6 +255,7 @@ const en = {
     emptyAll: "No posts yet.",
     emptyAllDesc: "Create your first post to get started.",
     emptyFiltered: "No posts match the current filter.",
+    listTruncated: "Showing the first 500 posts in this category. Older posts are not shown.",
     importCsv: "Import CSV",
     statusFilter: "Status",
     today: "Today",

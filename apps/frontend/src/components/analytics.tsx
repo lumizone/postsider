@@ -355,7 +355,18 @@ export function Analytics() {
         ) : loading ? (
           <div className={styles.empty}>{t("common.loading")}</div>
         ) : error ? (
-          <div className={styles.empty}>{error}</div>
+          <div className={styles.empty}>
+            <div>{error}</div>
+            <button
+              type="button"
+              className={styles.refreshBtn}
+              onClick={() => fetchData(true)}
+              disabled={loading}
+              style={{ marginTop: 12 }}
+            >
+              {t("calendar.retry")}
+            </button>
+          </div>
         ) : (
           <>
             <div className={styles.kpiRow}>

@@ -59,7 +59,7 @@ Set at minimum:
 |----------|-------|
 | `FRONTEND_URL`, `BACKEND_URL` | `https://app.postsider.com` |
 | `NEXT_PUBLIC_BACKEND_URL` | `https://app.postsider.com/api` |
-| `NOT_SECURED` | **must stay `"false"`** |
+| `NOT_SECURED` | **leave unset** |
 | `DISABLE_REGISTRATION` | `true` for a private instance |
 | `API_LIMIT` | `60`–`120` |
 
@@ -102,6 +102,28 @@ git pull
 ./deploy.sh            # rebuild + restart (migrations run automatically on boot)
 ./deploy.sh --no-build # just restart
 ```
+
+### Existing Postiz-data upgrades
+
+Before the first deploy of this schema to a database that may contain legacy
+Postiz rows, run this preflight while the old `CreationMethod` enum still
+exists. The applied migration `20260628160000_remove_stripped_ai_models`
+removes `MCP` and `AUTOPOST` without remapping rows first, so Prisma will abort
+before any later migration can run if either value remains.
+
+```sql
+BEGIN;
+UPDATE "Post"
+SET "creationMethod" = 'API'
+WHERE "creationMethod" IN ('MCP', 'AUTOPOST');
+COMMIT;
+```
+
+Verify that the update affected the expected rows, then run
+`./deploy.sh`.
+Fresh installs and databases that never used those creation paths do not need
+this preflight. Do not edit the applied migration: its Prisma checksum must
+remain unchanged.
 
 First login: sign in with `admin@setup.local` and the one-time password from
 the bootstrap step, then set your real email and password.
@@ -155,21 +177,20 @@ Only expose them publicly behind basic auth (see the commented blocks in
 Critical state lives in the Postgres and MinIO volumes.
 
 ```bash
-# Database
-docker exec postsider-postgres pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > backup-$(date +%F).sql
-
-# Media (MinIO volume)
-docker run --rm -v postsider_app_minio-data:/data -v "$PWD":/backup alpine \
-  tar czf /backup/minio-$(date +%F).tar.gz -C /data .
+# Database and optional MinIO backup helper
+./var/deploy/backup.sh
 ```
 
-Automate with cron and store backups off-box.
+The helper stores timestamped database backups in `/opt/postsider-backups/`
+and keeps 30 days by default. Install its six-hour cron job with
+`./var/deploy/setup-backup-cron.sh`. Store a copy off-box; the helper's
+optional MinIO upload requires a configured `mc` alias.
 
 ---
 
 ## 8. Pre-flight security checklist
 
-- [ ] `NOT_SECURED="false"` in `.env.production`
+- [ ] `NOT_SECURED` is unset in `.env.production`
 - [ ] `JWT_SECRET` and `ENCRYPTION_KEY` are random (not the dev defaults)
 - [ ] Strong `POSTGRES_PASSWORD`, `MINIO_SECRET_KEY`, `DBGATE_PASSWORD`
 - [ ] `DISABLE_REGISTRATION=true` (unless you want open sign-up)
@@ -189,5 +210,5 @@ Automate with cron and store backups off-box.
 | Dashboard loads but every API call fails / hits `localhost:3000` | `NEXT_PUBLIC_BACKEND_URL` wasn't set at build time. Set it in `.env.production` and rebuild with `./deploy.sh`. |
 | 502 from the reverse proxy | App container not healthy yet — `docker compose --env-file .env.production -f docker-compose.production.yaml logs -f postsider`. |
 | Scheduled posts never publish | Orchestrator/Temporal issue — check `postsider-temporal` and the orchestrator process inside the app container (`docker exec postsider-app pm2 ls`). |
-| Login works locally but not in prod | `NOT_SECURED` must be `"false"` so the auth cookie is set as secure/httpOnly. |
+| Login works locally but not in prod | Remove `NOT_SECURED` from `.env.production`; any set value enables insecure mode and prevents the production session cookie. |
 | Images don't load (`/storage/...` 404) | Reverse proxy `/storage` → MinIO mapping missing, or the `postsider-media` bucket wasn't created. |

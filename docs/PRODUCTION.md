@@ -10,8 +10,8 @@ git clone <repo-url> /opt/postsider
 cd /opt/postsider
 
 # Deploy (generates secrets, starts services, sets up nginx + SSL)
-chmod +x var/deploy/deploy.sh
-./var/deploy/deploy.sh
+chmod +x deploy.sh
+./deploy.sh
 
 # Set up automated backups
 ./var/deploy/setup-backup-cron.sh
@@ -46,6 +46,25 @@ pnpm prisma-migrate-status
 ### Production deployment
 
 Migrations run automatically on app startup via `pnpm prisma-migrate-deploy`.
+
+### Legacy Postiz data preflight
+
+Before upgrading an existing Postiz database, remap legacy `Post.creationMethod`
+values while the old enum still exists:
+
+```sql
+BEGIN;
+UPDATE "Post"
+SET "creationMethod" = 'API'
+WHERE "creationMethod" IN ('MCP', 'AUTOPOST');
+COMMIT;
+```
+
+The already-applied migration `20260628160000_remove_stripped_ai_models`
+removes those enum values without a pre-update. If either value remains,
+`migrate deploy` fails before it can reach a follow-up migration. Fresh
+databases do not need this step. Do not modify that applied migration because
+Prisma verifies its checksum.
 
 ### Baselining an existing database
 
@@ -82,7 +101,7 @@ Backups run every 6 hours via cron (set up by `setup-backup-cron.sh`).
 # List available backups
 ./var/deploy/restore.sh
 
-# Restore a specific backup (⚠️ DESTRUCTIVE — drops current DB)
+# Restore a specific backup (DESTRUCTIVE — drops current DB)
 ./var/deploy/restore.sh /opt/postsider-backups/postsider_20260610_120000.sql.gz
 ```
 
@@ -189,7 +208,7 @@ docker compose -f docker-compose.production.yaml restart temporal
 2. Clone repository
 3. Copy `.env.production` from backup (or regenerate via `deploy.sh`)
 4. Restore database from latest `/opt/postsider-backups/` backup
-5. Run `./var/deploy/deploy.sh`
+5. Run `./deploy.sh`
 
 ---
 

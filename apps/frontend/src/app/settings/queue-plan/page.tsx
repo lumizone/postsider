@@ -58,6 +58,7 @@ export default function QueuePlanPage() {
   const [savedId, setSavedId] = useState<string | null>(null);
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [assignments, setAssignments] = useState<Record<string, string[]>>({});
+  const [failedPlanIds, setFailedPlanIds] = useState<Set<string>>(new Set());
   const [loadAttempt, setLoadAttempt] = useState(0);
 
   // Falls back to a short list on runtimes without Intl.supportedValuesOf
@@ -102,12 +103,18 @@ export default function QueuePlanPage() {
         }
         const nextPlans: Record<string, QueueSlot[]> = {};
         const nextTimezones: Record<string, string> = {};
+        const failedIds = new Set<string>();
         for (const e of planResults) {
+          if (e.failed) {
+            failedIds.add(e.id);
+            continue;
+          }
           nextPlans[e.id] = e.slots;
           nextTimezones[e.id] = e.timezone;
         }
         setPlans(nextPlans);
         setTimezones(nextTimezones);
+        setFailedPlanIds(failedIds);
 
         const [{ users: members }, assignmentEntries] = await Promise.all([
           getTeam().catch(() => ({ users: [] as TeamMember[] })),
@@ -248,7 +255,7 @@ export default function QueuePlanPage() {
                   <div style={{ fontSize: 13, color: "var(--muted)" }}>{t("settingsQueuePlan.noSlots")}</div>
                 )}
                 {slots.map((slot, i) => {
-                  const active = slot.days && slot.days.length ? slot.days : [0, 1, 2, 3, 4, 5, 6];
+                  const active = Array.isArray(slot.days) ? slot.days : [0, 1, 2, 3, 4, 5, 6];
                   return (
                     <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       <input type="time" className={s.input} style={{ width: 120 }} value={minutesToHHMM(slot.time)} onChange={(e) => setTime(c.id, i, e.target.value)} />
@@ -298,7 +305,7 @@ export default function QueuePlanPage() {
                 <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
                   <button type="button" className={s.btnGhost} onClick={() => addSlot(c.id)}>{t("settingsQueuePlan.addSlot")}</button>
                   <InfoTip textKey="infoTip.slot" />
-                  <button type="button" className={s.btnPrimary} onClick={() => save(c.id)} disabled={savingId === c.id}>
+                   <button type="button" className={s.btnPrimary} onClick={() => save(c.id)} disabled={savingId === c.id || failedPlanIds.has(c.id)}>
                     {savingId === c.id ? t("settingsQueuePlan.saving") : savedId === c.id ? t("settingsQueuePlan.saved") : t("common.save")}
                   </button>
                 </div>

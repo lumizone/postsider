@@ -386,7 +386,9 @@ function BillingInner() {
             >
               <div className={styles.plans}>
                 {PLANS.map((plan) => {
-                  const isCurrent = current?.subscriptionTier === plan.name;
+                   const isCurrent =
+                     current?.subscriptionTier === plan.name &&
+                     current?.period === period;
                   const planLevel = TIER_ORDER[plan.name] ?? 0;
                   const isUpgrade = planLevel > currentLevel;
             // Monthly: show the monthly price. Yearly: show the per-month

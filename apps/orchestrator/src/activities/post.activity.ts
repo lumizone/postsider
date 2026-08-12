@@ -284,20 +284,28 @@ export class PostActivity {
           integration
         );
 
-        await this._temporalService.client!
-          .getRawClient()!
-          .workflow.start('streakWorkflow', {
-            args: [{ organizationId: integration.organizationId }],
-            workflowId: `streak_${integration.organizationId}`,
-            taskQueue: 'main',
-            workflowIdConflictPolicy: 'TERMINATE_EXISTING',
-            typedSearchAttributes: new TypedSearchAttributes([
-              {
-                key: organizationId,
-                value: integration.organizationId,
-              },
-            ]),
-          });
+        try {
+          await this._temporalService.client!
+            .getRawClient()!
+            .workflow.start('streakWorkflow', {
+              args: [{ organizationId: integration.organizationId }],
+              workflowId: `streak_${integration.organizationId}`,
+              taskQueue: 'main',
+              workflowIdConflictPolicy: 'TERMINATE_EXISTING',
+              typedSearchAttributes: new TypedSearchAttributes([
+                {
+                  key: organizationId,
+                  value: integration.organizationId,
+                },
+              ]),
+            });
+        } catch (error) {
+          // The provider post already succeeded. A secondary streak workflow
+          // must never turn this activity into a retry that publishes again.
+          this._logger.warn(
+            `Could not start streak workflow after publishing: ${error}`
+          );
+        }
 
         return postNow;
       },

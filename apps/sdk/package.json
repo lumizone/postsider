@@ -1,10 +1,12 @@
 {
   "name": "@postsider/node",
-  "version": "1.0.8",
+  "version": "2.0.0",
   "description": "The ultimate social media scheduling tool",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
+    "build": "tsup",
+    "test": "jest --runInBand",
     "publish": "tsup && pnpm publish --access public"
   },
   "files": [

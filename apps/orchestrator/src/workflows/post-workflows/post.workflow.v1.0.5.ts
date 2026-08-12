@@ -165,16 +165,22 @@ export async function postWorkflowV105({
     const before = postsResults.length;
     // remembered so the retry-exhaustion path below can record WHY it gave up
     let lastError: unknown = null;
+    let localUpdateSucceeded = false;
     // this is a small trick to repeat an action in case of token refresh
     for (const _ of iterate) {
       try {
         // first post the main post
         if (i === 0) {
-          postsResults.push(
-            ...(await postSocial(post.integration as Integration, [
-              postsList[i],
-            ]))
-          );
+          // If the provider call succeeded but the local update failed, the
+          // retry must reconcile the known provider result instead of
+          // publishing the same content again.
+          if (postsResults.length <= before) {
+            postsResults.push(
+              ...(await postSocial(post.integration as Integration, [
+                postsList[i],
+              ]))
+            );
+          }
 
           // then post the comments if any
         } else {
@@ -182,16 +188,18 @@ export async function postWorkflowV105({
             await sleep(60000 * Math.max(0, Number(postsList[i].delay ?? 0)));
           }
 
-          postsResults.push(
-            ...(await postComment(
-              postsResults[0].postId,
-              postsResults.length === 1
-                ? undefined
-                : postsResults[i - 1].postId,
-              post.integration,
-              [postsList[i]]
-            ))
-          );
+          if (postsResults.length <= before) {
+            postsResults.push(
+              ...(await postComment(
+                postsResults[0].postId,
+                postsResults.length === 1
+                  ? undefined
+                  : postsResults[i - 1].postId,
+                post.integration,
+                [postsList[i]]
+              ))
+            );
+          }
         }
 
         // mark post as successful
@@ -200,20 +208,27 @@ export async function postWorkflowV105({
           postsResults[i].postId,
           postsResults[i].releaseURL
         );
+        localUpdateSucceeded = true;
 
         if (i === 0) {
-          // send notification on a sucessful post
-          await inAppNotification(
-            post.integration.organizationId,
-            `Your post has been published on ${capitalize(
-              post.integration.providerIdentifier
-            )}`,
-            `Your post has been published on ${capitalize(
-              post.integration.providerIdentifier
-            )} at ${postsResults[0].releaseURL}`,
-            true,
-            true
-          );
+          // Notification is secondary. Keep it outside the publish failure
+          // path so a mail/digest outage cannot rewrite PUBLISHED to ERROR.
+          try {
+            await inAppNotification(
+              post.integration.organizationId,
+              `Your post has been published on ${capitalize(
+                post.integration.providerIdentifier
+              )}`,
+              `Your post has been published on ${capitalize(
+                post.integration.providerIdentifier
+              )} at ${postsResults[0].releaseURL}`,
+              true,
+              true
+            );
+          } catch (notificationError) {
+            // The post is already durable and published. Notification retry
+            // must not trigger the provider publish retry path.
+          }
 
           // best-effort: publish the post's first comment (if any) as a comment.
           // Mirrors the thread postComment invocation above. Never fails the main publish.
@@ -277,7 +292,7 @@ export async function postWorkflowV105({
 
         // A thread/first-comment failure must not erase the successful main
         // publication. The main post is already PUBLISHED at this point.
-        if (i === 0) {
+        if (i === 0 && postsResults.length === before) {
           await changeState(postsList[0].id, 'ERROR', err, postsList);
         }
 
@@ -304,7 +319,7 @@ export async function postWorkflowV105({
       }
     }
 
-    if (postsResults.length === before) {
+    if (!localUpdateSucceeded) {
       // All retries exhausted without success. The refresh_token branch above
       // `continue`s past the generic changeState, so this path used to return
       // with the post still QUEUE and `error` null — a "Completed" workflow
