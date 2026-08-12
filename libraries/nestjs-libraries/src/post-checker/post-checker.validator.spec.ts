@@ -18,4 +18,11 @@ describe('parseCheckResult', () => {
   it('throws on non-JSON', () => {
     expect(() => parseCheckResult('the post looks great!')).toThrow();
   });
+  it('removes empty feedback instead of displaying it', () => {
+    const raw = '{"score":50,"dimensions":{"hook":50,"clarity":50,"cta":50,"platformFit":50},"positives":["  ","Clear opening"],"negatives":[null,"Add a CTA"]}';
+    expect(parseCheckResult(raw)).toMatchObject({
+      positives: ['Clear opening'],
+      negatives: ['Add a CTA'],
+    });
+  });
 });

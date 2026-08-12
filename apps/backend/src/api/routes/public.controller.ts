@@ -76,9 +76,14 @@ export class PublicController {
     return post;
   }
 
-  @Get(`/posts/:id/comments`)
-  async getComments(@Param('id') postId: string) {
-    return { comments: await this._postsService.getComments(postId) };
+  @Get(`/posts/shared/:shareToken/comments`)
+  async getSharedComments(@Param('shareToken') shareToken: string) {
+    const post = await this._postsService.getPublicPost(shareToken);
+    if (!post) {
+      throw new HttpForbiddenException();
+    }
+
+    return { comments: await this._postsService.getComments(post.id) };
   }
 
   @Post('/t')

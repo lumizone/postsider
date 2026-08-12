@@ -495,7 +495,8 @@ export class ThreadsProvider extends SocialAbstract implements SocialProvider {
     // case, aggregate per-post insights from the user's recent threads so the
     // analytics panel shows something meaningful.
     const hasAnyData = result.some(
-      (s) => Array.isArray(s.data) && s.data.some((p: any) => Number(p.total) > 0)
+      (s: AnalyticsData) =>
+        Array.isArray(s.data) && s.data.some((p: any) => Number(p.total) > 0)
     );
 
     if (!hasAnyData) {

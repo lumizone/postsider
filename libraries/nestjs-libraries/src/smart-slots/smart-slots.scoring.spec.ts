@@ -40,4 +40,26 @@ describe('scoreSlots', () => {
     expect(r[0].score).toBeGreaterThan(r[1].score);
     expect(r[1].score).toBeGreaterThan(r[2].score);
   });
+
+  it('uses the channel posting day pattern when available', () => {
+    const pattern = Array(7 * 24).fill(0);
+    pattern[0 * 24 + 12] = 8; // Sunday at noon
+    const r = scoreSlots([
+      new Date('2026-06-28T12:00:00Z'), // Sunday
+      new Date('2026-06-29T12:00:00Z'), // Monday
+    ], 'x', null, 2, 0, pattern);
+
+    expect(r[0].datetime.getUTCDay()).toBe(0);
+  });
+
+  it('keeps the legacy hourly histogram behavior', () => {
+    const histogram = Array(24).fill(0);
+    histogram[3] = 50;
+    const r = scoreSlots([
+      new Date('2026-06-29T03:00:00Z'),
+      new Date('2026-06-29T08:00:00Z'),
+    ], 'linkedin', histogram, 2);
+
+    expect(r[0].datetime.getUTCHours()).toBe(3);
+  });
 });

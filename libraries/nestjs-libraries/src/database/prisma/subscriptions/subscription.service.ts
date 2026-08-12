@@ -127,6 +127,9 @@ export class SubscriptionService {
 
     if (billing === 'FREE') {
       await this._integrationService.changeActiveCron(organizationId);
+      await this._subscriptionRepository.deleteSubscriptionByOrgId(
+        organizationId
+      );
     }
 
     return true;
@@ -212,11 +215,13 @@ export class SubscriptionService {
   ) {
     if (!code) {
       try {
-        const load = await this.modifySubscription(
-          customerId,
-          totalChannels,
-          billing
-        );
+        const load = org
+          ? await this.modifySubscriptionByOrg(
+              org,
+              totalChannels,
+              billing
+            )
+          : await this.modifySubscription(customerId, totalChannels, billing);
         if (!load) {
           return {};
         }

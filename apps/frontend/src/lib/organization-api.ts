@@ -8,6 +8,10 @@ export interface OrganizationProfile {
   logo: string | null;
   defaultTimezone: string | null;
   referralSource: string | null;
+  brandVoice: string | null;
+  brandAudience: string | null;
+  brandRules: string | null;
+  brandForbiddenWords: string | null;
 }
 
 export async function getOrganizationProfile(): Promise<OrganizationProfile> {

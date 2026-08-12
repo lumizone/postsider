@@ -10,6 +10,7 @@ import {
   ValidityMedia,
 } from '@postsider/nestjs-libraries/integrations/social.abstract';
 import dayjs from 'dayjs';
+import { ssrfSafeDispatcher } from '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
 import { Integration } from '@prisma/client';
 import { AuthService } from '@postsider/helpers/auth/auth.service';
 import { LemmySettingsDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/lemmy.dto';
@@ -104,6 +105,8 @@ export class LemmyProvider extends SocialAbstract implements SocialProvider {
       headers: {
         'Content-Type': 'application/json',
       },
+      // @ts-ignore -- undici dispatcher is not in the DOM RequestInit type.
+      dispatcher: ssrfSafeDispatcher,
     });
 
     if (load.status === 401) {
@@ -118,6 +121,8 @@ export class LemmyProvider extends SocialAbstract implements SocialProvider {
           headers: {
             Authorization: `Bearer ${jwt}`,
           },
+          // @ts-ignore -- undici dispatcher is not in the DOM RequestInit type.
+          dispatcher: ssrfSafeDispatcher,
         })
       ).json();
 

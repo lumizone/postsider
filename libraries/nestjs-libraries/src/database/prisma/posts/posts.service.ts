@@ -56,6 +56,7 @@ import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { stripHtmlValidation } from '@postsider/helpers/utils/strip.html.validation';
 import { weightedLength } from '@postsider/helpers/utils/count.length';
+import { PostAnalyticsService } from '@postsider/nestjs-libraries/database/prisma/post-analytics/post-analytics.service';
 
 type PostWithConditionals = Post & {
   integration?: Integration;
@@ -74,7 +75,8 @@ export class PostsService {
     private _shortLinkService: ShortLinkService,
     private _openaiService: OpenaiService,
     private _temporalService: TemporalService,
-    private _refreshIntegrationService: RefreshIntegrationService
+    private _refreshIntegrationService: RefreshIntegrationService,
+    private _postAnalyticsService: PostAnalyticsService,
   ) {}
 
   searchForMissingThreeHoursPosts() {
@@ -220,6 +222,17 @@ export class PostsService {
         post.releaseId,
         date
       );
+      // Persistence is best-effort so a database write cannot turn a healthy
+      // provider response into a failed analytics request.
+      try {
+        await this._postAnalyticsService.record(orgId, post.id, loadAnalytics);
+      } catch (error) {
+        this._logger.warn(
+          `Could not persist analytics for post ${post.id}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
       await ioRedis.set(
         cacheKey,
         JSON.stringify(loadAnalytics),
@@ -341,8 +354,15 @@ export class PostsService {
     const post = await this._postRepository.findByShareToken(shareToken);
     if (!post) return null;
 
-    const { error, childrenPost, ...safe } = post as any;
-    return safe;
+    return {
+      id: post.id,
+      content: post.content,
+      publishDate: post.publishDate,
+      releaseURL: post.releaseURL,
+      image: post.image,
+      state: post.state,
+      integration: post.integration,
+    };
   }
 
   async getPosts(orgId: string, query: GetPostsDto) {

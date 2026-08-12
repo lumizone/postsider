@@ -11,6 +11,7 @@ import { NotificationService } from '@postsider/nestjs-libraries/database/prisma
 import { BillingSubscribeDto } from '@postsider/nestjs-libraries/dtos/billing/billing.subscribe.dto';
 import { pricing } from '@postsider/nestjs-libraries/database/prisma/subscriptions/pricing';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
+import { PrismaService } from '@postsider/nestjs-libraries/database/prisma/prisma.service';
 import {
   getPolarProductId,
   resolveProductRef,
@@ -44,7 +45,8 @@ export class PolarService {
   constructor(
     private _subscriptionService: SubscriptionService,
     private _organizationService: OrganizationService,
-    private _notificationService: NotificationService
+    private _notificationService: NotificationService,
+    private _prisma: PrismaService
   ) {}
 
   /**
@@ -77,6 +79,60 @@ export class PolarService {
    * Returns { ok: true } for events we don't care about.
    */
   async handleWebhook(event: any) {
+    const eventId = String(event?.id || event?.eventId || '');
+    if (!eventId) throw new Error('Polar webhook has no event id');
+
+    const existing = await this._prisma.polarWebhookEvent.findUnique({
+      where: { eventId },
+    });
+    if (existing?.processedAt) return { ok: true, duplicate: true };
+
+    await this._prisma.polarWebhookEvent.upsert({
+      where: { eventId },
+      create: {
+        eventId,
+        eventType: String(event?.type || 'unknown'),
+        attempts: 1,
+      },
+      update: {},
+    });
+
+    const claim = await this._prisma.polarWebhookEvent.updateMany({
+      where: {
+        eventId,
+        processedAt: null,
+        OR: [
+          { processingAt: null },
+          { processingAt: { lt: new Date(Date.now() - 10 * 60 * 1000) } },
+        ],
+      },
+      data: { processingAt: new Date(), attempts: { increment: 1 }, lastError: null },
+    });
+    if (claim.count !== 1) {
+      throw new Error(`Polar webhook ${eventId} is already being processed`);
+    }
+
+    try {
+      const result = await this.dispatchWebhook(event);
+      await this._prisma.polarWebhookEvent.update({
+        where: { eventId },
+        data: { processedAt: new Date(), processingAt: null, lastError: null },
+      });
+      return result;
+    } catch (error) {
+      await this._prisma.polarWebhookEvent.update({
+        where: { eventId },
+        data: {
+          attempts: { increment: 1 },
+          processingAt: null,
+          lastError: error instanceof Error ? error.message.slice(0, 1000) : 'Unknown error',
+        },
+      });
+      throw error;
+    }
+  }
+
+  private async dispatchWebhook(event: any) {
     switch (event.type) {
       case 'subscription.created':
       case 'subscription.active':

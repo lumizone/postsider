@@ -92,6 +92,7 @@ export class ApprovalService {
     const approval = await this._repo.getById(orgId, approvalId);
     assertPending(approval);
     const count = await this._repo.resolve(
+      orgId,
       approvalId,
       approverId,
       'APPROVED',
@@ -119,6 +120,7 @@ export class ApprovalService {
     const approval = await this._repo.getById(orgId, approvalId);
     assertPending(approval);
     const count = await this._repo.resolve(
+      orgId,
       approvalId,
       approverId,
       'REJECTED',
@@ -181,6 +183,7 @@ export class ApprovalService {
       image: approval.post.image,
       publishDate: approval.post.publishDate,
       channel: approval.post.integration,
+      branding: approval.organization,
     };
   }
 

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import pLimit from 'p-limit';
 import { OpenaiService } from '@postsider/nestjs-libraries/openai/openai.service';
 import { ProviderCredentialsService } from '@postsider/nestjs-libraries/database/prisma/integrations/provider-credentials.service';
+import { OrganizationRepository } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.repository';
 import { isPlatformAiEnabled } from '@postsider/nestjs-libraries/services/ai.flag';
 import { OpenaiCheckProvider } from './providers/openai.check.provider';
 import { DeepseekCheckProvider } from './providers/deepseek.check.provider';
@@ -19,6 +20,7 @@ import {
   LlmConfig,
   LlmProvider,
 } from './post-checker.types';
+import type { BrandContext } from './brand-context';
 
 const STORE_KEY = 'post-checker';
 export class NoCheckerConfigError extends Error {}
@@ -33,6 +35,7 @@ export class PostCheckerService {
   constructor(
     private _openai: OpenaiService,
     private _creds: ProviderCredentialsService,
+    private _organizations: OrganizationRepository,
     openaiByo: OpenaiCheckProvider,
     deepseek: DeepseekCheckProvider,
     gemini: GeminiCheckProvider
@@ -77,6 +80,17 @@ export class PostCheckerService {
     };
   }
 
+  private async loadBrandContext(orgId: string): Promise<BrandContext | undefined> {
+    const org = await this._organizations.getOrgById(orgId);
+    if (!org) return undefined;
+    return {
+      voice: org.brandVoice,
+      audience: org.brandAudience,
+      rules: org.brandRules,
+      forbiddenWords: org.brandForbiddenWords,
+    };
+  }
+
   private async runChecks(
     platforms: string[],
     run: (platform: string) => Promise<string>
@@ -103,26 +117,29 @@ export class PostCheckerService {
     base: Omit<CheckInput, 'platform'>,
     platforms: string[]
   ) {
+    const brandContext = await this.loadBrandContext(orgId);
     if (isPlatformAiEnabled()) {
       return this.runChecks(platforms, (platform) =>
-        this._openai.complete(buildCheckPrompt({ ...base, platform }))
+        this._openai.complete(buildCheckPrompt({ ...base, platform, brandContext }))
       );
     }
     const config = await this.loadLlmConfig(orgId); // throws -> 409
     const provider = pickProvider(this.providers, config.provider);
     return this.runChecks(platforms, (platform) =>
-      provider.complete(config, buildCheckPrompt({ ...base, platform }))
+      provider.complete(config, buildCheckPrompt({ ...base, platform, brandContext }))
     );
   }
 
   async rewrite(orgId: string, input: RewriteInput): Promise<RewriteResult> {
+    const brandContext = await this.loadBrandContext(orgId);
+    const contextualInput = { ...input, brandContext };
     if (isPlatformAiEnabled()) {
-      const raw = await this._openai.complete(buildRewritePrompt(input));
+      const raw = await this._openai.complete(buildRewritePrompt(contextualInput), undefined, 0.7);
       return parseRewriteResult(raw, input.count ?? 3);
     }
     const config = await this.loadLlmConfig(orgId); // throws -> 409
     const provider = pickProvider(this.providers, config.provider);
-    const raw = await provider.complete(config, buildRewritePrompt(input));
+    const raw = await provider.complete(config, buildRewritePrompt(contextualInput), 0.7);
     return parseRewriteResult(raw, input.count ?? 3);
   }
 }

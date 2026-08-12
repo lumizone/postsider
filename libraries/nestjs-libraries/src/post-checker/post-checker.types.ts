@@ -1,3 +1,5 @@
+import type { BrandContext } from './brand-context';
+
 export type CheckProvider = 'openai' | 'deepseek' | 'gemini';
 
 export interface LlmConfig {
@@ -11,6 +13,7 @@ export interface CheckInput {
   hasMedia: boolean;
   mediaType?: 'image' | 'video' | 'mixed';
   platform: string; // providerIdentifier, e.g. "x", "linkedin", "instagram"
+  brandContext?: BrandContext;
 }
 
 export interface CheckResult {
@@ -22,5 +25,5 @@ export interface CheckResult {
 
 export interface LlmProvider {
   readonly name: CheckProvider;
-  complete(config: LlmConfig, prompt: string): Promise<string>;
+  complete(config: LlmConfig, prompt: string, temperature?: number): Promise<string>;
 }

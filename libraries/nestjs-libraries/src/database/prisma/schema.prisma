@@ -15,6 +15,10 @@ model Organization {
   logo                 String?
   defaultTimezone      String?
   referralSource       String?
+  brandVoice           String?
+  brandAudience        String?
+  brandRules           String?
+  brandForbiddenWords  String?
   apiKey               String?
   paymentId            String?
   streakSince          DateTime?
@@ -55,6 +59,7 @@ model Organization {
   utmPresets           UtmPreset[]
   postApprovals        PostApproval[]
   channelAssignments   ChannelAssignment[]
+  postAnalytics        PostAnalytics[]
 
   @@index([apiKey])
   @@index([streakSince])
@@ -475,6 +480,7 @@ model Post {
   submittedForOrganization   Organization?             @relation("submittedForOrg", fields: [submittedForOrganizationId], references: [id])
   tags                       TagsPosts[]
   approval                   PostApproval?
+  analytics                  PostAnalytics[]
 
   @@index([group])
   @@index([deletedAt])
@@ -491,6 +497,23 @@ model Post {
   @@index([updatedAt])
   @@index([releaseURL])
   @@index([integrationId])
+}
+
+model PostAnalytics {
+  id             String       @id @default(cuid())
+  organizationId String
+  postId         String
+  metric         String
+  value          Float
+  measuredAt     DateTime
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  post           Post         @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, postId, metric, measuredAt])
+  @@index([organizationId, postId])
+  @@index([measuredAt])
 }
 
 model Notifications {
@@ -645,6 +668,7 @@ model Webhooks {
   name           String
   organizationId String
   url            String
+  secret         String?
   deletedAt      DateTime?
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt
@@ -653,6 +677,36 @@ model Webhooks {
 
   @@index([organizationId])
   @@index([deletedAt])
+}
+
+model PublicApiIdempotency {
+  id             String   @id @default(uuid())
+  organizationId String
+  key            String
+  requestHash    String
+  status         String   @default("processing")
+  responseJson   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, key])
+  @@index([createdAt])
+  @@index([organizationId])
+}
+
+model PolarWebhookEvent {
+  id          String    @id @default(uuid())
+  eventId     String    @unique
+  eventType   String
+  processedAt DateTime?
+  processingAt DateTime?
+  lastError   String?
+  attempts    Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([processedAt])
+  @@index([eventType])
 }
 
 model Sets {

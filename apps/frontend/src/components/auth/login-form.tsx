@@ -50,9 +50,17 @@ export function LoginForm() {
 
       // If joining via invite, bind to the org.
       if (inviteToken) {
-        await api
-          .post("/user/join-org", { org: inviteToken }, { silent: true })
-          .catch(() => undefined);
+        try {
+          await api.post("/user/join-org", { org: inviteToken }, { silent: true });
+          await refresh();
+        } catch (inviteError) {
+          setError(
+            inviteError instanceof ApiError
+              ? inviteError.message
+              : t("auth.signInError")
+          );
+          return;
+        }
       }
 
       router.replace("/calendar");

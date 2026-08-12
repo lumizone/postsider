@@ -83,13 +83,14 @@ export class ApprovalRepository {
   // Conditional update (status must still be PENDING) guards against two admins
   // resolving the same approval concurrently. Returns the affected row count.
   async resolve(
+    organizationId: string,
     id: string,
     approverId: string | null,
     status: ResolveStatus,
     note: string | null
   ) {
     const res = await this._approval.model.postApproval.updateMany({
-      where: { id, status: 'PENDING' },
+      where: { id, organizationId, status: 'PENDING' },
       data: { status, approverId, note, resolvedAt: new Date() },
     });
     return res.count;
@@ -130,6 +131,7 @@ export class ApprovalRepository {
         id: true,
         note: true,
         organizationId: true,
+        organization: { select: { name: true, logo: true } },
         requestedBy: { select: { email: true } },
         post: {
           select: {

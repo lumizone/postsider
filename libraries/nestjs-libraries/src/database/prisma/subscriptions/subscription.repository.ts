@@ -98,6 +98,16 @@ export class SubscriptionRepository {
     });
   }
 
+  deleteSubscriptionByOrgId(organizationId: string) {
+    return this._subscription.model.subscription.deleteMany({
+      where: {
+        organizationId,
+        deletedAt: null,
+        isLifetime: false,
+      },
+    });
+  }
+
   updateCustomerId(organizationId: string, customerId: string) {
     return this._organization.model.organization.update({
       where: {

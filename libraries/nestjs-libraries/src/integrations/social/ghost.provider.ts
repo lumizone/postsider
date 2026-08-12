@@ -6,6 +6,7 @@ import {
 } from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
 import { SocialAbstract } from '@postsider/nestjs-libraries/integrations/social.abstract';
 import dayjs from 'dayjs';
+import { ssrfSafeDispatcher } from '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
 import { Integration } from '@prisma/client';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import { GhostDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/ghost.dto';
@@ -112,6 +113,9 @@ export class GhostProvider extends SocialAbstract implements SocialProvider {
           Authorization: `Ghost ${token}`,
           'Content-Type': 'application/json',
         },
+        // Ghost instances are user-supplied URLs; pin DNS and block private IPs.
+        // @ts-ignore -- undici dispatcher is not in the DOM RequestInit type.
+        dispatcher: ssrfSafeDispatcher,
       });
 
       const { site } = await response.json();

@@ -8,6 +8,7 @@ import {
   Post,
   Put,
   Query,
+  Headers,
   UploadedFile,
   UseInterceptors,
   UsePipes,
@@ -58,6 +59,9 @@ import { RefreshToken } from '@postsider/nestjs-libraries/integrations/social.ab
 import { PostValidationException } from '@postsider/backend/api/routes/posts.validation.exception';
 import { timer } from '@postsider/helpers/utils/timer';
 import { ioRedis } from '@postsider/nestjs-libraries/redis/redis.service';
+import { PublicApiIdempotencyService } from '@postsider/nestjs-libraries/database/prisma/idempotency/public-api-idempotency.service';
+import { AgencyOverviewService } from '@postsider/nestjs-libraries/database/prisma/agency/agency-overview.service';
+import { CustomerReportService } from '@postsider/nestjs-libraries/database/prisma/agency/customer-report.service';
 
 // Ceiling for the remote-download endpoint (matches the video upload cap).
 const MAX_REMOTE_MEDIA_BYTES = 500 * 1024 * 1024;
@@ -74,7 +78,10 @@ export class PublicIntegrationsController {
     private _notificationService: NotificationService,
     private _integrationManager: IntegrationManager,
     private _refreshIntegrationService: RefreshIntegrationService,
-    private _approvalService: ApprovalService
+    private _approvalService: ApprovalService,
+    private _idempotency: PublicApiIdempotencyService,
+    private _agencyOverview: AgencyOverviewService,
+    private _customerReport: CustomerReportService
   ) {}
 
   @Post('/upload')
@@ -173,11 +180,49 @@ export class PublicIntegrationsController {
     };
   }
 
+  @Get('/overview')
+  async getAgencyOverview(
+    @GetOrgFromRequest() org: Organization,
+    @Query('days') days?: string
+  ) {
+    Sentry.metrics.count('public_api-request', 1);
+    const parsedDays = Number(days);
+    return this._agencyOverview.getOverview(
+      org.id,
+      Number.isFinite(parsedDays) && parsedDays > 0 ? parsedDays : 30
+    );
+  }
+
+  @Get('/customers/:customerId/report')
+  async getCustomerReport(
+    @GetOrgFromRequest() org: Organization,
+    @Param('customerId') customerId: string,
+    @Query('days') days?: string
+  ) {
+    Sentry.metrics.count('public_api-request', 1);
+    const parsedDays = Number(days);
+    return this._customerReport.getReport(
+      org.id,
+      customerId,
+      Number.isFinite(parsedDays) && parsedDays > 0 ? parsedDays : 30
+    );
+  }
+
+  @Get('/posts/:id')
+  async getPost(
+    @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string
+  ) {
+    Sentry.metrics.count('public_api-request', 1);
+    return this._postsService.getPost(org.id, id);
+  }
+
   @Post('/posts')
   @CheckPolicies([AuthorizationActions.Create, Sections.POSTS_PER_MONTH])
   async createPost(
     @GetOrgFromRequest() org: Organization,
-    @Body() rawBody: any
+    @Body() rawBody: any,
+    @Headers('idempotency-key') idempotencyKey?: string
   ) {
     Sentry.metrics.count('public_api-request', 1);
 
@@ -254,7 +299,17 @@ export class PublicIntegrationsController {
       ? (rawBody.creationMethod as 'CLI' | 'API')
       : 'API';
 
-    return this._postsService.createPost(org.id, body, creationMethod);
+    const claim = await this._idempotency.claim(org.id, idempotencyKey, rawBody);
+    if (claim?.kind === 'replay') return claim.response;
+
+    try {
+      const result = await this._postsService.createPost(org.id, body, creationMethod);
+      if (claim?.kind === 'new') await this._idempotency.complete(claim.id, result);
+      return result;
+    } catch (error) {
+      if (claim?.kind === 'new') await this._idempotency.release(claim.id);
+      throw error;
+    }
   }
 
   @Delete('/posts/:id')
@@ -318,7 +373,10 @@ export class PublicIntegrationsController {
   @Get('/is-connected')
   async getActiveIntegrations(@GetOrgFromRequest() org: Organization) {
     Sentry.metrics.count('public_api-request', 1);
-    return { connected: true };
+    const integrations = await this._integrationService.getIntegrationsList(org.id);
+    return {
+      connected: integrations.some((integration) => !integration.disabled),
+    };
   }
 
   @Get('/groups')
@@ -508,6 +566,21 @@ export class PublicIntegrationsController {
     return this._postsService.updateReleaseId(org.id, id, releaseId);
   }
 
+  @Get('/analytics/post/:postId')
+  async getPostAnalytics(
+    @GetOrgFromRequest() org: Organization,
+    @Param('postId') postId: string,
+    @Query('date') date: string
+  ) {
+    Sentry.metrics.count('public_api-request', 1);
+    const days = Number(date);
+    return this._postsService.checkPostAnalytics(
+      org.id,
+      postId,
+      Number.isFinite(days) && days > 0 ? days : 7
+    );
+  }
+
   @Get('/analytics/:integration')
   async getAnalytics(
     @GetOrgFromRequest() org: Organization,
@@ -516,16 +589,6 @@ export class PublicIntegrationsController {
   ) {
     Sentry.metrics.count('public_api-request', 1);
     return this._integrationService.checkAnalytics(org, integration, date);
-  }
-
-  @Get('/analytics/post/:postId')
-  async getPostAnalytics(
-    @GetOrgFromRequest() org: Organization,
-    @Param('postId') postId: string,
-    @Query('date') date: string
-  ) {
-    Sentry.metrics.count('public_api-request', 1);
-    return this._postsService.checkPostAnalytics(org.id, postId, +date);
   }
 
   @Post('/integration-trigger/:id')

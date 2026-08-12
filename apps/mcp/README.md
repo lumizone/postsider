@@ -21,6 +21,8 @@ self-hosted instance, authenticated with an organization API key.
 | `postsider_get_post_analytics` | Analytics for one post |
 | `postsider_get_channel_analytics` | Account-level analytics for a channel |
 | `postsider_get_notifications` | Recent notifications (failures, reconnect prompts) |
+| `postsider_request_approval` | Send a draft to the approval queue |
+| `postsider_get_approval_status` | Read a post's approval status |
 
 ## Setup
 

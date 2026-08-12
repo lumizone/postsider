@@ -253,6 +253,36 @@ export default function OrganizationSettingsPage() {
 
       {profile && (
         <Card
+          title={t("settingsOrganization.brandCard")}
+          subtitle={t("settingsOrganization.brandSubtitle")}
+        >
+          <div className={s.field}>
+            <label className={s.label} htmlFor="brand-voice">{t("settingsOrganization.brandVoice")}</label>
+            <textarea id="brand-voice" className={s.input} rows={3} value={profile.brandVoice ?? ""} onChange={(e) => setProfile({ ...profile, brandVoice: e.target.value })} placeholder={t("settingsOrganization.brandVoicePlaceholder")} />
+            <span className={s.hint}>{t("settingsOrganization.brandVoiceHint")}</span>
+          </div>
+          <div className={s.field} style={{ marginTop: 12 }}>
+            <label className={s.label} htmlFor="brand-audience">{t("settingsOrganization.brandAudience")}</label>
+            <textarea id="brand-audience" className={s.input} rows={2} value={profile.brandAudience ?? ""} onChange={(e) => setProfile({ ...profile, brandAudience: e.target.value })} placeholder={t("settingsOrganization.brandAudiencePlaceholder")} />
+          </div>
+          <div className={s.field} style={{ marginTop: 12 }}>
+            <label className={s.label} htmlFor="brand-rules">{t("settingsOrganization.brandRules")}</label>
+            <textarea id="brand-rules" className={s.input} rows={3} value={profile.brandRules ?? ""} onChange={(e) => setProfile({ ...profile, brandRules: e.target.value })} placeholder={t("settingsOrganization.brandRulesPlaceholder")} />
+          </div>
+          <div className={s.field} style={{ marginTop: 12 }}>
+            <label className={s.label} htmlFor="brand-forbidden">{t("settingsOrganization.brandForbiddenWords")}</label>
+            <input id="brand-forbidden" className={s.input} value={profile.brandForbiddenWords ?? ""} onChange={(e) => setProfile({ ...profile, brandForbiddenWords: e.target.value })} placeholder={t("settingsOrganization.brandForbiddenWordsPlaceholder")} />
+          </div>
+          <div className={s.cardActions}>
+            <button type="button" className={s.btnPrimary} onClick={() => void save()} disabled={saving}>
+              {saving ? t("settingsOrganization.saving") : t("settingsOrganization.save")}
+            </button>
+          </div>
+        </Card>
+      )}
+
+      {profile && (
+        <Card
           title={t("settingsOrganization.defaultsCard")}
         >
           <div className={s.field}>

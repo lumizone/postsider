@@ -34,4 +34,12 @@ describe('webhook HMAC signature', () => {
   it('produces the sha256=<hex> format', () => {
     expect(signWebhook('x', 's')).toMatch(/^sha256=[0-9a-f]{64}$/);
   });
+
+  it('signs the timestamp and body together', () => {
+    const body = JSON.stringify({ event: 'post.published' });
+    const timestamp = '1735689600';
+    const signature = signWebhook(`${timestamp}.${body}`, 'secret');
+    expect(verifyWebhook(signature, `${timestamp}.${body}`, 'secret')).toBe(true);
+    expect(verifyWebhook(signature, `${Number(timestamp) + 1}.${body}`, 'secret')).toBe(false);
+  });
 });

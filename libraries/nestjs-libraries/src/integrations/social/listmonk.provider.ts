@@ -7,6 +7,7 @@ import {
   SocialProvider,
 } from './social.integrations.interface';
 import dayjs from 'dayjs';
+import { ssrfSafeDispatcher } from '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
 import { Integration } from '@prisma/client';
 import { ListmonkDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/listmonk.dto';
 import { AuthService } from '@postsider/helpers/auth/auth.service';
@@ -91,6 +92,8 @@ export class ListmonkProvider extends SocialAbstract implements SocialProvider {
             Accept: 'application/json',
             Authorization: 'Basic ' + basic,
           },
+          // @ts-ignore -- undici dispatcher is not in the DOM RequestInit type.
+          dispatcher: ssrfSafeDispatcher,
         })
       ).json();
 

@@ -14,6 +14,10 @@ export class WebhooksService {
     return this._webhooksRepository.getWebhooks(orgId);
   }
 
+  getWebhooksForDelivery(orgId: string) {
+    return this._webhooksRepository.getWebhooksForDelivery(orgId);
+  }
+
   createWebhook(orgId: string, body: WebhooksDto) {
     return this._webhooksRepository.createWebhook(orgId, body);
   }

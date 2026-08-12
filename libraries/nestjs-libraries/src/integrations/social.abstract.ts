@@ -153,7 +153,7 @@ export abstract class SocialAbstract {
   ): Promise<Response> {
     const request = await fetch(url, options);
 
-    if (request.status === 200 || request.status === 201) {
+    if (request.status >= 200 && request.status < 300) {
       return request;
     }
 

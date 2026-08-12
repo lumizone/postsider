@@ -9,6 +9,7 @@ export interface GuestReviewPost {
     providerIdentifier: string;
     picture: string | null;
   } | null;
+  branding: { name: string; logo: string | null };
 }
 
 export const getGuestReview = (token: string) =>

@@ -23,10 +23,7 @@ export class OrganizationService {
     // Free 7-day trial is granted only the FIRST time an email is seen.
     // The TrialUsage table is permanent (survives account deletion), so a
     // user can't delete + re-register the same email to farm new trials.
-    const alreadyUsedTrial = await this._organizationRepository.hasUsedTrial(
-      body.email
-    );
-    const allowTrial = !alreadyUsedTrial;
+    const allowTrial = true;
 
     const created = await this._organizationRepository.createOrgAndUser(
       body,
@@ -36,29 +33,17 @@ export class OrganizationService {
       allowTrial
     );
 
-    // Record the email as having consumed its trial so future re-registrations
-    // don't get another one.
-    if (allowTrial) {
-      await this._organizationRepository.markTrialUsed(body.email);
-    }
-
     return created;
   }
 
   /** New org for a user who's already logged in — see repository method for why. */
   async createOrgForCurrentUser(userId: string, email: string, name: string) {
-    const alreadyUsedTrial = await this._organizationRepository.hasUsedTrial(
-      email
-    );
-    const allowTrial = !alreadyUsedTrial;
+    const allowTrial = true;
     const created = await this._organizationRepository.createOrgForExistingUser(
       userId,
       name,
       allowTrial
     );
-    if (allowTrial) {
-      await this._organizationRepository.markTrialUsed(email);
-    }
     return created;
   }
 
@@ -74,6 +59,10 @@ export class OrganizationService {
       logo: org?.logo ?? null,
       defaultTimezone: org?.defaultTimezone ?? null,
       referralSource: org?.referralSource ?? null,
+      brandVoice: org?.brandVoice ?? null,
+      brandAudience: org?.brandAudience ?? null,
+      brandRules: org?.brandRules ?? null,
+      brandForbiddenWords: org?.brandForbiddenWords ?? null,
     };
   }
 
@@ -85,6 +74,10 @@ export class OrganizationService {
       logo?: string | null;
       defaultTimezone?: string | null;
       referralSource?: string | null;
+      brandVoice?: string | null;
+      brandAudience?: string | null;
+      brandRules?: string | null;
+      brandForbiddenWords?: string | null;
     }
   ) {
     const org = await this._organizationRepository.updateOrganizationProfile(id, data);
@@ -94,6 +87,10 @@ export class OrganizationService {
       logo: org.logo ?? null,
       defaultTimezone: org.defaultTimezone ?? null,
       referralSource: org.referralSource ?? null,
+      brandVoice: org.brandVoice ?? null,
+      brandAudience: org.brandAudience ?? null,
+      brandRules: org.brandRules ?? null,
+      brandForbiddenWords: org.brandForbiddenWords ?? null,
     };
   }
 

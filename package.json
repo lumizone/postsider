@@ -16,9 +16,9 @@
     "pm2": "pnpm run pm2-run",
     "publish-sdk": "pnpm run --filter ./apps/sdk publish",
     "pm2-run": "pnpm run prisma-migrate-deploy && pm2-runtime start ecosystem.config.js",
-    "build": "pnpm -r --workspace-concurrency=1 --filter ./apps/backend --filter ./apps/orchestrator run build",
-    "build:backend": "rm -rf apps/backend/dist && pnpm --filter ./apps/backend run build",
-    "build:orchestrator": "rm -rf apps/orchestrator/dist && pnpm --filter ./apps/orchestrator run build",
+    "build": "cross-env NODE_OPTIONS=--max-old-space-size=4096 pnpm -r --workspace-concurrency=1 --filter ./apps/backend --filter ./apps/orchestrator run build",
+    "build:backend": "rm -rf apps/backend/dist && cross-env NODE_OPTIONS=--max-old-space-size=4096 pnpm --filter ./apps/backend run build",
+    "build:orchestrator": "rm -rf apps/orchestrator/dist && cross-env NODE_OPTIONS=--max-old-space-size=4096 pnpm --filter ./apps/orchestrator run build",
     "build:sdk": "pnpm --filter ./apps/sdk exec tsup",
     "dev:backend": "rm -rf apps/backend/dist && pnpm --filter ./apps/backend run dev",
     "dev:orchestrator": "rm -rf apps/orchestrator/dist && pnpm --filter ./apps/orchestrator run dev",
@@ -39,6 +39,7 @@
     "docker-create": "./var/docker/docker-create.sh",
     "postinstall": "pnpm run prisma-generate",
     "rebrand-check": "node scripts/rebrand-check.mjs",
+    "check:providers": "node scripts/provider-contract-check.mjs",
     "test": "jest --coverage --detectOpenHandles --reporters=default --reporters=jest-junit"
   },
   "dependencies": {

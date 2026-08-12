@@ -63,7 +63,8 @@ export class InboundService {
 
     await Promise.all(
       subscriptions.map(async (sub) => {
-        const signature = signWebhook(body, sub.secret);
+        const timestamp = Math.floor(Date.now() / 1000);
+        const signature = signWebhook(`${timestamp}.${body}`, sub.secret);
         for (let attempt = 0; attempt < MAX_DELIVERY_ATTEMPTS; attempt++) {
           let status = 'error';
           try {
@@ -73,6 +74,7 @@ export class InboundService {
                 'Content-Type': 'application/json',
                 [WEBHOOK_SIGNATURE_HEADER]: signature,
                 'X-Postsider-Event': 'inbound.event',
+                'X-Postsider-Timestamp': String(timestamp),
                 'X-Webhook-Attempt': String(attempt + 1),
               },
               body,

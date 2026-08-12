@@ -25,6 +25,7 @@ import {
 import { SubscriptionService } from '@postsider/nestjs-libraries/database/prisma/subscriptions/subscription.service';
 import { ProviderEnvHelper } from '@postsider/nestjs-libraries/integrations/provider-env.helper';
 import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
+import { signWebhook } from '@postsider/nestjs-libraries/services/webhook.signature';
 
 // Drops fields the workflow and downstream activities never read — biggest wins are `error` (grows per retry) and `childrenPost` (Prisma side-loads it on every recursive row).
 function slimPost(post: any) {
@@ -348,7 +349,7 @@ export class PostActivity {
 
   @ActivityMethod()
   async sendWebhooks(postId: string, orgId: string, integrationId: string) {
-    const webhooks = (await this._webhookService.getWebhooks(orgId)).filter(
+    const webhooks = (await this._webhookService.getWebhooksForDelivery(orgId)).filter(
       (f) => {
         return (
           f.integrations.length === 0 ||
@@ -373,6 +374,11 @@ export class PostActivity {
         // workflow) — but total failure is at least logged now: it used to
         // leave literally zero trace (2026-07-22 audit).
         let lastOutcome = '';
+        const body = JSON.stringify(post);
+        const timestamp = Math.floor(Date.now() / 1000);
+        const signature = webhook.secret
+          ? signWebhook(`${timestamp}.${body}`, webhook.secret)
+          : null;
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
             const res = await fetch(webhook.url, {
@@ -381,8 +387,10 @@ export class PostActivity {
                 'Content-Type': 'application/json',
                 'X-Webhook-Attempt': String(attempt + 1),
                 'X-Postsider-Event': 'post.published',
+                'X-Postsider-Timestamp': String(timestamp),
+                ...(signature ? { 'x-postsider-signature': signature } : {}),
               },
-              body: JSON.stringify(post),
+              body,
               signal: AbortSignal.timeout(10000),
               // @ts-ignore - undici dispatcher (SSRF / DNS-rebinding guard)
               dispatcher: ssrfSafeDispatcher,

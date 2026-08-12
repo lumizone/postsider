@@ -82,6 +82,46 @@ server.registerTool(
 );
 
 server.registerTool(
+  'postsider_get_agency_overview',
+  {
+    title: 'Get agency overview',
+    description:
+      'Get an organization-wide operational overview for an agency: clients, channels, queued posts, drafts, published posts, errors, recent errors and pending approvals. Useful for morning checks and client reporting.',
+    inputSchema: {
+      days: z.number().int().positive().max(365).default(30).describe('Window for recent errors, in days.'),
+    },
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+  },
+  async ({ days }) => {
+    try {
+      return ok(await client.get('/overview', { days }));
+    } catch (e) {
+      return fail(e);
+    }
+  }
+);
+
+server.registerTool(
+  'postsider_get_customer_report',
+  {
+    title: 'Get customer report',
+    description: 'Get a customer-scoped agency report with channels, queued, draft, published, error and pending approval counts.',
+    inputSchema: {
+      customerId: z.string().describe('Customer id from postsider_list_groups.'),
+      days: z.number().int().positive().max(365).default(30).describe('Window for recent errors, in days.'),
+    },
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+  },
+  async ({ customerId, days }) => {
+    try {
+      return ok(await client.get(`/customers/${encodeURIComponent(customerId)}/report`, { days }));
+    } catch (e) {
+      return fail(e);
+    }
+  }
+);
+
+server.registerTool(
   'postsider_list_groups',
   {
     title: 'List channel groups',
@@ -164,6 +204,26 @@ server.registerTool(
   async ({ postId }) => {
     try {
       return ok(await client.get(`/posts/${encodeURIComponent(postId)}/missing`));
+    } catch (e) {
+      return fail(e);
+    }
+  }
+);
+
+server.registerTool(
+  'postsider_get_post',
+  {
+    title: 'Get post details',
+    description:
+      'Get the full organization-scoped post group, including current state, scheduled time, media, channel and publish error. Use this to inspect the result of an asynchronous create or publish operation.',
+    inputSchema: {
+      postId: z.string().describe('Post id returned by postsider_create_post.'),
+    },
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+  },
+  async ({ postId }) => {
+    try {
+      return ok(await client.get(`/posts/${encodeURIComponent(postId)}`));
     } catch (e) {
       return fail(e);
     }
@@ -335,6 +395,12 @@ server.registerTool(
         .array(z.object({ value: z.string(), label: z.string() }))
         .optional()
         .describe('Optional tags.'),
+      idempotencyKey: z
+        .string()
+        .min(1)
+        .max(255)
+        .optional()
+        .describe('Stable key for safe retries. Reusing it with the same request returns the original result without creating duplicates.'),
     },
     annotations: {
       readOnlyHint: false,
@@ -342,10 +408,10 @@ server.registerTool(
       openWorldHint: true,
     },
   },
-  async ({ type, date, shortLink, posts, tags }) => {
+  async ({ type, date, shortLink, posts, tags, idempotencyKey }) => {
     try {
       const body = buildCreatePostBody({ type, date, shortLink, posts, tags });
-      return ok(await client.post('/posts', body));
+      return ok(await client.post('/posts', body, idempotencyKey));
     } catch (e) {
       return fail(e);
     }

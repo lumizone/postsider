@@ -17,6 +17,7 @@ import utc from 'dayjs/plugin/utc';
 import { v4 as uuidv4 } from 'uuid';
 import { CreateTagDto } from '@postsider/nestjs-libraries/dtos/posts/create.tag.dto';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
+import { randomBytes } from 'crypto';
 
 dayjs.extend(isoWeek);
 dayjs.extend(weekOfYear);
@@ -380,7 +381,6 @@ export class PostsRepository {
       include: {
         integration: {
           select: {
-            id: true,
             name: true,
             picture: true,
             providerIdentifier: true,
@@ -604,7 +604,7 @@ export class PostsRepository {
         },
         // Share token for public preview links. Only set on create (not update)
         // so a post keeps the same share URL for its entire lifetime.
-        ...(type === 'create' ? { shareToken: makeId(30) } : {}),
+        ...(type === 'create' ? { shareToken: randomBytes(24).toString('base64url') } : {}),
       });
 
       posts.push(

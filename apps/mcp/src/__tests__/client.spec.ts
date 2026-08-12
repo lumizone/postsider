@@ -117,6 +117,15 @@ describe('PostsiderClient', () => {
       expect(init.body).toBe(JSON.stringify(body));
     });
 
+    it('adds Idempotency-Key when supplied', async () => {
+      fetchMock.mockResolvedValue(mockResponse({ text: '{"id":"p1"}' }));
+      const client = new PostsiderClient(apiKey, 'https://api.postsider.com');
+      await client.post('/posts', { type: 'schedule' }, 'agency-job-42');
+
+      const init = fetchMock.mock.calls[0][1] as RequestInit;
+      expect((init.headers as Record<string, string>)['Idempotency-Key']).toBe('agency-job-42');
+    });
+
     it('uses the right method for get/post/put/del', async () => {
       fetchMock.mockResolvedValue(mockResponse({ text: '{}' }));
       const client = new PostsiderClient(apiKey, 'https://api.postsider.com');

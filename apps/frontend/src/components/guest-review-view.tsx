@@ -77,10 +77,14 @@ export function GuestReviewView({ token }: { token: string }) {
   return (
     <div style={{ maxWidth: 560, margin: "0 auto", padding: "48px 20px" }}>
       <div style={{ marginBottom: 24 }}>
+        {post?.branding?.logo && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={post.branding.logo} alt={post.branding.name} style={{ maxWidth: 180, maxHeight: 48, objectFit: "contain", marginBottom: 14 }} />
+        )}
         <div style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)" }}>
           {t("guestReview.eyebrow")}
         </div>
-        <h1 style={{ fontSize: 22, fontWeight: 700, margin: "4px 0 0" }}>{t("guestReview.title")}</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 700, margin: "4px 0 0" }}>{post?.branding?.name ? `${post.branding.name} · ${t("guestReview.title")}` : t("guestReview.title")}</h1>
       </div>
 
       {loading ? (

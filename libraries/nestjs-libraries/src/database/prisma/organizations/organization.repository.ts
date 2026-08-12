@@ -231,6 +231,10 @@ export class OrganizationRepository {
       logo?: string | null;
       defaultTimezone?: string | null;
       referralSource?: string | null;
+      brandVoice?: string | null;
+      brandAudience?: string | null;
+      brandRules?: string | null;
+      brandForbiddenWords?: string | null;
     }
   ) {
     return this._organization.model.organization.update({
@@ -305,14 +309,25 @@ export class OrganizationRepository {
     // self-host mode (no billing) every org is already unlimited, so no trial
     // subscription is needed (and one would wrongly downgrade them to STANDARD).
     const TRIAL_DAYS = 7;
-    const grantTrial = allowTrial && isBillingEnabled();
+    return this._prisma.$transaction(async (tx) => {
+      let grantTrial = allowTrial && isBillingEnabled();
+      if (allowTrial) {
+        try {
+          await tx.trialUsage.create({
+            data: { email: body.email.trim().toLowerCase() },
+          });
+        } catch (error: any) {
+          if (error?.code === 'P2002') grantTrial = false;
+          else throw error;
+        }
+      }
 
-    return this._organization.model.organization.create({
+      return tx.organization.create({
       data: {
         name: body.company,
         apiKey: AuthService.fixedEncryption(makeId(20)),
-        allowTrial,
-        isTrailing: allowTrial,
+        allowTrial: grantTrial,
+        isTrailing: grantTrial,
         ...(grantTrial
           ? {
               subscription: {
@@ -357,6 +372,7 @@ export class OrganizationRepository {
           },
         },
       },
+      });
     });
   }
 
@@ -374,13 +390,29 @@ export class OrganizationRepository {
     allowTrial: boolean
   ) {
     const TRIAL_DAYS = 7;
-    const grantTrial = allowTrial && isBillingEnabled();
-    return this._organization.model.organization.create({
+    return this._prisma.$transaction(async (tx) => {
+      let grantTrial = allowTrial && isBillingEnabled();
+      const email = await tx.user.findUnique({
+        where: { id: userId },
+        select: { email: true },
+      });
+      if (allowTrial && email?.email) {
+        try {
+          await tx.trialUsage.create({
+            data: { email: email.email.trim().toLowerCase() },
+          });
+        } catch (error: any) {
+          if (error?.code === 'P2002') grantTrial = false;
+          else throw error;
+        }
+      }
+
+      return tx.organization.create({
       data: {
         name,
         apiKey: AuthService.fixedEncryption(makeId(20)),
-        allowTrial,
-        isTrailing: allowTrial,
+        allowTrial: grantTrial,
+        isTrailing: grantTrial,
         ...(grantTrial
           ? {
               subscription: {
@@ -405,6 +437,7 @@ export class OrganizationRepository {
         },
       },
       select: { id: true, name: true },
+      });
     });
   }
 
@@ -734,6 +767,7 @@ export class OrganizationRepository {
     await prisma.$transaction(async (tx) => {
       // Post-dependent rows
       if (postIds.length) {
+        await tx.postAnalytics.deleteMany({ where: { organizationId: orgId } });
         await tx.tagsPosts.deleteMany({ where: { postId: { in: postIds } } });
         await tx.errors.deleteMany({ where: { postId: { in: postIds } } });
         await tx.comments.deleteMany({ where: { postId: { in: postIds } } });

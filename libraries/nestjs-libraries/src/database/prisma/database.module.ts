@@ -53,6 +53,11 @@ import { InboundService } from '@postsider/nestjs-libraries/database/prisma/inbo
 import { InboundSourceRegistry } from '@postsider/nestjs-libraries/integrations/inbound/inbound.registry';
 import { ChannelAssignmentRepository } from '@postsider/nestjs-libraries/database/prisma/channel-assignment/channel-assignment.repository';
 import { ChannelAssignmentService } from '@postsider/nestjs-libraries/database/prisma/channel-assignment/channel-assignment.service';
+import { AgencyOverviewService } from '@postsider/nestjs-libraries/database/prisma/agency/agency-overview.service';
+import { CustomerReportService } from '@postsider/nestjs-libraries/database/prisma/agency/customer-report.service';
+import { PublicApiIdempotencyService } from '@postsider/nestjs-libraries/database/prisma/idempotency/public-api-idempotency.service';
+import { PostAnalyticsRepository } from '@postsider/nestjs-libraries/database/prisma/post-analytics/post-analytics.repository';
+import { PostAnalyticsService } from '@postsider/nestjs-libraries/database/prisma/post-analytics/post-analytics.service';
 
 @Global()
 @Module({
@@ -115,6 +120,11 @@ import { ChannelAssignmentService } from '@postsider/nestjs-libraries/database/p
     ApprovalService,
     ChannelAssignmentRepository,
     ChannelAssignmentService,
+    PublicApiIdempotencyService,
+    AgencyOverviewService,
+    CustomerReportService,
+    PostAnalyticsRepository,
+    PostAnalyticsService,
   ],
   get exports() {
     return this.providers;

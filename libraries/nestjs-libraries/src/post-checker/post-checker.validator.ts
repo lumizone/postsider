@@ -13,7 +13,16 @@ export function parseCheckResult(raw: string): CheckResult {
   return {
     score: clamp(obj.score),
     dimensions: { hook: clamp(d.hook), clarity: clamp(d.clarity), cta: clamp(d.cta), platformFit: clamp(d.platformFit) },
-    positives: Array.isArray(obj.positives) ? obj.positives.map(String).slice(0, 4) : [],
-    negatives: Array.isArray(obj.negatives) ? obj.negatives.map(String).slice(0, 4) : [],
+    positives: toFeedback(obj.positives),
+    negatives: toFeedback(obj.negatives),
   };
+}
+
+function toFeedback(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 4);
 }

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '@postsider/nestjs-libraries/database/prisma/prisma.service';
 import { scoreSlots, RankedSlot } from './smart-slots.scoring';
 import dayjs from 'dayjs';
@@ -53,13 +53,16 @@ export class SmartSlotsService {
     platform: string,
     count = 3,
   ): Promise<{ datetime: string; score: number }[]> {
-    const integration = await this._prisma.integration
-      .findFirst({
-        where: { id: integrationId, organizationId: orgId },
-        select: { timezone: true },
-      })
-      .catch(() => null);
-    const tz = integration?.timezone || 'UTC';
+    const integration = await this._prisma.integration.findFirst({
+      where: { id: integrationId, organizationId: orgId, deletedAt: null },
+      select: { timezone: true, providerIdentifier: true, disabled: true },
+    });
+    if (!integration) throw new BadRequestException('Integration not found');
+    if (integration.disabled) throw new BadRequestException('Integration is disabled');
+    if (integration.providerIdentifier !== platform) {
+      throw new BadRequestException('Platform does not match integration');
+    }
+    const tz = integration.timezone || 'UTC';
     const tzOffsetMinutes = dayjs().tz(tz).utcOffset();
     const offsetMs = tzOffsetMinutes * 60_000;
     const nowMs = Date.now();
@@ -115,22 +118,33 @@ export class SmartSlotsService {
       (c) => !busy.some((b) => Math.abs(c.getTime() - b) < COLLISION_MS),
     );
 
-    // Posting-rhythm histogram (audience-local hour), only with enough signal.
+    // Posting rhythm by local day and hour, only with enough signal.
     let histogram: number[] | null = null;
+    let postingPattern: number[] | null = null;
     if (published.length >= MIN_HISTORY) {
       const h = new Array(24).fill(0);
+      const pattern = new Array(7 * 24).fill(0);
       for (const p of published) {
-        h[new Date(p.publishDate.getTime() + offsetMs).getUTCHours()]++;
+        const local = new Date(p.publishDate.getTime() + offsetMs);
+        const hour = local.getUTCHours();
+        h[hour]++;
+        pattern[local.getUTCDay() * 24 + hour]++;
       }
       histogram = h;
+      postingPattern = pattern;
     }
 
     // 3) Score the collision-free candidates, then diversify down to `count`.
     // Prefer free slots even if fewer than `count` remain (returning fewer
     // suggestions beats double-booking a queued slot); only when EVERY candidate
     // collides — a fully-saturated channel — fall back to the full grid.
-    const pool = free.length > 0 ? free : candidates;
-    const ranked = scoreSlots(pool, platform, histogram, pool.length, tzOffsetMinutes);
+    // Never recommend a time that is already occupied. An empty result is
+    // safer than silently creating a double-booking for an agency client.
+    if (!free.length) return [];
+    const pool = free;
+    const ranked = scoreSlots(
+      pool, platform, histogram, pool.length, tzOffsetMinutes, postingPattern,
+    );
     const picked = this.diversify(ranked, count, offsetMs);
 
     return picked.map((s) => ({ datetime: s.datetime.toISOString(), score: s.score }));

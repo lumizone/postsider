@@ -25,4 +25,24 @@ export class UpdateOrganizationDto {
   @IsString()
   @MaxLength(64)
   referralSource?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  brandVoice?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  brandAudience?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  brandRules?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  brandForbiddenWords?: string | null;
 }

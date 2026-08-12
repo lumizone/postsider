@@ -18,6 +18,7 @@ import { SubscriptionExceptionFilter } from '@postsider/backend/services/auth/pe
 import { PostValidationExceptionFilter } from '@postsider/backend/api/routes/posts.validation.exception';
 import { HttpExceptionFilter } from '@postsider/nestjs-libraries/services/exception.filter';
 import { ConfigurationChecker } from '@postsider/helpers/configuration/configuration.checker';
+import { getAllConfiguredProducts } from '@postsider/nestjs-libraries/services/polar.products';
 
 async function start() {
   assertRequiredSecrets();
@@ -190,6 +191,42 @@ function assertRequiredSecrets() {
       'Startup'
     );
     process.exit(1);
+  }
+
+  if (process.env.NEXT_PUBLIC_SELF_HOSTED !== 'true' && process.env.POLAR_ACCESS_TOKEN) {
+    const missingBillingConfig = [
+      'POLAR_WEBHOOK_SECRET',
+      'POLAR_SERVER',
+      ...(['STANDARD', 'TEAM', 'PRO', 'ULTIMATE'] as const).flatMap((tier) =>
+        (['MONTHLY', 'YEARLY'] as const).map(
+          (period) => `POLAR_PRODUCT_${tier}_${period}`
+        )
+      ),
+    ].filter((key) => !process.env[key]?.trim());
+
+    if (missingBillingConfig.length) {
+      Logger.error(
+        `Refusing to start: incomplete Polar configuration: ${missingBillingConfig.join(', ')}.`,
+        'Startup'
+      );
+      process.exit(1);
+    }
+
+    if (!['sandbox', 'production'].includes(process.env.POLAR_SERVER!)) {
+      Logger.error(
+        `Refusing to start: POLAR_SERVER must be "sandbox" or "production", got ${JSON.stringify(process.env.POLAR_SERVER)}.`,
+        'Startup'
+      );
+      process.exit(1);
+    }
+
+    if (getAllConfiguredProducts().length !== 8) {
+      Logger.error(
+        'Refusing to start: expected all 8 Polar product mappings to be configured.',
+        'Startup'
+      );
+      process.exit(1);
+    }
   }
 }
 

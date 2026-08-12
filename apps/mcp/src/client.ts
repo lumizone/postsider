@@ -16,7 +16,7 @@ export class PostsiderClient {
   private async request(
     method: string,
     path: string,
-    opts: { query?: Record<string, unknown>; body?: unknown } = {}
+    opts: { query?: Record<string, unknown>; body?: unknown; idempotencyKey?: string } = {}
   ): Promise<unknown> {
     const url = new URL(this.base + path);
     if (opts.query) {
@@ -34,6 +34,7 @@ export class PostsiderClient {
         headers: {
           Authorization: this.apiKey,
           ...(opts.body ? { 'Content-Type': 'application/json' } : {}),
+          ...(opts.idempotencyKey ? { 'Idempotency-Key': opts.idempotencyKey } : {}),
         },
         body: opts.body ? JSON.stringify(opts.body) : undefined,
       });
@@ -78,8 +79,8 @@ export class PostsiderClient {
   get(path: string, query?: Record<string, unknown>) {
     return this.request('GET', path, { query });
   }
-  post(path: string, body?: unknown) {
-    return this.request('POST', path, { body });
+  post(path: string, body?: unknown, idempotencyKey?: string) {
+    return this.request('POST', path, { body, idempotencyKey });
   }
   put(path: string, body?: unknown) {
     return this.request('PUT', path, { body });

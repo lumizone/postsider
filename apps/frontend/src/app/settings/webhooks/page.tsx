@@ -23,12 +23,17 @@ interface Webhook {
   integrations: WebhookIntegration[];
 }
 
+interface CreatedWebhook extends Webhook {
+  secret?: string;
+}
+
 export default function WebhooksSettingsPage() {
   const { channels } = useChannels();
   const t = useT();
   const [hooks, setHooks] = useState<Webhook[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [newSecret, setNewSecret] = useState<string | null>(null);
 
   // Create form
   const [showCreate, setShowCreate] = useState(false);
@@ -61,12 +66,13 @@ export default function WebhooksSettingsPage() {
     setCreating(true);
     setError(null);
     try {
-      await api.post("/webhooks", {
+      const created = await api.post<CreatedWebhook>("/webhooks", {
         name: newName.trim(),
         url: newUrl.trim(),
         integrations: Array.from(selectedChannels).map((id) => ({ id })),
       });
       setShowCreate(false);
+      setNewSecret(created.secret ?? null);
       setNewName("");
       setNewUrl("");
       setSelectedChannels(new Set());
@@ -109,6 +115,15 @@ export default function WebhooksSettingsPage() {
       {error && (
         <div role="alert" style={{ margin: "0 0 16px", padding: "10px 12px", borderRadius: 8, background: "rgba(192,57,43,0.08)", color: "#c0392b", fontSize: 13 }}>
           {error}
+        </div>
+      )}
+
+      {newSecret && (
+        <div role="alert" style={{ margin: "0 0 16px", padding: "12px", borderRadius: 8, background: "rgba(180,140,0,0.10)", fontSize: 13 }}>
+          <strong>{t("settingsWebhooks.secretOnceTitle")}</strong>
+          <div style={{ marginTop: 6, fontFamily: "monospace", wordBreak: "break-all" }}>{newSecret}</div>
+          <div style={{ marginTop: 6, color: "var(--muted)" }}>{t("settingsWebhooks.secretOnceHint")}</div>
+          <button type="button" className={s.btnSecondary} style={{ marginTop: 8 }} onClick={() => setNewSecret(null)}>{t("common.close")}</button>
         </div>
       )}
 

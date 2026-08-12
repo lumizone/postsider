@@ -87,17 +87,22 @@ export default class Postsider {
   /**
    * Verify an inbound webhook HMAC signature (Requirement 19.3).
    * `signature` is the value of the `X-Postsider-Signature` header
-   * (`sha256=<hex>`), `body` is the raw request body, `secret` is the
-   * per-subscription secret.
+   * (`sha256=<hex>`), `body` is the raw request body, and `secret` is the
+   * endpoint secret. `timestamp` is required from `X-Postsider-Timestamp`;
+   * it is included in the signed payload to reject replayed requests.
    */
   static verifyWebhookSignature(
     signature: string,
     body: string,
-    secret: string
+    secret: string,
+    timestamp: string,
+    toleranceSeconds = 300
   ): boolean {
     if (!signature) return false;
+    const parsed = Number(timestamp);
+    if (!Number.isFinite(parsed) || Math.abs(Date.now() / 1000 - parsed) > toleranceSeconds) return false;
     const expected =
-      'sha256=' + createHmac('sha256', secret).update(body).digest('hex');
+      'sha256=' + createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex');
     const a = Buffer.from(signature);
     const b = Buffer.from(expected);
     if (a.length !== b.length) return false;

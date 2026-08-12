@@ -235,11 +235,18 @@ export class PostsController {
     // Audience timezone is resolved server-side from the channel's own
     // Integration.timezone, not a client-supplied offset (was the viewing
     // staff member's browser zone, not the channel's).
+    if (!integration || !platform) {
+      throw new BadRequestException('integration and platform are required');
+    }
+    const normalizedCount = Number(count);
+    if (count !== undefined && (!Number.isInteger(normalizedCount) || normalizedCount < 1 || normalizedCount > 10)) {
+      throw new BadRequestException('count must be an integer between 1 and 10');
+    }
     return this._smartSlots.suggest(
       org.id,
       integration,
       platform,
-      Number.isFinite(Number(count)) ? Number(count) : 3
+      normalizedCount || 3
     );
   }
 

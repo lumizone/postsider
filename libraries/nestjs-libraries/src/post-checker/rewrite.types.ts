@@ -10,8 +10,10 @@ export interface RewriteInput {
   tone?: RewriteTone;
   count?: number;
   platform?: string;
+  brandContext?: BrandContext;
 }
 
 export interface RewriteResult {
   variants: string[];
 }
+import type { BrandContext } from './brand-context';

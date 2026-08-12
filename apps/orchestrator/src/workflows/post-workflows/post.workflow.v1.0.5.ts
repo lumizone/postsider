@@ -259,6 +259,14 @@ export async function postWorkflowV105({
             err?.cause?.message || ''
           );
           if (!refresh || !refresh.accessToken) {
+            if (i !== 0) {
+              await inAppNotification(
+                post.organizationId,
+                'Thread publishing incomplete',
+                'The main post was published, but a follow-up could not be published.'
+              );
+              return false;
+            }
             await changeState(postsList[0].id, 'ERROR', err, postsList);
             return false;
           }
@@ -267,8 +275,11 @@ export async function postWorkflowV105({
           continue;
         }
 
-        // for other errors, change state and inform the user if needed
-        await changeState(postsList[0].id, 'ERROR', err, postsList);
+        // A thread/first-comment failure must not erase the successful main
+        // publication. The main post is already PUBLISHED at this point.
+        if (i === 0) {
+          await changeState(postsList[0].id, 'ERROR', err, postsList);
+        }
 
         // specific case for bad body errors
         if (
@@ -299,12 +310,25 @@ export async function postWorkflowV105({
       // with the post still QUEUE and `error` null — a "Completed" workflow
       // hiding a dead publish (the silent-outage diagnostic signature, but
       // with healthy workers). Always record the failure before giving up.
-      await changeState(
-        postsList[0].id,
-        'ERROR',
-        lastError ?? 'Publish failed: all retries exhausted',
-        postsList
-      );
+      if (i === 0) {
+        await changeState(
+          postsList[0].id,
+          'ERROR',
+          lastError ?? 'Publish failed: all retries exhausted',
+          postsList
+        );
+      } else {
+        await inAppNotification(
+          post.organizationId,
+          `Comment publishing failed on ${post.integration?.providerIdentifier}`,
+          `The main post was published, but a comment or thread could not be published: ${
+            lastError instanceof Error ? lastError.message : 'all retries exhausted'
+          }`,
+          true,
+          false,
+          'fail'
+        );
+      }
       return false;
     }
   }
