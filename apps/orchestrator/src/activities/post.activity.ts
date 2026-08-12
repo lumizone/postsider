@@ -110,8 +110,8 @@ export class PostActivity {
   }
 
   @ActivityMethod()
-  async updatePost(id: string, postId: string, releaseURL: string) {
-    await this._postService.updatePost(id, postId, releaseURL);
+  async updatePost(id: string, postId: string, releaseURL: string, orgId?: string) {
+    await this._postService.updatePost(id, postId, releaseURL, orgId);
   }
 
   @ActivityMethod()
@@ -332,8 +332,8 @@ export class PostActivity {
   }
 
   @ActivityMethod()
-  async changeState(id: string, state: State, err?: any, body?: any) {
-    await this._postService.changeState(id, state, err, body);
+  async changeState(id: string, state: State, err?: any, body?: any, orgId?: string) {
+    await this._postService.changeState(id, state, err, body, orgId);
   }
 
   @ActivityMethod()
@@ -357,7 +357,7 @@ export class PostActivity {
       }
     );
 
-    const post = await this._postService.getPostByForWebhookId(postId);
+    const post = await this._postService.getPostByForWebhookId(postId, orgId);
     // Re-validate egress at fire time. The stored URL was only checked for
     // public-HTTPS at create time, so a domain that later rebinds to an
     // internal IP (127.0.0.1 / 169.254.169.254 / RFC1918) would otherwise be

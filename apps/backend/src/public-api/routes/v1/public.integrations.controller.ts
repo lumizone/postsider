@@ -35,6 +35,7 @@ import { GetNotificationsDto } from '@postsider/nestjs-libraries/dtos/notificati
 import { Readable } from 'stream';
 import { ssrfSafeDispatcher } from '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
 import { detectFileType } from '@postsider/nestjs-libraries/upload/detect-file-type';
+import { ApprovalService } from '@postsider/nestjs-libraries/database/prisma/approval/approval.service';
 
 const PUBLIC_API_ALLOWED_MIME = new Set<string>([
   'image/jpeg',
@@ -72,7 +73,8 @@ export class PublicIntegrationsController {
     private _mediaService: MediaService,
     private _notificationService: NotificationService,
     private _integrationManager: IntegrationManager,
-    private _refreshIntegrationService: RefreshIntegrationService
+    private _refreshIntegrationService: RefreshIntegrationService,
+    private _approvalService: ApprovalService
   ) {}
 
   @Post('/upload')
@@ -275,6 +277,42 @@ export class PublicIntegrationsController {
   ) {
     Sentry.metrics.count('public_api-request', 1);
     return this._postsService.deletePost(org.id, group);
+  }
+
+  // Lets an external content pipeline (agency's own generator, n8n, ...) push
+  // a draft it already created via POST /posts (type: "draft") straight into
+  // the human approval queue — no dashboard session, no manual "Send for
+  // approval" click. There is no API-key-bound user, so the request is
+  // attributed to the org's own SUPERADMIN (see ApprovalService).
+  @Post('/posts/:id/request-approval')
+  async requestApproval(
+    @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string
+  ) {
+    Sentry.metrics.count('public_api-request', 1);
+    return this._approvalService.requestApprovalFromApi(org.id, id);
+  }
+
+  // Read-side counterpart to request-approval: lets a pipeline that pushed a
+  // post into the approval queue poll for the outcome (state alone, from
+  // GET /posts, can't distinguish "rejected" from "never submitted", and
+  // never carries the reviewer's note).
+  @Get('/posts/:id/approval')
+  async getApprovalStatus(
+    @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string
+  ) {
+    Sentry.metrics.count('public_api-request', 1);
+    const approval = await this._approvalService.getForPost(org.id, id);
+    if (!approval) {
+      return { status: 'NONE' as const };
+    }
+    return {
+      status: approval.status,
+      note: approval.note,
+      requestedAt: approval.requestedAt,
+      resolvedAt: approval.resolvedAt,
+    };
   }
 
   @Get('/is-connected')

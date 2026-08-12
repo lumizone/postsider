@@ -34,6 +34,7 @@ import {
 import { uniqBy } from 'lodash';
 import { RefreshIntegrationService } from '@postsider/nestjs-libraries/integrations/refresh.integration.service';
 import { ProviderEnvHelper } from '@postsider/nestjs-libraries/integrations/provider-env.helper';
+import { ChannelAssignmentService } from '@postsider/nestjs-libraries/database/prisma/channel-assignment/channel-assignment.service';
 
 @ApiTags('Integrations')
 @Controller('/integrations')
@@ -44,7 +45,39 @@ export class IntegrationsController {
     private _postService: PostsService,
     private _refreshIntegrationService: RefreshIntegrationService,
     private _providerEnvHelper: ProviderEnvHelper,
+    private _channelAssignments: ChannelAssignmentService,
   ) {}
+
+  private roleOf(org: Organization): string {
+    return (org as any).users?.[0]?.role ?? 'USER';
+  }
+
+  // Optional per-channel scoping (ADMIN/SUPERADMIN only). No assignments for
+  // a USER = unrestricted access, unchanged from before this feature existed.
+  @Get('/:id/assignments')
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  async getChannelAssignments(
+    @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string
+  ) {
+    const rows = await this._channelAssignments.listForIntegration(org.id, id);
+    return { users: rows.map((r) => r.user) };
+  }
+
+  @Put('/:id/assignments')
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  async setChannelAssignments(
+    @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string,
+    @Body() body: { userIds: string[] }
+  ) {
+    await this._channelAssignments.setForIntegration(
+      org.id,
+      id,
+      Array.isArray(body.userIds) ? body.userIds : []
+    );
+    return { ok: true };
+  }
 
   @Post('/provider/:id/connect')
   @CheckPolicies([AuthorizationActions.Create, Sections.CHANNEL])
@@ -89,12 +122,27 @@ export class IntegrationsController {
   }
 
   @Get('/list')
-  async getIntegrationList(@GetOrgFromRequest() org: Organization) {
+  async getIntegrationList(
+    @GetOrgFromRequest() org: Organization,
+    @GetUserFromRequest() user: User
+  ) {
+    let list = await this._integrationService.getIntegrationsList(org.id);
+    // ADMIN/SUPERADMIN always see every channel. A USER with zero
+    // assignments is unrestricted too (unchanged default) — assigning them
+    // to specific channels is what narrows this list.
+    if (this.roleOf(org) === 'USER') {
+      const allowedIds = await this._channelAssignments.listIntegrationIdsForUser(
+        org.id,
+        user.id
+      );
+      if (allowedIds.length > 0) {
+        const allowed = new Set(allowedIds);
+        list = list.filter((p) => allowed.has(p.id));
+      }
+    }
     return {
       integrations: (await Promise.all(
-        (
-          await this._integrationService.getIntegrationsList(org.id)
-        ).map(async (p) => {
+        list.map(async (p) => {
           const findIntegration = this._integrationManager.getSocialIntegration(
             p.providerIdentifier
           );
@@ -238,11 +286,15 @@ export class IntegrationsController {
 
       // Determine if this provider is OAuth-capable (has env mapping defined).
       // In SaaS mode, OAuth providers never expose manual credential fields to
-      // the end user — only API-key-only providers get customFields.
+      // the end user — only API-key-only providers get customFields. Discord
+      // is the one deliberate exception: it offers BOTH the shared-bot OAuth
+      // flow and a bring-your-own-bot customFields form as a user choice
+      // (DiscordBotChoiceModal), so it needs customFields even though it's
+      // also OAuth-capable.
       const isOAuthCapable = Object.keys(this.getEnvMapping(integration)).length > 0;
 
       let customFields: any[] | undefined;
-      if (!isOAuthCapable) {
+      if (!isOAuthCapable || integration === 'discord') {
         // Manual-only provider — return the credential form fields.
         if (integrationProvider.customFields) {
           customFields = await integrationProvider.customFields();
@@ -545,7 +597,12 @@ export class IntegrationsController {
     const slots = integration?.postingTimes
       ? JSON.parse(integration.postingTimes)
       : [];
-    return { slots };
+    // Per-channel timezone wins when set; otherwise fall back to the org's
+    // configured default (Organization Settings) before the hard 'UTC'.
+    return {
+      slots,
+      timezone: integration?.timezone ?? org.defaultTimezone ?? 'UTC',
+    };
   }
 
   @Put('/:id/queue-plan')

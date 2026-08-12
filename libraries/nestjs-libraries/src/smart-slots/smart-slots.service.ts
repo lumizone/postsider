@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@postsider/nestjs-libraries/database/prisma/prisma.service';
 import { scoreSlots, RankedSlot } from './smart-slots.scoring';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 // A fairly dense candidate grid so the gradient heuristic + diversifier have room
 // to find good, spread-out slots (not just a handful of fixed hours).
@@ -29,7 +34,16 @@ export class SmartSlotsService {
    * Results are diversified (at most one per local day, ≥3h apart) so you get a
    * spread of options instead of a cluster.
    *
-   * tzOffsetMinutes = minutes to ADD to UTC to reach the audience-local wall clock.
+   * The audience-local zone is the CHANNEL's own configured Integration.timezone
+   * (default 'UTC'), never the viewing staff member's browser — an agency
+   * operator in one timezone reviewing a client channel based in another used
+   * to get suggestions ranked for their own local clock, not the audience's.
+   * tzOffsetMinutes here is that channel's current UTC offset, resolved once
+   * per call — a flat offset across the ~14-day candidate window is a rare,
+   * low-severity imprecision only on the handful of days each year a DST
+   * transition falls inside that window (advisory ranking only; the actual
+   * scheduled instant is resolved separately, DST-correctly, by
+   * PostsService.findFreeDateTime).
    * NOTE: engagement-based optimization would require persisting post analytics
    * over time; the clickHistogram path is ready for that when it exists.
    */
@@ -38,8 +52,15 @@ export class SmartSlotsService {
     integrationId: string,
     platform: string,
     count = 3,
-    tzOffsetMinutes = 0,
   ): Promise<{ datetime: string; score: number }[]> {
+    const integration = await this._prisma.integration
+      .findFirst({
+        where: { id: integrationId, organizationId: orgId },
+        select: { timezone: true },
+      })
+      .catch(() => null);
+    const tz = integration?.timezone || 'UTC';
+    const tzOffsetMinutes = dayjs().tz(tz).utcOffset();
     const offsetMs = tzOffsetMinutes * 60_000;
     const nowMs = Date.now();
     const localNow = new Date(nowMs + offsetMs);

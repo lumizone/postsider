@@ -16,6 +16,7 @@ export function RegisterForm() {
   const router = useRouter();
   const { refresh } = useAuth();
   const [name, setName] = useState("");
+  const [orgName, setOrgName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -27,6 +28,11 @@ export function RegisterForm() {
     e.preventDefault();
     if (loading) return;
     setError(null);
+
+    if (orgName.trim().length < 3) {
+      setError(t("auth.orgNameMin3"));
+      return;
+    }
 
     if (password.length < 8) {
       setError(t("auth.passwordMin8"));
@@ -46,7 +52,7 @@ export function RegisterForm() {
         {
           email,
           password,
-          company: name || "My Organization",
+          company: orgName.trim(),
           provider: "LOCAL",
         },
         { anonymous: true, silent: true },
@@ -145,6 +151,22 @@ export function RegisterForm() {
             autoComplete="name"
             autoFocus
             placeholder={t("auth.namePlaceholder")}
+          />
+        </div>
+        <div className={styles.field}>
+          <label className={styles.label} htmlFor="reg-org-name">
+            {t("auth.orgName")}
+          </label>
+          <input
+            id="reg-org-name"
+            type="text"
+            className={styles.input}
+            value={orgName}
+            onChange={(e) => setOrgName(e.target.value)}
+            autoComplete="organization"
+            required
+            minLength={3}
+            placeholder={t("auth.orgNamePlaceholder")}
           />
         </div>
         <div className={styles.field}>

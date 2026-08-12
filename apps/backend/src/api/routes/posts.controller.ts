@@ -133,6 +133,14 @@ export class PostsController {
     return this._postsService.createComment(org.id, user.id, id, body.comment);
   }
 
+  @Get('/:id/comments')
+  async getComments(
+    @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string
+  ) {
+    return this._postsService.getCommentsForOrg(org.id, id);
+  }
+
   @Get('/tags')
   async getTags(@GetOrgFromRequest() org: Organization) {
     return { tags: await this._postsService.getTags(org.id) };
@@ -222,15 +230,16 @@ export class PostsController {
     @GetOrgFromRequest() org: Organization,
     @Query('integration') integration: string,
     @Query('platform') platform: string,
-    @Query('count') count?: string,
-    @Query('tz') tz?: string
+    @Query('count') count?: string
   ) {
+    // Audience timezone is resolved server-side from the channel's own
+    // Integration.timezone, not a client-supplied offset (was the viewing
+    // staff member's browser zone, not the channel's).
     return this._smartSlots.suggest(
       org.id,
       integration,
       platform,
-      Number.isFinite(Number(count)) ? Number(count) : 3,
-      Number.isFinite(Number(tz)) ? Number(tz) : 0
+      Number.isFinite(Number(count)) ? Number(count) : 3
     );
   }
 
@@ -245,7 +254,11 @@ export class PostsController {
       mimetype?: string;
       size?: number;
       buffer?: Buffer;
-    }
+    },
+    // Opt-in: import as DRAFT instead of straight to QUEUE, so a batch can go
+    // through the (still fully optional) approval flow instead of publishing
+    // unreviewed. Off by default — unchanged behavior for existing callers.
+    @Body('asDraft') asDraft?: string
   ) {
     if (!file?.buffer) {
       throw new BadRequestException('No file uploaded.');
@@ -260,7 +273,7 @@ export class PostsController {
     if ((file.size ?? 0) > 2 * 1024 * 1024) {
       throw new BadRequestException('CSV exceeds the 2 MB limit.');
     }
-    return this._csvImport.importCSV(org.id, file.buffer);
+    return this._csvImport.importCSV(org.id, file.buffer, asDraft === 'true');
   }
 
   @Get('/comment-providers')

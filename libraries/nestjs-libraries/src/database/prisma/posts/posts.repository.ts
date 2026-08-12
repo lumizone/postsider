@@ -16,6 +16,7 @@ import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
 import utc from 'dayjs/plugin/utc';
 import { v4 as uuidv4 } from 'uuid';
 import { CreateTagDto } from '@postsider/nestjs-libraries/dtos/posts/create.tag.dto';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 
 dayjs.extend(isoWeek);
 dayjs.extend(weekOfYear);
@@ -368,6 +369,28 @@ export class PostsRepository {
     });
   }
 
+  /**
+   * Public post lookup by share token. No orgId required — the share token IS
+   * the authorization (crypto-random, unguessable). Returns null when no post
+   * carries that token or the post has been soft-deleted.
+   */
+  async findByShareToken(shareToken: string) {
+    return this._post.model.post.findUnique({
+      where: { shareToken, deletedAt: null },
+      include: {
+        integration: {
+          select: {
+            id: true,
+            name: true,
+            picture: true,
+            providerIdentifier: true,
+            profile: true,
+          },
+        },
+      },
+    });
+  }
+
   getPost(
     id: string,
     includeIntegration = false,
@@ -396,10 +419,11 @@ export class PostsRepository {
     });
   }
 
-  updatePost(id: string, postId: string, releaseURL: string) {
+  updatePost(id: string, postId: string, releaseURL: string, orgId?: string) {
     return this._post.model.post.update({
       where: {
         id,
+        ...(orgId ? { organizationId: orgId } : {}),
       },
       data: {
         state: 'PUBLISHED',
@@ -422,10 +446,11 @@ export class PostsRepository {
     });
   }
 
-  async changeState(id: string, state: State, err?: any, body?: any) {
+  async changeState(id: string, state: State, err?: any, body?: any, orgId?: string) {
     const update = await this._post.model.post.update({
       where: {
         id,
+        ...(orgId ? { organizationId: orgId } : {}),
       },
       data: {
         state,
@@ -577,6 +602,9 @@ export class PostsRepository {
             id: orgId,
           },
         },
+        // Share token for public preview links. Only set on create (not update)
+        // so a post keeps the same share URL for its entire lifetime.
+        ...(type === 'create' ? { shareToken: makeId(30) } : {}),
       });
 
       posts.push(
@@ -710,11 +738,11 @@ export class PostsRepository {
     });
   }
 
-  getPostById(id: string, org?: string) {
+  getPostById(id: string, orgId: string) {
     return this._post.model.post.findUnique({
       where: {
         id,
-        ...(org ? { organizationId: org } : {}),
+        organizationId: orgId,
       },
       include: {
         integration: true,
@@ -791,12 +819,17 @@ export class PostsRepository {
   async getPostsCountsByDates(
     orgId: string,
     times: number[],
-    date: dayjs.Dayjs
+    date: dayjs.Dayjs,
+    integrationId?: string
   ) {
     const dates = await this._post.model.post.findMany({
       where: {
         deletedAt: null,
         organizationId: orgId,
+        // Scoped to the target channel when known, so a busy slot on one
+        // client's channel doesn't block an unrelated channel from using the
+        // same UTC instant — cross-channel simultaneous posting is normal.
+        ...(integrationId ? { integrationId } : {}),
         publishDate: {
           in: times.map((time) => {
             return date.clone().add(time, 'minutes').toDate();
@@ -836,6 +869,30 @@ export class PostsRepository {
         id: true,
         content: true,
         createdAt: true,
+      },
+    });
+  }
+
+  /**
+   * Internal team-facing variant (dashboard, not the public preview): scoped
+   * to the org AND includes the commenter's identity, since this is only
+   * ever reached after the caller has proven org membership.
+   */
+  async getCommentsForOrg(orgId: string, postId: string) {
+    return this._comments.model.comments.findMany({
+      where: {
+        postId,
+        organizationId: orgId,
+        deletedAt: null,
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+      select: {
+        id: true,
+        content: true,
+        createdAt: true,
+        user: { select: { id: true, name: true, email: true } },
       },
     });
   }
@@ -900,10 +957,11 @@ export class PostsRepository {
     });
   }
 
-  async getPostByForWebhookId(postId: string) {
+  async getPostByForWebhookId(postId: string, orgId?: string) {
     return this._post.model.post.findMany({
       where: {
         id: postId,
+        ...(orgId ? { organizationId: orgId } : {}),
         deletedAt: null,
         parentPostId: null,
       },

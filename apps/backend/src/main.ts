@@ -175,6 +175,22 @@ function assertRequiredSecrets() {
     );
     process.exit(1);
   }
+
+  // On the managed cloud instance (NEXT_PUBLIC_SELF_HOSTED !== 'true'), billing
+  // MUST be armed. Without POLAR_ACCESS_TOKEN, `isBillingEnabled()` returns false
+  // and every org gets unlimited access for free — a silent misconfiguration that
+  // can run for weeks unnoticed (the app starts fine, just never enforces plans).
+  // Self-hosters set their own token or leave billing off intentionally.
+  if (
+    process.env.NEXT_PUBLIC_SELF_HOSTED !== 'true' &&
+    (!process.env.POLAR_ACCESS_TOKEN || process.env.POLAR_ACCESS_TOKEN.length === 0)
+  ) {
+    Logger.error(
+      'POLAR_ACCESS_TOKEN is unset or empty on the managed cloud instance — billing would be silently disabled. Aborting startup.',
+      'Startup'
+    );
+    process.exit(1);
+  }
 }
 
 start();

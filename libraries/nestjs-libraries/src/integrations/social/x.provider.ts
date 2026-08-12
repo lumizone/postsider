@@ -803,7 +803,12 @@ export class XProvider extends SocialAbstract implements SocialProvider {
 
       return Object.entries(metrics).map(([key, value]) => ({
         label: key.replace('_count', '').replace('_', ' ').toUpperCase(),
-        percentageChange: 5,
+        // Was a hardcoded `5` — not computed from anything, so every channel
+        // always showed a fake "+5%" regardless of actual performance.
+        // There's no prior-period fetch here to compute a real delta against,
+        // so 0 (no claimed change) is the honest value until that's added.
+        percentageChange: 0,
+        isSnapshot: true,
         data: [
           {
             total: String(0),

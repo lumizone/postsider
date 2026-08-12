@@ -86,6 +86,44 @@
   line-height: 1.5;
 }
 
+.trialBadge {
+  display: inline-block;
+  margin: -16px 0 20px;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-soft);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.valueProps {
+  list-style: none;
+  margin: 0 0 28px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.valueProps li {
+  padding-left: 16px;
+  border-left: 2px solid var(--line-soft);
+}
+
+.valuePropTitle {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.valuePropDesc {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
 /* Buttons */
 
 .primaryButton {
@@ -128,74 +166,74 @@
   color: var(--fg);
 }
 
-/* Source grid (how did you find us) */
+/* Attribution step — single-select option list */
 
-.sourceGrid {
+.optionList {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 8px;
-  justify-content: center;
-  margin-bottom: 28px;
+  margin-bottom: 8px;
 }
 
-.sourceChip {
-  padding: 8px 16px;
+.optionButton {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--line-soft);
-  border-radius: var(--radius-pill);
   background: var(--bg);
   color: var(--fg);
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
   cursor: pointer;
   transition: border-color 120ms var(--ease), background 120ms var(--ease);
 }
 
-.sourceChip:hover {
+.optionButton:hover {
   border-color: var(--fg);
 }
 
-.sourceChipActive {
+.optionButtonActive {
   border-color: var(--fg);
   background: var(--fg);
   color: var(--bg);
 }
 
-/* Platform grid (connect channel) */
+/* Instructions step — two ways to publish */
 
-.platformGrid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-  margin-bottom: 24px;
-}
-
-.platformCard {
+.instructionCards {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 14px 8px;
-  border: 1px solid var(--line-soft);
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.instructionCard {
+  padding: 16px;
   border-radius: var(--radius-md);
-  background: var(--bg);
-  cursor: pointer;
-  transition: border-color 120ms var(--ease), box-shadow 120ms var(--ease);
+  border: 1px solid var(--line-soft);
+  text-align: left;
 }
 
-.platformCard:hover {
-  border-color: var(--fg);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+.instructionCardTitle {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
 }
 
-.platformIcon {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  object-fit: contain;
+.instructionCardDesc {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-bottom: 8px;
 }
 
-.platformName {
-  font-size: 11px;
-  font-weight: 500;
+.instructionCardLink {
+  font-size: 13px;
+  font-weight: 600;
   color: var(--fg);
-  text-align: center;
+  text-decoration: underline;
 }

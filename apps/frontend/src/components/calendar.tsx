@@ -9,13 +9,16 @@ import { AddChannelModal } from "./add-channel-modal";
 import { CustomFieldsModal } from "./custom-fields-modal";
 import { TelegramConnectModal } from "./telegram-connect-modal";
 import { FarcasterConnectModal } from "./farcaster-connect-modal";
+import { DiscordBotChoiceModal } from "./discord-bot-choice-modal";
 import { DayPopup } from "./day-popup";
 import { ConfirmDialog } from "./confirm-dialog";
 import { EmptyState } from "./empty-state";
+import { SetupChecklist } from "./setup-checklist";
 import { useI18n, useT } from "@/lib/i18n";
 import {
   type CalendarEvent,
   type Channel,
+  type PostStatus,
 } from "@/lib/calendar-data";
 import { useChannels } from "@/lib/use-channels";
 import { useCalendarData } from "@/lib/use-calendar-data";
@@ -87,6 +90,23 @@ function stripDiscriminator(
   const { __type, ...rest } = settings ?? {};
   void __type;
   return rest;
+}
+
+/**
+ * Whether a calendar event can be dragged to a new date/time.
+ *
+ * Excludes "published" (already sent, moving it would be meaningless) and
+ * "pendingApproval" — PUT /posts/:id/date accepts any non-published post
+ * and sets state:QUEUE, so dragging an approval-pending post would silently
+ * pull it out of review and schedule it for real publish. Everything else
+ * (draft, scheduled, failed) is safe to move.
+ *
+ * Single source of truth for moveEvent and both drag-affordance checks below
+ * — they used to disagree (moveEvent allowed drafts, the draggable attribute
+ * did not), so dragging a draft was a no-op with no visible cause.
+ */
+function isDraggableStatus(status: PostStatus | undefined): boolean {
+  return !!status && status !== "published" && status !== "pendingApproval";
 }
 
 function isSameDay(a: Date, b: Date): boolean {
@@ -170,6 +190,10 @@ export function Calendar({ year, month }: CalendarProps) {
   const [selected, setSelected] = useState<Date | null>(null);
   const [openDay, setOpenDay] = useState<Date | null>(null);
   const [composer, setComposer] = useState<{ date: string; time: string } | null>(null);
+  // Bumped whenever a post is created, so SetupChecklist's post-count re-fetches
+  // even when the composer was opened from its own "Write a post" button (which
+  // doesn't otherwise change anything the checklist was watching).
+  const [postCreatedTick, setPostCreatedTick] = useState(0);
   // Editing an existing post: prefilled modal + group to update.
   const [editPost, setEditPost] = useState<{
     group: string;
@@ -184,6 +208,7 @@ export function Calendar({ year, month }: CalendarProps) {
 
   const {
     channels,
+    raw: rawChannels,
     setChannels,
     loading: channelsLoading,
     error: channelsError,
@@ -221,6 +246,20 @@ export function Calendar({ year, month }: CalendarProps) {
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [openChannelId, setOpenChannelId] = useState<string | null>(null);
   const [addChannelOpen, setAddChannelOpen] = useState(false);
+  // Onboarding hands off here with ?connect=1 rather than reimplementing the
+  // per-provider connect branching. Strip the param once consumed so a later
+  // refresh or back-navigation doesn't reopen the picker.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("connect") !== "1") return;
+    // Matches the panel's own "Add channel" button (member-gated below) —
+    // without this, a member landing on the link saw a modal the rest of
+    // the UI otherwise hides from that role.
+    if (!isMember) setAddChannelOpen(true);
+    url.searchParams.delete("connect");
+    window.history.replaceState({}, "", url.pathname + url.search);
+  }, [isMember]);
   const [customFieldsState, setCustomFieldsState] = useState<{
     provider: string;
     label: string;
@@ -236,6 +275,17 @@ export function Calendar({ year, month }: CalendarProps) {
   // Farcaster connects via the Sign In With Neynar widget.
   const [farcasterConnect, setFarcasterConnect] = useState<{
     clientId: string;
+    state: string;
+  } | null>(null);
+  // Discord offers a choice at connect time: PostSider's shared bot (zero
+  // setup, but every post shows the shared bot's own name/avatar — Discord's
+  // Bot API has no per-message override for that) or the org's own bot
+  // (pasted token + server ID, posts show up under their own bot's identity
+  // instead). Reuses the existing customFields modal/submit flow below for
+  // the "own bot" branch — no separate submit path needed.
+  const [discordChoice, setDiscordChoice] = useState<{
+    oauthUrl: string;
+    customFields: CustomFieldDef[];
     state: string;
   } | null>(null);
   // Surfaced when a plan limit (e.g. channel cap) or other error blocks adding
@@ -338,6 +388,17 @@ export function Calendar({ year, month }: CalendarProps) {
 
       const hasOAuth = !!res?.oauthUrl;
       const hasCustomFields = !!(res?.customFields && res.customFields.length > 0);
+
+      // Discord uniquely offers both — let the user pick instead of
+      // silently always redirecting to the shared-bot OAuth flow.
+      if (platformId === "discord" && hasOAuth && hasCustomFields) {
+        setDiscordChoice({
+          oauthUrl: res.oauthUrl!,
+          customFields: res.customFields!,
+          state: res.url || "",
+        });
+        return;
+      }
 
       // OAuth provider — configured and ready: redirect immediately.
       if (hasOAuth) {
@@ -625,7 +686,7 @@ export function Calendar({ year, month }: CalendarProps) {
   const moveEvent = async (eventId: string, target: Date, newTime?: string) => {
     if (isMember) return;
     const ev = events.find((e) => e.id === eventId);
-    if (!ev || ev.status !== "scheduled") return;
+    if (!ev || !isDraggableStatus(ev.status)) return;
 
     const time = newTime || ev.time || "09:00";
     const newDate = iso(target);
@@ -785,6 +846,24 @@ export function Calendar({ year, month }: CalendarProps) {
             </button>
           </div>
         )}
+        {!isMember && (
+          <SetupChecklist
+            channels={channels}
+            raw={rawChannels}
+            loading={channelsLoading}
+            refreshSignal={postCreatedTick}
+            onConnect={() => setAddChannelOpen(true)}
+            onCompose={() => {
+              const now = new Date();
+              const pad = (n: number) => String(n).padStart(2, "0");
+              setComposer({
+                date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+                time: `${pad(now.getHours())}:${pad(now.getMinutes())}`,
+              });
+            }}
+          />
+        )}
+
         <div className={styles.header}>
           <div className={styles.title}>
             <span className={styles.titleMain}>{headerTitle}</span>
@@ -981,6 +1060,26 @@ export function Calendar({ year, month }: CalendarProps) {
         />
       )}
 
+      {discordChoice && (
+        <DiscordBotChoiceModal
+          onCancel={() => setDiscordChoice(null)}
+          onChooseShared={() => {
+            const url = discordChoice.oauthUrl;
+            setDiscordChoice(null);
+            window.location.href = url;
+          }}
+          onChooseOwn={() => {
+            setCustomFieldsState({
+              provider: "discord",
+              label: "Discord",
+              fields: discordChoice.customFields,
+              state: discordChoice.state,
+            });
+            setDiscordChoice(null);
+          }}
+        />
+      )}
+
       {openDay && (
         <DayPopup
           date={openDay}
@@ -1004,6 +1103,7 @@ export function Calendar({ year, month }: CalendarProps) {
             await submitPost(post, "draft");
             setComposer(null);
             void refreshEvents();
+            setPostCreatedTick((n) => n + 1);
           }}
           onSendToApproval={async (post) => {
             // Create as a DRAFT, then submit each created post for approval.
@@ -1014,16 +1114,19 @@ export function Calendar({ year, month }: CalendarProps) {
             }
             setComposer(null);
             void refreshEvents();
+            setPostCreatedTick((n) => n + 1);
           }}
           onSchedule={async (post) => {
             await submitPost(post, "schedule");
             setComposer(null);
             void refreshEvents();
+            setPostCreatedTick((n) => n + 1);
           }}
           onPublishNow={async (post) => {
             await submitPost(post, "now");
             setComposer(null);
             void refreshEvents();
+            setPostCreatedTick((n) => n + 1);
           }}
         />
       )}
@@ -1218,7 +1321,7 @@ function MonthView({
                   <div className={styles.events}>
                     {dayEvents.slice(0, 2).map((ev) => {
                       const c = channelsById.get(ev.channelId);
-                      const canDrag = !!onMoveEvent && ev.status === "scheduled";
+                      const canDrag = !!onMoveEvent && isDraggableStatus(ev.status);
                       return (
                         <span
                           key={ev.id}
@@ -1443,7 +1546,7 @@ function Timeline({
                   ev.durationMinutes ?? DEFAULT_DURATION,
                 );
                 const c = channelsById.get(ev.channelId);
-                const canDrag = !!onMoveEvent && ev.status === "scheduled";
+                const canDrag = !!onMoveEvent && isDraggableStatus(ev.status);
                 return (
                   <div
                     key={ev.id}

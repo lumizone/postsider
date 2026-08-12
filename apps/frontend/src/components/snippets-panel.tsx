@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { InfoTip } from "./info-tip";
 import {
   HashtagGroup,
   CaptionTemplate,
@@ -99,7 +100,10 @@ export function SnippetsPanel({ selectedPlatforms, onInsertText, onApplyUtm, onC
       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", borderBottom: "1px solid var(--line-soft)" }}>
-        <span style={{ fontSize: 13, fontWeight: 700 }}>Insert snippet</span>
+        <span style={{ fontSize: 13, fontWeight: 700 }}>
+          Insert snippet
+          <InfoTip textKey="infoTip.snippets" />
+        </span>
         <button type="button" onClick={onClose} aria-label="Close" style={{ border: "none", background: "transparent", cursor: "pointer", color: "var(--muted)", fontSize: 16, lineHeight: 1 }}>×</button>
       </div>
 

@@ -12,6 +12,9 @@ model Organization {
   id                   String                     @id @default(uuid())
   name                 String
   description          String?
+  logo                 String?
+  defaultTimezone      String?
+  referralSource       String?
   apiKey               String?
   paymentId            String?
   streakSince          DateTime?
@@ -51,6 +54,7 @@ model Organization {
   captionTemplates     CaptionTemplate[]
   utmPresets           UtmPreset[]
   postApprovals        PostApproval[]
+  channelAssignments   ChannelAssignment[]
 
   @@index([apiKey])
   @@index([streakSince])
@@ -123,6 +127,7 @@ model User {
   oauthAuthorizations   OAuthAuthorization[]
   approvalRequests      PostApproval[]       @relation("approvalRequester")
   approvalResolutions   PostApproval[]       @relation("approvalResolver")
+  channelAssignments    ChannelAssignment[]
 
   @@unique([email, providerName])
   @@index([lastReadNotifications])
@@ -227,6 +232,8 @@ model Media {
   deletedAt          DateTime?
   fileSize           Int                 @default(0)
   type               String              @default("image")
+  width              Int?
+  height             Int?
   thumbnail          String?
   alt                String?
   thumbnailTimestamp Int?
@@ -340,6 +347,10 @@ model Integration {
   inBetweenSteps        Boolean                @default(false)
   refreshNeeded         Boolean                @default(false)
   postingTimes          String                 @default("[{\"time\":120}, {\"time\":400}, {\"time\":700}]")
+  // IANA name (e.g. "America/New_York"). postingTimes.time is minutes-from-
+  // midnight in THIS zone, not UTC. Default 'UTC' keeps every pre-existing
+  // channel's behavior byte-identical (local time == UTC time when zone is UTC).
+  timezone              String                 @default("UTC")
   customInstanceDetails String?
   customerId            String?
   rootInternalId        String?
@@ -351,6 +362,7 @@ model Integration {
   orderItems            OrderItems[]
   plugs                 Plugs[]
   posts                 Post[]
+  channelAssignments    ChannelAssignment[]
 
   @@unique([organizationId, internalId])
   @@index([rootInternalId])
@@ -363,6 +375,27 @@ model Integration {
   @@index([inBetweenSteps])
   @@index([refreshNeeded])
   @@index([disabled])
+}
+
+// Optional per-channel scoping for USER-role members (ADMIN/SUPERADMIN always
+// see every channel). No assignments for a user = unrestricted access, same
+// as before this model existed; assigning them to specific channels narrows
+// what they can select/act on and who gets targeted approval-request emails
+// for that channel, instead of the whole org.
+model ChannelAssignment {
+  id             String       @id @default(uuid())
+  organizationId String
+  userId         String
+  integrationId  String
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
+  integration    Integration  @relation(fields: [integrationId], references: [id])
+
+  @@unique([userId, integrationId])
+  @@index([organizationId])
+  @@index([integrationId])
+  @@index([userId])
 }
 
 model Signatures {
@@ -426,6 +459,7 @@ model Post {
   evergreen                  Boolean                   @default(false)
   lastRecycledAt             DateTime?
   firstComment               String?
+  shareToken                 String?                   @unique
   createdAt                  DateTime                  @default(now())
   updatedAt                  DateTime                  @updatedAt
   deletedAt                  DateTime?
@@ -942,21 +976,28 @@ enum ApprovalStatus {
 }
 
 model PostApproval {
-  id             String         @id @default(uuid())
-  postId         String         @unique
-  organizationId String
-  requestedById  String
-  approverId     String?
-  status         ApprovalStatus @default(PENDING)
-  note           String?
-  requestedAt    DateTime       @default(now())
-  resolvedAt     DateTime?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  post           Post           @relation(fields: [postId], references: [id])
-  organization   Organization   @relation(fields: [organizationId], references: [id])
-  requestedBy    User           @relation("approvalRequester", fields: [requestedById], references: [id])
-  approver       User?          @relation("approvalResolver", fields: [approverId], references: [id])
+  id                  String         @id @default(uuid())
+  postId              String         @unique
+  organizationId      String
+  requestedById       String
+  approverId          String?
+  status              ApprovalStatus @default(PENDING)
+  note                String?
+  requestedAt         DateTime       @default(now())
+  resolvedAt          DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  // Optional external-reviewer link (e.g. the agency's own client, who
+  // shouldn't need a full seat). Minted on demand by an ADMIN/SUPERADMIN,
+  // crypto-random, single-use (cleared once resolved), expiring. No
+  // assignments/approval requires this to exist — it's an explicit opt-in
+  // action per pending approval, not a default.
+  guestToken          String?        @unique
+  guestTokenExpiresAt DateTime?
+  post                Post           @relation(fields: [postId], references: [id])
+  organization        Organization   @relation(fields: [organizationId], references: [id])
+  requestedBy         User           @relation("approvalRequester", fields: [requestedById], references: [id])
+  approver            User?          @relation("approvalResolver", fields: [approverId], references: [id])
 
   @@index([organizationId])
   @@index([status])

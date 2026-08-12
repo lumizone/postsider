@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -86,6 +87,7 @@ export class UsersController {
       onTrial,
       trialDaysLeft,
       streakSince: organization?.streakSince || null,
+      orgLogo: organization?.logo || null,
       // @ts-ignore
       publicApi: organization?.users[0]?.role === 'SUPERADMIN' || organization?.users[0]?.role === 'ADMIN' ? organization?.apiKey : '',
       isPlatformAi: isPlatformAiEnabled(),
@@ -288,6 +290,26 @@ export class UsersController {
   async getOrgs(@GetUserFromRequest() user: User) {
     return (await this._orgService.getOrgsByUserId(user.id)).filter(
       (f) => !f.users?.[0]?.disabled
+    );
+  }
+
+  // Lets an already-logged-in user create an ADDITIONAL organization (e.g.
+  // an agency onboarding a new client) without touching the public signup
+  // flow — unrelated to DISABLE_REGISTRATION, which gates new people
+  // joining the platform, not more orgs under an existing account.
+  @Post('/organizations')
+  async createOrg(
+    @GetUserFromRequest() user: User,
+    @Body('name') name: string
+  ) {
+    const trimmed = (name || '').trim();
+    if (!trimmed) {
+      throw new BadRequestException('Organization name is required');
+    }
+    return this._orgService.createOrgForCurrentUser(
+      user.id,
+      user.email,
+      trimmed
     );
   }
 

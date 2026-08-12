@@ -68,23 +68,13 @@ export class IntegrationRepository {
     });
   }
 
-  async checkPreviousConnections(org: string, id: string) {
-    const findIt = await this._integration.model.integration.findMany({
-      where: {
-        rootInternalId: id,
-      },
-      select: {
-        organizationId: true,
-        id: true,
-      },
-    });
-
-    if (findIt.some((f) => f.organizationId === org)) {
-      return false;
-    }
-
-    return findIt.length > 0;
-  }
+  // NOTE: checkPreviousConnections was REMOVED (2026-08-09). The OSS original
+  // probed ALL orgs by rootInternalId (a cross-tenant data leak — an attacker
+  // could learn which orgs had connected a given social account during OAuth
+  // connect). Scoping it to the caller's org closed the leak but inverted its
+  // semantics (same-org reconnects started 409ing), and same-org duplicates are
+  // already handled by createOrUpdateIntegration's upsert — so the method had no
+  // remaining purpose and was deleted outright rather than kept as dead code.
 
   updateProviderSettings(org: string, id: string, settings: string) {
     return this._integration.model.integration.update({
@@ -109,6 +99,7 @@ export class IntegrationRepository {
       },
       data: {
         postingTimes: JSON.stringify(times.time),
+        ...(times.timezone ? { timezone: times.timezone } : {}),
       },
     });
   }
@@ -238,12 +229,17 @@ export class IntegrationRepository {
     timezone?: number,
     customInstanceDetails?: string
   ) {
+    // Default posting times are LOCAL minutes-from-midnight (Integration.timezone,
+    // default 'UTC') — no longer baked against a raw browser-offset number, which
+    // (a) can't be reversed into an actual IANA zone (many zones share an offset)
+    // and (b) isn't DST-safe. The channel starts on 'UTC' until the operator sets
+    // a real zone on the Queue Plan page; `timezone` here is otherwise unused now.
     const postTimes = timezone
       ? {
           postingTimes: JSON.stringify([
-            { time: 560 - timezone },
-            { time: 850 - timezone },
-            { time: 1140 - timezone },
+            { time: 560 },
+            { time: 850 },
+            { time: 1140 },
           ]),
         }
       : {};
@@ -287,6 +283,18 @@ export class IntegrationRepository {
               inBetweenSteps: isBetweenSteps,
             }
           : {}),
+        // `name` was missing here (only set in `create`), so reconnecting an
+        // EXISTING integration (matched by internalId+org) never refreshed
+        // its display name — only `picture` did. Found live via Discord: a
+        // fix that made `authenticate()` resolve the real server name
+        // instead of the shared bot's own name appeared to do nothing on
+        // reconnect, because the corrected value was computed but then
+        // silently dropped by this update clause. The silent token-refresh
+        // path (RefreshIntegrationService) round-trips the integration's
+        // own existing `name`/`picture` back through this same function, so
+        // writing it unconditionally here is a no-op for that path, not a
+        // behavior change.
+        name,
         ...(picture ? { picture } : {}),
         profile: username,
         providerIdentifier: provider,
@@ -736,6 +744,7 @@ export class IntegrationRepository {
       },
       select: {
         postingTimes: true,
+        timezone: true,
       },
     });
   }

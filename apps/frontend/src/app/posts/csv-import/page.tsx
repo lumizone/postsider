@@ -4,6 +4,51 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { useT } from "@/lib/i18n";
 import { uploadCsv, CsvImportResult } from "@/lib/csv-import-api";
+import { useChannels } from "@/lib/use-channels";
+
+/**
+ * Builds the sample CSV from the org's OWN channels.
+ *
+ * The static /csv-template.csv shipped with placeholder names ("My X Account",
+ * "My LinkedIn Page") that match no real org, plus a hardcoded date that is now
+ * in the past, so downloading it and uploading it back failed every row. That
+ * is the first thing a new user does with the feature.
+ *
+ * The datetime column is left empty on purpose: the importer drops rows with no
+ * datetime into the next free queue slot, which is both the friendliest default
+ * and impossible to get wrong.
+ */
+/** CSV-quotes a field, doubling any embedded `"` per RFC 4180. Channel names
+ *  come straight from the connected platform and can legitimately contain
+ *  one (an Instagram display name, for instance) — leaving it unescaped
+ *  produced invalid CSV the app's own parser would misread. */
+function csvField(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+function buildTemplate(channelNames: string[]): string {
+  const sample = channelNames.length
+    ? channelNames.slice(0, 2).join(", ")
+    : "Your channel name";
+  const rows = [
+    "content,channels,datetime,first_comment,thread",
+    [
+      csvField("Big news! Our summer collection just dropped. Tell us which piece is your favourite."),
+      csvField(sample),
+      "",
+      csvField("Shop the full collection here: https://example.com/summer"),
+      "",
+    ].join(","),
+    [
+      csvField("Leave datetime empty and this post drops into your next free queue slot."),
+      csvField(sample),
+      "",
+      "",
+      "",
+    ].join(","),
+  ];
+  return rows.join("\n") + "\n";
+}
 
 const primaryBtn: React.CSSProperties = {
   padding: "10px 18px",
@@ -35,6 +80,9 @@ export default function CsvImportPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<CsvImportResult[] | null>(null);
+  const [asDraft, setAsDraft] = useState(false);
+  const [importedAsDraft, setImportedAsDraft] = useState(false);
+  const { channels } = useChannels();
 
   const pick = (f: File | null | undefined) => {
     if (!f) return;
@@ -52,7 +100,8 @@ export default function CsvImportPage() {
     setBusy(true);
     setError(null);
     try {
-      setResults(await uploadCsv(file));
+      setResults(await uploadCsv(file, asDraft));
+      setImportedAsDraft(asDraft);
     } catch (e) {
       setError(e instanceof Error ? e.message : t("csvImport.importFailed"));
     } finally {
@@ -102,11 +151,37 @@ export default function CsvImportPage() {
         <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>{file ? `${(file.size / 1024).toFixed(1)} KB` : t("csvImport.maxSize")}</div>
       </div>
 
+      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+        <input
+          type="checkbox"
+          checked={asDraft}
+          onChange={(e) => setAsDraft(e.target.checked)}
+        />
+        {t("csvImport.asDraft")}
+      </label>
+
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <button type="button" style={{ ...primaryBtn, opacity: file && !busy ? 1 : 0.5, cursor: file && !busy ? "pointer" : "default" }} onClick={onImport} disabled={!file || busy}>
           {busy ? t("csvImport.importing") : t("csvImport.importBtn")}
         </button>
-        <a style={ghostBtn} href="/csv-template.csv" download>{t("csvImport.downloadTemplate")}</a>
+        <button
+          type="button"
+          style={ghostBtn}
+          onClick={() => {
+            const url = URL.createObjectURL(
+              new Blob([buildTemplate(channels.map((c) => c.name))], {
+                type: "text/csv;charset=utf-8",
+              }),
+            );
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "postsider-template.csv";
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+        >
+          {t("csvImport.downloadTemplate")}
+        </button>
         <Link style={ghostBtn} href="/posts">{t("csvImport.backToPosts")}</Link>
       </div>
 
@@ -137,7 +212,7 @@ export default function CsvImportPage() {
             {results.map((r) => (
               <div key={r.row} style={{ display: "grid", gridTemplateColumns: "56px 1fr 1.4fr", gap: 8, padding: "10px 12px", borderBottom: "1px solid rgba(0,0,0,0.05)", fontSize: 13, alignItems: "center" }}>
                 <span style={{ color: "var(--muted)" }}>{r.row}</span>
-                <span style={{ fontWeight: 600, color: r.ok ? "#15803d" : "#DC2626" }}>{r.ok ? t("csvImport.statusScheduled") : t("csvImport.statusError")}</span>
+                <span style={{ fontWeight: 600, color: r.ok ? "#15803d" : "#DC2626" }}>{r.ok ? (importedAsDraft ? t("csvImport.statusDraft") : t("csvImport.statusScheduled")) : t("csvImport.statusError")}</span>
                 <span style={{ color: "var(--muted)" }}>{r.ok ? `${r.channels ?? ""}${r.scheduledFor ? ` · ${r.scheduledFor.replace("T", " ")}` : ""}` : r.error}</span>
               </div>
             ))}

@@ -24,11 +24,13 @@ export class WebhookController {
   constructor(private _webhooksService: WebhooksService) {}
 
   @Get('/')
+  @CheckPolicies([AuthorizationActions.Read, Sections.ADMIN])
   async getStatistics(@GetOrgFromRequest() org: Organization) {
     return this._webhooksService.getWebhooks(org.id);
   }
 
   @Post('/')
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
   async createAWebhook(
     @GetOrgFromRequest() org: Organization,
     @Body() body: WebhooksDto
@@ -37,6 +39,7 @@ export class WebhookController {
   }
 
   @Put('/')
+  @CheckPolicies([AuthorizationActions.Update, Sections.ADMIN])
   async updateWebhook(
     @GetOrgFromRequest() org: Organization,
     @Body() body: UpdateDto
@@ -45,6 +48,7 @@ export class WebhookController {
   }
 
   @Delete('/:id')
+  @CheckPolicies([AuthorizationActions.Delete, Sections.ADMIN])
   async deleteWebhook(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string
@@ -53,7 +57,12 @@ export class WebhookController {
   }
 
   @Post('/send')
-  async sendWebhook(@Body() body: any, @Query() query: OnlyURL) {
+  @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
+  async sendWebhook(
+    @GetOrgFromRequest() org: Organization,
+    @Body() body: any,
+    @Query() query: OnlyURL
+  ) {
     // Validate the target URL to prevent SSRF attacks (unlike OSS which allows any URL)
     const url = new URL(query.url);
     const blockedProtocols = ['file:', 'ftp:', 'data:', 'javascript:'];

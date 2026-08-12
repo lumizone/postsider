@@ -18,6 +18,21 @@ export class BillingController {
     private _notificationService: NotificationService
   ) {}
 
+  // Billing is owner-only: only the org's SUPERADMIN (the account that
+  // created it, mirrors deleteAccount's "only the owner" gate below in
+  // settings.controller.ts) can start a checkout, open the Polar customer
+  // portal, or cancel the subscription. Plain ADMIN team members do not
+  // manage billing. `Sections.ADMIN` via @CheckPolicies is the wrong tool
+  // here — that ability check treats ADMIN and SUPERADMIN as equivalent
+  // (see permissions.service.ts), so this is a manual role check instead,
+  // same pattern deleteAccount already uses.
+  private assertOwner(org: Organization) {
+    // @ts-ignore — role is attached to org.users[0] by the auth middleware.
+    if (org.users?.[0]?.role !== 'SUPERADMIN') {
+      throw new HttpException('Only the account owner can manage billing', 403);
+    }
+  }
+
   @Get('/check/:id')
   async checkId(
     @GetOrgFromRequest() org: Organization,
@@ -42,6 +57,7 @@ export class BillingController {
     @Body() body: BillingSubscribeDto,
     @Req() req: Request
   ) {
+    this.assertOwner(org);
     const uniqueId = req?.cookies?.track;
     return this._polarService.embedded(
       uniqueId,
@@ -59,6 +75,7 @@ export class BillingController {
     @Body() body: BillingSubscribeDto,
     @Req() req: Request
   ) {
+    this.assertOwner(org);
     const uniqueId = req?.cookies?.track;
     return this._polarService.subscribe(
       uniqueId,
@@ -71,6 +88,7 @@ export class BillingController {
 
   @Get('/portal')
   async modifyPayment(@GetOrgFromRequest() org: Organization) {
+    this.assertOwner(org);
     const customerId = await this._polarService.getCustomerByOrganizationId(
       org.id
     );
@@ -92,6 +110,7 @@ export class BillingController {
     @GetUserFromRequest() user: User,
     @Body() body: { feedback: string }
   ) {
+    this.assertOwner(org);
     await this._notificationService.sendEmail(
       process.env.EMAIL_FROM_ADDRESS || '',
       'Subscription Cancelled',

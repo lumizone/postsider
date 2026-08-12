@@ -12,6 +12,7 @@ import {
   fetchIntegrationAnalytics,
   type AnalyticsSeries,
 } from "@/lib/analytics-api";
+import { rowsToCsv, downloadCsv } from "@/lib/csv-export";
 
 type Range = "7d" | "30d" | "90d";
 
@@ -79,6 +80,9 @@ export function Analytics() {
   const [data, setData] = useState<AnalyticsSeries[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Distinguishes "this platform doesn't implement analytics at all" from a
+  // genuinely quiet channel — both used to render the exact same empty state.
+  const [unsupported, setUnsupported] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
   // Auto-select first channel once they load.
@@ -117,6 +121,9 @@ export function Analytics() {
     fetchIntegrationAnalytics(channel.id, RANGE_DAYS[range], force)
       .then((res) => {
         if (cancelled) return;
+        const isUnsupported =
+          !Array.isArray(res) && !!res && (res as { unsupported?: boolean }).unsupported;
+        setUnsupported(!!isUnsupported);
         setData(Array.isArray(res) ? (res as AnalyticsSeries[]) : []);
         setLastRefresh(new Date());
       })
@@ -125,6 +132,7 @@ export function Analytics() {
         setError(
           err instanceof Error ? err.message : "Could not load analytics",
         );
+        setUnsupported(false);
         setData([]);
       })
       .finally(() => {
@@ -213,7 +221,18 @@ export function Analytics() {
     return (audienceDelta / first) * 100;
   }, [audienceDelta, audiencePoints]);
 
+  const activeSeries =
+    metric === "impressions"
+      ? impressionsSeries
+      : metric === "engagements"
+        ? engagementsSeries
+        : clicksSeries;
+  const activeIsSnapshot = !!activeSeries?.isSnapshot;
+
   const trend = useMemo(() => {
+    // A snapshot is one aggregate total, not a real series — computing a
+    // "first half vs second half" delta from it is fabricated, not a trend.
+    if (activeIsSnapshot) return 0;
     const arr = points[metric];
     if (!arr || arr.length < 2) return 0;
     const mid = Math.floor(arr.length / 2);
@@ -223,12 +242,34 @@ export function Analytics() {
     const second = sumOf(arr.slice(mid));
     if (first === 0) return second > 0 ? 100 : 0;
     return ((second - first) / first) * 100;
-  }, [points, metric]);
+  }, [points, metric, activeIsSnapshot]);
 
   const engagementRate =
     totals.impressions > 0
       ? (totals.engagements / totals.impressions) * 100
       : 0;
+
+  // Client-facing export: agencies otherwise had no way to hand a client
+  // their numbers except a screenshot of this page (audit finding — the
+  // #1 blocker to "prove ROI to your own client", the core retention job
+  // for a tool like this). Works off data already loaded, one row per
+  // (metric, date) so it drops straight into a pivot table.
+  const exportCsv = () => {
+    if (!data || data.length === 0 || !channel) return;
+    const rows: (string | number)[][] = [];
+    for (const series of data) {
+      for (const point of series.data) {
+        rows.push([series.label, point.date, point.total]);
+      }
+    }
+    const csv = rowsToCsv(["Metric", "Date", "Value"], rows);
+    const rangeLabel = RANGE_DAYS[range];
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadCsv(
+      `${channel.name}-analytics-${rangeLabel}d-${stamp}.csv`,
+      csv,
+    );
+  };
 
   return (
     <div className={styles.shell}>
@@ -255,6 +296,15 @@ export function Analytics() {
           </div>
 
           <div className={styles.headerControls}>
+            <button
+              type="button"
+              className={styles.refreshBtn}
+              onClick={exportCsv}
+              disabled={!data || data.length === 0}
+              title={t("analytics.exportCsvHint")}
+            >
+              {t("analytics.exportCsv")}
+            </button>
             <button
               type="button"
               className={styles.refreshBtn}
@@ -357,18 +407,24 @@ export function Analytics() {
                       })}
                     </div>
                     <div className={styles.chartSub}>
-                      {trend === 0
-                        ? t("analytics.flatTrend")
-                        : t("analytics.trendVsFirstHalf", {
-                            arrow: trend > 0 ? "▲" : "▼",
-                            pct: Math.abs(trend).toFixed(1),
-                          })}
+                      {activeIsSnapshot
+                        ? t("analytics.snapshotNote")
+                        : trend === 0
+                          ? t("analytics.flatTrend")
+                          : t("analytics.trendVsFirstHalf", {
+                              arrow: trend > 0 ? "▲" : "▼",
+                              pct: Math.abs(trend).toFixed(1),
+                            })}
                     </div>
                   </div>
                 </div>
                 {points[metric].length === 0 ? (
                   <div className={styles.empty}>
                     {t("analytics.noRangeData")}
+                  </div>
+                ) : activeIsSnapshot ? (
+                  <div className={styles.statBig}>
+                    {compactNumber(sumSeries(points[metric]))}
                   </div>
                 ) : (
                   <LineChart data={points[metric]} />
@@ -413,7 +469,9 @@ export function Analytics() {
 
               {!data || data.length === 0 ? (
                 <div className={styles.empty}>
-                  {t("analytics.noProviderData")}
+                  {unsupported
+                    ? t("analytics.unsupportedProvider", { platform: channel.platform })
+                    : t("analytics.noProviderData")}
                 </div>
               ) : (
                 <ul className={styles.postList}>

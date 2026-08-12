@@ -545,6 +545,17 @@ export class InstagramProvider
     return onlyConnectedAccounts.map((p: any) => ({
       pageId: p.pageId,
       id: p.id,
+      // The generic connect-picker (oauth-callback.tsx handlePickPage) only
+      // round-trips ONE field back to fetchPageInformation — `page.page`,
+      // falling back to `page.id` only when `page.page` is missing. This
+      // provider needs BOTH the Facebook Page id (for the page access token)
+      // and the IG Business Account id (for the account's own name/picture),
+      // so without a `page` field here, the picker sent back `id` under the
+      // key `page` and `pageId` was silently undefined on every connection —
+      // the first Graph fetch below 404'd, and the wrong page access token
+      // was persisted. Packing both into one composite string here needs no
+      // frontend change: the picker already prefers `page.page`.
+      page: `${p.pageId}:${p.id}`,
       name: p.name,
       // Flat URL string — the picker renders <img src={picture}>, so a
       // { data: { url } } object showed up as a broken image.
@@ -554,23 +565,35 @@ export class InstagramProvider
 
   async fetchPageInformation(
     token: string,
-    data: { pageId: string; id: string }
+    data: { page?: string; pageId?: string; id?: string }
   ) {
     const [accessToken, userToken] = token.split('___');
+    // `data.page` is the composite `${pageId}:${igAccountId}` from pages()
+    // above. Prefer explicit pageId/id when a caller passes the old shape
+    // directly (e.g. tests), otherwise unpack the composite string.
+    const [composedPageId, composedIgId] = (data.page || '').split(':');
+    const pageId = data.pageId || composedPageId;
+    const igId = data.id || composedIgId;
+
     const { access_token, ...all } = await (
       await fetch(
-        `https://graph.facebook.com/v20.0/${data.pageId}?fields=access_token,name,picture.type(large)&access_token=${accessToken}`
+        `https://graph.facebook.com/v20.0/${pageId}?fields=access_token,name,picture.type(large)&access_token=${accessToken}`
       )
     ).json();
 
     const { id, name, profile_picture_url, username } = await (
       await fetch(
-        `https://graph.facebook.com/v20.0/${data.id}?fields=username,name,profile_picture_url&access_token=${accessToken}`
+        `https://graph.facebook.com/v20.0/${igId}?fields=id,username,name,profile_picture_url&access_token=${accessToken}`
       )
     ).json();
 
     return {
-      id,
+      // Fall back to the id we already queried by (`igId`) — Graph API
+      // does not reliably echo `id` back on a node fetched by its own id,
+      // and destructuring an absent field silently produced `String(undefined)`
+      // ("undefined" as a literal string) as the persisted internalId, which
+      // then targeted every publish/media call at .../undefined/media.
+      id: id || igId,
       name,
       picture: profile_picture_url,
       access_token: access_token + '___' + accessToken,
@@ -916,7 +939,9 @@ export class InstagramProvider
     analytics.push(
       ...(data?.map((d: any) => ({
         label: this.setTitle(d.name),
-        percentageChange: 5,
+        // No percentage change: the platform API returns a point-in-time value
+        // and nothing is persisted to compare against, so any number here is
+        // invented. The frontend hides the badge when this is absent.
         data: d.values.map((v: any) => ({
           total: v.value,
           date: dayjs(v.end_time).format('YYYY-MM-DD'),
@@ -927,7 +952,9 @@ export class InstagramProvider
     analytics.push(
       ...data2.map((d: any) => ({
         label: this.setTitle(d.name),
-        percentageChange: 5,
+        // No percentage change: the platform API returns a point-in-time value
+        // and nothing is persisted to compare against, so any number here is
+        // invented. The frontend hides the badge when this is absent.
         data: [
           {
             total: d.total_value.value,

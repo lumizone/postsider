@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -8,6 +9,7 @@ import {
   Req,
   Res,
   StreamableFile,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { PostsService } from '@postsider/nestjs-libraries/database/prisma/posts/posts.service';
@@ -23,6 +25,9 @@ import { promisify } from 'util';
 import { OnlyURL } from '@postsider/nestjs-libraries/dtos/webhooks/webhooks.dto';
 import { isSafePublicHttpsUrl } from '@postsider/nestjs-libraries/dtos/webhooks/webhook.url.validator';
 import { ssrfSafeDispatcher } from '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
+import { ApprovalService } from '@postsider/nestjs-libraries/database/prisma/approval/approval.service';
+import { AuthRateLimitGuard } from '@postsider/nestjs-libraries/services/auth-rate-limit.guard';
+import { HttpForbiddenException } from '@postsider/nestjs-libraries/services/exception.filter';
 
 const pump = promisify(pipeline);
 
@@ -31,30 +36,44 @@ const pump = promisify(pipeline);
 export class PublicController {
   constructor(
     private _trackService: TrackService,
-    private _postsService: PostsService
+    private _postsService: PostsService,
+    private _approvalService: ApprovalService
   ) {}
 
-  @Get(`/posts/:id`)
-  async getPreview(@Param('id') id: string) {
-    // Public preview (no auth, gated only by the post id). Drop internal-only
-    // fields like `error` (platform failure messages) that a shared preview
-    // link must never expose. A share-token gate is the fuller fix (product).
-    return (await this._postsService.getPostsRecursively(id, true)).map(
-      ({ childrenPost, error, ...p }) => ({
-        ...p,
-        ...(p.integration
-          ? {
-              integration: {
-                id: p.integration.id,
-                name: p.integration.name,
-                picture: p.integration.picture,
-                providerIdentifier: p.integration.providerIdentifier,
-                profile: p.integration.profile,
-              },
-            }
-          : {}),
-      })
+  // Guest approval review (no account — gated by an unguessable, expiring,
+  // single-use token minted by an org ADMIN/SUPERADMIN via
+  // POST /approval/:id/guest-link). Rate-limited against token-guessing.
+  @Get('/approval-review/:token')
+  @UseGuards(AuthRateLimitGuard)
+  async getGuestReview(@Param('token') token: string) {
+    return this._approvalService.getForGuestReview(token);
+  }
+
+  @Post('/approval-review/:token/resolve')
+  @UseGuards(AuthRateLimitGuard)
+  async resolveGuestReview(
+    @Param('token') token: string,
+    @Body() body: { action: 'approve' | 'reject'; note?: string }
+  ) {
+    if (body.action !== 'approve' && body.action !== 'reject') {
+      throw new BadRequestException('action must be "approve" or "reject"');
+    }
+    return this._approvalService.resolveGuestReview(
+      token,
+      body.action,
+      body.note
     );
+  }
+
+  @Get(`/posts/shared/:shareToken`)
+  async getSharedPreview(@Param('shareToken') shareToken: string) {
+    // Public preview gated by crypto-random share token. Without a valid token
+    // the post is not reachable — knowing the post id is not enough.
+    const post = await this._postsService.getPublicPost(shareToken);
+    if (!post) {
+      throw new HttpForbiddenException();
+    }
+    return post;
   }
 
   @Get(`/posts/:id/comments`)

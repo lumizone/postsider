@@ -21,6 +21,7 @@ export interface OrgSummary {
   id: string;
   name: string;
   role: "SUPERADMIN" | "ADMIN" | "USER";
+  logo?: string | null;
 }
 
 export interface SelfUser {
@@ -42,6 +43,8 @@ export interface SelfUser {
   isPlatformAi: boolean;
   /** All organizations the user belongs to. Populated after first /user/self load. */
   organizations?: OrgSummary[];
+  /** Current org's uploaded logo (Settings → Organization). Null falls back to the PostSider brand mark. */
+  orgLogo?: string | null;
   // Other fields exist on the backend but aren't used here yet.
 }
 
@@ -53,6 +56,8 @@ interface AuthState {
   logout: () => Promise<void>;
   /** Switch to a different organization. Resolves after the new org context is loaded. */
   switchOrg: (orgId: string) => Promise<void>;
+  /** Create an additional organization owned by the current user and switch to it. */
+  createOrg: (name: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -84,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               id: o.id,
               name: o.name,
               role: o.users?.[0]?.role || "USER",
+              logo: o.logo ?? null,
             }));
           setUser((prev) => (prev ? { ...prev, organizations: orgs } : prev));
         }
@@ -114,6 +120,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = "/";
   }, []);
 
+  const createOrg = useCallback(async (name: string) => {
+    const created = await api.post<{ id: string; name: string }>(
+      "/user/organizations",
+      { name },
+    );
+    await switchOrg(created.id);
+  }, [switchOrg]);
+
   useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -129,8 +143,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [router]);
 
   const value = useMemo<AuthState>(
-    () => ({ user, loading, refresh, logout, switchOrg }),
-    [user, loading, refresh, logout, switchOrg],
+    () => ({ user, loading, refresh, logout, switchOrg, createOrg }),
+    [user, loading, refresh, logout, switchOrg, createOrg],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -153,12 +167,14 @@ export function useOrg(): {
   role: string;
   organizations: OrgSummary[];
   switchOrg: (orgId: string) => Promise<void>;
+  createOrg: (name: string) => Promise<void>;
 } {
-  const { user, switchOrg } = useAuth();
+  const { user, switchOrg, createOrg } = useAuth();
   return {
     orgId: user?.orgId ?? null,
     role: user?.role ?? "USER",
     organizations: user?.organizations ?? [],
     switchOrg,
+    createOrg,
   };
 }

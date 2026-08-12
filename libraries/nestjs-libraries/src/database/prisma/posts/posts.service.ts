@@ -23,6 +23,7 @@ import { shuffle } from 'lodash';
 import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
 import { MediaService } from '@postsider/nestjs-libraries/database/prisma/media/media.service';
 import { ShortLinkService } from '@postsider/nestjs-libraries/short-linking/short.link.service';
 import { CreateTagDto } from '@postsider/nestjs-libraries/dtos/posts/create.tag.dto';
@@ -36,6 +37,7 @@ import { UploadFactory } from '@postsider/nestjs-libraries/upload/upload.factory
 import { Readable } from 'stream';
 import { OpenaiService } from '@postsider/nestjs-libraries/openai/openai.service';
 dayjs.extend(utc);
+dayjs.extend(timezone);
 import * as Sentry from '@sentry/nestjs';
 import { TemporalService } from 'nestjs-temporal-core';
 import { TypedSearchAttributes } from '@temporalio/common';
@@ -79,8 +81,8 @@ export class PostsService {
     return this._postRepository.searchForMissingThreeHoursPosts();
   }
 
-  updatePost(id: string, postId: string, releaseURL: string) {
-    return this._postRepository.updatePost(id, postId, releaseURL);
+  updatePost(id: string, postId: string, releaseURL: string, orgId?: string) {
+    return this._postRepository.updatePost(id, postId, releaseURL, orgId);
   }
 
   async getMissingContent(
@@ -328,6 +330,19 @@ export class PostsService {
           )
         : []),
     ];
+  }
+
+  /**
+   * Public post preview gated by share token. Returns the flat post row
+   * (no recursive children), stripped of internal fields. The share token is
+   * crypto-random — knowing a post id is not enough to reach this.
+   */
+  async getPublicPost(shareToken: string) {
+    const post = await this._postRepository.findByShareToken(shareToken);
+    if (!post) return null;
+
+    const { error, childrenPost, ...safe } = post as any;
+    return safe;
   }
 
   async getPosts(orgId: string, query: GetPostsDto) {
@@ -718,8 +733,8 @@ export class PostsService {
     return this._postRepository.countPostsFromDay(orgId, date);
   }
 
-  getPostByForWebhookId(id: string) {
-    return this._postRepository.getPostByForWebhookId(id);
+  getPostByForWebhookId(id: string, orgId?: string) {
+    return this._postRepository.getPostByForWebhookId(id, orgId);
   }
 
   async startWorkflow(
@@ -805,7 +820,9 @@ export class PostsService {
         await this._postRepository.changeState(
           postId,
           'ERROR',
-          'Could not schedule the publish workflow (scheduler unavailable). Please re-schedule this post.'
+          'Could not schedule the publish workflow (scheduler unavailable). Please re-schedule this post.',
+          undefined,
+          orgId
         );
       } catch (stateErr) {
         this._logger.error(
@@ -1043,15 +1060,30 @@ export class PostsService {
       image: JSON.parse(p.image || '[]'),
     }));
 
+    // firstComment lives only on the group's main row. It was omitted here
+    // while thread parts were copied, so duplicating a post silently dropped
+    // it — invisible until after publish, and it is where hashtags usually
+    // live.
+    const firstComment =
+      loadAll.find((p: any) => p.firstComment)?.firstComment || undefined;
+
+    // Without an explicit date every duplicate landed on tomorrow at the
+    // current minute, so duplicating a batch stacked them all on one
+    // timestamp. Fall back to the next free queue slot for the target
+    // channel, the same way the CSV importer does.
+    const resolvedDate =
+      date || (await this.findFreeDateTime(orgId, integrationId));
+
     const postPayload = {
       type: 'draft' as const,
-      date: date || dayjs().add(1, 'day').format('YYYY-MM-DDTHH:mm:00'),
+      date: resolvedDate,
       shortLink: false,
       tags: [] as any[],
       posts: [
         {
           integration: { id: integrationId },
           value,
+          ...(firstComment ? { firstComment } : {}),
           settings: {
             __type: integration.providerIdentifier,
           },
@@ -1062,30 +1094,70 @@ export class PostsService {
 
     const mapped = await this.mapTypeToPost(postPayload as any, orgId);
     const result = await this.createPost(orgId, mapped, 'WEB');
+    const createdId = result[0]?.postId;
+
+    // createPost returns post ids, not the group uuid it generated. `group`
+    // used to carry that post id, so GET /posts/group/<value> 404'd on the
+    // duplicate — every other posts route is group-keyed. Resolve the real
+    // group and return the post id under its own name.
+    const created = createdId
+      ? await this._postRepository.getPost(createdId, false, orgId)
+      : null;
 
     return {
       duplicated: true,
       source: { group, integration: firstPost.integrationId },
-      target: { group: result[0]?.postId, integration: integrationId },
+      target: {
+        group: created?.group ?? null,
+        postId: createdId,
+        integration: integrationId,
+      },
     };
   }
 
-  async changeState(id: string, state: State, err?: any, body?: any) {
-    return this._postRepository.changeState(id, state, err, body);
+  async changeState(id: string, state: State, err?: any, body?: any, orgId?: string) {
+    return this._postRepository.changeState(id, state, err, body, orgId);
+  }
+
+  /**
+   * Blocks changeDate/changePostStatus from touching a post that is
+   * PUBLISHED (already went out — not this endpoint's job) or in APPROVAL
+   * (pending human review — moving it must go through the dedicated
+   * approve/reject endpoints in ApprovalService, which are role-gated and
+   * resolve the Approval record; this generic status/date endpoint is open
+   * to any org member and any Public API key, so leaving it able to flip
+   * APPROVAL -> QUEUE silently pulls a post out of review). Mirrors the
+   * frontend's own isDraggableStatus() exclusion, which only ever guarded
+   * the calendar drag handler, not the API these requests ultimately hit.
+   */
+  private assertMutable(post: { state: string }): void {
+    if (post.state === 'PUBLISHED' || post.state === 'APPROVAL') {
+      throw new BadRequestException(
+        `Cannot change a post that is ${post.state === 'APPROVAL' ? 'pending approval' : 'already published'}`
+      );
+    }
   }
 
   async changePostStatus(
     orgId: string,
     id: string,
-    status: 'draft' | 'schedule'
+    status: 'draft' | 'schedule',
+    // Only ApprovalService.onApproved sets this — it has already run
+    // assertCanApprove(role) + assertPending(approval) before calling in, so
+    // an APPROVAL post reaching here IS the authorized approve action, not
+    // the bypass this guard exists to stop.
+    allowApprovalTransition = false
   ) {
     const getPostById = await this._postRepository.getPostById(id, orgId);
     if (!getPostById) {
       throw new BadRequestException('Post not found');
     }
+    if (!(allowApprovalTransition && getPostById.state === 'APPROVAL')) {
+      this.assertMutable(getPostById);
+    }
 
     const state: State = status === 'draft' ? 'DRAFT' : 'QUEUE';
-    await this._postRepository.changeState(id, state);
+    await this._postRepository.changeState(id, state, undefined, undefined, orgId);
 
     // No swallow: if the workflow cannot be scheduled the post is already
     // marked ERROR (inside startWorkflow) and the user must see the failure
@@ -1105,7 +1177,7 @@ export class PostsService {
   async setPostState(orgId: string, postId: string, state: State) {
     const post = await this._postRepository.getPostById(postId, orgId);
     if (!post) throw new BadRequestException('Post not found');
-    await this._postRepository.changeState(postId, state);
+    await this._postRepository.changeState(postId, state, undefined, undefined, orgId);
     return { id: postId, state };
   }
 
@@ -1120,6 +1192,7 @@ export class PostsService {
     if (!getPostById) {
       throw new BadRequestException('Post not found');
     }
+    this.assertMutable(getPostById);
 
     // schedule: Set status to QUEUE and change date (reschedule the post)
     // update: Just change the date without changing the status
@@ -1161,7 +1234,7 @@ export class PostsService {
   }
 
   async findFreeDateTime(orgId: string, integrationId?: string) {
-    const slots = await this._integrationService.findFreeDateTime(
+    const { slots, timezone } = await this._integrationService.findFreeDateTime(
       orgId,
       integrationId
     );
@@ -1173,8 +1246,18 @@ export class PostsService {
       slots?.length > 0
         ? slots
         : [9, 12, 15, 18].map((h) => ({ time: h * 60 }));
-    const start = dayjs.utc().startOf('day');
-    return this.findFreeDateTimeRecursive(orgId, effective, start, start);
+    // Anchored in the channel's own timezone (default 'UTC' — identical to
+    // the old behavior for every channel that hasn't set one) so a "9am"
+    // slot resolves to the correct UTC instant for the actual calendar date,
+    // DST included, instead of a frozen offset baked in once.
+    const start = dayjs().tz(timezone).startOf('day');
+    return this.findFreeDateTimeRecursive(
+      orgId,
+      effective,
+      start,
+      start,
+      integrationId
+    );
   }
 
   async createPopularPosts(post: {
@@ -1190,7 +1273,8 @@ export class PostsService {
     orgId: string,
     slots: { time: number; days?: number[] }[],
     date: dayjs.Dayjs,
-    start: dayjs.Dayjs
+    start: dayjs.Dayjs,
+    integrationId?: string
   ): Promise<string> {
     // Safety guard: never loop forever when a channel has no posting times.
     if (date.diff(start, 'day') > 365) {
@@ -1207,14 +1291,16 @@ export class PostsService {
         orgId,
         slots,
         date.add(1, 'day'),
-        start
+        start,
+        integrationId
       );
     }
 
     const list = await this._postRepository.getPostsCountsByDates(
       orgId,
       times,
-      date
+      date,
+      integrationId
     );
 
     if (!list.length) {
@@ -1222,7 +1308,8 @@ export class PostsService {
         orgId,
         slots,
         date.add(1, 'day'),
-        start
+        start,
+        integrationId
       );
     }
 
@@ -1233,7 +1320,10 @@ export class PostsService {
       return prev;
     }, null) as number;
 
-    return date.clone().add(num, 'minutes').format('YYYY-MM-DDTHH:mm:00');
+    // `date` may be anchored in the channel's own timezone (not UTC) — the
+    // documented contract of this function is a UTC wall-clock string
+    // (callers append 'Z'), so convert back to UTC before formatting.
+    return date.clone().add(num, 'minutes').utc().format('YYYY-MM-DDTHH:mm:00');
   }
 
   getComments(postId: string) {
@@ -1270,5 +1360,13 @@ export class PostsService {
       throw new BadRequestException('Post not found');
     }
     return this._postRepository.createComment(orgId, userId, postId, comment);
+  }
+
+  async getCommentsForOrg(orgId: string, postId: string) {
+    const post = await this._postRepository.getPostById(postId, orgId);
+    if (!post) {
+      throw new BadRequestException('Post not found');
+    }
+    return this._postRepository.getCommentsForOrg(orgId, postId);
   }
 }

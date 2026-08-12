@@ -45,8 +45,56 @@ export class OrganizationService {
     return created;
   }
 
+  /** New org for a user who's already logged in — see repository method for why. */
+  async createOrgForCurrentUser(userId: string, email: string, name: string) {
+    const alreadyUsedTrial = await this._organizationRepository.hasUsedTrial(
+      email
+    );
+    const allowTrial = !alreadyUsedTrial;
+    const created = await this._organizationRepository.createOrgForExistingUser(
+      userId,
+      name,
+      allowTrial
+    );
+    if (allowTrial) {
+      await this._organizationRepository.markTrialUsed(email);
+    }
+    return created;
+  }
+
   async getCount() {
     return this._organizationRepository.getCount();
+  }
+
+  async getOrganizationProfile(id: string) {
+    const org = await this._organizationRepository.getOrgById(id);
+    return {
+      name: org?.name ?? '',
+      description: org?.description ?? '',
+      logo: org?.logo ?? null,
+      defaultTimezone: org?.defaultTimezone ?? null,
+      referralSource: org?.referralSource ?? null,
+    };
+  }
+
+  async updateOrganizationProfile(
+    id: string,
+    data: {
+      name?: string;
+      description?: string | null;
+      logo?: string | null;
+      defaultTimezone?: string | null;
+      referralSource?: string | null;
+    }
+  ) {
+    const org = await this._organizationRepository.updateOrganizationProfile(id, data);
+    return {
+      name: org.name,
+      description: org.description ?? '',
+      logo: org.logo ?? null,
+      defaultTimezone: org.defaultTimezone ?? null,
+      referralSource: org.referralSource ?? null,
+    };
   }
 
   async createMaxUser(id: string, name: string, saasName: string, email: string) {

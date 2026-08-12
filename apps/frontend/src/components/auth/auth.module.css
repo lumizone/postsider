@@ -99,6 +99,19 @@
   transition: border-color 120ms var(--ease), box-shadow 120ms var(--ease);
 }
 
+/*
+ * iOS Safari zooms the viewport when focusing an input below 16px. The rest of
+ * the app already bumps fields at this breakpoint (composer, post search,
+ * approval note); the auth forms were missed, so the very first screen anyone
+ * opens on a phone zoomed in on the email field and had to be pinched back out.
+ */
+@media (max-width: 768px) {
+  .input,
+  .input:focus {
+    font-size: 16px;
+  }
+}
+
 .input:focus {
   outline: none;
   border-color: var(--fg);

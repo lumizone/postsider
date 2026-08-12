@@ -737,7 +737,9 @@ export class FacebookProvider extends SocialAbstract implements SocialProvider {
             : d.name === 'page_video_views'
             ? 'Videos views'
             : 'Posts Impressions',
-        percentageChange: 5,
+        // No percentage change: the platform API returns a point-in-time value
+        // and nothing is persisted to compare against, so any number here is
+        // invented. The frontend hides the badge when this is absent.
         data: d?.values?.map((v: any) => ({
           total: v.value,
           date: dayjs(v.end_time).format('YYYY-MM-DD'),

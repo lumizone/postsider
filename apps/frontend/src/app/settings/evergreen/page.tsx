@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { PageHeader, Card, settingsStyles as ui } from "@/components/settings-ui";
 import { useAuth } from "@/lib/auth-context";
 import { useT } from "@/lib/i18n";
+import { InfoTip } from "@/components/info-tip";
 import {
   getEvergreenSettings,
   saveEvergreenSettings,
@@ -109,6 +110,7 @@ export default function EvergreenSettingsPage() {
                 style={{ width: 16, height: 16 }}
               />
               {t("evergreen.enable")}
+              <InfoTip textKey="infoTip.evergreen" />
             </label>
 
             <div>

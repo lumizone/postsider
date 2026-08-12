@@ -14,8 +14,9 @@ import { fetchPostsList, duplicatePost, type BackendPost } from "@/lib/posts";
 import { backendPostToEvent } from "@/lib/use-calendar-data";
 import { EmptyState } from "./empty-state";
 import { useI18n, useT } from "@/lib/i18n";
-import { toggleEvergreen, listEvergreen } from "@/lib/evergreen-api";
+import { toggleEvergreen, listEvergreen, getEvergreenSettings } from "@/lib/evergreen-api";
 import { requestApproval } from "@/lib/approval-api";
+import { PostDetailDrawer } from "./post-detail-drawer";
 
 type StatusFilter = "all" | PostStatus;
 
@@ -146,6 +147,8 @@ export function Posts() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [evergreenGroups, setEvergreenGroups] = useState<Set<string>>(new Set());
+  const [evergreenOrgEnabled, setEvergreenOrgEnabled] = useState(true);
+  const [detailPost, setDetailPost] = useState<{ id: string; status: PostStatus } | null>(null);
 
   // Load which post groups are evergreen so each row's toggle shows the real state.
   useEffect(() => {
@@ -153,6 +156,22 @@ export function Posts() {
     listEvergreen()
       .then((rows) => {
         if (!cancelled) setEvergreenGroups(new Set(rows.map((r) => r.group)));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Marking a post evergreen does nothing unless the org-level switch
+  // (Settings -> Evergreen) is also on — surfaced as a toast on toggle
+  // below instead of leaving that discoverable only after a month of
+  // silence.
+  useEffect(() => {
+    let cancelled = false;
+    getEvergreenSettings()
+      .then((s) => {
+        if (!cancelled) setEvergreenOrgEnabled(s.enabled);
       })
       .catch(() => undefined);
     return () => {
@@ -373,7 +392,10 @@ export function Posts() {
           title={t("empty.channelTitle")}
           description={t("empty.channelDescAdmin")}
           actionLabel={t("empty.channelAction")}
-          actionHref="/settings/general"
+          // Settings > General has no channel UI at all, so the old target was
+          // a dead end for the one action this empty state exists to prompt.
+          // ?connect=1 opens the calendar's real add-channel picker.
+          actionHref="/calendar?connect=1"
         />
       ) : items.length === 0 ? (
         <EmptyState
@@ -394,10 +416,21 @@ export function Posts() {
               onDuplicate={() => void handleDuplicate(ev.group)}
               onDuplicateTo={() => setDuplicateTargetGroup(ev.group)}
               onRequestApproval={() => void handleRequestApproval(ev.id)}
+              onViewDetails={() => setDetailPost({ id: ev.id, status })}
               initialEvergreen={evergreenGroups.has(ev.group)}
+              evergreenOrgEnabled={evergreenOrgEnabled}
+              onEvergreenOrgDisabledWarning={() => setToast(t("evergreen.orgDisabledWarning"))}
             />
           ))}
         </div>
+      )}
+
+      {detailPost && (
+        <PostDetailDrawer
+          postId={detailPost.id}
+          status={detailPost.status}
+          onClose={() => setDetailPost(null)}
+        />
       )}
     </section>
   );
@@ -410,10 +443,13 @@ interface PostRowProps {
   onDuplicate: () => void;
   onDuplicateTo: () => void;
   onRequestApproval: () => void;
+  onViewDetails: () => void;
   initialEvergreen?: boolean;
+  evergreenOrgEnabled?: boolean;
+  onEvergreenOrgDisabledWarning?: () => void;
 }
 
-function PostRow({ ev, status, channel, onDuplicate, onDuplicateTo, onRequestApproval, initialEvergreen }: PostRowProps) {
+function PostRow({ ev, status, channel, onDuplicate, onDuplicateTo, onRequestApproval, onViewDetails, initialEvergreen, evergreenOrgEnabled, onEvergreenOrgDisabledWarning }: PostRowProps) {
   const date = parseDate(ev.date);
   const [menuOpen, setMenuOpen] = useState(false);
   const [evergreenOn, setEvergreenOn] = useState<boolean>(initialEvergreen ?? false);
@@ -428,6 +464,7 @@ function PostRow({ ev, status, channel, onDuplicate, onDuplicateTo, onRequestApp
     const next = !evergreenOn;
     setEvergreenOn(next); // optimistic
     void toggleEvergreen(ev.group, next).catch(() => setEvergreenOn(!next));
+    if (next && evergreenOrgEnabled === false) onEvergreenOrgDisabledWarning?.();
   };
 
   const statusClass = `statusPill${status[0].toUpperCase()}${status.slice(1)}`;
@@ -513,6 +550,9 @@ function PostRow({ ev, status, channel, onDuplicate, onDuplicateTo, onRequestApp
         </button>
         {menuOpen && (
           <div className={styles.menu} onClick={() => setMenuOpen(false)} role="menu">
+            <button type="button" className={styles.menuItem} onClick={onViewDetails} role="menuitem">
+              {t("postDetail.viewDetails")}
+            </button>
             <button type="button" className={styles.menuItem} onClick={onDuplicate} role="menuitem">
               {t("posts.duplicate")}
             </button>

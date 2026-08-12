@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   forwardRef,
   HttpException,
   HttpStatus,
@@ -60,6 +61,17 @@ export class IntegrationService {
     integrationId: string,
     times: IntegrationTimeDto
   ) {
+    if (times.timezone) {
+      try {
+        // Throws RangeError for anything that isn't a real IANA zone name —
+        // cheaper and more correct than a hand-maintained allowlist.
+        Intl.DateTimeFormat(undefined, { timeZone: times.timezone });
+      } catch {
+        throw new BadRequestException(
+          `"${times.timezone}" is not a valid timezone name.`
+        );
+      }
+    }
     return this._integrationRepository.setTimes(orgId, integrationId, times);
   }
 
@@ -69,10 +81,6 @@ export class IntegrationService {
       id,
       additionalSettings
     );
-  }
-
-  checkPreviousConnections(org: string, id: string) {
-    return this._integrationRepository.checkPreviousConnections(org, id);
   }
 
   async createOrUpdateIntegration(
@@ -340,6 +348,20 @@ export class IntegrationService {
       data
     );
 
+    // A provider's fetchPageInformation can come back without a resolvable
+    // id (an upstream API error/edge-case response shape) — persisting that
+    // anyway wrote the literal string "undefined" as internalId in one real
+    // case (Instagram), which then silently 100%-failed every publish for
+    // that channel (every post/media call is built as `${internalId}/media`).
+    // Fail the connect step instead so the user can retry, rather than
+    // completing "successfully" into a channel that can never publish.
+    if (!getIntegrationInformation?.id) {
+      throw new HttpException(
+        'Could not resolve the selected page/account — please try again',
+        HttpStatus.BAD_GATEWAY
+      );
+    }
+
     await this.checkForDeletedOnceAndUpdate(
       org,
       String(getIntegrationInformation.id)
@@ -363,7 +385,7 @@ export class IntegrationService {
     date: string,
     forceRefresh = false,
     _retryCount = 0
-  ): Promise<AnalyticsData[]> {
+  ): Promise<AnalyticsData[] | { unsupported: true }> {
     const getIntegration = await this.getIntegrationById(org.id, integration);
 
     if (!getIntegration) {
@@ -380,6 +402,16 @@ export class IntegrationService {
 
     if (!integrationProvider) {
       return [];
+    }
+
+    // Distinguish "this platform doesn't support analytics at all" from a
+    // genuinely empty/quiet channel — both used to render as the same blank
+    // chart, so a customer on e.g. Mastodon/Bluesky/personal LinkedIn/
+    // Discord/Slack/Telegram/WordPress (no `analytics()` implemented) had no
+    // way to tell whether the feature was broken or the channel had zero
+    // engagement.
+    if (!integrationProvider.analytics) {
+      return { unsupported: true };
     }
 
     if (
@@ -611,7 +643,10 @@ export class IntegrationService {
   async findFreeDateTime(
     orgId: string,
     integrationsId?: string
-  ): Promise<{ time: number; days?: number[] }[]> {
+  ): Promise<{
+    slots: { time: number; days?: number[] }[];
+    timezone: string;
+  }> {
     const findTimes = await this._integrationRepository.getPostingTimes(
       orgId,
       integrationsId
@@ -636,6 +671,11 @@ export class IntegrationService {
         .join(',')}`;
       if (!seen.has(key)) seen.set(key, slot);
     }
-    return Array.from(seen.values());
+    // A specific channel has one unambiguous timezone. The org-wide lookup
+    // (no integrationsId — merges slots across every channel) has no single
+    // meaningful zone, so it stays UTC-anchored, same as before this feature.
+    const timezone =
+      integrationsId && findTimes[0]?.timezone ? findTimes[0].timezone : 'UTC';
+    return { slots: Array.from(seen.values()), timezone };
   }
 }

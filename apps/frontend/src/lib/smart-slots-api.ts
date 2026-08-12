@@ -8,11 +8,10 @@ export function suggestSlots(
   platform: string,
   count = 3,
 ): Promise<SlotSuggestion[]> {
-  // Minutes to ADD to UTC to reach the user's local wall clock (getTimezoneOffset
-  // returns minutes to subtract, so negate it). Lets the backend rank slots at
-  // audience-local peak hours.
-  const tz = -new Date().getTimezoneOffset();
+  // Audience timezone is resolved server-side from the channel's own
+  // configured Integration.timezone — not this browser's zone, which could
+  // be the agency staffer reviewing a client channel in another timezone.
   return api.get(
-    `/posts/smart-slots?integration=${encodeURIComponent(integration)}&platform=${encodeURIComponent(platform)}&count=${count}&tz=${tz}`,
+    `/posts/smart-slots?integration=${encodeURIComponent(integration)}&platform=${encodeURIComponent(platform)}&count=${count}`,
   );
 }
