@@ -195,14 +195,17 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY must be set}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?MINIO_SECRET_KEY must be set}
       MINIO_BUCKET: ${MINIO_BUCKET:?MINIO_BUCKET must be set}
-    entrypoint: >
-      /bin/sh -c "
-       mc alias set myminio http://postsider-minio:9000 $${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY must be set} $${MINIO_SECRET_KEY:?MINIO_SECRET_KEY must be set} &&
-       mc mb myminio/${MINIO_BUCKET:?MINIO_BUCKET must be set} --ignore-existing &&
-       sed "s/__MINIO_BUCKET__/$${MINIO_BUCKET}/g" /policy.template.json > /tmp/policy.json &&
-       mc anonymous set-json /tmp/policy.json myminio/${MINIO_BUCKET:?MINIO_BUCKET must be set} &&
-      echo 'MinIO bucket ready (public GET only, no anonymous listing)'
-      "
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        mc alias set myminio http://postsider-minio:9000 "$${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY must be set}" "$${MINIO_SECRET_KEY:?MINIO_SECRET_KEY must be set}" &&
+        mc mb "myminio/$${MINIO_BUCKET:?MINIO_BUCKET must be set}" --ignore-existing &&
+        cat > /tmp/policy.json <<POLICY
+        {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::$${MINIO_BUCKET}/*"]}]}
+        POLICY
+        mc anonymous set-json /tmp/policy.json "myminio/$${MINIO_BUCKET:?MINIO_BUCKET must be set}" &&
+        echo 'MinIO bucket ready (public GET only, no anonymous listing)'
     volumes:
       # Anonymous policy = s3:GetObject ONLY. `mc anonymous set download` (the
       # previous line) also grants s3:ListBucket to *, which let anyone enumerate
