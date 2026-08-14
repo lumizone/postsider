@@ -27,7 +27,8 @@ export class OrganizationService {
 
     const created = await this._organizationRepository.createOrgAndUser(
       body,
-      this._notificationsService.hasEmailProvider(),
+      process.env.REQUIRE_EMAIL_ACTIVATION === 'true' &&
+        this._notificationsService.hasEmailProvider(),
       ip,
       userAgent,
       allowTrial
