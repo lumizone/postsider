@@ -26,7 +26,6 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
   isBetweenSteps = false;
   convertToJPEG = true;
   scopes = [
-    'video.list',
     'user.info.basic',
     'video.publish',
     'video.upload',
@@ -205,7 +204,8 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     if (body.indexOf('url_ownership_unverified') > -1) {
       return {
         type: 'bad-body' as const,
-        value: 'You have to upload the picture/video to Postsider when sending a URL',
+        value:
+          'You have to upload the picture/video to Postsider when sending a URL',
       };
     }
 
@@ -681,6 +681,11 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
         }
       }
 
+      // Video-level analytics require the optional video.list scope.
+      if (!this.scopes.includes('video.list')) {
+        return result;
+      }
+
       // Get recent videos and aggregate their stats
       const videoListResponse = await this.fetch(
         'https://open.tiktokapis.com/v2/video/list/?fields=id',
@@ -772,6 +777,10 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     id: string,
     accessToken: string
   ): Promise<{ id: string; url: string }[]> {
+    if (!this.scopes.includes('video.list')) {
+      return [];
+    }
+
     try {
       const videoListResponse = await this.fetch(
         'https://open.tiktokapis.com/v2/video/list/?fields=id,cover_image_url,title',
@@ -809,6 +818,10 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     fromDate: number
   ): Promise<AnalyticsData[]> {
     const today = dayjs().format('YYYY-MM-DD');
+
+    if (!this.scopes.includes('video.list')) {
+      return [];
+    }
 
     if (postId.indexOf('v_pub_url') > -1) {
       const post = await (

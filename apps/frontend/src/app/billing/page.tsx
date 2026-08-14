@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { Suspense, useCallback, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { PageHeader, Card } from "@/components/settings-ui";
-import { useAuth } from "@/lib/auth-context";
-import { useT, useI18n } from "@/lib/i18n";
+import { Suspense, useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { PageHeader, Card } from '@/components/settings-ui';
+import { useAuth } from '@/lib/auth-context';
+import { useT, useI18n } from '@/lib/i18n';
 import {
   PLANS,
   getPlan,
@@ -17,9 +17,9 @@ import {
   type BillingPeriod,
   type TierName,
   type PlanDescriptor,
-} from "@/lib/billing-api";
-import { ApiError } from "@/lib/api";
-import styles from "./billing.module.css";
+} from '@/lib/billing-api';
+import { ApiError } from '@/lib/api';
+import styles from './billing.module.css';
 
 const TIER_ORDER: Record<string, number> = {
   STANDARD: 1,
@@ -30,11 +30,11 @@ const TIER_ORDER: Record<string, number> = {
 };
 
 const FAQ_KEYS: { q: string; a: string }[] = [
-  { q: "billing.faq.trust_q", a: "billing.faq.trust_a" },
-  { q: "billing.faq.channel_q", a: "billing.faq.channel_a" },
-  { q: "billing.faq.team_q", a: "billing.faq.team_a" },
-  { q: "billing.faq.cancel_q", a: "billing.faq.cancel_a" },
-  { q: "billing.faq.upgrade_q", a: "billing.faq.upgrade_a" },
+  { q: 'billing.faq.trust_q', a: 'billing.faq.trust_a' },
+  { q: 'billing.faq.channel_q', a: 'billing.faq.channel_a' },
+  { q: 'billing.faq.team_q', a: 'billing.faq.team_a' },
+  { q: 'billing.faq.cancel_q', a: 'billing.faq.cancel_a' },
+  { q: 'billing.faq.upgrade_q', a: 'billing.faq.upgrade_a' },
 ];
 
 function Check() {
@@ -76,9 +76,9 @@ function BillingInner() {
 
   // Billing is owner-only — mirrors the backend's assertOwner() in
   // billing.controller.ts and the sidebar nav's minRole: "SUPERADMIN".
-  const canManage = user?.role === "SUPERADMIN";
+  const canManage = user?.role === 'SUPERADMIN';
 
-  const [period, setPeriod] = useState<BillingPeriod>("MONTHLY");
+  const [period, setPeriod] = useState<BillingPeriod>('MONTHLY');
   const [current, setCurrent] = useState<CurrentSubscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -86,12 +86,12 @@ function BillingInner() {
   const [portalBusy, setPortalBusy] = useState(false);
 
   const [showCancel, setShowCancel] = useState(false);
-  const [cancelFeedback, setCancelFeedback] = useState("");
+  const [cancelFeedback, setCancelFeedback] = useState('');
   const [cancelBusy, setCancelBusy] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   // Status returned after coming back from a checkout.
-  const checkoutId = searchParams.get("check");
+  const checkoutId = searchParams.get('check');
   const [provisioning, setProvisioning] = useState(false);
   const [provisioningTimedOut, setProvisioningTimedOut] = useState(false);
 
@@ -99,10 +99,10 @@ function BillingInner() {
   useEffect(() => {
     if (!showCancel) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !cancelBusy) setShowCancel(false);
+      if (e.key === 'Escape' && !cancelBusy) setShowCancel(false);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [showCancel, cancelBusy]);
 
   // Display copy for a plan card comes from the i18n catalog; the descriptor
@@ -117,25 +117,31 @@ function BillingInner() {
   const planTagline = (name: string) => {
     const key = `billing.plans.${name}.tagline`;
     const tagline = t(key as Parameters<typeof t>[0]);
-    return tagline === key ? "" : tagline;
+    return tagline === key ? '' : tagline;
   };
-  const planFeatures = (plan: PlanDescriptor): string[] => [
-    t("billing.features.channels", { count: plan.channels }),
-    plan.postsPerMonth === "unlimited"
-      ? t("billing.features.unlimitedPosts")
-      : t("billing.features.posts", { count: plan.postsPerMonth }),
-    ...(plan.teamMembers ? [t("billing.features.teamMembers")] : []),
-    t("billing.features.multiPlatform"),
-    t("billing.features.calendar"),
-    t("billing.features.analytics"),
-    // AI usage is billed as simple per-action credits rather than provider
-    // input/output tokens, so plans stay understandable to customers.
-    plan.name === "STANDARD" ? t("billing.features.aiUses", { count: 50 }) :
-    plan.name === "TEAM" ? t("billing.features.aiUses", { count: 150 }) :
-    plan.name === "PRO" ? t("billing.features.aiUses", { count: 500 }) :
-    plan.name === "ULTIMATE" ? t("billing.features.aiUses", { count: 1000 }) : null,
-    t("billing.features.approvals"),
-  ].filter((feature): feature is string => !!feature);
+  const planFeatures = (plan: PlanDescriptor): string[] =>
+    [
+      t('billing.features.channels', { count: plan.channels }),
+      plan.postsPerMonth === 'unlimited'
+        ? t('billing.features.unlimitedPosts')
+        : t('billing.features.posts', { count: plan.postsPerMonth }),
+      ...(plan.teamMembers ? [t('billing.features.teamMembers')] : []),
+      t('billing.features.multiPlatform'),
+      t('billing.features.calendar'),
+      t('billing.features.analytics'),
+      // AI usage is billed as simple per-action credits rather than provider
+      // input/output tokens, so plans stay understandable to customers.
+      plan.name === 'STANDARD'
+        ? t('billing.features.aiUses', { count: 50 })
+        : plan.name === 'TEAM'
+        ? t('billing.features.aiUses', { count: 150 })
+        : plan.name === 'PRO'
+        ? t('billing.features.aiUses', { count: 500 })
+        : plan.name === 'ULTIMATE'
+        ? t('billing.features.aiUses', { count: 1000 })
+        : null,
+      t('billing.features.approvals'),
+    ].filter((feature): feature is string => !!feature);
 
   const loadBilling = useCallback(async () => {
     try {
@@ -145,7 +151,7 @@ function BillingInner() {
       if (err instanceof ApiError && err.status === 404) {
         setCurrent(null);
       } else {
-        setError(err instanceof Error ? err.message : "Could not load billing");
+        setError(err instanceof Error ? err.message : 'Could not load billing');
       }
     } finally {
       setLoading(false);
@@ -193,10 +199,20 @@ function BillingInner() {
 
   const currentTier = current?.subscriptionTier || null;
   const currentPlan = getPlan(currentTier);
-  const currentLevel = currentTier ? (TIER_ORDER[currentTier] ?? 0) : 0;
+  const isTrial = current?.identifier === 'trial';
+  const hasPaidPlan = !!current && !isTrial;
+  const currentLevel =
+    hasPaidPlan && currentTier ? TIER_ORDER[currentTier] ?? 0 : 0;
   // SAMURAI is an internal owner plan: full access, no payment, no Polar
   // subscription to manage or cancel.
-  const isInternalPlan = currentTier === "SAMURAI";
+  const isInternalPlan = currentTier === 'SAMURAI';
+  const trialDaysLeft = user?.onTrial ? user.trialDaysLeft ?? 0 : 0;
+  const trialStatus =
+    trialDaysLeft <= 0
+      ? t('trial.endsToday')
+      : trialDaysLeft === 1
+      ? t('trial.oneDayLeft')
+      : t('trial.daysLeft', { days: trialDaysLeft });
 
   const onSelectPlan = async (tier: TierName) => {
     if (busyTier) return;
@@ -216,7 +232,7 @@ function BillingInner() {
       await Promise.all([loadBilling(), refreshUser()]);
       setBusyTier(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not start checkout");
+      setError(err instanceof Error ? err.message : 'Could not start checkout');
       setBusyTier(null);
     }
   };
@@ -231,9 +247,9 @@ function BillingInner() {
         window.location.href = url;
         return;
       }
-      setError(t("billing.portalUnavailable"));
+      setError(t('billing.portalUnavailable'));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not open portal");
+      setError(err instanceof Error ? err.message : 'Could not open portal');
     } finally {
       setPortalBusy(false);
     }
@@ -245,10 +261,10 @@ function BillingInner() {
     try {
       await cancelSubscription(cancelFeedback.trim());
       setShowCancel(false);
-      setCancelFeedback("");
+      setCancelFeedback('');
       await Promise.all([loadBilling(), refreshUser()]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not cancel");
+      setError(err instanceof Error ? err.message : 'Could not cancel');
     } finally {
       setCancelBusy(false);
     }
@@ -257,9 +273,9 @@ function BillingInner() {
   if (!canManage) {
     return (
       <PageHeader
-        eyebrow={t("billing.eyebrow")}
-        title={t("billing.title")}
-        subtitle={t("billing.noPermission")}
+        eyebrow={t('billing.eyebrow')}
+        title={t('billing.title')}
+        subtitle={t('billing.noPermission')}
       />
     );
   }
@@ -267,9 +283,9 @@ function BillingInner() {
   return (
     <div className={styles.wrap}>
       <PageHeader
-        eyebrow={t("billing.eyebrow")}
-        title={t("billing.title")}
-        subtitle={t("billing.subtitle")}
+        eyebrow={t('billing.eyebrow')}
+        title={t('billing.title')}
+        subtitle={t('billing.subtitle')}
       />
       {error && (
         <div role="alert" className={`${styles.banner} ${styles.bannerError}`}>
@@ -279,23 +295,25 @@ function BillingInner() {
 
       {provisioning && (
         <div className={`${styles.banner} ${styles.bannerInfo}`}>
-          {t("billing.finalizing")}
+          {t('billing.finalizing')}
         </div>
       )}
       {provisioningTimedOut && (
         <div role="alert" className={`${styles.banner} ${styles.bannerWarn}`}>
-          {t("billing.stillFinalizing")} {" "}
-          <button type="button" onClick={() => window.location.reload()}>{t("calendar.retry")}</button>
+          {t('billing.stillFinalizing')}{' '}
+          <button type="button" onClick={() => window.location.reload()}>
+            {t('calendar.retry')}
+          </button>
         </div>
       )}
 
-      {current?.cancelAt && (
+      {current?.cancelAt && !isTrial && (
         <div className={`${styles.banner} ${styles.bannerWarn}`}>
-          {t("billing.cancelAt", {
+          {t('billing.cancelAt', {
             date: new Date(current.cancelAt).toLocaleDateString(locale, {
-              year: "numeric",
-              month: "long",
-              day: "numeric",
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
             }),
           })}
         </div>
@@ -304,8 +322,15 @@ function BillingInner() {
       {/* Loading */}
       {loading ? (
         <Card title="">
-          <div style={{ padding: "20px 0", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>
-            {t("common.loading")}
+          <div
+            style={{
+              padding: '20px 0',
+              textAlign: 'center',
+              color: 'var(--muted)',
+              fontSize: 13,
+            }}
+          >
+            {t('common.loading')}
           </div>
         </Card>
       ) : (
@@ -327,40 +352,52 @@ function BillingInner() {
                   </span>
                   <div className={styles.currentText}>
                     <span className={styles.currentTier}>
-                      {t("billing.currentPlanOn", {
-                        plan: planLabel(current.subscriptionTier),
-                      })}
+                      {isTrial
+                        ? t('onboarding.trialBadge', { days: trialDaysLeft })
+                        : t('billing.currentPlanOn', {
+                            plan: planLabel(current.subscriptionTier),
+                          })}
                     </span>
                     <span className={styles.currentMeta}>
-                      {isInternalPlan
-                        ? t("billing.internalPlan")
-                        : `${current.period === "YEARLY" ? t("billing.billedYearly", { price: String(currentPlan?.yearlyPrice ?? "") }) : t("billing.billedMonthly")}${
+                      {isTrial
+                        ? trialStatus
+                        : isInternalPlan
+                        ? t('billing.internalPlan')
+                        : `${
+                            current.period === 'YEARLY'
+                              ? t('billing.billedYearly', {
+                                  price: String(currentPlan?.yearlyPrice ?? ''),
+                                })
+                              : t('billing.billedMonthly')
+                          }${
                             current.isLifetime
-                              ? " · " + t("billing.lifetime")
-                              : ""
+                              ? ' · ' + t('billing.lifetime')
+                              : ''
                           }`}
                     </span>
                   </div>
                 </div>
-                {!isInternalPlan && (
+                {!isInternalPlan && !isTrial && (
                   <div className={styles.currentActions}>
                     <button
                       type="button"
                       onClick={onOpenPortal}
                       disabled={portalBusy}
-                      className={styles.planBtn + " " + styles.planBtnSecondary}
-                      style={{ padding: "0 16px" }}
+                      className={styles.planBtn + ' ' + styles.planBtnSecondary}
+                      style={{ padding: '0 16px' }}
                     >
-                      {portalBusy ? t("billing.opening") : t("billing.manage")}
+                      {portalBusy ? t('billing.opening') : t('billing.manage')}
                     </button>
                     {!current.cancelAt && (
                       <button
                         type="button"
                         onClick={() => setShowCancel(true)}
-                        className={styles.planBtn + " " + styles.planBtnSecondary}
-                        style={{ padding: "0 16px" }}
+                        className={
+                          styles.planBtn + ' ' + styles.planBtnSecondary
+                        }
+                        style={{ padding: '0 16px' }}
                       >
-                        {t("billing.cancelPlan")}
+                        {t('billing.cancelPlan')}
                       </button>
                     )}
                   </div>
@@ -372,11 +409,15 @@ function BillingInner() {
           {/* Plan picker — hidden for the internal SAMURAI plan */}
           {!isInternalPlan && (
             <Card
-              title={current ? t("billing.availablePlans") : t("billing.choosePlan")}
+              title={
+                hasPaidPlan
+                  ? t('billing.availablePlans')
+                  : t('billing.choosePlan')
+              }
               subtitle={
-                current
-                  ? t("billing.switchHint")
-                  : t("billing.pickPlanHint")
+                hasPaidPlan
+                  ? t('billing.switchHint')
+                  : t('billing.pickPlanHint')
               }
               actions={
                 <div className={styles.periodRow}>
@@ -386,86 +427,95 @@ function BillingInner() {
             >
               <div className={styles.plans}>
                 {PLANS.map((plan) => {
-                   const isCurrent =
-                     current?.subscriptionTier === plan.name &&
-                     current?.period === period;
+                  const isCurrent =
+                    !isTrial &&
+                    current?.subscriptionTier === plan.name &&
+                    current?.period === period;
                   const planLevel = TIER_ORDER[plan.name] ?? 0;
                   const isUpgrade = planLevel > currentLevel;
-            // Monthly: show the monthly price. Yearly: show the per-month
-            // equivalent as the main price, total yearly below.
-            const displayPrice =
-              period === "MONTHLY"
-                ? plan.monthlyPrice
-                : Math.round(plan.yearlyPrice / 12);
+                  // Monthly: show the monthly price. Yearly: show the per-month
+                  // equivalent as the main price, total yearly below.
+                  const displayPrice =
+                    period === 'MONTHLY'
+                      ? plan.monthlyPrice
+                      : Math.round(plan.yearlyPrice / 12);
 
-            return (
-              <div
-                key={plan.name}
-                className={
-                  styles.plan +
-                  (isCurrent ? " " + styles.planCurrent : "") +
-                  (plan.popular ? " " + styles.planPopular : "")
-                }
-              >
-                {plan.popular && (
-                  <span className={styles.popularBadge}>{t("billing.popular")}</span>
-                )}
-                <div className={styles.planHead}>
-                  <span className={styles.planName}>{planLabel(plan.name)}</span>
-                  <span className={styles.planTagline}>
-                    {planTagline(plan.name)}
-                  </span>
-                </div>
+                  return (
+                    <div
+                      key={plan.name}
+                      className={
+                        styles.plan +
+                        (isCurrent ? ' ' + styles.planCurrent : '') +
+                        (plan.popular ? ' ' + styles.planPopular : '')
+                      }
+                    >
+                      {plan.popular && (
+                        <span className={styles.popularBadge}>
+                          {t('billing.popular')}
+                        </span>
+                      )}
+                      <div className={styles.planHead}>
+                        <span className={styles.planName}>
+                          {planLabel(plan.name)}
+                        </span>
+                        <span className={styles.planTagline}>
+                          {planTagline(plan.name)}
+                        </span>
+                      </div>
 
-                <div>
-                  <div className={styles.priceRow}>
-                    <span className={styles.price}>${displayPrice}</span>
-                    <span className={styles.priceUnit}>{t("billing.perMonth")}</span>
-                  </div>
-                  <div className={styles.yearNote}>
-                    {period === "YEARLY"
-                      ? t("billing.billedYearly", { price: String(plan.yearlyPrice) })
-                      : ""}
-                  </div>
-                </div>
+                      <div>
+                        <div className={styles.priceRow}>
+                          <span className={styles.price}>${displayPrice}</span>
+                          <span className={styles.priceUnit}>
+                            {t('billing.perMonth')}
+                          </span>
+                        </div>
+                        <div className={styles.yearNote}>
+                          {period === 'YEARLY'
+                            ? t('billing.billedYearly', {
+                                price: String(plan.yearlyPrice),
+                              })
+                            : ''}
+                        </div>
+                      </div>
 
-                <div className={styles.priceDivider} />
+                      <div className={styles.priceDivider} />
 
-                <ul className={styles.featureList}>
-                  {planFeatures(plan).map((f) => (
-                    <li key={f} className={styles.feature}>
-                      <Check />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
+                      <ul className={styles.featureList}>
+                        {planFeatures(plan).map((f) => (
+                          <li key={f} className={styles.feature}>
+                            <Check />
+                            {f}
+                          </li>
+                        ))}
+                      </ul>
 
-                <button
-                  type="button"
-                  disabled={isCurrent || busyTier !== null}
-                  onClick={() => onSelectPlan(plan.name)}
-                  className={
-                    styles.planBtn +
-                    (isCurrent
-                      ? " " + styles.planBtnCurrent
-                      : !isUpgrade
-                        ? " " + styles.planBtnSecondary
-                        : "")
-                  }
-                >
-                  {isCurrent
-                    ? t("billing.currentPlan")
-                    : busyTier === plan.name
-                      ? t("billing.starting")
-                      : current
-                        ? isUpgrade
-                          ? t("common.upgrade")
-                          : t("billing.switch")
-                        : t("billing.choosePlan")}
-                </button>
-              </div>
-            );
-          })}
+                      <button
+                        type="button"
+                        disabled={isCurrent || busyTier !== null}
+                        onClick={() => onSelectPlan(plan.name)}
+                        className={
+                          styles.planBtn +
+                          (isCurrent
+                            ? ' ' + styles.planBtnCurrent
+                            : !isUpgrade
+                            ? ' ' + styles.planBtnSecondary
+                            : '')
+                        }
+                      >
+                        {isCurrent
+                          ? t('billing.currentPlan')
+                          : busyTier === plan.name
+                          ? t('billing.starting')
+                          : hasPaidPlan
+                          ? isUpgrade
+                            ? t('common.upgrade')
+                            : t('billing.switch')
+                          : t('billing.choosePlan')}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </Card>
           )}
@@ -484,7 +534,7 @@ function BillingInner() {
                   {t(item.q as any)}
                   <svg
                     className={
-                      styles.faqIcon + (open ? " " + styles.faqIconOpen : "")
+                      styles.faqIcon + (open ? ' ' + styles.faqIconOpen : '')
                     }
                     width="16"
                     height="16"
@@ -503,7 +553,7 @@ function BillingInner() {
                 </button>
                 <div
                   className={
-                    styles.faqAnswer + (open ? " " + styles.faqAnswerOpen : "")
+                    styles.faqAnswer + (open ? ' ' + styles.faqAnswerOpen : '')
                   }
                 >
                   {t(item.a as any)}
@@ -524,28 +574,26 @@ function BillingInner() {
             className={styles.modal}
             role="dialog"
             aria-modal="true"
-            aria-label={t("billing.cancelTitle")}
+            aria-label={t('billing.cancelTitle')}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className={styles.modalTitle}>{t("billing.cancelTitle")}</h2>
-            <p className={styles.modalText}>
-              {t("billing.cancelBody")}
-            </p>
+            <h2 className={styles.modalTitle}>{t('billing.cancelTitle')}</h2>
+            <p className={styles.modalText}>{t('billing.cancelBody')}</p>
             <textarea
               className={styles.textarea}
               value={cancelFeedback}
               onChange={(e) => setCancelFeedback(e.target.value)}
-              placeholder={t("billing.cancelPlaceholder")}
+              placeholder={t('billing.cancelPlaceholder')}
             />
             <div className={styles.modalActions}>
               <button
                 type="button"
                 onClick={() => setShowCancel(false)}
                 disabled={cancelBusy}
-                className={styles.planBtn + " " + styles.planBtnSecondary}
-                style={{ padding: "0 18px" }}
+                className={styles.planBtn + ' ' + styles.planBtnSecondary}
+                style={{ padding: '0 18px' }}
               >
-                {t("billing.keepPlan")}
+                {t('billing.keepPlan')}
               </button>
               <button
                 type="button"
@@ -553,13 +601,15 @@ function BillingInner() {
                 disabled={cancelBusy}
                 className={styles.planBtn}
                 style={{
-                  padding: "0 18px",
-                  background: "#dc2626",
-                  borderColor: "#dc2626",
-                  color: "#fff",
+                  padding: '0 18px',
+                  background: '#dc2626',
+                  borderColor: '#dc2626',
+                  color: '#fff',
                 }}
               >
-                {cancelBusy ? t("billing.cancelling") : t("billing.cancelSubscription")}
+                {cancelBusy
+                  ? t('billing.cancelling')
+                  : t('billing.cancelSubscription')}
               </button>
             </div>
           </div>
@@ -579,7 +629,7 @@ function PeriodToggle({
   const t = useT();
   return (
     <div className={styles.periodToggle}>
-      {(["MONTHLY", "YEARLY"] as BillingPeriod[]).map((p) => {
+      {(['MONTHLY', 'YEARLY'] as BillingPeriod[]).map((p) => {
         const active = period === p;
         return (
           <button
@@ -587,12 +637,14 @@ function PeriodToggle({
             type="button"
             onClick={() => onChange(p)}
             className={
-              styles.periodBtn + (active ? " " + styles.periodBtnActive : "")
+              styles.periodBtn + (active ? ' ' + styles.periodBtnActive : '')
             }
           >
-            {p === "MONTHLY" ? t("billing.monthly") : t("billing.yearly")}
-            {p === "YEARLY" && (
-              <span className={styles.saveBadge}>{t("billing.twoMonFree")}</span>
+            {p === 'MONTHLY' ? t('billing.monthly') : t('billing.yearly')}
+            {p === 'YEARLY' && (
+              <span className={styles.saveBadge}>
+                {t('billing.twoMonFree')}
+              </span>
             )}
           </button>
         );

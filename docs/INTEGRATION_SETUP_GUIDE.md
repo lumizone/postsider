@@ -233,7 +233,10 @@ Używa tych samych Google credentials co YouTube (`YOUTUBE_CLIENT_ID` / `YOUTUBE
    - `${FRONTEND_URL}/integrations/social/tiktok`
 
 ### Wymagane scopes:
-`video.list`, `user.info.basic`, `video.publish`, `video.upload`, `user.info.profile`, `user.info.stats`
+`user.info.basic`, `video.publish`, `video.upload`, `user.info.profile`, `user.info.stats`
+
+`video.list` is optional. Enable it to use video-level analytics and identify
+missing TikTok content in the media flow.
 
 ### Uwagi:
 - Wymagany min. 1 video LUB 1+ zdjęć (nie może być pusty)

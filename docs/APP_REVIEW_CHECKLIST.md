@@ -96,7 +96,8 @@ prywatne/draft (unaudited client).
 - [ ] Privacy / Terms URL jak wyżej
 - [ ] Weryfikacja domeny publikacji (pull-from-URL) w portalu
 - [ ] Scopes (`tiktok.provider.ts`): `user.info.basic`, `user.info.profile`,
-      `user.info.stats`, `video.list`, `video.publish`, `video.upload`
+       `user.info.stats`, `video.publish`, `video.upload` (`video.list` is
+       optional for video-level analytics)
 - [ ] Demo video + uzasadnienia dla `video.publish` / `video.upload`
 - [ ] Redirect URI: `https://app.postsider.com/integrations/social/tiktok`
 

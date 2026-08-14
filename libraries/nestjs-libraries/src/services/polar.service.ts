@@ -38,8 +38,7 @@ export class PolarService {
   private readonly _logger = new Logger(PolarService.name);
   private readonly _polar = new Polar({
     accessToken: process.env.POLAR_ACCESS_TOKEN || '',
-    server:
-      (process.env.POLAR_SERVER as 'sandbox' | 'production') || 'sandbox',
+    server: (process.env.POLAR_SERVER as 'sandbox' | 'production') || 'sandbox',
   });
 
   constructor(
@@ -78,8 +77,10 @@ export class PolarService {
    * Route a verified webhook event to the right handler.
    * Returns { ok: true } for events we don't care about.
    */
-  async handleWebhook(event: any) {
-    const eventId = String(event?.id || event?.eventId || '');
+  async handleWebhook(event: any, webhookId?: string) {
+    // Polar uses Standard Webhooks, which carries the delivery id in the
+    // signed `webhook-id` header rather than the JSON event body.
+    const eventId = String(webhookId || event?.id || event?.eventId || '');
     if (!eventId) throw new Error('Polar webhook has no event id');
 
     const existing = await this._prisma.polarWebhookEvent.findUnique({
@@ -106,7 +107,11 @@ export class PolarService {
           { processingAt: { lt: new Date(Date.now() - 10 * 60 * 1000) } },
         ],
       },
-      data: { processingAt: new Date(), attempts: { increment: 1 }, lastError: null },
+      data: {
+        processingAt: new Date(),
+        attempts: { increment: 1 },
+        lastError: null,
+      },
     });
     if (claim.count !== 1) {
       throw new Error(`Polar webhook ${eventId} is already being processed`);
@@ -125,7 +130,10 @@ export class PolarService {
         data: {
           attempts: { increment: 1 },
           processingAt: null,
-          lastError: error instanceof Error ? error.message.slice(0, 1000) : 'Unknown error',
+          lastError:
+            error instanceof Error
+              ? error.message.slice(0, 1000)
+              : 'Unknown error',
         },
       });
       throw error;
@@ -138,13 +146,28 @@ export class PolarService {
       case 'subscription.active':
       case 'subscription.updated':
       case 'subscription.uncanceled':
-        return this.onSubscriptionUpserted(event.data);
       case 'subscription.canceled':
+      case 'subscription.cycled':
+      case 'subscription.past_due':
+      case 'subscription.paused':
+      case 'subscription.resumed':
       case 'subscription.revoked':
-        return this.onSubscriptionCanceled(event.data);
+        // Polar emits subscription.canceled as soon as a customer schedules a
+        // cancellation, while its status remains active until period end. Only
+        // terminal statuses lose PostSider access; past_due keeps access while
+        // Polar retries the payment.
+        return this.hasLostSubscriptionAccess(event.data)
+          ? this.onSubscriptionCanceled(event.data)
+          : this.onSubscriptionUpserted(event.data);
       default:
         return { ok: true };
     }
+  }
+
+  private hasLostSubscriptionAccess(subscription: any) {
+    return ['canceled', 'paused', 'unpaid', 'revoked'].includes(
+      String(subscription?.status || '').toLowerCase()
+    );
   }
 
   /**
@@ -194,9 +217,8 @@ export class PolarService {
     // emailing the org's admins about) apart from a duplicate/retry webhook
     // delivery or an unrelated field update on the same tier — Polar can
     // resend 'subscription.updated' for reasons that aren't a tier change.
-    const previous = await this._subscriptionService.getSubscriptionByOrganizationId(
-      orgId
-    );
+    const previous =
+      await this._subscriptionService.getSubscriptionByOrganizationId(orgId);
     const planChanged =
       !previous ||
       previous.subscriptionTier !== ref.tier ||
@@ -218,7 +240,9 @@ export class PolarService {
       await this._notificationService.notifyApprovers(
         orgId,
         'Subscription plan updated',
-        `Your organization's plan is now ${ref.tier} (billed ${ref.period.toLowerCase()}).`
+        `Your organization's plan is now ${
+          ref.tier
+        } (billed ${ref.period.toLowerCase()}).`
       );
     }
 
@@ -268,9 +292,7 @@ export class PolarService {
   private extractCancelAt(subscription: any): number | null {
     const ends =
       subscription?.endsAt ||
-      (subscription?.cancelAtPeriodEnd
-        ? subscription?.currentPeriodEnd
-        : null);
+      (subscription?.cancelAtPeriodEnd ? subscription?.currentPeriodEnd : null);
     if (!ends) {
       return null;
     }
@@ -385,7 +407,11 @@ export class PolarService {
     const existing = await this._subscriptionService.getSubscription(
       organizationId
     );
-    if (!existing?.identifier || existing.identifier === 'trial' || existing.isLifetime) {
+    if (
+      !existing?.identifier ||
+      existing.identifier === 'trial' ||
+      existing.isLifetime
+    ) {
       return false;
     }
 
@@ -435,9 +461,7 @@ export class PolarService {
   ) {
     try {
       const session = await this._polar.customerSessions.create(
-        customerId
-          ? { customerId }
-          : { externalCustomerId: organizationId! }
+        customerId ? { customerId } : { externalCustomerId: organizationId! }
       );
       return { url: session.customerPortalUrl };
     } catch (err) {
@@ -469,7 +493,8 @@ export class PolarService {
       subscriptionUpdate: { cancelAtPeriodEnd: true },
     });
 
-    const endsAt = (updated as any)?.endsAt || (updated as any)?.currentPeriodEnd;
+    const endsAt =
+      (updated as any)?.endsAt || (updated as any)?.currentPeriodEnd;
     return {
       id,
       cancel_at: endsAt ? new Date(endsAt) : undefined,
@@ -574,7 +599,9 @@ export class PolarService {
         return 0;
       }
       resultingSubscriptionId = (checkout as any)?.subscriptionId || null;
-      const sub = await this._subscriptionService.getSubscription(organizationId);
+      const sub = await this._subscriptionService.getSubscription(
+        organizationId
+      );
       // On a plain first-time subscribe there is no prior subscription, so
       // any subscription showing up means THIS checkout provisioned it. But
       // on an upgrade the org can already have an older subscription while
@@ -587,7 +614,10 @@ export class PolarService {
       ) {
         return 2;
       }
-      if (checkout?.status === 'confirmed' || checkout?.status === 'succeeded') {
+      if (
+        checkout?.status === 'confirmed' ||
+        checkout?.status === 'succeeded'
+      ) {
         return 1;
       }
     } catch (err) {
