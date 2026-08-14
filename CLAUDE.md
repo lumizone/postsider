@@ -4,6 +4,15 @@ The PostSider product app (NestJS backend + Next 15/React 19 frontend + Temporal
 
 ## Status
 
+- **Production smoke test (2026-08-14).** Public production checks passed:
+  `GET /api/health` returned HTTP 200 with Redis, PostgreSQL, and Temporal all
+  `ok`; `/`, `/login`, and `/register` returned HTTP 200; HSTS,
+  `X-Content-Type-Options: nosniff`, and `Referrer-Policy` headers were
+  present. Authenticated dashboard checks and VPS-side worker/container checks
+  were not run in this pass because SSH key access was unavailable and no
+  credentials/session for the dedicated `hunter19973` test account were
+  provided. No production data, configuration, billing, OAuth connection, or
+  publication was changed.
 - **Release snapshot (2026-08-12).** Release commits `76360a5`, `8694212`,
   `387353b`, and `1224074` are committed on `main` and pushed to
   `origin/main` (`github.com/lumizone/postsider_production`). Production was
