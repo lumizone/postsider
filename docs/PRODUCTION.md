@@ -24,7 +24,7 @@ cd /opt/postsider
 git pull origin main
 
 # Rebuild and restart (migrations run automatically on startup)
-docker compose -f docker-compose.production.yaml --env-file .env.production up -d --build
+sudo ./deploy.sh
 ```
 
 ---
@@ -46,6 +46,9 @@ pnpm prisma-migrate-status
 ### Production deployment
 
 Migrations run automatically on app startup via `pnpm prisma-migrate-deploy`.
+The root `deploy.sh` creates a pre-deploy PostgreSQL dump, tags the previous
+image for rollback, recreates the stack, and fails hard if the app health gate
+does not pass. Use `sudo ./deploy.sh --no-build` only for env-only restarts.
 
 ### Legacy Postiz data preflight
 
@@ -88,6 +91,8 @@ Backups run every 6 hours via cron (set up by `setup-backup-cron.sh`).
 - **Format:** `postsider_YYYYMMDD_HHMMSS.sql.gz` (pg_dump custom format, gzipped)
 - **Retention:** 30 days
 - **Log:** `/var/log/postsider-backup.log`
+- **Scope:** PostgreSQL only. MinIO media is not included and needs a separate
+  object-storage or Docker-volume backup.
 
 ### Manual backup
 
@@ -139,9 +144,24 @@ Response:
   "uptime": 3600,
   "checks": {
     "redis": "ok",
-    "database": "ok"
+    "database": "ok",
+    "temporal": "ok"
   }
 }
+```
+
+Worker health is a separate endpoint inside the app container:
+
+```bash
+docker exec postsider-app wget -qO- http://127.0.0.1:3002/health/workers
+```
+
+It must report `32/32` healthy workers in the current production image. Check
+the `main` task queue for active pollers and zero backlog:
+
+```bash
+addr=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' postsider-temporal)
+docker exec postsider-temporal temporal task-queue describe --task-queue main --address "$addr:7233"
 ```
 
 ### Logs
@@ -208,7 +228,8 @@ docker compose -f docker-compose.production.yaml restart temporal
 2. Clone repository
 3. Copy `.env.production` from backup (or regenerate via `deploy.sh`)
 4. Restore database from latest `/opt/postsider-backups/` backup
-5. Run `./deploy.sh`
+5. Restore the separately backed-up MinIO media volume or objects
+6. Run `sudo ./deploy.sh`
 
 ---
 

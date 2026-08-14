@@ -85,7 +85,7 @@ LinkedIn, Facebook, …). Use **fresh production credentials**, not the dev keys
 ## 4. Deploy
 
 ```bash
-./deploy.sh --bootstrap
+sudo ./deploy.sh --bootstrap
 ```
 
 This will:
@@ -99,8 +99,8 @@ Re-deploys / updates:
 
 ```bash
 git pull
-./deploy.sh            # rebuild + restart (migrations run automatically on boot)
-./deploy.sh --no-build # just restart
+sudo ./deploy.sh            # rebuild + restart (migrations run automatically on boot)
+sudo ./deploy.sh --no-build # just restart after env-only changes
 ```
 
 ### Existing Postiz-data upgrades
@@ -174,7 +174,10 @@ Only expose them publicly behind basic auth (see the commented blocks in
 
 ## 7. Backups
 
-Critical state lives in the Postgres and MinIO volumes.
+Critical state lives in the Postgres and MinIO volumes. The current helper
+backs up PostgreSQL only; it does **not** create a MinIO media backup. Configure
+an object-storage/volume backup before treating the deployment as disaster-
+recoverable.
 
 ```bash
 # Database and optional MinIO backup helper
@@ -200,6 +203,8 @@ optional MinIO upload requires a configured `mc` alias.
 - [ ] DbGate / Temporal UI not publicly exposed (or behind auth)
 - [ ] Production OAuth keys in use — dev keys from `.env` rotated/removed
 - [ ] Backups scheduled
+- [ ] PostgreSQL backups copied off the VPS
+- [ ] MinIO media backup configured and restore-tested
 
 ---
 
@@ -207,8 +212,9 @@ optional MinIO upload requires a configured `mc` alias.
 
 | Symptom | Cause / fix |
 |---------|-------------|
-| Dashboard loads but every API call fails / hits `localhost:3000` | `NEXT_PUBLIC_BACKEND_URL` wasn't set at build time. Set it in `.env.production` and rebuild with `./deploy.sh`. |
+| Dashboard loads but every API call fails / hits `localhost:3000` | `NEXT_PUBLIC_BACKEND_URL` wasn't set at build time. Set it in `.env.production` and rebuild with `sudo ./deploy.sh`. |
 | 502 from the reverse proxy | App container not healthy yet — `docker compose --env-file .env.production -f docker-compose.production.yaml logs -f postsider`. |
 | Scheduled posts never publish | Orchestrator/Temporal issue — check `postsider-temporal` and the orchestrator process inside the app container (`docker exec postsider-app pm2 ls`). |
+| Workers appear healthy but publishing is stuck | Check `docker exec postsider-app wget -qO- http://127.0.0.1:3002/health/workers` and describe the `main` task queue; publishing requires active `main` pollers and zero backlog. |
 | Login works locally but not in prod | Remove `NOT_SECURED` from `.env.production`; any set value enables insecure mode and prevents the production session cookie. |
 | Images don't load (`/storage/...` 404) | Reverse proxy `/storage` → MinIO mapping missing, or the `postsider-media` bucket wasn't created. |
