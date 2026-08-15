@@ -1,0 +1,22 @@
+# Keep docker build context lean — exclude everything that isn't needed at build time.
+**/node_modules
+node_modules/*
+node_modules
+docker-data/*
+dist
+/apps/backend/dist
+/apps/orchestrator/dist
+/apps/commands/dist
+/apps/sdk/dist
+.devcontainer
+**/.git
+**/*.md
+**/LICENSE
+**/npm-debug.log
+**/*.vscode
+.git
+.github
+reports
+.env
+.env.*
+uploads/

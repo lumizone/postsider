@@ -1,0 +1,681 @@
+import {
+  BadRequestException,
+  forwardRef,
+  HttpException,
+  HttpStatus,
+  Inject,
+  Injectable,
+} from '@nestjs/common';
+import { IntegrationRepository } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.repository';
+import { IntegrationManager } from '@postsider/nestjs-libraries/integrations/integration.manager';
+import {
+  AnalyticsData,
+  SocialProvider,
+} from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { Integration, Organization } from '@prisma/client';
+import { NotificationService } from '@postsider/nestjs-libraries/database/prisma/notifications/notification.service';
+import dayjs from 'dayjs';
+import { timer } from '@postsider/helpers/utils/timer';
+import { ioRedis } from '@postsider/nestjs-libraries/redis/redis.service';
+import { RefreshToken } from '@postsider/nestjs-libraries/integrations/social.abstract';
+import { IntegrationTimeDto } from '@postsider/nestjs-libraries/dtos/integrations/integration.time.dto';
+import { UploadFactory } from '@postsider/nestjs-libraries/upload/upload.factory';
+import { PlugDto } from '@postsider/nestjs-libraries/dtos/plugs/plug.dto';
+import { difference } from 'lodash';
+import utc from 'dayjs/plugin/utc';
+import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
+import { RefreshIntegrationService } from '@postsider/nestjs-libraries/integrations/refresh.integration.service';
+import { TemporalService } from 'nestjs-temporal-core';
+
+dayjs.extend(utc);
+
+@Injectable()
+export class IntegrationService {
+  private storage = UploadFactory.createStorage();
+  constructor(
+    private _integrationRepository: IntegrationRepository,
+    private _integrationManager: IntegrationManager,
+    private _notificationService: NotificationService,
+    @Inject(forwardRef(() => RefreshIntegrationService))
+    private _refreshIntegrationService: RefreshIntegrationService,
+    private _temporalService: TemporalService
+  ) {}
+
+  async changeActiveCron(_orgId: string) {
+    return true;
+  }
+
+  getMentions(platform: string, q: string) {
+    return this._integrationRepository.getMentions(platform, q);
+  }
+
+  insertMentions(
+    platform: string,
+    mentions: { name: string; username: string; image: string }[]
+  ) {
+    return this._integrationRepository.insertMentions(platform, mentions);
+  }
+
+  async setTimes(
+    orgId: string,
+    integrationId: string,
+    times: IntegrationTimeDto
+  ) {
+    if (times.timezone) {
+      try {
+        // Throws RangeError for anything that isn't a real IANA zone name —
+        // cheaper and more correct than a hand-maintained allowlist.
+        Intl.DateTimeFormat(undefined, { timeZone: times.timezone });
+      } catch {
+        throw new BadRequestException(
+          `"${times.timezone}" is not a valid timezone name.`
+        );
+      }
+    }
+    return this._integrationRepository.setTimes(orgId, integrationId, times);
+  }
+
+  updateProviderSettings(org: string, id: string, additionalSettings: string) {
+    return this._integrationRepository.updateProviderSettings(
+      org,
+      id,
+      additionalSettings
+    );
+  }
+
+  async createOrUpdateIntegration(
+    additionalSettings:
+      | {
+          title: string;
+          description: string;
+          type: 'checkbox' | 'text' | 'textarea';
+          value: any;
+          regex?: string;
+        }[]
+      | undefined,
+    oneTimeToken: boolean,
+    org: string,
+    name: string,
+    picture: string | undefined,
+    type: 'article' | 'social',
+    internalId: string,
+    provider: string,
+    token: string,
+    refreshToken = '',
+    expiresIn?: number,
+    username?: string,
+    isBetweenSteps = false,
+    refresh?: string,
+    timezone?: number,
+    customInstanceDetails?: string
+  ) {
+    const uploadedPicture = picture
+      ? picture?.indexOf('imagedelivery.net') > -1
+        ? picture
+        : await this.storage.uploadSimple(picture)
+      : undefined;
+
+    return this._integrationRepository.createOrUpdateIntegration(
+      additionalSettings,
+      oneTimeToken,
+      org,
+      name,
+      uploadedPicture,
+      type,
+      internalId,
+      provider,
+      token,
+      refreshToken,
+      expiresIn,
+      username,
+      isBetweenSteps,
+      refresh,
+      timezone,
+      customInstanceDetails
+    );
+  }
+
+  updateIntegrationGroup(org: string, id: string, group: string) {
+    return this._integrationRepository.updateIntegrationGroup(org, id, group);
+  }
+
+  updateOnCustomerName(org: string, id: string, name: string) {
+    return this._integrationRepository.updateOnCustomerName(org, id, name);
+  }
+
+  getIntegrationsList(org: string) {
+    return this._integrationRepository.getIntegrationsList(org);
+  }
+
+  getAllForRefreshArming() {
+    return this._integrationRepository.getAllForRefreshArming();
+  }
+
+  getIntegrationForOrder(id: string, order: string, user: string, org: string) {
+    return this._integrationRepository.getIntegrationForOrder(
+      id,
+      order,
+      user,
+      org
+    );
+  }
+
+  updateNameAndUrl(id: string, name: string, url: string) {
+    return this._integrationRepository.updateNameAndUrl(id, name, url);
+  }
+
+  getIntegrationById(org: string, id: string) {
+    return this._integrationRepository.getIntegrationById(org, id);
+  }
+
+  async refreshToken(provider: SocialProvider, refresh: string) {
+    try {
+      const { refreshToken, accessToken, expiresIn } =
+        await provider.refreshToken(refresh);
+
+      if (!refreshToken || !accessToken || !expiresIn) {
+        return false;
+      }
+
+      return { refreshToken, accessToken, expiresIn };
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async disconnectChannel(orgId: string, integration: Integration) {
+    await this._integrationRepository.disconnectChannel(orgId, integration.id);
+    await this.informAboutRefreshError(orgId, integration);
+  }
+
+  async informAboutRefreshError(
+    orgId: string,
+    integration: Integration,
+    err = ''
+  ) {
+    await this._notificationService.inAppNotification(
+      orgId,
+      `Could not refresh your ${integration.providerIdentifier} channel ${err}`,
+      `Could not refresh your ${integration.providerIdentifier} channel ${err}. Please go back to the system and connect it again ${process.env.FRONTEND_URL}/launches`,
+      true,
+      false,
+      'info'
+    );
+  }
+
+  async refreshNeeded(org: string, id: string) {
+    return this._integrationRepository.refreshNeeded(org, id);
+  }
+
+  async setBetweenRefreshSteps(id: string) {
+    return this._integrationRepository.setBetweenRefreshSteps(id);
+  }
+
+  async refreshTokens() {
+    const integrations = await this._integrationRepository.needsToBeRefreshed();
+    for (const integration of integrations) {
+      const provider = this._integrationManager.getSocialIntegration(
+        integration.providerIdentifier
+      );
+
+      const data = await this.refreshToken(provider, integration.refreshToken!);
+
+      if (!data) {
+        await this.informAboutRefreshError(
+          integration.organizationId,
+          integration
+        );
+        await this._integrationRepository.refreshNeeded(
+          integration.organizationId,
+          integration.id
+        );
+        // `return` aborted the whole batch on the first failing integration —
+        // every remaining one was skipped. `continue` keeps the sweep going.
+        continue;
+      }
+
+      const { refreshToken, accessToken, expiresIn } = data;
+
+      await this.createOrUpdateIntegration(
+        undefined,
+        !!provider.oneTimeToken,
+        integration.organizationId,
+        integration.name,
+        undefined,
+        'social',
+        integration.internalId,
+        integration.providerIdentifier,
+        accessToken,
+        refreshToken,
+        expiresIn
+      );
+    }
+  }
+
+  async disableChannel(org: string, id: string) {
+    return this._integrationRepository.disableChannel(org, id);
+  }
+
+  async wipeIntegrationsForPlatformUser(
+    providerIdentifiers: string[],
+    internalIds: string[]
+  ) {
+    const integrations =
+      await this._integrationRepository.findByPlatformInternalIds(
+        providerIdentifiers,
+        internalIds
+      );
+    if (integrations.length) {
+      await this._integrationRepository.dataDeletionWipe(
+        integrations.map((i) => i.id)
+      );
+    }
+    return integrations.length;
+  }
+
+  async deauthorizeIntegrationsForPlatformUser(
+    providerIdentifiers: string[],
+    internalIds: string[]
+  ) {
+    const integrations =
+      await this._integrationRepository.findByPlatformInternalIds(
+        providerIdentifiers,
+        internalIds
+      );
+    if (integrations.length) {
+      await this._integrationRepository.markDeauthorized(
+        integrations.map((i) => i.id)
+      );
+    }
+    return integrations.length;
+  }
+
+  async enableChannel(org: string, totalChannels: number, id: string) {
+    const integrations = (
+      await this._integrationRepository.getIntegrationsList(org)
+    ).filter((f) => !f.disabled);
+    if (
+      isBillingEnabled() &&
+      integrations.length >= totalChannels
+    ) {
+      throw new Error('You have reached the maximum number of channels');
+    }
+
+    return this._integrationRepository.enableChannel(org, id);
+  }
+
+  async getPostsForChannel(org: string, id: string) {
+    return this._integrationRepository.getPostsForChannel(org, id);
+  }
+
+  async deleteChannel(org: string, id: string) {
+    return this._integrationRepository.deleteChannel(org, id);
+  }
+
+  async disableIntegrations(org: string, totalChannels: number) {
+    return this._integrationRepository.disableIntegrations(org, totalChannels);
+  }
+
+  async checkForDeletedOnceAndUpdate(org: string, page: string) {
+    return this._integrationRepository.checkForDeletedOnceAndUpdate(org, page);
+  }
+
+  async saveProviderPage(org: string, id: string, data: any) {
+    const getIntegration = await this._integrationRepository.getIntegrationById(
+      org,
+      id
+    );
+    if (!getIntegration) {
+      throw new HttpException('Integration not found', HttpStatus.NOT_FOUND);
+    }
+    if (!getIntegration.inBetweenSteps) {
+      throw new HttpException('Invalid request', HttpStatus.BAD_REQUEST);
+    }
+
+    const provider = this._integrationManager.getSocialIntegration(
+      getIntegration.providerIdentifier
+    );
+
+    if (!provider.fetchPageInformation) {
+      throw new HttpException(
+        'Provider does not support page selection',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const getIntegrationInformation = await provider.fetchPageInformation(
+      getIntegration.token,
+      data
+    );
+
+    // A provider's fetchPageInformation can come back without a resolvable
+    // id (an upstream API error/edge-case response shape) — persisting that
+    // anyway wrote the literal string "undefined" as internalId in one real
+    // case (Instagram), which then silently 100%-failed every publish for
+    // that channel (every post/media call is built as `${internalId}/media`).
+    // Fail the connect step instead so the user can retry, rather than
+    // completing "successfully" into a channel that can never publish.
+    if (!getIntegrationInformation?.id) {
+      throw new HttpException(
+        'Could not resolve the selected page/account — please try again',
+        HttpStatus.BAD_GATEWAY
+      );
+    }
+
+    await this.checkForDeletedOnceAndUpdate(
+      org,
+      String(getIntegrationInformation.id)
+    );
+    await this._integrationRepository.updateIntegration(id, {
+      picture: getIntegrationInformation.picture,
+      internalId: String(getIntegrationInformation.id),
+      organizationId: org,
+      name: getIntegrationInformation.name,
+      inBetweenSteps: false,
+      token: getIntegrationInformation.access_token,
+      profile: getIntegrationInformation.username,
+    });
+
+    return { success: true };
+  }
+
+  async checkAnalytics(
+    org: Organization,
+    integration: string,
+    date: string,
+    forceRefresh = false,
+    _retryCount = 0
+  ): Promise<AnalyticsData[] | { unsupported: true }> {
+    const getIntegration = await this.getIntegrationById(org.id, integration);
+
+    if (!getIntegration) {
+      throw new Error('Invalid integration');
+    }
+
+    if (getIntegration.type !== 'social') {
+      return [];
+    }
+
+    const integrationProvider = this._integrationManager.getSocialIntegration(
+      getIntegration.providerIdentifier
+    );
+
+    if (!integrationProvider) {
+      return [];
+    }
+
+    // Distinguish "this platform doesn't support analytics at all" from a
+    // genuinely empty/quiet channel — both used to render as the same blank
+    // chart, so a customer on e.g. Mastodon/Bluesky/personal LinkedIn/
+    // Discord/Slack/Telegram/WordPress (no `analytics()` implemented) had no
+    // way to tell whether the feature was broken or the channel had zero
+    // engagement.
+    if (!integrationProvider.analytics) {
+      return { unsupported: true };
+    }
+
+    if (
+      dayjs(getIntegration?.tokenExpiration).isBefore(dayjs()) ||
+      forceRefresh
+    ) {
+      const data = await this._refreshIntegrationService.refresh(
+        getIntegration
+      );
+      if (!data) {
+        return [];
+      }
+
+      const { accessToken } = data;
+
+      if (accessToken) {
+        getIntegration.token = accessToken;
+
+        if (integrationProvider.refreshWait) {
+          await timer(10000);
+        }
+      } else {
+        await this.disconnectChannel(org.id, getIntegration);
+        return [];
+      }
+    }
+
+    if (!forceRefresh) {
+      const getIntegrationData = await ioRedis.get(
+        `integration:${org.id}:${integration}:${date}`
+      );
+      if (getIntegrationData) {
+        return JSON.parse(getIntegrationData);
+      }
+    }
+
+    if (integrationProvider.analytics) {
+      try {
+        const loadAnalytics = await integrationProvider.analytics(
+          getIntegration.internalId,
+          getIntegration.token,
+          +date
+        );
+        await ioRedis.set(
+          `integration:${org.id}:${integration}:${date}`,
+          JSON.stringify(loadAnalytics),
+          'EX',
+          !process.env.NODE_ENV || process.env.NODE_ENV === 'development'
+            ? 1
+            : 3600
+        );
+        return loadAnalytics;
+      } catch (e) {
+        if (e instanceof RefreshToken) {
+          // Bounded: a token can refresh successfully yet still be rejected by
+          // the analytics API (missing scope, revoked-but-refreshable). Without
+          // a cap this recursed forever — hanging the request and hammering the
+          // provider + refresh endpoints. Mirrors checkPostAnalytics's guard.
+          if (_retryCount >= 2) {
+            console.error(
+              `[analytics] ${getIntegration.providerIdentifier}/${integration}: token still rejected after ${_retryCount} refresh attempts — giving up`
+            );
+            return [];
+          }
+          return this.checkAnalytics(
+            org,
+            integration,
+            date,
+            true,
+            _retryCount + 1
+          );
+        }
+        // Previously swallowed silently, so the UI rendered an empty chart —
+        // indistinguishable from "no data" — for a channel that was actually
+        // erroring. Log it so genuine failures are visible.
+        console.error(
+          `[analytics] ${getIntegration.providerIdentifier}/${integration}: analytics fetch failed`,
+          e
+        );
+      }
+    }
+
+    return [];
+  }
+
+  customers(orgId: string) {
+    return this._integrationRepository.customers(orgId);
+  }
+
+  getPlugsByIntegrationId(org: string, integrationId: string) {
+    return this._integrationRepository.getPlugsByIntegrationId(
+      org,
+      integrationId
+    );
+  }
+
+  async processInternalPlug(
+    data: {
+      post: string;
+      originalIntegration: string;
+      integration: string;
+      plugName: string;
+      orgId: string;
+      delay: number;
+      information: any;
+    },
+    forceRefresh = false
+  ): Promise<any> {
+    const originalIntegration =
+      await this._integrationRepository.getIntegrationById(
+        data.orgId,
+        data.originalIntegration
+      );
+
+    const getIntegration = await this._integrationRepository.getIntegrationById(
+      data.orgId,
+      data.integration
+    );
+
+    if (!getIntegration || !originalIntegration) {
+      return;
+    }
+
+    const getAllInternalPlugs = this._integrationManager
+      .getInternalPlugs(getIntegration.providerIdentifier)
+      .internalPlugs.find((p: any) => p.identifier === data.plugName);
+
+    if (!getAllInternalPlugs) {
+      return;
+    }
+
+    const getSocialIntegration = this._integrationManager.getSocialIntegration(
+      getIntegration.providerIdentifier
+    );
+
+    // @ts-ignore
+    await getSocialIntegration?.[getAllInternalPlugs.methodName]?.(
+      getIntegration,
+      originalIntegration,
+      data.post,
+      data.information
+    );
+
+    return;
+  }
+
+  async processPlugs(data: {
+    plugId: string;
+    postId: string;
+    delay: number;
+    totalRuns: number;
+    currentRun: number;
+  }) {
+    const getPlugById = await this._integrationRepository.getPlug(data.plugId);
+    if (!getPlugById) {
+      return true;
+    }
+
+    const integration = this._integrationManager.getSocialIntegration(
+      getPlugById.integration.providerIdentifier
+    );
+
+    // @ts-ignore
+    const process = await integration[getPlugById.plugFunction](
+      getPlugById.integration,
+      data.postId,
+      JSON.parse(getPlugById.data).reduce((all: any, current: any) => {
+        all[current.name] = current.value;
+        return all;
+      }, {})
+    );
+
+    if (process) {
+      return true;
+    }
+
+    if (data.totalRuns === data.currentRun) {
+      return true;
+    }
+
+    return false;
+  }
+
+  async createOrUpdatePlug(
+    orgId: string,
+    integrationId: string,
+    body: PlugDto
+  ) {
+    const { activated } = await this._integrationRepository.createOrUpdatePlug(
+      orgId,
+      integrationId,
+      body
+    );
+
+    return {
+      activated,
+    };
+  }
+
+  async changePlugActivation(orgId: string, plugId: string, status: boolean) {
+    const { id, integrationId, plugFunction } =
+      await this._integrationRepository.changePlugActivation(
+        orgId,
+        plugId,
+        status
+      );
+
+    return { id };
+  }
+
+  async getPlugs(orgId: string, integrationId: string) {
+    return this._integrationRepository.getPlugs(orgId, integrationId);
+  }
+
+  async loadExisingData(
+    methodName: string,
+    integrationId: string,
+    id: string[]
+  ) {
+    const exisingData = await this._integrationRepository.loadExisingData(
+      methodName,
+      integrationId,
+      id
+    );
+    const loadOnlyIds = exisingData.map((p) => p.value);
+    return difference(id, loadOnlyIds);
+  }
+
+  async findFreeDateTime(
+    orgId: string,
+    integrationsId?: string
+  ): Promise<{
+    slots: { time: number; days?: number[] }[];
+    timezone: string;
+  }> {
+    const findTimes = await this._integrationRepository.getPostingTimes(
+      orgId,
+      integrationsId
+    );
+    const all = findTimes.reduce(
+      (acc: { time: number; days?: number[] }[], current: any) => {
+        const slots = JSON.parse(current.postingTimes) as {
+          time: number;
+          days?: number[];
+        }[];
+        return [...acc, ...slots.map((p) => ({ time: p.time, days: p.days }))];
+      },
+      [] as { time: number; days?: number[] }[]
+    );
+    // De-duplicate by time + day fingerprint so the same slot from multiple
+    // channels is not counted twice.
+    const seen = new Map<string, { time: number; days?: number[] }>();
+    for (const slot of all) {
+      const key = `${slot.time}:${(slot.days ?? [])
+        .slice()
+        .sort((a, b) => a - b)
+        .join(',')}`;
+      if (!seen.has(key)) seen.set(key, slot);
+    }
+    // A specific channel has one unambiguous timezone. The org-wide lookup
+    // (no integrationsId — merges slots across every channel) has no single
+    // meaningful zone, so it stays UTC-anchored, same as before this feature.
+    const timezone =
+      integrationsId && findTimes[0]?.timezone ? findTimes[0].timezone : 'UTC';
+    return { slots: Array.from(seen.values()), timezone };
+  }
+}

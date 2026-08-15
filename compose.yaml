@@ -1,0 +1,218 @@
+name: postsider
+
+# Full self-hosted stack. Copy .env.example to .env, replace every CHANGE_ME
+# value, then run `docker compose up -d --build`.
+#
+# The application is bound to localhost by default. Put Caddy, nginx, Traefik,
+# or another TLS reverse proxy in front of 127.0.0.1:5000. Infrastructure
+# services remain private to Docker networks; the optional Temporal UI is also
+# bound to localhost and starts only with `--profile tools`.
+
+services:
+  postsider:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:?Set NEXT_PUBLIC_BACKEND_URL in .env}
+        NEXT_PUBLIC_SELF_HOSTED: "true"
+        NEXT_PUBLIC_VERSION: ${NEXT_PUBLIC_VERSION:-1.0.0}
+        NEXT_PUBLIC_TELEGRAM_BOT_NAME: ${NEXT_PUBLIC_TELEGRAM_BOT_NAME:-}
+        NEXT_PUBLIC_DISABLE_REGISTRATION: ${NEXT_PUBLIC_DISABLE_REGISTRATION:-false}
+    restart: unless-stopped
+    env_file: ${POSTSIDER_ENV_FILE:-.env}
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+    ports:
+      - "127.0.0.1:5000:5000"
+    networks:
+      - app
+      - temporal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      temporal:
+        condition: service_healthy
+    stop_grace_period: 45s
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:5000/ && wget -q --spider http://localhost:5000/api/health && wget -q --spider http://localhost:3002/health/workers"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 180s
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - effective_cache_size=256MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - max_connections=100
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --maxmemory 128mb --maxmemory-policy volatile-lru --save 60 1000
+    volumes:
+      - redis-data:/data
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  minio:
+    image: minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?Set MINIO_ACCESS_KEY in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?Set MINIO_SECRET_KEY in .env}
+    volumes:
+      - minio-data:/data
+    ports:
+      - "127.0.0.1:9000:9000"
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  minio-init:
+    image: minio/mc@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?Set MINIO_ACCESS_KEY in .env}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?Set MINIO_SECRET_KEY in .env}
+      MINIO_BUCKET: ${MINIO_BUCKET:?Set MINIO_BUCKET in .env}
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        mc alias set postsider http://minio:9000 "$${MINIO_ACCESS_KEY}" "$${MINIO_SECRET_KEY}"
+        mc mb "postsider/$${MINIO_BUCKET}" --ignore-existing
+        sed "s|__MINIO_BUCKET__|$${MINIO_BUCKET}|g" /policy.template.json > /tmp/policy.json
+        mc anonymous set-json /tmp/policy.json "postsider/$${MINIO_BUCKET}"
+    volumes:
+      - ./minio-anon-policy.json:/policy.template.json:ro
+    networks:
+      - app
+
+  temporal-elasticsearch:
+    image: elasticsearch:7.17.27
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      ES_JAVA_OPTS: -Xms256m -Xmx384m
+      xpack.security.enabled: "false"
+    volumes:
+      - temporal-es-data:/usr/share/elasticsearch/data
+    networks:
+      - temporal
+
+  temporal-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: ${TEMPORAL_POSTGRES_PASSWORD:?Set TEMPORAL_POSTGRES_PASSWORD in .env}
+    volumes:
+      - temporal-pg-data:/var/lib/postgresql/data
+    networks:
+      - temporal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  temporal:
+    image: temporalio/auto-setup:1.28.1
+    restart: unless-stopped
+    depends_on:
+      temporal-postgres:
+        condition: service_healthy
+      temporal-elasticsearch:
+        condition: service_started
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: ${TEMPORAL_POSTGRES_PASSWORD:?Set TEMPORAL_POSTGRES_PASSWORD in .env}
+      POSTGRES_SEEDS: temporal-postgres
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
+      ENABLE_ES: "true"
+      ES_SEEDS: temporal-elasticsearch
+      ES_VERSION: v7
+      TEMPORAL_NAMESPACE: default
+    volumes:
+      - ./dynamicconfig:/etc/temporal/config/dynamicconfig:ro
+    networks:
+      - temporal
+    healthcheck:
+      test: ["CMD-SHELL", "temporal operator namespace describe -n $${TEMPORAL_NAMESPACE:-default} --address $$(hostname -i):7233 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  temporal-ui:
+    image: temporalio/ui:2.34.0
+    profiles: [tools]
+    restart: unless-stopped
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: ${FRONTEND_URL:?Set FRONTEND_URL in .env}
+    ports:
+      - "127.0.0.1:8080:8080"
+    networks:
+      - temporal
+    depends_on:
+      temporal:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
+  temporal-es-data:
+  temporal-pg-data:
+
+networks:
+  app:
+  temporal:

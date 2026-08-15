@@ -1,0 +1,67 @@
+import {
+  proxyActivities,
+  setHandler,
+  condition,
+  sleep,
+  continueAsNew,
+} from '@temporalio/workflow';
+import { EmailActivity } from '@postsider/orchestrator/activities/email.activity';
+import {
+  SendEmail,
+  sendEmailSignal,
+} from '@postsider/orchestrator/signals/send.email.signal';
+
+const { sendEmail } = proxyActivities<EmailActivity>({
+  startToCloseTimeout: '10 minute',
+  taskQueue: 'main',
+  cancellationType: 'ABANDON',
+  // Bounded: sendEmailSync now throws on total failure, and Temporal's default
+  // retry policy is UNLIMITED attempts — one permanently-bouncing email would
+  // wedge this singleton queue forever. 3 activity attempts (x3 in-process
+  // tries each) is plenty; the catch below then drops that one email and the
+  // queue moves on.
+  retry: { maximumAttempts: 3 },
+});
+
+const RATE_LIMIT_MS = 700;
+
+export async function sendEmailWorkflow({
+  queue = [],
+}: {
+  queue: SendEmail[];
+}) {
+  let processedThisRun = 0;
+  // Handle incoming email signals
+  setHandler(sendEmailSignal, (addEmail: SendEmail) => {
+    if (addEmail.to && addEmail.subject) {
+      if (addEmail.addTo === 'top') {
+        queue.unshift(addEmail);
+      } else {
+        queue.push(addEmail);
+      }
+    }
+  });
+
+  // Process emails with rate limiting
+  while (true) {
+    // Wait until there's an email in the queue or timeout after 1 hour of inactivity
+    await condition(() => queue.length > 0);
+
+    try {
+      const email = queue.shift()!;
+      if (!email) {
+        continue;
+      }
+      await sendEmail(email.to, email.subject, email.html, email.replyTo);
+      processedThisRun++;
+    } catch (err) {
+      console.log(err);
+    }
+
+    await sleep(RATE_LIMIT_MS);
+
+    if (processedThisRun >= 30) {
+      return await continueAsNew({ queue });
+    }
+  }
+}

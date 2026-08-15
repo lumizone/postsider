@@ -1,0 +1,23 @@
+.reasonInput {
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-soft);
+  font: inherit;
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--fg);
+  min-height: 60px;
+  resize: vertical;
+}
+
+.reasonInput:focus {
+  outline: none;
+  border-color: var(--fg);
+}
+
+/* iOS Safari auto-zooms focused fields under 16px. */
+@media (max-width: 768px) {
+  .reasonInput {
+    font-size: 16px;
+  }
+}
