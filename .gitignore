@@ -72,3 +72,5 @@ i18n.cache
 reports/
 coverage/
 graphify-out/
+CLAUDE.md
+.superpowers/
