@@ -1,20 +1,45 @@
-# PostSider
+<p align="center">
+  <img src="apps/frontend/public/brand/postsider-logo.png" alt="PostSider" width="80" height="80" />
+</p>
 
-Open-source social media scheduling for teams and agencies. Plan, compose and
-publish content for 40+ platforms from one calendar, with approvals, a public
-API, SDK and optional MCP server.
+<h1 align="center">PostSider</h1>
 
-[Self-hosting](docs/SELF_HOSTING.md) | [Contributing](CONTRIBUTING.md) | [Security](SECURITY.md) | [AGPL-3.0](LICENSE)
+<p align="center">
+  Open-source social media scheduling for 40+ platforms.<br />
+  Plan, compose and publish from one calendar, with a public API, SDK and MCP server.
+</p>
+
+<p align="center">
+  <a href="#quick-start">Quick Start</a> &middot;
+  <a href="#features">Features</a> &middot;
+  <a href="#self-hosting">Self-Hosting</a> &middot;
+  <a href="#development">Development</a> &middot;
+  <a href="#license">License</a>
+</p>
 
 ## Features
 
-- Calendar scheduling, posting queues, recurring content and Smart Slots.
-- Per-platform previews, validation and first comments.
-- Approvals, team roles and multi-organization workspaces.
-- Media library, CSV import, caption templates, hashtag groups and UTM presets.
-- Public REST API, TypeScript SDK and MCP server for compatible AI clients.
+**Scheduling and publishing**
+
+- Visual calendar, day-aware posting queues, recurring content and Smart Slots.
+- Per-platform previews and validation before publishing.
+- Optional first comments for supported platforms.
+- Connectors for X, LinkedIn, Facebook, Instagram, YouTube, TikTok, Bluesky,
+  Mastodon, Discord, Slack, Telegram, Pinterest and more.
+
+**Composer and collaboration**
+
+- Hashtag groups, caption templates, UTM presets and reusable snippets.
+- Bulk CSV import and approval workflows.
+- Media library, team roles and multi-organization workspaces.
+- Analytics where the social provider supports it.
+
+**Automation**
+
+- Public REST API and TypeScript SDK.
+- Lean MCP server for compatible AI clients.
 - Optional OpenAI caption checks and rewrites.
-- Self-hosted PostgreSQL, Redis, MinIO and Temporal stack.
+- Webhooks for publishing events.
 
 ## Quick Start
 
@@ -45,6 +70,16 @@ docker compose exec postsider wget -qO- http://127.0.0.1:3002/health/workers
 
 See [the self-hosting guide](docs/SELF_HOSTING.md) for HTTPS, OAuth callbacks,
 backups, upgrades and troubleshooting.
+
+## Self-Hosting
+
+The bundled Compose stack includes the app, PostgreSQL, Redis, MinIO and
+Temporal. Billing is disabled by default, so self-hosted organizations are
+unlimited. Configure only the OAuth credentials for platforms you use.
+
+Read [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md) before a public deployment.
+It covers reverse proxies, HTTPS, storage, backups, upgrades and Temporal worker
+health.
 
 ## Architecture
 

@@ -65,7 +65,7 @@ jobs:
       - name: Tests
         # --detectOpenHandles is useful locally but can hang indefinitely on
         # GitHub-hosted runners. CI remains deterministic and collects coverage.
-        run: pnpm exec jest --coverage --runInBand --reporters=default --reporters=jest-junit
+        run: pnpm exec jest --coverage --runInBand --forceExit --reporters=default --reporters=jest-junit
       - name: MCP server tests
         run: NODE_OPTIONS=--experimental-vm-modules pnpm exec jest -c apps/mcp/jest.config.cjs
       - name: SDK build
