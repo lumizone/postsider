@@ -38,7 +38,7 @@ jobs:
       NEXT_PUBLIC_BACKEND_URL: http://localhost:3000
       NEXT_PUBLIC_SELF_HOSTED: "true"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
         with:
           version: 10.6.1
@@ -81,7 +81,7 @@ jobs:
     # transitive items are tracked in SECURITY.md and pinned in pnpm-workspace).
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
         with:
           version: 10.6.1
