@@ -49,9 +49,11 @@ domain with HTTPS for a public deployment.
 ```bash
 git clone https://github.com/lumizone/postsider.git
 cd postsider
+umask 077
 cp .env.example .env
+chmod 600 .env
 # Edit .env: set your domain and replace every CHANGE_ME value.
-docker compose up -d --build
+docker compose up -d --build --wait
 ```
 
 The application is bound to `127.0.0.1:5000`. Configure a TLS reverse proxy for

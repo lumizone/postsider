@@ -145,18 +145,25 @@ function checkConfiguration() {
 }
 
 /**
- * Refuse to start when a security-critical secret is missing (Requirement 21.3).
- * Without JWT_SECRET the app cannot sign tokens or encrypt provider credentials,
- * so starting would be unsafe.
+ * Refuse to start when a security-critical secret is missing or still contains
+ * the public self-hosting template placeholder.
  */
 function assertRequiredSecrets() {
-  const required = ['JWT_SECRET'];
-  const missing = required.filter(
-    (key) => !process.env[key] || process.env[key]!.length === 0
-  );
-  if (missing.length) {
+  const required = [
+    'JWT_SECRET',
+    'ENCRYPTION_KEY',
+    'POSTGRES_PASSWORD',
+    'TEMPORAL_POSTGRES_PASSWORD',
+    'MINIO_ACCESS_KEY',
+    'MINIO_SECRET_KEY',
+  ];
+  const invalid = required.filter((key) => {
+    const value = process.env[key]?.trim();
+    return !value || value.includes('CHANGE_ME');
+  });
+  if (invalid.length) {
     Logger.error(
-      `Refusing to start: missing required secret(s): ${missing.join(', ')}.`,
+      `Refusing to start: set non-template values for ${invalid.join(', ')}.`,
       'Startup'
     );
     process.exit(1);

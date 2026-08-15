@@ -12,12 +12,18 @@ PostgreSQL, Redis, MinIO and Temporal are private Docker services. The optional
 Temporal UI starts with `docker compose --profile tools up -d` and is bound to
 `127.0.0.1:8080`.
 
+If one of the localhost ports is already in use, set `POSTSIDER_HOST_PORT`,
+`MINIO_HOST_PORT` or `TEMPORAL_UI_HOST_PORT` in `.env`. Update the reverse proxy
+upstream when changing the application or MinIO port.
+
 ## First deployment
 
 ```bash
 git clone https://github.com/lumizone/postsider.git
 cd postsider
+umask 077
 cp .env.example .env
+chmod 600 .env
 ```
 
 Set your HTTPS domain in `FRONTEND_URL`, `BACKEND_URL`,
@@ -28,7 +34,7 @@ browser bundle, so changing them requires `docker compose up -d --build`.
 Start the stack and wait for its health check:
 
 ```bash
-docker compose up -d --build
+docker compose up -d --build --wait
 docker compose ps
 curl -fsS http://127.0.0.1:5000/api/health
 docker compose exec postsider wget -qO- http://127.0.0.1:3002/health/workers
@@ -98,11 +104,13 @@ deploying.
 
 ## Backups
 
-Back up both PostgreSQL and MinIO. A database backup alone does not include
-uploaded media. Store encrypted copies off the host and test restoration.
+Back up both PostgreSQL databases and MinIO. Application data, Temporal's
+scheduled-work state and uploaded media are all required for a usable restore.
+Store encrypted copies off the host and test restoration.
 
 ```bash
 docker compose exec -T postgres pg_dump -U postsider -Fc postsider > postsider.dump
+docker compose exec -T temporal-postgres pg_dumpall -U temporal > temporal-postgres.sql
 ```
 
 For MinIO, use an S3-compatible backup tool or back up the `minio-data` Docker

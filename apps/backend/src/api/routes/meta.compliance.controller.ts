@@ -130,7 +130,7 @@ export class MetaComplianceController {
     // page so self-hosted installs stay self-contained.
     const statusBase =
       process.env.DATA_DELETION_URL ||
-      `${process.env.BACKEND_URL}/meta/data-deletion/status`;
+      `${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL}/meta/data-deletion/status`;
     return {
       url: `${statusBase}?code=${confirmationCode}`,
       confirmation_code: confirmationCode,

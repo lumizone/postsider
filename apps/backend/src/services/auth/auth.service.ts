@@ -23,10 +23,7 @@ export class AuthService {
     private _providerManager: AuthProviderManager
   ) {}
   async canRegister(provider: string, hasValidInvite = false) {
-    if (
-      process.env.DISABLE_REGISTRATION !== 'true' ||
-      provider === Provider.GENERIC
-    ) {
+    if (process.env.DISABLE_REGISTRATION !== 'true') {
       return true;
     }
 

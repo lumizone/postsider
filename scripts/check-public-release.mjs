@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], { encoding: 'buffer' })
   .toString('utf8')
@@ -34,6 +34,8 @@ const forbiddenText = [
 
 const failures = [];
 for (const file of files) {
+  if (!existsSync(file)) continue;
+
   if (!allowedEnvTemplates.has(file) && forbiddenPath.some((pattern) => pattern.test(file))) {
     failures.push(`${file}: forbidden file path`);
     continue;
