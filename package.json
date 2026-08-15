@@ -64,7 +64,7 @@
     "@sentry/profiling-node": "^10.25.0",
     "@temporalio/activity": "^1.14.0",
     "@temporalio/client": "^1.14.0",
-    "@temporalio/common": "^1.14.0",
+    "@temporalio/common": "^1.22.0",
     "@temporalio/worker": "^1.14.0",
     "@temporalio/workflow": "^1.14.0",
     "@types/bcrypt": "^5.0.2",
