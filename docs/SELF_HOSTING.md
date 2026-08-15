@@ -92,8 +92,9 @@ docker compose ps
 ```
 
 Prisma migrations run before the application processes start. Do not use
-`prisma db push` on a production database. For existing Postiz databases, read
-the migration notes in the release you are upgrading to before deploying.
+`prisma db push` on a production database. For databases created by an earlier
+release, read the migration notes in the release you are upgrading to before
+deploying.
 
 ## Backups
 
