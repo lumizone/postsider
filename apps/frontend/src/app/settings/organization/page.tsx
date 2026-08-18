@@ -304,6 +304,23 @@ export default function OrganizationSettingsPage() {
             </select>
             <span className={s.hint}>{t("settingsOrganization.defaultTimezoneHint")}</span>
           </div>
+
+          <div className={s.field} style={{ marginTop: 18 }}>
+            <label
+              style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}
+            >
+              <input
+                type="checkbox"
+                checked={!!profile.agencyMode}
+                onChange={(e) => void save({ agencyMode: e.target.checked })}
+                style={{ accentColor: "var(--fg)" }}
+              />
+              <span style={{ fontWeight: 600, fontSize: 13 }}>
+                {t("settingsOrganization.agencyMode")}
+              </span>
+            </label>
+            <span className={s.hint}>{t("settingsOrganization.agencyModeHint")}</span>
+          </div>
         </Card>
       )}
 

@@ -4,6 +4,136 @@ The PostSider product app (NestJS backend + Next 15/React 19 frontend + Temporal
 
 ## Status
 
+- **Agency/Overview rework + client reports (PDF + engagement) + agency-mode flag (2026-08-18).**
+  All built + deployed via `sudo ./deploy.sh` (health-gated, full build — new
+  dep `pdf-lib`), 167 root tests green, 12/12 containers, workers polling on
+  `main` (0 backlog), migration `20260818000000_organization_agency_mode`
+  applied. **Uncommitted as of session end** — sits on top of the 08-17 batch,
+  all in the working tree on `main`.
+  - **Phase A — "Agency" was the wrong product.** Research (Sendible/Planable/
+    white-label guides) showed agencies want white-label, shareable,
+    *results*-oriented reporting; the existing `/agency` page was really an
+    internal ops "morning check" that asked for a pasted Public API key.
+    Reworked it into an ops **Overview**: moved `/overview` +
+    `/customers/:id/report` off the key-authed public API onto a session-authed
+    `AgencyController` (`GET /agency/overview`, `/agency/customers/:id/report`),
+    dropped the API-key input, renamed nav "Agency" → "Overview" (title
+    "Delivery overview"), and enriched `AgencyOverviewService.getOverview` with
+    real risk signals: `stuckPosts` (QUEUE past `publishDate`, no `error` — the
+    silent-failure signature the host monitor watches) and `tokenIssues`
+    (disabled/refreshNeeded/inBetweenSteps/expired token), both org-wide and
+    per-client (client rollup shows "2 stuck · 1 error · 3 token issues" flags).
+    Public `/public/v1/overview` kept for the MCP tools.
+  - **Phase B — client reports (PDF + engagement).** `ReportService.buildReport`
+    (org + customer + window) aggregates branding (logo+name), delivery
+    (per-channel counts), engagement (sum of latest-per-post-per-metric from
+    `PostAnalytics`), and top 10 posts (ranked by total engagement, recency
+    fallback). `ReportPdfService` renders a branded PDF via **`pdf-lib`** (new
+    dep, pure JS — no chromium, fits the 3072M limit): logo header,
+    Performance/Delivery/Top-posts sections, pagination, HTML strip, graceful
+    no-logo fallback. `ReportController` → `GET /report/customers/:id/pdf`
+    (session, `Content-Disposition: attachment`); frontend "Download PDF" button
+    on the customer card + `api.download` (blob) helper.
+    **Engagement is real only after collection** — new daily cron
+    `collectAnalyticsWorkflow` (`collect.analytics.activity.ts` →
+    `collectForRecentPosts` iterates PUBLISHED posts (14d) and calls the
+    existing `checkPostAnalytics`, which persists to `PostAnalytics`; added
+    `findRecentPublishedForAnalytics` repo query). Registered as the 4th cron in
+    `InfiniteWorkflowRegister` (armed: `missingPostWorkflow, mediaCleanupWorkflow,
+    evergreenWorkflow, collectAnalyticsWorkflow`).
+  - **Agency-mode flag.** `Organization.agencyMode` (Boolean, default false). The
+    Overview tab is **hidden by default**; admin/superadmin enables it in
+    Settings → Organization (checkbox; `agencyMode` added to `GET /user/self` +
+    frontend `SelfUser`). Nav item gated via `agencyModeOnly`; `/agency` page
+    shows a "disabled" notice with a link to Organization settings; backend
+    `AgencyController`/`ReportController` **fail closed** with
+    `ForbiddenException` (403) when off — used the standard 403, NOT the custom
+    `HttpForbiddenException` (the exception filter remaps that to 401 + clears
+    cookies).
+  - **Open follow-ups (phase B v2):** engagement appears in a report only after
+    the first `collectAnalyticsWorkflow` run (daily); the PDF embeds the org logo
+    but NOT post thumbnails (top posts are text + channel + date + engagement +
+    release URL); no auto-send to the client's inbox (the `Customer` model has no
+    email field — natural next step, needs a cron + `EmailService`/Resend +
+    `Customer.email`); the page is only meaningful for multi-client orgs (single
+    "Unassigned" row otherwise).
+
+- **Dashboard media preview + approval queue pass (2026-08-17).** Live owner
+  bug reports, all built + deployed via `sudo ./deploy.sh` (health-gated,
+  12/12 containers, 32/32 workers throughout), 162 root tests green.
+  **Uncommitted as of session end** — the whole batch (22 modified + 3 new
+  files) sits in the working tree on `main`, ready to commit.
+  - **Post media never reached the calendar/posts list.** Backend `getPosts`
+    (calendar) and `getPostsList` selects did not include `image`, and the
+    minify key map (`posts.list.minify.ts` + frontend mirror) had no `image`
+    entry — so no post's media was ever in the list/calendar payload. Fixed
+    both; new `parsePostMedia()` (lib/posts.ts) turns the raw `image` JSON
+    (id+path from API posts, or enriched path+url+type) into
+    `{url, kind}[]`; `CalendarEvent.media` + `backendPostToEvent` now carry
+    it; new `PostMediaThumb` renders a small thumb (image or video w/ play
+    glyph) in MonthView, Week/Day timeline, DayPopup and Posts rows. The
+    detail endpoint already returned media — it was purely the list/calendar
+    path that dropped it.
+  - **`updateMedia` hardcoded `type: 'image'`** for every attachment (so .mp4
+    posts read back as "image"). Now `m.type || deriveMediaType(path)` —
+    video/audio derived from extension when the Media row type isn't carried.
+  - **Editing a post wiped its media.** `openEventForEdit` never prefilled
+    `InitialPostValue.media` (the type had no media field), so saving a
+    prefilled edit sent `image:[]`. Added `media` to `InitialPostValue`,
+    prefill from `fetchPostDetail` (which now parses via `parsePostMedia`),
+    and `AttachedMedia.backendId` so `submitPost`/`submitEdit` skip re-upload
+    for already-persisted media. Also the composer's `requestClose`
+    "Discard your changes?" confirm used a "is there ANY content" dirty check,
+    true from mount in edit mode → warned on every untouched close. Now
+    snapshots the prefilled state (`initialSnapshot` useMemo) and only flags
+    real diffs (body/threads/media/date/time/channels/settings/firstComment).
+  - **Same-time posts overlapped in day/week views.** `.timelineEvent` /
+    DayPopup `.event` are `position: absolute` with `top` from time only, so
+    two posts at 09:00 stacked exactly. New `lib/event-lanes.ts`
+    (`layoutOverlappingEvents`, greedy first-fit lanes like Google Calendar)
+    gives each overlapping event a `left`/`width`; used in Timeline and
+    DayPopup.
+  - **Posts row 3-dots landed in the wrong grid row + dropdown clipped.**
+    `.row` had a 5-column grid but 6 children, so `actionsCell` auto-placed
+    to a phantom second row, and `.list { overflow: hidden }` clipped the
+    absolute-positioned menu. Added the 6th column (40px), switched `.list`
+    to `overflow: visible` (rounding first/last `.row` for the corners), and
+    placed `actionsCell` explicitly in the mobile media query. Menu items got
+    `stopPropagation` so row-click (new) doesn't also fire.
+  - **Clicking a post in the Posts list did nothing.** Rows had no `onClick`.
+    Now opens the same `CreatePostModal` edit flow as the calendar
+    (`openEventForEdit` + `submitEdit` + `refreshList` + `runDelete`
+    migrated into posts.tsx), so Posts rows get full preview + edit + delete.
+  - **Media library preview was tiny / video silent.** `.modalPreview` had
+    only `min-height` (percentage `max-height: 100%` on the child resolved to
+    auto), and the `<video>` had `autoPlay` without `muted` (blocked). Added
+    `height: min(70vh, 640px)` + `img/video { width/height 100%;
+    object-fit: contain }` and `muted playsInline`. Portrait videos were also
+    force-cropped to 16:9 in the composer preview (`family === "video" ?
+    "16 / 9"`); now `aspect-ratio: auto` + `contain` so portrait/landscape
+    keep their real ratio.
+  - **`POST /public/v1/upload` dropped file metadata.** It called `saveFile`
+    without `originalName`, `fileSize`, `width`, `height` (the dashboard's
+    `/media/upload-simple` passed them; the public-API endpoint didn't), so
+    every API upload stored 0 B / no dims / no original name — invisible in
+    the Media library. Fixed (now probes + passes size); `upload-from-url`
+    likewise gets `buffer.length` + probe + name from the URL. `probeDimensions`
+    extracted to shared `libraries/.../upload/probe-dimensions.ts` (sharp for
+    images, ffprobe temp-file for video, `execFile` only) and media.controller
+    refactored onto it. Verified live: fresh `/public/v1/upload` returns
+    `fileSize`/`width`/`height`/`originalName`; old rows stay 0 (no way to
+    recover without re-upload).
+  - **Approval queue: thumbnails 80px, no video, sparse channel info.**
+    `getPending` backend select now includes `integration.picture`; the card
+    shows channel avatar (picture or monogram), a **22px platform badge**
+    (enlarged from an 11px inline icon), readable platform name via
+    `platformFromIdentifier` (was raw `providerIdentifier`), media count +
+    image/video split, and a **large first-media preview** (image or
+    playable video, full width) with remaining media as a 72px strip.
+    Uses `parsePostMedia` (not the old url-only parser) so videos are
+    distinguishable.
+  - Test-only cleanup: no migrations, no schema changes this session.
+
 - **Production smoke test (2026-08-14).** Public production checks passed:
   `GET /api/health` returned HTTP 200 with Redis, PostgreSQL, and Temporal all
   `ok`; `/`, `/login`, and `/register` returned HTTP 200; HSTS,

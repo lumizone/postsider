@@ -10,13 +10,30 @@ import {
   type PostStatus,
 } from "@/lib/calendar-data";
 import { useChannels } from "@/lib/use-channels";
-import { fetchPostsList, duplicatePost, type BackendPost } from "@/lib/posts";
+import {
+  createPost,
+  fetchPostDetail,
+  deletePostGroup,
+  uploadMedia,
+  fetchPostsList,
+  duplicatePost,
+  type BackendPost,
+  type CreatePostInput,
+} from "@/lib/posts";
 import { backendPostToEvent } from "@/lib/use-calendar-data";
 import { EmptyState } from "./empty-state";
 import { useI18n, useT } from "@/lib/i18n";
 import { toggleEvergreen, listEvergreen, getEvergreenSettings } from "@/lib/evergreen-api";
-import { requestApproval } from "@/lib/approval-api";
+import { requestApproval, getApprovalByPost } from "@/lib/approval-api";
 import { PostDetailDrawer } from "./post-detail-drawer";
+import { PostMediaThumb } from "./post-media-thumb";
+import { ConfirmDialog } from "./confirm-dialog";
+import {
+  CreatePostModal,
+  type NewPostInput,
+  type InitialPostValue,
+  type AttachedMedia,
+} from "./create-post-modal";
 
 type StatusFilter = "all" | PostStatus;
 
@@ -69,6 +86,21 @@ function relativeFromNow(d: Date, t: ReturnType<typeof useT>): string {
   if (diff === -1) return t("posts.yesterday");
   if (diff > 0) return t("posts.inDays", { n: diff });
   return t("posts.daysAgo", { n: Math.abs(diff) });
+}
+
+function iso(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate(),
+  ).padStart(2, "0")}`;
+}
+
+/** Remove the backend-only `__type` discriminator from a settings object. */
+function stripDiscriminator(
+  settings: Record<string, unknown>,
+): Record<string, unknown> {
+  const { __type, ...rest } = settings ?? {};
+  void __type;
+  return rest;
 }
 
 function SearchIcon() {
@@ -151,6 +183,16 @@ export function Posts() {
   const [evergreenGroups, setEvergreenGroups] = useState<Set<string>>(new Set());
   const [evergreenOrgEnabled, setEvergreenOrgEnabled] = useState(true);
   const [detailPost, setDetailPost] = useState<{ id: string; status: PostStatus } | null>(null);
+  // Editing an existing post from the list: prefilled composer + group to update.
+  const [editPost, setEditPost] = useState<{
+    group: string;
+    initial: InitialPostValue;
+    approvalStatus?: "pending" | "approved" | "rejected" | "none";
+    rejectionNote?: string;
+  } | null>(null);
+  const [editLoading, setEditLoading] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
 
   // Load which post groups are evergreen so each row's toggle shows the real state.
   useEffect(() => {
@@ -335,6 +377,154 @@ export function Posts() {
 
   const [duplicateTargetGroup, setDuplicateTargetGroup] = useState<string | null>(null);
 
+  /**
+   * Open the composer in edit mode for a post, prefilled with its content,
+   * thread parts, media and provider settings. Mirrors the calendar flow so
+   * clicking a row in the Posts list gives the same preview+edit experience.
+   */
+  const openEventForEdit = async (ev: CalendarEvent) => {
+    if (editLoading) return;
+    setEditLoading(true);
+    try {
+      const detail = await fetchPostDetail(ev.id);
+      const [main, ...rest] = detail.posts;
+      const channelId = detail.integration || ev.channelId;
+      const when = detail.publishDate
+        ? new Date(detail.publishDate)
+        : new Date(`${ev.date}T${ev.time || "09:00"}:00`);
+      const initial: InitialPostValue = {
+        channelIds: channelId ? [channelId] : [],
+        date: iso(when),
+        time: `${String(when.getHours()).padStart(2, "0")}:${String(
+          when.getMinutes(),
+        ).padStart(2, "0")}`,
+        body: main?.content ?? "",
+        threadParts: rest.map((p) => p.content),
+        perChannelSettings:
+          channelId && detail.settings
+            ? { [channelId]: stripDiscriminator(detail.settings) }
+            : {},
+        media: (main?.image ?? []).map(
+          (m, idx): AttachedMedia => ({
+            id: m.id ?? `existing-${idx}-${ev.id}`,
+            backendId: m.id,
+            name: m.url.split("/").pop()?.split("?")[0] || "attachment",
+            kind: m.kind,
+            size: 0,
+            url: m.url,
+          }),
+        ),
+      };
+      let approvalStatus: "pending" | "approved" | "rejected" | "none" = "none";
+      let rejectionNote: string | undefined;
+      try {
+        const approval = await getApprovalByPost(ev.id);
+        if (approval?.status === "REJECTED") {
+          approvalStatus = "rejected";
+          rejectionNote = approval.note ?? undefined;
+        } else if (approval?.status === "PENDING") {
+          approvalStatus = "pending";
+        }
+      } catch {
+        // No approval record → not an approval-tracked post, fine.
+      }
+      setEditPost({ group: detail.group, initial, approvalStatus, rejectionNote });
+    } catch (err) {
+      console.error("[edit-post]", err);
+      setToast(t("errors.postEdit"));
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  /**
+   * Submit an edit payload. Media already existing server-side (backendId)
+   * rides along as {id, path} instead of being re-uploaded.
+   */
+  const submitEdit = async (
+    post: NewPostInput,
+    type: "schedule" | "draft" | "now" | "update",
+    group?: string,
+  ): Promise<Array<{ postId: string; integration: string }>> => {
+    const isoDate = (() => {
+      if (post.date && post.time) {
+        const dt = new Date(`${post.date}T${post.time}:00`);
+        return dt.toISOString();
+      }
+      return new Date().toISOString();
+    })();
+    const uploadedMedia: { id?: string; path: string }[] = [];
+    for (const m of post.media) {
+      if (m.backendId) {
+        uploadedMedia.push({ id: m.backendId, path: m.url });
+        continue;
+      }
+      const blob = await fetch(m.url).then((r) => r.blob());
+      const result = await uploadMedia(blob, m.name);
+      uploadedMedia.push(result);
+    }
+    const input: CreatePostInput = {
+      type,
+      date: isoDate,
+      channelIds: post.channelIds,
+      body: post.body,
+      perChannelBody: post.perChannelBody,
+      threadParts: post.threadParts,
+      firstComment: post.firstComment,
+      media: uploadedMedia.map((m) => ({ id: m.id ?? "", path: m.path })),
+      shortLink: false,
+      tags: [],
+      perChannelSettings: post.perChannelSettings,
+      ...(group ? { group } : {}),
+    };
+    return await createPost(input);
+  };
+
+  const refreshList = async () => {
+    setLoading(true);
+    try {
+      const states: ("all" | "scheduled" | "draft" | "published" | "failed" | "approval")[] = [
+        "scheduled",
+        "draft",
+        "published",
+        "failed",
+        "approval",
+      ];
+      const collected: BackendPost[] = [];
+      let truncated = false;
+      for (const state of states) {
+        let page = 0;
+        for (let i = 0; i < 5; i++) {
+          const res = await fetchPostsList({ page, limit: 100, state });
+          collected.push(...((res.posts as unknown) as BackendPost[]));
+          if (!res.hasMore) break;
+          if (i === 4) truncated = true;
+          page += 1;
+        }
+      }
+      setEvents(collected.map(backendPostToEvent));
+      setListTruncated(truncated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load posts");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const runDelete = async () => {
+    if (!confirmDelete) return;
+    setConfirmBusy(true);
+    try {
+      await deletePostGroup(confirmDelete);
+      setConfirmDelete(null);
+      await refreshList();
+    } catch (err) {
+      setToast(t("errors.postDelete"));
+    } finally {
+      setConfirmBusy(false);
+    }
+  };
+
   return (
     <section className={styles.root}>
       {toast && <div className={styles.toast}>{toast}</div>}
@@ -447,6 +637,7 @@ export function Posts() {
               ev={ev}
               status={status}
               channel={channelsById.get(ev.channelId)}
+              onOpenEdit={() => void openEventForEdit(ev)}
               onDuplicate={() => void handleDuplicate(ev.group)}
               onDuplicateTo={() => setDuplicateTargetGroup(ev.group)}
               onRequestApproval={() => void handleRequestApproval(ev.id)}
@@ -466,6 +657,58 @@ export function Posts() {
           onClose={() => setDetailPost(null)}
         />
       )}
+
+      {editPost && (
+        <CreatePostModal
+          channels={channels}
+          date={editPost.initial.date}
+          time={editPost.initial.time}
+          initialValue={editPost.initial}
+          onClose={() => setEditPost(null)}
+          onSaveDraft={() => setEditPost(null)}
+          onSchedule={async (post) => {
+            await submitEdit(post, "update", editPost.group);
+            setEditPost(null);
+            void refreshList();
+          }}
+          onPublishNow={async (post) => {
+            await submitEdit(post, "now", editPost.group);
+            setEditPost(null);
+            void refreshList();
+          }}
+          onSendToApproval={
+            editPost.approvalStatus === "rejected"
+              ? async (post) => {
+                  await submitEdit(post, "update", editPost.group);
+                  for (const c of (await submitEdit(post, "draft", editPost.group)) ?? []) {
+                    await requestApproval(c.postId);
+                  }
+                  setEditPost(null);
+                  void refreshList();
+                }
+              : undefined
+          }
+          onDelete={async () => {
+            const group = editPost.group;
+            setEditPost(null);
+            setConfirmDelete(group);
+          }}
+          approvalStatus={editPost.approvalStatus}
+          rejectionNote={editPost.rejectionNote}
+        />
+      )}
+
+      {confirmDelete && (
+        <ConfirmDialog
+          danger
+          busy={confirmBusy}
+          title={t("posts.deleteConfirmTitle")}
+          body={t("posts.deleteConfirmBody")}
+          confirmLabel={t("posts.deleteBtn")}
+          onConfirm={() => void runDelete()}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
     </section>
   );
 }
@@ -474,6 +717,7 @@ interface PostRowProps {
   ev: CalendarEvent;
   status: PostStatus;
   channel?: Channel;
+  onOpenEdit: () => void;
   onDuplicate: () => void;
   onDuplicateTo: () => void;
   onRequestApproval: () => void;
@@ -483,7 +727,7 @@ interface PostRowProps {
   onEvergreenOrgDisabledWarning?: () => void;
 }
 
-function PostRow({ ev, status, channel, onDuplicate, onDuplicateTo, onRequestApproval, onViewDetails, initialEvergreen, evergreenOrgEnabled, onEvergreenOrgDisabledWarning }: PostRowProps) {
+function PostRow({ ev, status, channel, onOpenEdit, onDuplicate, onDuplicateTo, onRequestApproval, onViewDetails, initialEvergreen, evergreenOrgEnabled, onEvergreenOrgDisabledWarning }: PostRowProps) {
   const date = parseDate(ev.date);
   const [menuOpen, setMenuOpen] = useState(false);
   const [evergreenOn, setEvergreenOn] = useState<boolean>(initialEvergreen ?? false);
@@ -508,8 +752,12 @@ function PostRow({ ev, status, channel, onDuplicate, onDuplicateTo, onRequestApp
       className={styles.row}
       role="listitem"
       tabIndex={0}
+      onClick={onOpenEdit}
       onKeyDown={(e) => {
-        if (e.key === "Enter") e.preventDefault();
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpenEdit();
+        }
       }}
     >
       <div className={styles.statusCell}>
@@ -526,7 +774,10 @@ function PostRow({ ev, status, channel, onDuplicate, onDuplicateTo, onRequestApp
       </div>
 
       <div className={styles.titleCell}>
-        <span className={styles.postTitle}>{ev.title}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <PostMediaThumb media={ev.media} size={26} />
+          <span className={styles.postTitle}>{ev.title}</span>
+        </div>
         {ev.excerpt && <span className={styles.excerpt}>{ev.excerpt}</span>}
       </div>
 
@@ -583,24 +834,24 @@ function PostRow({ ev, status, channel, onDuplicate, onDuplicateTo, onRequestApp
           <DotsIcon />
         </button>
         {menuOpen && (
-          <div className={styles.menu} onClick={() => setMenuOpen(false)} role="menu">
-            <button type="button" className={styles.menuItem} onClick={onViewDetails} role="menuitem">
+          <div className={styles.menu} onClick={(e) => { e.stopPropagation(); setMenuOpen(false); }} role="menu">
+            <button type="button" className={styles.menuItem} onClick={(e) => { e.stopPropagation(); onViewDetails(); }} role="menuitem">
               {t("postDetail.viewDetails")}
             </button>
-            <button type="button" className={styles.menuItem} onClick={onDuplicate} role="menuitem">
+            <button type="button" className={styles.menuItem} onClick={(e) => { e.stopPropagation(); onDuplicate(); }} role="menuitem">
               {t("posts.duplicate")}
             </button>
-            <button type="button" className={styles.menuItem} onClick={onDuplicateTo} role="menuitem">
+            <button type="button" className={styles.menuItem} onClick={(e) => { e.stopPropagation(); onDuplicateTo(); }} role="menuitem">
               {t("posts.duplicateTo")}
             </button>
-            <button type="button" className={styles.menuItem} onClick={onToggleEvergreen} role="menuitem">
+            <button type="button" className={styles.menuItem} onClick={(e) => { e.stopPropagation(); onToggleEvergreen(); }} role="menuitem">
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                 <RepeatIcon />
                 {evergreenOn ? t("evergreen.unmarkEvergreen") : t("evergreen.markEvergreen")}
               </span>
             </button>
             {status === "draft" && (
-              <button type="button" className={styles.menuItem} onClick={onRequestApproval} role="menuitem">
+              <button type="button" className={styles.menuItem} onClick={(e) => { e.stopPropagation(); onRequestApproval(); }} role="menuitem">
                 {t("approval.requestBtn")}
               </button>
             )}

@@ -64,6 +64,7 @@ export class OrganizationService {
       brandAudience: org?.brandAudience ?? null,
       brandRules: org?.brandRules ?? null,
       brandForbiddenWords: org?.brandForbiddenWords ?? null,
+      agencyMode: org?.agencyMode ?? false,
     };
   }
 
@@ -79,6 +80,7 @@ export class OrganizationService {
       brandAudience?: string | null;
       brandRules?: string | null;
       brandForbiddenWords?: string | null;
+      agencyMode?: boolean;
     }
   ) {
     const org = await this._organizationRepository.updateOrganizationProfile(id, data);
@@ -92,6 +94,7 @@ export class OrganizationService {
       brandAudience: org.brandAudience ?? null,
       brandRules: org.brandRules ?? null,
       brandForbiddenWords: org.brandForbiddenWords ?? null,
+      agencyMode: org.agencyMode ?? false,
     };
   }
 

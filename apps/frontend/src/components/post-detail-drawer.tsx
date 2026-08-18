@@ -10,6 +10,11 @@ import {
   type PostAnalyticsResponse,
 } from "@/lib/post-detail-api";
 import type { PostStatus } from "@/lib/calendar-data";
+import {
+  fetchPostDetail,
+  type PostDetailItem,
+  type PostMedia,
+} from "@/lib/posts";
 
 const ghostBtn: React.CSSProperties = {
   padding: "8px 14px",
@@ -27,10 +32,89 @@ interface PostDetailDrawerProps {
   onClose: () => void;
 }
 
+/** Render the post's media as a full-width preview (first item large, rest as a strip). */
+function PostMediaPreview({ media }: { media?: PostMedia[] }) {
+  if (!media || media.length === 0) return null;
+  const [first, ...rest] = media;
+  const isVideo = first.kind === "video";
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <span
+        style={{
+          width: "100%",
+          aspectRatio: isVideo ? "auto" : "auto",
+          maxHeight: 340,
+          borderRadius: 10,
+          overflow: "hidden",
+          background: "#000",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {first.kind === "image" ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={first.url}
+            alt=""
+            style={{ width: "100%", height: "auto", maxHeight: 340, objectFit: "contain" }}
+          />
+        ) : (
+          <video
+            src={first.url}
+            controls
+            playsInline
+            style={{ width: "100%", maxHeight: 340, objectFit: "contain" }}
+          />
+        )}
+      </span>
+      {rest.length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {rest.map((m) => (
+            <span key={m.id ?? m.url} style={{ width: 88, aspectRatio: "1 / 1", borderRadius: 8, overflow: "hidden", background: "#000", display: "block" }}>
+              {m.kind === "image" ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={m.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <video src={m.url} muted playsInline style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Render the post's content chain (main post + thread parts) as plain text. */
+function PostContent({ posts }: { posts: PostDetailItem[] }) {
+  if (!posts || posts.length === 0) return null;
+  const [main, ...rest] = posts;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {main.content && (
+        <p style={{ margin: 0, fontSize: 14, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
+          {main.content}
+        </p>
+      )}
+      {rest.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, borderLeft: "2px solid var(--line-soft)", paddingLeft: 10 }}>
+          {rest.map((p, i) => (
+            <p key={i} style={{ margin: 0, fontSize: 13, color: "var(--muted)", whiteSpace: "pre-wrap" }}>
+              {p.content}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function PostDetailDrawer({ postId, status, onClose }: PostDetailDrawerProps) {
   const t = useT();
   const [comments, setComments] = useState<PostComment[]>([]);
   const [analytics, setAnalytics] = useState<PostAnalyticsResponse | null>(null);
+  const [post, setPost] = useState<PostDetailItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -40,13 +124,15 @@ export function PostDetailDrawer({ postId, status, onClose }: PostDetailDrawerPr
     let cancelled = false;
     (async () => {
       try {
-        const [c, a] = await Promise.all([
+        const [c, a, d] = await Promise.all([
           getPostComments(postId),
           status === "published" ? getPostAnalytics(postId) : Promise.resolve(null),
+          fetchPostDetail(postId).catch(() => null),
         ]);
         if (!cancelled) {
           setComments(c);
           setAnalytics(a);
+          setPost(d?.posts ?? []);
         }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : t("postDetail.loadError"));
@@ -117,6 +203,14 @@ export function PostDetailDrawer({ postId, status, onClose }: PostDetailDrawerPr
           <div style={{ padding: "20px 0", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>{t("common.loading")}</div>
         ) : (
           <>
+            {(post.length > 0) && (
+              <section style={{ display: "flex", flexDirection: "column", gap: 12, paddingBottom: 8, borderBottom: "1px solid var(--line-soft)" }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>{t("postDetail.preview")}</span>
+                <PostMediaPreview media={post[0]?.image} />
+                <PostContent posts={post} />
+              </section>
+            )}
+
             <section style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>{t("postDetail.analyticsTitle")}</span>
               {status !== "published" ? (

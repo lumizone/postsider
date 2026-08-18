@@ -42,8 +42,11 @@ import {
   CreatePostModal,
   type NewPostInput,
   type InitialPostValue,
+  type AttachedMedia,
 } from "./create-post-modal";
 import { useAuth } from "@/lib/auth-context";
+import { PostMediaThumb } from "./post-media-thumb";
+import { layoutOverlappingEvents } from "@/lib/event-lanes";
 
 /** Monday-first weekday names for the given locale (2024-01-01 is a Monday). */
 function buildWeekdayNames(
@@ -581,9 +584,14 @@ export function Calendar({ year, month }: CalendarProps) {
 
     // Upload any attached media (the composer holds them as local object URLs)
     // so the backend gets publicly reachable paths — required by providers
-    // like Instagram.
+    // like Instagram. Media that already exists server-side (edit mode,
+    // backendId set) rides along as {id, path} instead of being re-uploaded.
     const uploadedMedia: { id?: string; path: string }[] = [];
     for (const m of post.media) {
+      if (m.backendId) {
+        uploadedMedia.push({ id: m.backendId, path: m.url });
+        continue;
+      }
       try {
         const blob = await fetch(m.url).then((r) => r.blob());
         const result = await uploadMedia(blob, m.name);
@@ -647,6 +655,18 @@ export function Calendar({ year, month }: CalendarProps) {
           channelId && detail.settings
             ? { [channelId]: stripDiscriminator(detail.settings) }
             : {},
+        // Existing media must be prefilled — the composer starts empty and a
+        // save would otherwise wipe the attachments (image:[]).
+        media: (main?.image ?? []).map(
+          (m, idx): AttachedMedia => ({
+            id: m.id ?? `existing-${idx}-${ev.id}`,
+            backendId: m.id,
+            name: m.url.split("/").pop()?.split("?")[0] || "attachment",
+            kind: m.kind,
+            size: 0,
+            url: m.url,
+          }),
+        ),
       };
       // Fetch approval status for the post so the composer can show a
       // rejection banner and offer a re-submit button.
@@ -1018,6 +1038,7 @@ export function Calendar({ year, month }: CalendarProps) {
               setComposer({ date: iso(d), time })
             }
             onMoveEvent={isMember ? undefined : moveEvent}
+            onOpenEvent={isMember ? undefined : (ev) => void openEventForEdit(ev)}
           />
         )}
 
@@ -1031,6 +1052,7 @@ export function Calendar({ year, month }: CalendarProps) {
               setComposer({ date: iso(d), time })
             }
             onMoveEvent={isMember ? undefined : moveEvent}
+            onOpenEvent={isMember ? undefined : (ev) => void openEventForEdit(ev)}
           />
         )}
 
@@ -1415,6 +1437,7 @@ function MonthView({
                               aria-hidden
                             >?</span>
                           )}
+                          <PostMediaThumb media={ev.media} size={16} />
                           <span className={styles.eventLabel}>{ev.title}</span>
                         </span>
                       );
@@ -1450,6 +1473,12 @@ function eventTopAndHeight(time: string, durationMinutes: number) {
   return { top, height };
 }
 
+/** "HH:mm" → minutes from midnight (for overlap layout). */
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
 function formatHourLabel(h: number): string {
   return `${String(h).padStart(2, "0")}:00`;
 }
@@ -1462,6 +1491,7 @@ interface TimelineProps {
   showWeekdayLabels: boolean;
   onCreate?: (date: Date, time: string) => void;
   onMoveEvent?: (eventId: string, target: Date, newTime?: string) => void;
+  onOpenEvent?: (ev: CalendarEvent) => void;
 }
 
 function Timeline({
@@ -1472,6 +1502,7 @@ function Timeline({
   showWeekdayLabels,
   onCreate,
   onMoveEvent,
+  onOpenEvent,
 }: TimelineProps) {
   const t = useT();
   const { locale } = useI18n();
@@ -1593,54 +1624,76 @@ function Timeline({
                 <div className={styles.nowLine} style={{ top: nowTop }} />
               )}
 
-              {dayEvents.map((ev) => {
-                const { top, height } = eventTopAndHeight(
-                  ev.time,
-                  ev.durationMinutes ?? DEFAULT_DURATION,
+              {(() => {
+                // Overlapping events (same or near same time) are laid out
+                // side by side instead of stacking on top of each other.
+                const placements = layoutOverlappingEvents(
+                  dayEvents.map((ev) => ({
+                    id: ev.id,
+                    startMin: timeToMinutes(ev.time),
+                    endMin:
+                      timeToMinutes(ev.time) +
+                      (ev.durationMinutes ?? DEFAULT_DURATION),
+                  })),
                 );
-                const c = channelsById.get(ev.channelId);
-                const canDrag = !!onMoveEvent && isDraggableStatus(ev.status);
-                return (
-                  <div
-                    key={ev.id}
-                    className={styles.timelineEvent}
-                    draggable={canDrag}
-                    onDragStart={
-                      canDrag
-                        ? (e) => {
-                            e.stopPropagation();
-                            e.dataTransfer.setData("text/plain", ev.id);
-                            e.dataTransfer.effectAllowed = "move";
-                          }
-                        : undefined
-                    }
-                    style={{
-                      top,
-                      height,
-                      borderLeft: c ? `3px solid ${c.color}` : undefined,
-                      ...(canDrag ? { cursor: "grab" } : {}),
-                    }}
-                  >
-                    <div className={styles.timelineEventHead}>
-                      {c ? (
-                        <ChannelAvatar channel={c} size={16} radius={5} />
-                      ) : (
-                        <span
-                          className={styles.timelineEventBadge}
-                          aria-hidden
-                        >?</span>
-                      )}
-                      <span className={styles.timelineEventTitle}>
-                        {ev.title}
+                return dayEvents.map((ev) => {
+                  const { top, height } = eventTopAndHeight(
+                    ev.time,
+                    ev.durationMinutes ?? DEFAULT_DURATION,
+                  );
+                  const c = channelsById.get(ev.channelId);
+                  const canDrag = !!onMoveEvent && isDraggableStatus(ev.status);
+                  const placement = placements.get(ev.id);
+                  return (
+                    <div
+                      key={ev.id}
+                      className={styles.timelineEvent}
+                      draggable={canDrag}
+                      onClick={() => onOpenEvent?.(ev)}
+                      onDragStart={
+                        canDrag
+                          ? (e) => {
+                              e.stopPropagation();
+                              e.dataTransfer.setData("text/plain", ev.id);
+                              e.dataTransfer.effectAllowed = "move";
+                            }
+                          : undefined
+                      }
+                      style={{
+                        top,
+                        height,
+                        borderLeft: c ? `3px solid ${c.color}` : undefined,
+                        ...(canDrag ? { cursor: "grab" } : {}),
+                        ...(placement
+                          ? {
+                              left: `calc(${placement.leftPct}% + 6px)`,
+                              width: `calc(${placement.widthPct}% - 12px)`,
+                            }
+                          : {}),
+                      }}
+                    >
+                      <div className={styles.timelineEventHead}>
+                        {c ? (
+                          <ChannelAvatar channel={c} size={16} radius={5} />
+                        ) : (
+                          <span
+                            className={styles.timelineEventBadge}
+                            aria-hidden
+                          >?</span>
+                        )}
+                        <PostMediaThumb media={ev.media} size={16} />
+                        <span className={styles.timelineEventTitle}>
+                          {ev.title}
+                        </span>
+                      </div>
+                      <span className={styles.timelineEventMeta}>
+                        {ev.time}
+                        {c ? ` · ${c.name}` : ""}
                       </span>
                     </div>
-                    <span className={styles.timelineEventMeta}>
-                      {ev.time}
-                      {c ? ` · ${c.name}` : ""}
-                    </span>
-                  </div>
-                );
-              })}
+                  );
+                });
+              })()}
             </div>
           );
         })}
@@ -1658,6 +1711,7 @@ interface WeekViewProps {
   channelsById: Map<string, Channel>;
   onCreate?: (date: Date, time: string) => void;
   onMoveEvent?: (eventId: string, target: Date, newTime?: string) => void;
+  onOpenEvent?: (ev: CalendarEvent) => void;
 }
 
 function WeekView({
@@ -1667,6 +1721,7 @@ function WeekView({
   channelsById,
   onCreate,
   onMoveEvent,
+  onOpenEvent,
 }: WeekViewProps) {
   const weekStart = startOfWeek(cursor);
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -1679,6 +1734,7 @@ function WeekView({
       showWeekdayLabels
       onCreate={onCreate}
       onMoveEvent={onMoveEvent}
+      onOpenEvent={onOpenEvent}
     />
   );
 }
@@ -1692,6 +1748,7 @@ interface DayViewProps {
   channelsById: Map<string, Channel>;
   onCreate?: (date: Date, time: string) => void;
   onMoveEvent?: (eventId: string, target: Date, newTime?: string) => void;
+  onOpenEvent?: (ev: CalendarEvent) => void;
 }
 
 function DayView({
@@ -1701,6 +1758,7 @@ function DayView({
   channelsById,
   onCreate,
   onMoveEvent,
+  onOpenEvent,
 }: DayViewProps) {
   return (
     <Timeline
@@ -1711,6 +1769,7 @@ function DayView({
       showWeekdayLabels
       onCreate={onCreate}
       onMoveEvent={onMoveEvent}
+      onOpenEvent={onOpenEvent}
     />
   );
 }

@@ -653,21 +653,14 @@ function MediaPreview({ item, src, channel, onClose, onDelete }: MediaPreviewPro
         <div className={styles.modalPreview}>
           {item.kind === "image" ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={src}
-              alt={item.name}
-              style={{
-                maxWidth: "100%",
-                maxHeight: "100%",
-                objectFit: "contain",
-              }}
-            />
+            <img src={src} alt={item.name} />
           ) : (
             <video
               src={src}
               controls
               autoPlay
-              style={{ maxWidth: "100%", maxHeight: "100%" }}
+              muted
+              playsInline
             />
           )}
           {item.durationSeconds !== undefined && (

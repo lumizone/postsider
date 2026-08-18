@@ -5,6 +5,8 @@ import styles from "./day-popup.module.css";
 import { ChannelAvatar } from "./channel-avatar";
 import { type CalendarEvent, type Channel } from "@/lib/calendar-data";
 import { useT } from "@/lib/i18n";
+import { PostMediaThumb } from "./post-media-thumb";
+import { layoutOverlappingEvents } from "@/lib/event-lanes";
 
 interface DayPopupProps {
   date: Date;
@@ -41,6 +43,11 @@ function eventTopAndHeight(time: string, durationMinutes: number) {
   const top = (minutes / 60) * HOUR_HEIGHT;
   const height = Math.max((durationMinutes / 60) * HOUR_HEIGHT, 28);
   return { top, height };
+}
+
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
 }
 
 function formatHourLabel(h: number) {
@@ -185,41 +192,62 @@ export function DayPopup({
               />
             )}
 
-            {sortedEvents.map((ev) => {
-              const { top, height } = eventTopAndHeight(
-                ev.time,
-                ev.durationMinutes ?? DEFAULT_DURATION,
+            {(() => {
+              // Overlapping events are laid out side by side instead of
+              // stacking on top of each other.
+              const placements = layoutOverlappingEvents(
+                sortedEvents.map((ev) => ({
+                  id: ev.id,
+                  startMin: timeToMinutes(ev.time),
+                  endMin:
+                    timeToMinutes(ev.time) +
+                    (ev.durationMinutes ?? DEFAULT_DURATION),
+                })),
               );
-              const c = channelsById.get(ev.channelId);
-              return (
-                <button
-                  type="button"
-                  key={ev.id}
-                  className={styles.event}
-                  style={{
-                    top,
-                    height,
-                    borderLeft: c
-                      ? `3px solid ${c.color}`
-                      : "3px solid var(--fg)",
-                  }}
-                  onClick={() => onEditEvent?.(ev)}
-                >
-                  <div className={styles.eventHead}>
-                    {c ? (
-                      <ChannelAvatar channel={c} size={20} radius={6} />
-                    ) : (
-                      <span className={styles.eventBadge} aria-hidden>?</span>
-                    )}
-                    <span className={styles.eventTitle}>{ev.title}</span>
-                  </div>
-                  <span className={styles.eventMeta}>
-                    {ev.time}
-                    {c ? ` · ${c.name}` : ""}
-                  </span>
-                </button>
-              );
-            })}
+              return sortedEvents.map((ev) => {
+                const { top, height } = eventTopAndHeight(
+                  ev.time,
+                  ev.durationMinutes ?? DEFAULT_DURATION,
+                );
+                const c = channelsById.get(ev.channelId);
+                const placement = placements.get(ev.id);
+                return (
+                  <button
+                    type="button"
+                    key={ev.id}
+                    className={styles.event}
+                    style={{
+                      top,
+                      height,
+                      borderLeft: c
+                        ? `3px solid ${c.color}`
+                        : "3px solid var(--fg)",
+                      ...(placement
+                        ? {
+                            left: `calc(${placement.leftPct}% + 64px)`,
+                            width: `calc(${placement.widthPct}% - 72px)`,
+                          }
+                        : {}),
+                    }}
+                    onClick={() => onEditEvent?.(ev)}
+                  >
+                    <div className={styles.eventHead}>
+                      {c ? (
+                        <ChannelAvatar channel={c} size={20} radius={6} />
+                      ) : (
+                        <span className={styles.eventBadge} aria-hidden>?</span>
+                      )}
+                      <PostMediaThumb media={ev.media} size={20} />
+                      <span className={styles.eventTitle}>{ev.title}</span>
+                    </div>
+                    <span className={styles.eventMeta}>
+                      {ev.time}
+                      {c ? ` · ${c.name}` : ""}
+                    </span>
+                  </button>
+                );
+              });
+            })()}
           </div>
         </div>
       </div>

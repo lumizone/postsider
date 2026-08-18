@@ -10,6 +10,9 @@ import {
   rejectPost,
   createGuestLink,
 } from "@/lib/approval-api";
+import { parsePostMedia, type PostMedia } from "@/lib/posts";
+import { platformFromIdentifier } from "@/lib/integrations";
+import { PlatformIcon } from "@/components/platform-icon";
 import ap from "./approval.module.css";
 
 const ghostBtn: React.CSSProperties = {
@@ -22,16 +25,58 @@ const ghostBtn: React.CSSProperties = {
   cursor: "pointer",
 };
 
-/** Parse the `post.image` JSON column (stringified `[ { path: string } ]`) into url strings. */
-function parseMediaUrls(imageJson?: string): string[] {
-  if (!imageJson) return [];
-  try {
-    const arr = JSON.parse(imageJson);
-    if (!Array.isArray(arr)) return [];
-    return arr.map((m: any) => m?.path || m?.url || "").filter(Boolean);
-  } catch {
-    return [];
-  }
+/** Full-width media preview: first item large, remaining as a strip. */
+function MediaPreview({ media }: { media: PostMedia[] }) {
+  if (!media || media.length === 0) return null;
+  const [first, ...rest] = media;
+  const isVideo = first.kind === "video";
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div
+        style={{
+          width: "100%",
+          borderRadius: 10,
+          overflow: "hidden",
+          background: "#000",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          maxHeight: 420,
+        }}
+      >
+        {isVideo ? (
+          <video
+            src={first.url}
+            controls
+            muted
+            playsInline
+            style={{ width: "100%", maxHeight: 420, objectFit: "contain" }}
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={first.url}
+            alt=""
+            style={{ width: "100%", maxHeight: 420, objectFit: "contain" }}
+          />
+        )}
+      </div>
+      {rest.length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {rest.map((m, i) => (
+            <span key={i} style={{ width: 72, height: 72, borderRadius: 8, overflow: "hidden", background: "#000", display: "block" }}>
+              {m.kind === "image" ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={m.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <video src={m.url} muted playsInline style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function shortDay(d: string | Date): string {
@@ -147,46 +192,86 @@ export default function ApprovalPage() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {items.map((a) => {
-            const mediaUrls = parseMediaUrls(a.post?.image);
+            const media = parsePostMedia(a.post?.image);
             const content = a.post?.content || "";
             const isLong = content.length > 280;
             const showFull = expanded.has(a.id);
             const displayContent = showFull || !isLong ? content : content.slice(0, 280) + "…";
+            const provider = a.post?.integration?.providerIdentifier;
+            const platform = platformFromIdentifier(provider ?? "");
+            const channelName = a.post?.integration?.name ?? t("approval.channelFallback");
+            const picture = a.post?.integration?.picture;
+            const images = media.filter((m) => m.kind === "image").length;
+            const videos = media.filter((m) => m.kind === "video").length;
 
             return (
-              <div key={a.id} style={{ border: "1px solid var(--line-soft)", borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
-                {/* Header row: channel + requester + date */}
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 12, color: "var(--muted)", flexWrap: "wrap" }}>
-                  <span>
-                    {a.post?.integration?.name ?? t("approval.channelFallback")}
-                    <span style={{ marginLeft: 6, opacity: 0.6 }}>{a.post?.integration?.providerIdentifier}</span>
-                  </span>
-                  <span>{t("approval.requestedBy", { name: a.requestedBy?.name || a.requestedBy?.email || t("approval.someone") })}</span>
+              <div key={a.id} style={{ border: "1px solid var(--line-soft)", borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+                {/* Header row: channel avatar/platform + requester + date */}
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                    {picture ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={picture}
+                        alt=""
+                        style={{ width: 30, height: 30, borderRadius: 7, objectFit: "cover", background: "rgba(0,0,0,0.06)" }}
+                      />
+                    ) : (
+                      <span
+                        style={{
+                          width: 30, height: 30, borderRadius: 7,
+                          display: "inline-flex", alignItems: "center", justifyContent: "center",
+                          background: "var(--fg)", color: "var(--bg)",
+                          fontSize: 12, fontWeight: 700,
+                        }}
+                      >
+                        {channelName.slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
+                    <div style={{ display: "flex", flexDirection: "column", minWidth: 0, lineHeight: 1.25 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {channelName}
+                      </span>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--muted)" }}>
+                        {platform && (
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              width: 22,
+                              height: 22,
+                              borderRadius: 6,
+                              background: "rgba(0,0,0,0.05)",
+                              flexShrink: 0,
+                            }}
+                          >
+                            <PlatformIcon platform={platform} size={18} />
+                          </span>
+                        )}
+                        {platform}
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", fontSize: 12, color: "var(--muted)", gap: 2 }}>
+                    <span>{t("approval.requestedBy", { name: a.requestedBy?.name || a.requestedBy?.email || t("approval.someone") })}</span>
+                    {a.post?.publishDate && (
+                      <span>{t("approval.scheduledFor")}: {shortDay(a.post.publishDate)}</span>
+                    )}
+                  </div>
                 </div>
 
-                {/* Publish date if set */}
-                {a.post?.publishDate && (
+                {/* Media type summary + count */}
+                {media.length > 0 && (
                   <div style={{ fontSize: 12, color: "var(--muted)" }}>
-                    {t("approval.scheduledFor")}: {shortDay(a.post.publishDate)}
+                    {media.length} {media.length === 1 ? t("media.image").toLowerCase() : t("approval.mediaItems")}
+                    {images > 0 && ` · ${images} ${t("approval.images")}`}
+                    {videos > 0 && ` · ${videos} ${t("approval.videos")}`}
                   </div>
                 )}
 
-                {/* Media thumbnails */}
-                {mediaUrls.length > 0 && (
-                  <div style={{ display: "flex", gap: 6, overflowX: "auto" }}>
-                    {mediaUrls.map((url, i) => (
-                      <img
-                        key={i}
-                        src={url}
-                        alt=""
-                        style={{
-                          width: 80, height: 80, borderRadius: 8,
-                          objectFit: "cover", border: "1px solid var(--line-soft)",
-                        }}
-                      />
-                    ))}
-                  </div>
-                )}
+                {/* Large media preview */}
+                {media.length > 0 && <MediaPreview media={media} />}
 
                 {/* Post content */}
                 <div style={{ fontSize: 14, whiteSpace: "pre-wrap", color: "var(--fg)", wordBreak: "break-word" }}>

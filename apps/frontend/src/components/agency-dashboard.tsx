@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useT } from "@/lib/i18n";
+import { useAuth } from "@/lib/auth-context";
 import { downloadCsv, rowsToCsv } from "@/lib/csv-export";
 import {
   getAgencyOverview,
   getCustomerReport,
+  downloadReportPdf,
   type AgencyOverview,
   type CustomerReport,
 } from "@/lib/agency-api";
@@ -19,25 +22,23 @@ function number(value: number) {
 
 export function AgencyDashboard() {
   const t = useT();
+  const { user } = useAuth();
+  const agencyMode = !!user?.agencyMode;
   const [days, setDays] = useState(30);
-  const [apiKey, setApiKey] = useState("");
   const [overview, setOverview] = useState<AgencyOverview | null>(null);
   const [report, setReport] = useState<CustomerReport | null>(null);
   const [customerId, setCustomerId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [reportLoading, setReportLoading] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!apiKey.trim()) {
-      setOverview(null);
-      setLoading(false);
-      return;
-    }
+    if (!agencyMode) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
-    getAgencyOverview(days, apiKey.trim())
+    getAgencyOverview(days)
       .then((data) => {
         if (cancelled) return;
         setOverview(data);
@@ -51,21 +52,21 @@ export function AgencyDashboard() {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [apiKey, days, t]);
+  }, [agencyMode, days, t]);
 
   useEffect(() => {
-    if (!customerId || !apiKey.trim()) {
+    if (!customerId) {
       setReport(null);
       return;
     }
     let cancelled = false;
     setReportLoading(true);
-    getCustomerReport(customerId, days, apiKey.trim())
+    getCustomerReport(customerId, days)
       .then((data) => { if (!cancelled) setReport(data); })
       .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : t("agency.reportError")); })
       .finally(() => { if (!cancelled) setReportLoading(false); });
     return () => { cancelled = true; };
-  }, [apiKey, customerId, days, t]);
+  }, [customerId, days, t]);
 
   const summary = overview?.summary;
   const exportReport = () => {
@@ -79,6 +80,28 @@ export function AgencyDashboard() {
     );
   };
 
+  const exportPdf = async () => {
+    if (!report || pdfBusy) return;
+    setPdfBusy(true);
+    setError(null);
+    try {
+      const filename = `${report.customer.name.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "customer"}-report.pdf`;
+      await downloadReportPdf(customerId, days, filename);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("agency.reportError"));
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
+  const clientFlags = (client: AgencyOverview["clients"][number]) => {
+    const flags: string[] = [];
+    if (client.stuckPosts > 0) flags.push(t("agency.stuckFlag", { count: client.stuckPosts }));
+    if (client.errors > 0) flags.push(t("agency.errorFlag", { count: client.errors }));
+    if (client.tokenIssues > 0) flags.push(t("agency.tokenFlag", { count: client.tokenIssues }));
+    return flags;
+  };
+
   return (
     <main className={styles.page}>
       <header className={styles.header}>
@@ -87,20 +110,29 @@ export function AgencyDashboard() {
           <h1>{t("agency.title")}</h1>
           <p className={styles.subtitle}>{t("agency.subtitle")}</p>
         </div>
-        <div className={styles.controls}>
-          <label htmlFor="agency-api-key">{t("agency.apiKey")}</label>
-          <input id="agency-api-key" type="password" value={apiKey} onChange={(e) => { setApiKey(e.target.value); setError(null); }} placeholder="ps_…" autoComplete="off" />
-          <label htmlFor="agency-range">{t("agency.window")}</label>
-          <select id="agency-range" value={days} onChange={(e) => setDays(Number(e.target.value))}>
-            {ranges.map((range) => <option key={range} value={range}>{t("agency.days", { days: range })}</option>)}
-          </select>
-        </div>
+        {agencyMode && (
+          <div className={styles.controls}>
+            <label htmlFor="agency-range">{t("agency.window")}</label>
+            <select id="agency-range" value={days} onChange={(e) => setDays(Number(e.target.value))}>
+              {ranges.map((range) => <option key={range} value={range}>{t("agency.days", { days: range })}</option>)}
+            </select>
+          </div>
+        )}
       </header>
 
-      {!apiKey.trim() && <div className={styles.notice}>{t("agency.apiKeyHint")}</div>}
-
-      {error && <div className={styles.error} role="alert">{error}</div>}
-      {loading ? <p className={styles.muted}>{t("common.loading")}</p> : overview && (
+      {!agencyMode ? (
+        <div className={styles.notice} role="status">
+          {t("agency.disabledTitle")}{" "}
+          <Link href="/settings/organization" style={{ color: "var(--fg)", fontWeight: 600 }}>
+            {t("agency.disabledLink")}
+          </Link>
+          .
+        </div>
+      ) : error ? (
+        <div className={styles.error} role="alert">{error}</div>
+      ) : loading ? (
+        <p className={styles.muted}>{t("common.loading")}</p>
+      ) : overview && (
         <>
           <section className={styles.metrics} aria-label={t("agency.summary")}>
             {[
@@ -109,6 +141,8 @@ export function AgencyDashboard() {
               [t("agency.queued"), summary?.queued],
               [t("agency.published"), summary?.published],
               [t("agency.approvals"), summary?.pendingApprovals],
+              [t("agency.stuck"), summary?.stuckPosts],
+              [t("agency.tokenIssues"), summary?.tokenIssues],
               [t("agency.errors"), summary?.recentErrors],
             ].map(([label, value, total]) => (
               <div className={styles.metric} key={String(label)}>
@@ -124,12 +158,19 @@ export function AgencyDashboard() {
               <div className={styles.cardHeader}><div><p className={styles.eyebrow}>{t("agency.clientsEyebrow")}</p><h2>{t("agency.clientRollup")}</h2></div></div>
               {overview.clients.length === 0 ? <p className={styles.muted}>{t("agency.noClients")}</p> : (
                 <div className={styles.clientList}>
-                  {overview.clients.map((client) => (
-                    <button key={client.id ?? client.name} className={`${styles.client} ${client.id === customerId ? styles.selected : ""}`} onClick={() => client.id && setCustomerId(client.id)} disabled={!client.id}>
-                      <span><strong>{client.name}</strong><small>{t("agency.channelCount", { count: client.channels })}</small></span>
-                      <span className={styles.clientStatus}>{client.activeChannels}/{client.channels}</span>
-                    </button>
-                  ))}
+                  {overview.clients.map((client) => {
+                    const flags = clientFlags(client);
+                    return (
+                      <button key={client.id ?? client.name} className={`${styles.client} ${client.id === customerId ? styles.selected : ""}`} onClick={() => client.id && setCustomerId(client.id)} disabled={!client.id}>
+                        <span><strong>{client.name}</strong><small>{t("agency.channelCount", { count: client.channels })}</small></span>
+                        <span className={styles.clientStatus}>
+                          <span className={flags.length > 0 ? styles.warn : undefined}>
+                            {flags.length > 0 ? flags.join(" · ") : `${client.activeChannels}/${client.channels}`}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -137,6 +178,7 @@ export function AgencyDashboard() {
             <div className={styles.card}>
               <div className={styles.cardHeader}>
                 <div><p className={styles.eyebrow}>{t("agency.reportEyebrow")}</p><h2>{report?.customer.name ?? t("agency.selectClient")}</h2></div>
+                <button className={styles.secondary} onClick={exportPdf} disabled={!report || reportLoading || pdfBusy}>{t("agency.downloadPdf")}</button>
                 <button className={styles.secondary} onClick={exportReport} disabled={!report || reportLoading}>{t("agency.export")}</button>
               </div>
               {reportLoading ? <p className={styles.muted}>{t("common.loading")}</p> : report ? (

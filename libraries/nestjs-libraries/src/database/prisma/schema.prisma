@@ -19,6 +19,7 @@ model Organization {
   brandAudience        String?
   brandRules           String?
   brandForbiddenWords  String?
+  agencyMode           Boolean                    @default(false)
   apiKey               String?
   paymentId            String?
   streakSince          DateTime?

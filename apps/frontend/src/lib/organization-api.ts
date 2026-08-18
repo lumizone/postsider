@@ -12,6 +12,7 @@ export interface OrganizationProfile {
   brandAudience: string | null;
   brandRules: string | null;
   brandForbiddenWords: string | null;
+  agencyMode: boolean;
 }
 
 export async function getOrganizationProfile(): Promise<OrganizationProfile> {

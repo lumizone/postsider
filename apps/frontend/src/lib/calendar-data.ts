@@ -65,6 +65,8 @@ export interface CalendarEvent {
   excerpt?: string;
   /** Whether the post has been published already (true) or is still scheduled. */
   published?: boolean;
+  /** Media attachments for the post, parsed from the backend `image` column. */
+  media?: { url: string; kind: "image" | "video" }[];
   /** Explicit lifecycle status. Falls back to derived state if missing. */
   status?: PostStatus;
   /** Post group ID — used for duplicating, editing, and deleting. */

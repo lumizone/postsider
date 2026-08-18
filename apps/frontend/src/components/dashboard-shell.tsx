@@ -14,6 +14,8 @@ interface NavItem {
   icon: ReactNode;
   /** Minimum role required. Default: everyone. */
   minRole?: "ADMIN" | "SUPERADMIN";
+  /** Only shown when the org has agency mode enabled (Settings → Organization). */
+  agencyModeOnly?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -130,6 +132,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     href: "/agency",
     labelKey: "nav.agency",
+    agencyModeOnly: true,
     icon: (
       <svg viewBox="0 0 16 16" fill="none" aria-hidden>
         <path d="M3 12.5V7.5M8 12.5V3.5M13 12.5V5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -471,6 +474,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         <nav>
           <ul style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
             {NAV_ITEMS.filter((item) => {
+              if (item.agencyModeOnly && !user?.agencyMode) return false;
               if (!item.minRole) return true;
               return myLevel >= (ROLE_LEVEL[item.minRole] ?? 0);
             }).map((item) => {

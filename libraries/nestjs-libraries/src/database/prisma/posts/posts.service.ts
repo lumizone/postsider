@@ -90,6 +90,10 @@ export class PostsService {
     return this._postRepository.searchForMissingThreeHoursPosts();
   }
 
+  findRecentPublishedForAnalytics(since: Date, limit?: number) {
+    return this._postRepository.findRecentPublishedForAnalytics(since, limit);
+  }
+
   updatePost(id: string, postId: string, releaseURL: string, orgId?: string) {
     return this._postRepository.updatePost(id, postId, releaseURL, orgId);
   }
@@ -419,7 +423,7 @@ export class PostsService {
                     process.env.NEXT_PUBLIC_UPLOAD_STATIC_DIRECTORY +
                     m.path
                   : m.path,
-              type: 'image',
+              type: m.type || this.deriveMediaType(m.path),
               path:
                 m.path.indexOf('http') === -1
                   ? process.env.UPLOAD_DIRECTORY + m.path
@@ -492,6 +496,20 @@ export class PostsService {
     } catch (err: any) {
       return imagesList;
     }
+  }
+
+  /**
+   * Best-effort media kind derived from the file path/URL. Used when a media
+   * item carries no persisted `type` (e.g. posts created via the public API
+   * reference media by {id, path} only). Falls back to 'image'.
+   */
+  private deriveMediaType(path: string): 'image' | 'video' | 'audio' {
+    const videoExts = ['mp4', 'webm', 'mov', 'mkv', 'm4v', 'avi'];
+    const audioExts = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'];
+    const p = (path || '').toLowerCase();
+    if (videoExts.some((ext) => p.includes(`.${ext}`))) return 'video';
+    if (audioExts.some((ext) => p.includes(`.${ext}`))) return 'audio';
+    return 'image';
   }
 
   async getPostGroupDebugExport(orgId: string, group: string) {

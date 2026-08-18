@@ -46,6 +46,8 @@ export interface SelfUser {
   organizations?: OrgSummary[];
   /** Current org's uploaded logo (Settings → Organization). Null falls back to the PostSider brand mark. */
   orgLogo?: string | null;
+  /** Whether the org has agency mode (multi-client overview) enabled. Off by default. */
+  agencyMode?: boolean;
   // Other fields exist on the backend but aren't used here yet.
 }
 

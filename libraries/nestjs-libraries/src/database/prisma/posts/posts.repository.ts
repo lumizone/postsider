@@ -69,6 +69,32 @@ export class PostsRepository {
     });
   }
 
+  // PUBLISHED posts with a real release id, for the analytics collection cron.
+  // `checkPostAnalytics` no-ops for providers without a `postAnalytics`
+  // capability, so no need to filter by provider here.
+  findRecentPublishedForAnalytics(since: Date, limit = 500) {
+    return this._post.model.post.findMany({
+      where: {
+        state: State.PUBLISHED,
+        publishDate: { gte: since },
+        deletedAt: null,
+        parentPostId: null,
+        NOT: [{ releaseId: null }, { releaseId: 'missing' }],
+        integration: {
+          deletedAt: null,
+          disabled: false,
+        },
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        integration: { select: { providerIdentifier: true } },
+      },
+      orderBy: { publishDate: 'desc' },
+      take: limit,
+    });
+  }
+
   getOldPosts(orgId: string, date: string) {
     return this._post.model.post.findMany({
       where: {
@@ -181,6 +207,7 @@ export class PostsRepository {
         intervalInDays: true,
         group: true,
         creationMethod: true,
+        image: true,
         tags: {
           select: {
             tag: true,
@@ -312,6 +339,7 @@ export class PostsRepository {
           intervalInDays: true,
           group: true,
           creationMethod: true,
+          image: true,
           tags: {
             select: {
               tag: true,

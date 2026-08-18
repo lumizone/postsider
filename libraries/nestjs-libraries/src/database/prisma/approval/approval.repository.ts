@@ -72,7 +72,7 @@ export class ApprovalRepository {
             image: true,
             settings: true,
             publishDate: true,
-            integration: { select: { id: true, name: true, providerIdentifier: true } },
+            integration: { select: { id: true, name: true, providerIdentifier: true, picture: true } },
           },
         },
         requestedBy: { select: { name: true, email: true } },

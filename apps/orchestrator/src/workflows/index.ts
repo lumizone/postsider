@@ -7,6 +7,7 @@ export * from './digest.email.workflow';
 export * from './missing.post.workflow';
 export * from './media.cleanup.workflow';
 export * from './evergreen.workflow';
+export * from './collect.analytics.workflow';
 export * from './send.email.workflow';
 export * from './refresh.token.workflow';
 export * from './streak.workflow';

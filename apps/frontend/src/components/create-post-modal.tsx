@@ -80,6 +80,8 @@ export interface InitialPostValue {
   threadParts: string[];
   /** Per-channel provider settings (e.g. Discord channel). */
   perChannelSettings?: Record<string, Record<string, unknown>>;
+  /** Media already attached to the post being edited. */
+  media?: AttachedMedia[];
 }
 
 export interface NewPostInput {
@@ -111,6 +113,11 @@ export interface AttachedMedia {
   size: number;
   /** Local object URL — fine for the demo, would be a server URL in production. */
   url: string;
+  /**
+   * Backend media id (when present, this media already exists server-side and
+   * submitPost must NOT re-upload it — it rides along as {id, path}).
+   */
+  backendId?: string;
 }
 
 const GLOBAL_KEY = "__global__";
@@ -331,7 +338,9 @@ export function CreatePostModal({
   const [threadParts, setThreadParts] = useState<string[]>(
     initialValue?.threadParts ?? [],
   );
-  const [media, setMedia] = useState<AttachedMedia[]>([]);
+  const [media, setMedia] = useState<AttachedMedia[]>(
+    initialValue?.media ?? [],
+  );
 
   // Optional first comment (posted right after the main post). Only shown when
   // at least one selected channel's provider supports comments.
@@ -395,10 +404,85 @@ export function CreatePostModal({
   // and offering to "restore" over an in-progress edit would be confusing).
   // A single accidental backdrop click or Escape used to silently discard
   // everything typed with zero recovery path.
-  const hasUnsavedContent =
-    Object.values(bodies).some((b) => b.trim().length > 0) ||
-    threadParts.some((p) => p.trim().length > 0) ||
-    media.length > 0;
+  //
+  // In edit mode the composer is prefilled with the existing post, so "is
+  // there any content" is NOT a valid dirty check — it would be true from
+  // mount and warn on every close even with zero edits. We snapshot the
+  // prefilled state once and compare the current fields against it.
+  const initialSnapshot = useMemo(
+    () => ({
+      body: initialValue?.body ?? "",
+      threadParts: initialValue?.threadParts ?? [],
+      media: (initialValue?.media ?? []).map((m) => ({
+        url: m.url,
+        kind: m.kind,
+        id: m.id,
+      })),
+      date: initialValue?.date ?? date,
+      time: initialValue?.time ?? time,
+      channels: [...(initialValue?.channelIds ?? [])].sort().join(","),
+      settings: JSON.stringify(initialValue?.perChannelSettings ?? {}),
+    }),
+    // initialValue is stable for the modal's lifetime (it never changes while
+    // open) and date/time are the props passed at mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  const hasUnsavedContent = useMemo(() => {
+    if (isEdit) {
+      // Per-channel bodies are seeded from the global body on mode switch, so
+      // compare every body value against the prefilled global body — only a
+      // value that DIFFERS from it is a real user edit.
+      const bodyDirty =
+        (bodies[GLOBAL_KEY] ?? "") !== initialSnapshot.body ||
+        Object.values(bodies).some((v) => v !== initialSnapshot.body);
+      const threadsDirty =
+        threadParts.length !== initialSnapshot.threadParts.length ||
+        threadParts.some((p, i) => p !== initialSnapshot.threadParts[i]);
+      const mediaDirty =
+        media.length !== initialSnapshot.media.length ||
+        media.some(
+          (m, i) =>
+            m.url !== initialSnapshot.media[i]?.url ||
+            m.kind !== initialSnapshot.media[i]?.kind,
+        );
+      const dateDirty = postDate !== initialSnapshot.date;
+      const timeDirty = postTime !== initialSnapshot.time;
+      const channelsDirty =
+        Array.from(selectedIds).sort().join(",") !== initialSnapshot.channels;
+      const settingsDirty =
+        JSON.stringify(channelSettings) !== initialSnapshot.settings;
+      const commentDirty = firstComment.trim().length > 0;
+      return (
+        bodyDirty ||
+        threadsDirty ||
+        mediaDirty ||
+        dateDirty ||
+        timeDirty ||
+        channelsDirty ||
+        settingsDirty ||
+        commentDirty
+      );
+    }
+    // New post: any typed content counts.
+    return (
+      Object.values(bodies).some((b) => b.trim().length > 0) ||
+      threadParts.some((p) => p.trim().length > 0) ||
+      media.length > 0
+    );
+  }, [
+    isEdit,
+    initialSnapshot,
+    bodies,
+    threadParts,
+    media,
+    postDate,
+    postTime,
+    selectedIds,
+    channelSettings,
+    firstComment,
+  ]);
 
   const DRAFT_KEY = "postsider:composer:draft";
 

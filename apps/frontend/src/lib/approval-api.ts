@@ -20,6 +20,7 @@ export interface PendingApproval {
       id?: string;
       name: string;
       providerIdentifier: string;
+      picture?: string | null;
     };
   };
   requestedBy?: { name: string | null; email: string };

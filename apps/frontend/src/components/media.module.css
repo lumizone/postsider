@@ -539,6 +539,19 @@
   align-items: center;
   justify-content: center;
   min-height: 360px;
+  /* Definite height so the img/video child (width/height 100%) can fill it —
+     percentage max-heights resolve to auto against a parent with only
+     min-height, which left the preview tiny (and videos at their 300×150
+     default box). */
+  height: min(70vh, 640px);
+  overflow: hidden;
+}
+
+.modalPreview > img,
+.modalPreview > video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .modalPreviewIcon {
@@ -760,6 +773,7 @@
   }
   .modalPreview {
     min-height: 240px;
+    height: min(60vh, 420px);
   }
 }
 

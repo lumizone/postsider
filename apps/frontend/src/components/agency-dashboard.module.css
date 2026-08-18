@@ -8,7 +8,7 @@
 .subtitle { margin: 8px 0 0; }
 .controls { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
 .controls input, .controls select, .secondary { border: 1px solid var(--line-soft); border-radius: 8px; background: var(--bg); color: var(--fg); padding: 9px 11px; font-size: 13px; }
-.metrics { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 18px; }
+.metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 18px; }
 .metric, .card { border: 1px solid var(--line-soft); border-radius: 12px; background: var(--bg); }
 .metric { padding: 15px; min-height: 92px; display: flex; flex-direction: column; gap: 7px; }
 .metric span, .metric small, .reportStats span, .client small, .channelList small { color: var(--muted); font-size: 11px; }
@@ -19,7 +19,7 @@
 .clientList { display: flex; flex-direction: column; margin-top: 18px; }
 .client { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 4px; border: 0; border-top: 1px solid var(--line-soft); background: transparent; color: var(--fg); text-align: left; cursor: pointer; }
 .client:first-child { border-top: 0; }.client:disabled { cursor: default; }.selected { margin: 0 -10px; padding-left: 14px; padding-right: 14px; border-radius: 8px; background: var(--surface, #f5f5f5); }
-.client span:first-child, .channelList li span:first-child { display: flex; flex-direction: column; gap: 4px; }.clientStatus { font-size: 12px; color: var(--muted); }
+.client span:first-child, .channelList li span:first-child { display: flex; flex-direction: column; gap: 4px; }.clientStatus { font-size: 12px; color: var(--muted); }.clientStatus.warn { color: #c0392b; }
 .secondary { cursor: pointer; }.secondary:disabled { opacity: .45; cursor: default; }
 .reportStats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 22px 0; }.reportStats div { display: flex; flex-direction: column; gap: 4px; }.reportStats strong { font-size: 20px; }
 .channelList { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--line-soft); }.channelList li { display: flex; justify-content: space-between; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--line-soft); font-size: 13px; }.active { color: #16803c; font-size: 12px; }.disabled { color: var(--muted); font-size: 12px; }

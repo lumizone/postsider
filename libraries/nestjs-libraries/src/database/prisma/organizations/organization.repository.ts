@@ -235,6 +235,7 @@ export class OrganizationRepository {
       brandAudience?: string | null;
       brandRules?: string | null;
       brandForbiddenWords?: string | null;
+      agencyMode?: boolean;
     }
   ) {
     return this._organization.model.organization.update({

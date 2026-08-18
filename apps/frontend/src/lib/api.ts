@@ -218,4 +218,25 @@ export const api = {
   upload<T>(path: string, form: FormData, opts?: ApiOptions) {
     return request<T>("POST", buildUrl(path), { ...opts, body: form, form: true });
   },
+  async download(path: string, query?: Record<string, string | number | boolean | undefined | null>, opts?: ApiOptions): Promise<Blob> {
+    const { headers = {}, anonymous, body: _body, silent: _silent, form: _form, ...rest } = opts ?? {};
+    const finalHeaders: Record<string, string> = { ...headers };
+    if (!anonymous) {
+      const token = getAuthToken();
+      if (token) finalHeaders[TOKEN_HEADER] = token;
+      const org = getOrgId();
+      if (org) finalHeaders[ORG_HEADER] = org;
+    }
+    const res = await fetch(buildUrl(path, query), {
+      method: "GET",
+      headers: finalHeaders,
+      credentials: "include",
+      ...rest,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new ApiError(res.status, text || res.statusText, null);
+    }
+    return res.blob();
+  },
 };

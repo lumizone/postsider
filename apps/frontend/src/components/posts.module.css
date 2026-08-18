@@ -213,13 +213,15 @@
 .list {
   border-radius: var(--radius-lg);
   border: 1px solid var(--line-soft);
-  overflow: hidden;
   background: var(--bg);
+  /* overflow is NOT hidden here — the post-row dropdown (position: absolute,
+     top: 100%) must be able to overflow the row. Rounded corners are kept by
+     rounding the first/last rows instead (see .row:first-child/last-child). */
 }
 
 .row {
   display: grid;
-  grid-template-columns: 110px minmax(0, 2fr) minmax(0, 1.3fr) 130px 130px;
+  grid-template-columns: 110px minmax(0, 2fr) minmax(0, 1.3fr) 130px 130px 40px;
   align-items: center;
   gap: 16px;
   padding: 14px 18px;
@@ -228,8 +230,15 @@
   transition: background 140ms var(--ease);
 }
 
+.row:first-child {
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+}
+
 .row:last-child {
   border-bottom: none;
+  border-bottom-left-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-lg);
 }
 
 .row:hover {
@@ -422,6 +431,7 @@
   .channelCell { grid-column: 1 / -1; grid-row: 2; }
   .dateCell { grid-column: 1; grid-row: 3; }
   .metricsCell { grid-column: 2; grid-row: 3; }
+  .actionsCell { grid-column: 2; grid-row: 4; justify-self: end; }
 }
 
 /* Toast */

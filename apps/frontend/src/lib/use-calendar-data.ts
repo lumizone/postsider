@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   fetchCalendarPosts,
   fetchPostsList,
+  parsePostMedia,
   type BackendPost,
 } from "./posts";
 import type { CalendarEvent, PostStatus } from "./calendar-data";
@@ -54,6 +55,7 @@ export function backendPostToEvent(p: BackendPost): CalendarEvent {
     durationMinutes: 30,
     title: firstLine.slice(0, 80) || "Untitled",
     excerpt: p.content?.slice(0, 140),
+    media: parsePostMedia(p.image),
     published: status === "published",
     status,
     group: p.group,

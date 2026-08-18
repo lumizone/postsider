@@ -1,4 +1,4 @@
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class UpdateOrganizationDto {
   @IsOptional()
@@ -45,4 +45,8 @@ export class UpdateOrganizationDto {
   @IsString()
   @MaxLength(1000)
   brandForbiddenWords?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  agencyMode?: boolean;
 }

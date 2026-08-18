@@ -55,6 +55,7 @@ import { ChannelAssignmentRepository } from '@postsider/nestjs-libraries/databas
 import { ChannelAssignmentService } from '@postsider/nestjs-libraries/database/prisma/channel-assignment/channel-assignment.service';
 import { AgencyOverviewService } from '@postsider/nestjs-libraries/database/prisma/agency/agency-overview.service';
 import { CustomerReportService } from '@postsider/nestjs-libraries/database/prisma/agency/customer-report.service';
+import { ReportService } from '@postsider/nestjs-libraries/database/prisma/report/report.service';
 import { PublicApiIdempotencyService } from '@postsider/nestjs-libraries/database/prisma/idempotency/public-api-idempotency.service';
 import { PostAnalyticsRepository } from '@postsider/nestjs-libraries/database/prisma/post-analytics/post-analytics.repository';
 import { PostAnalyticsService } from '@postsider/nestjs-libraries/database/prisma/post-analytics/post-analytics.service';
@@ -123,6 +124,7 @@ import { PostAnalyticsService } from '@postsider/nestjs-libraries/database/prism
     PublicApiIdempotencyService,
     AgencyOverviewService,
     CustomerReportService,
+    ReportService,
     PostAnalyticsRepository,
     PostAnalyticsService,
   ],

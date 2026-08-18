@@ -91,6 +91,8 @@ export class UsersController {
       streakSince: organization?.streakSince || null,
       orgLogo: organization?.logo || null,
       // @ts-ignore
+      agencyMode: organization?.agencyMode ?? false,
+      // @ts-ignore
       publicApi: organization?.users[0]?.role === 'SUPERADMIN' || organization?.users[0]?.role === 'ADMIN' ? organization?.apiKey : '',
       isPlatformAi: isPlatformAiEnabled(),
       aiUsage: isPlatformAiEnabled()

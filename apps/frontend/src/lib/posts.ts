@@ -36,6 +36,60 @@ export async function uploadMedia(
 
 export type BackendPostState = "QUEUE" | "PUBLISHED" | "ERROR" | "DRAFT" | "APPROVAL";
 
+/** One media attachment as it appears inside a post's `image` JSON column. */
+export interface PostMedia {
+  id?: string;
+  /** Publicly reachable URL (absolute), resolved from path when relative. */
+  url: string;
+  kind: "image" | "video";
+}
+
+/**
+ * Parse the `Post.image` column (JSON string of `[{id, path, url?, type?}]`)
+ * into renderable media entries. Handles both the raw stored shape (id+path
+ * only, e.g. posts created via the public API) and the enriched shape the
+ * detail endpoint returns (path+url+type+name). Returns [] for null/empty/
+ * unparseable input so callers can render a plain text row safely.
+ */
+export function parsePostMedia(
+  image: string | PostMedia[] | { id?: string; path?: string; url?: string; type?: string }[] | null | undefined,
+): PostMedia[] {
+  if (!image) return [];
+  let arr: { id?: string; path?: string; url?: string; type?: string }[];
+  if (typeof image === "string") {
+    try {
+      arr = JSON.parse(image);
+    } catch {
+      return [];
+    }
+  } else {
+    arr = image;
+  }
+  if (!Array.isArray(arr)) return [];
+  const base = (
+    process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000"
+  ).replace(/\/$/, "");
+  const resolve = (p?: string): string => {
+    if (!p) return "";
+    if (/^https?:\/\//i.test(p)) return p;
+    if (p.startsWith("/")) return base + p;
+    return `${base}/uploads/${p}`;
+  };
+  return arr
+    .map((m) => {
+      const raw = m?.path || m?.url;
+      if (!raw) return null;
+      const url = resolve(raw);
+      const lower = url.toLowerCase();
+      const isVideo =
+        m?.type === "video" ||
+        m?.type === "audio" ||
+        /\.(mp4|webm|mov|mkv|m4v|avi|mpeg)(\?|#|$)/.test(lower);
+      return { id: m?.id, url, kind: isVideo ? "video" : "image" } as PostMedia;
+    })
+    .filter((m): m is PostMedia => m !== null);
+}
+
 export interface BackendPost {
   id: string;
   content: string;
@@ -47,6 +101,8 @@ export interface BackendPost {
   group: string;
   creationMethod: string;
   actualDate?: string;
+  /** JSON string of the post's media attachments (see parsePostMedia). */
+  image?: string | null;
   tags?: { tag: { id: string; name: string; color: string } }[];
   integration: {
     id: string;
@@ -191,7 +247,7 @@ export async function createPost(
 export interface PostDetailItem {
   id: string;
   content: string;
-  image?: { id?: string; path: string }[];
+  image?: PostMedia[];
 }
 
 export interface PostDetail {
@@ -222,12 +278,7 @@ export async function fetchPostDetail(id: string): Promise<PostDetail> {
   const posts: PostDetailItem[] = (res.posts ?? []).map((p) => ({
     id,
     content: p.content ?? "",
-    image:
-      typeof p.image === "string"
-        ? safeParseImages(p.image)
-        : Array.isArray(p.image)
-          ? p.image
-          : [],
+    image: parsePostMedia(p.image),
   }));
 
   return {
@@ -237,15 +288,6 @@ export async function fetchPostDetail(id: string): Promise<PostDetail> {
     posts,
     publishDate: res.posts?.[0]?.publishDate,
   };
-}
-
-function safeParseImages(raw: string): { id?: string; path: string }[] {
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
 }
 
 export interface DuplicatePostInput {

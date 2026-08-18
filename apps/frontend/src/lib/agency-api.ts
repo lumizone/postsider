@@ -5,6 +5,9 @@ export interface AgencyClient {
   name: string;
   channels: number;
   activeChannels: number;
+  errors: number;
+  stuckPosts: number;
+  tokenIssues: number;
 }
 
 export interface AgencyOverview {
@@ -20,6 +23,8 @@ export interface AgencyOverview {
     errors: number;
     recentErrors: number;
     pendingApprovals: number;
+    stuckPosts: number;
+    tokenIssues: number;
   };
   clients: AgencyClient[];
 }
@@ -37,8 +42,20 @@ export interface CustomerReport {
   summary: Omit<AgencyOverview["summary"], "clients"> & { channels: number };
 }
 
-export const getAgencyOverview = (days: number, apiKey: string) =>
-  api.get<AgencyOverview>("/public/v1/overview", { days }, { headers: { Authorization: apiKey }, silent: true });
+export const getAgencyOverview = (days: number) =>
+  api.get<AgencyOverview>("/agency/overview", { days }, { silent: true });
 
-export const getCustomerReport = (customerId: string, days: number, apiKey: string) =>
-  api.get<CustomerReport>(`/public/v1/customers/${customerId}/report`, { days }, { headers: { Authorization: apiKey }, silent: true });
+export const getCustomerReport = (customerId: string, days: number) =>
+  api.get<CustomerReport>(`/agency/customers/${customerId}/report`, { days }, { silent: true });
+
+export const downloadReportPdf = async (customerId: string, days: number, filename: string) => {
+  const blob = await api.download(`/report/customers/${customerId}/pdf`, { days });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};

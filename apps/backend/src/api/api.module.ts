@@ -15,6 +15,9 @@ import { PostsController } from '@postsider/backend/api/routes/posts.controller'
 import { EvergreenController } from '@postsider/backend/api/routes/evergreen.controller';
 import { ComposerHelpersController } from '@postsider/backend/api/routes/composer-helpers.controller';
 import { ApprovalController } from '@postsider/backend/api/routes/approval.controller';
+import { AgencyController } from '@postsider/backend/api/routes/agency.controller';
+import { ReportController } from '@postsider/backend/api/routes/report.controller';
+import { ReportPdfService } from '@postsider/backend/services/report.pdf.service';
 import { MediaController } from '@postsider/backend/api/routes/media.controller';
 import { UploadModule } from '@postsider/nestjs-libraries/upload/upload.module';
 import { BillingController } from '@postsider/backend/api/routes/billing.controller';
@@ -68,6 +71,8 @@ const authenticatedController = [
   EvergreenController,
   ComposerHelpersController,
   ApprovalController,
+  AgencyController,
+  ReportController,
 ];
 @Module({
   imports: [UploadModule],
@@ -102,6 +107,7 @@ const authenticatedController = [
     FarcasterProvider,
     WalletProvider,
     OauthProvider,
+    ReportPdfService,
   ],
   get exports() {
     return [...this.imports, ...this.providers];

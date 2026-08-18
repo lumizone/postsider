@@ -23,6 +23,7 @@ import { PostsService } from '@postsider/nestjs-libraries/database/prisma/posts/
 import { FileInterceptor } from '@nestjs/platform-express';
 import { uploadInterceptorOptions } from '@postsider/nestjs-libraries/upload/upload.limits';
 import { UploadFactory } from '@postsider/nestjs-libraries/upload/upload.factory';
+import { probeDimensions } from '@postsider/nestjs-libraries/upload/probe-dimensions';
 import { MediaService } from '@postsider/nestjs-libraries/database/prisma/media/media.service';
 import { GetPostsDto } from '@postsider/nestjs-libraries/dtos/posts/get.posts.dto';
 import { ChangePostStatusDto } from '@postsider/nestjs-libraries/dtos/posts/change.post.status.dto';
@@ -97,12 +98,16 @@ export class PublicIntegrationsController {
     }
 
     const getFile = await this.storage.uploadFile(file);
+    const { width, height } = await probeDimensions(file);
     return this._mediaService.saveFile(
       org.id,
       getFile.originalname,
       getFile.path,
-      undefined,
-      getFile.kind
+      file.originalname,
+      getFile.kind,
+      file.size,
+      width,
+      height
     );
   }
 
@@ -135,8 +140,22 @@ export class PublicIntegrationsController {
     }
     const mimetype = detected.mime;
     const ext = detected.ext;
+    const originalName = body.url.split('/').pop()?.split('?')[0] || undefined;
 
     const getFile = await this.storage.uploadFile({
+      buffer,
+      mimetype,
+      size: buffer.length,
+      path: '',
+      fieldname: '',
+      destination: '',
+      stream: new Readable(),
+      filename: '',
+      originalname: `upload.${ext}`,
+      encoding: '',
+    });
+
+    const { width, height } = await probeDimensions({
       buffer,
       mimetype,
       size: buffer.length,
@@ -153,8 +172,11 @@ export class PublicIntegrationsController {
       org.id,
       getFile.originalname,
       getFile.path,
-      undefined,
-      getFile.kind
+      originalName,
+      getFile.kind,
+      buffer.length,
+      width,
+      height
     );
   }
 

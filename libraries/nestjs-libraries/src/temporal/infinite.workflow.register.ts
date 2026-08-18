@@ -44,6 +44,7 @@ export class InfiniteWorkflowRegister implements OnModuleInit {
       { type: 'missingPostWorkflow', id: 'missing-post-workflow' },
       { type: 'mediaCleanupWorkflow', id: 'media-cleanup-workflow' },
       { type: 'evergreenWorkflow', id: 'evergreen-workflow' },
+      { type: 'collectAnalyticsWorkflow', id: 'collect-analytics-workflow' },
     ] as const;
     const maxAttempts = 20;
     const delayMs = 15_000;

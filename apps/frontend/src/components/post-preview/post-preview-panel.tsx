@@ -105,19 +105,46 @@ export function PostPreviewPanel({
         )}
 
         {media.length > 0 && (
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {media.slice(0, 4).map((m) => (
-              <span key={m.id} style={{ width: family === "video" || (family === "instagram") ? 110 : 150, aspectRatio: aspect, borderRadius: 8, overflow: "hidden", background: "#000", display: "block" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {media.slice(0, 1).map((m) => (
+              <span
+                key={m.id}
+                style={{
+                  width: "100%",
+                  aspectRatio: m.kind === "video" ? "auto" : aspect,
+                  maxHeight: m.kind === "video" ? 420 : undefined,
+                  borderRadius: 10,
+                  overflow: "hidden",
+                  background: "#000",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
                 {m.kind === "image" ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={m.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 ) : (
-                  <video src={m.url} muted playsInline style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <video src={m.url} controls muted playsInline style={{ width: "100%", maxHeight: 420, objectFit: "contain" }} />
                 )}
               </span>
             ))}
-            {media.length > 4 && (
-              <span style={{ fontSize: 12, color: "var(--muted)", alignSelf: "center" }}>+{media.length - 4}</span>
+            {media.length > 1 && (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {media.slice(1, 4).map((m) => (
+                  <span key={m.id} style={{ width: 88, aspectRatio: aspect, borderRadius: 8, overflow: "hidden", background: "#000", display: "block" }}>
+                    {m.kind === "image" ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={m.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    ) : (
+                      <video src={m.url} muted playsInline style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    )}
+                  </span>
+                ))}
+                {media.length > 4 && (
+                  <span style={{ fontSize: 12, color: "var(--muted)", alignSelf: "center" }}>+{media.length - 4}</span>
+                )}
+              </div>
             )}
           </div>
         )}
