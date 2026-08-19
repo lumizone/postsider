@@ -221,12 +221,34 @@ export class FacebookProvider extends SocialAbstract implements SocialProvider {
   }
 
   async refreshToken(refresh_token: string): Promise<AuthTokenDetails> {
+    // Facebook has no real refresh_token grant — the stored "refresh token" is
+    // the long-lived user token itself. Re-exchanging it via fb_exchange_token
+    // (same call authenticate() makes) mints a fresh long-lived token and
+    // resets its clock, which is the standard way to keep a long-lived FB
+    // token from lapsing. Page access tokens derived from that user token
+    // inherit its validity, so this covers both the classic /me/accounts flow
+    // and the granular Business Login flow.
+    const { access_token, expires_in } = await (
+      await fetch(
+        'https://graph.facebook.com/v20.0/oauth/access_token' +
+          '?grant_type=fb_exchange_token' +
+          `&client_id=${process.env.FACEBOOK_APP_ID}` +
+          `&client_secret=${process.env.FACEBOOK_APP_SECRET}` +
+          `&fb_exchange_token=${refresh_token}`
+      )
+    ).json();
+
+    if (!access_token) {
+      throw new Error('Facebook token refresh failed: no access_token returned');
+    }
+
     return {
-      refreshToken: '',
-      expiresIn: 0,
-      accessToken: '',
       id: '',
       name: '',
+      accessToken: access_token,
+      refreshToken: access_token,
+      expiresIn:
+        expires_in || dayjs().add(59, 'days').unix() - dayjs().unix(),
       picture: '',
       username: '',
     };

@@ -378,13 +378,28 @@ export function Calendar({ year, month }: CalendarProps) {
         .replace("&", "and");
     try {
       const res = await getOauthUrl(slug, { refresh: id });
-      if (res?.url && typeof window !== "undefined") {
-        window.location.href = res.url;
-      } else if (res?.oauthUrl && typeof window !== "undefined") {
+      // `res.url` is an opaque state token (used by widget-based flows like
+      // Farcaster/Telegram), never a redirect target — only `oauthUrl` is a
+      // real URL. Falling back to `res.url` here sent the browser to a
+      // nonsensical relative path (the bare token string) and landed on a
+      // 404. If oauthUrl is missing, OAuth just isn't configured for this
+      // provider — surface that instead of silently doing nothing.
+      if (res?.oauthUrl && typeof window !== "undefined") {
         window.location.href = res.oauthUrl;
+      } else {
+        setChannelError(t("errors.channelConnect"));
+        setChannelErrorIsPlanLimit(false);
       }
     } catch (err) {
       console.error("[reconnect-channel]", err);
+      const status = (err as { status?: number })?.status;
+      if (status === 402) {
+        setChannelError(t("limits.channels"));
+        setChannelErrorIsPlanLimit(true);
+      } else {
+        setChannelError(t("errors.channelConnect"));
+        setChannelErrorIsPlanLimit(false);
+      }
     }
   };
 

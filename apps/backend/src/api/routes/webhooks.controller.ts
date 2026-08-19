@@ -74,8 +74,11 @@ export class WebhookController {
     // the fetch threw — a user validating a broken/unreachable URL was told it
     // works, then wondered why deliveries never arrived.
     try {
+      // Relative, not the `@postsider/*` alias: `nest build` only rewrites path
+      // aliases in static imports, so an aliased dynamic import fails to
+      // resolve at runtime (it made this endpoint report every URL as broken).
       const { ssrfSafeDispatcher } = await import(
-        '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher'
+        '../../../../../libraries/nestjs-libraries/src/dtos/webhooks/ssrf.safe.dispatcher'
       );
       const res = await fetch(query.url, {
         method: 'POST',

@@ -776,8 +776,20 @@ export class IntegrationsController {
       id
     );
     if (isTherePosts.length) {
-      for (const post of isTherePosts) {
-        this._postService.deletePost(org.id, post.group).catch((err) => {});
+      // Await the sweep instead of firing it off unawaited: the old
+      // fire-and-forget loop let the request finish (and the channel flip to
+      // deletedAt) while deletions were still in flight, and swallowed every
+      // failure, so scheduled posts routinely survived the channel they
+      // belonged to. Failures are surfaced rather than silently dropped.
+      const results = await Promise.allSettled(
+        isTherePosts.map((post) => this._postService.deletePost(org.id, post.group))
+      );
+      const failed = results.filter((r) => r.status === 'rejected');
+      if (failed.length) {
+        console.error(
+          `[delete-channel] ${failed.length}/${results.length} post group(s) could not be deleted for integration ${id}`,
+          failed.map((f) => (f as PromiseRejectedResult).reason)
+        );
       }
     }
 

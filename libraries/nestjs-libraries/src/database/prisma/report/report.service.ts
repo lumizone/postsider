@@ -39,7 +39,7 @@ export class ReportService {
           content: true,
           releaseURL: true,
           publishDate: true,
-          integration: { select: { name: true } },
+          integration: { select: { id: true, name: true } },
         },
       }),
       this.prisma.postAnalytics.findMany({
@@ -82,11 +82,15 @@ export class ReportService {
       .map(([metric, total]) => ({ metric, total: Math.round(total) }))
       .sort((a, b) => b.total - a.total);
 
-    // Per-channel published counts from the posts we already loaded.
+    // Per-channel published counts from the posts we already loaded. Keyed by
+    // integration id, NOT name: one account is routinely connected across
+    // several platforms under the same display name ("Acme" on facebook +
+    // instagram + x), and keying by name made every row report the SUM of all
+    // same-named channels — inflating each line and the column total.
     const perChannel = new Map<string, number>();
     for (const post of posts) {
-      const name = post.integration.name;
-      perChannel.set(name, (perChannel.get(name) ?? 0) + 1);
+      const id = post.integration.id;
+      perChannel.set(id, (perChannel.get(id) ?? 0) + 1);
     }
 
     // Top posts: rank by total engagement (sum of latest metric values), fall
@@ -122,7 +126,7 @@ export class ReportService {
           name: i.name,
           providerIdentifier: i.providerIdentifier,
           disabled: i.disabled,
-          published: perChannel.get(i.name) ?? 0,
+          published: perChannel.get(i.id) ?? 0,
         })),
       },
       engagement,

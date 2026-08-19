@@ -14,20 +14,37 @@ export class ResendProvider implements EmailInterface {
     emailFromAddress: string,
     replyTo?: string
   ) {
-    try {
-      const sends = await resend.emails.send({
-        from: `${emailFromName} <${emailFromAddress}>`,
-        to,
-        subject,
-        html,
-        ...(replyTo && { reply_to: replyTo }),
-      });
+    const sends = await resend.emails.send({
+      from: `${emailFromName} <${emailFromAddress}>`,
+      to,
+      subject,
+      html,
+      ...(replyTo && { reply_to: replyTo }),
+    });
 
-      return sends;
-    } catch (err) {
-      console.log(err);
+    // The Resend SDK does NOT throw on API errors — it resolves with
+    // `{ data: null, error: {...} }` (unverified sending domain, bad key, rate
+    // limit, invalid recipient). Returning that as-is made every such failure
+    // look like a successful send to EmailService, which then skipped its
+    // retries and returned without throwing, so the "email vanished without a
+    // trace" problem the retry loop was built to solve came straight back —
+    // silently dropping password resets, invites and publish-failure notices.
+    // Swallowing thrown errors into `{ sent: false }` did the same. Throw on
+    // both, so EmailService's retry/alert path actually runs (nodemailer, the
+    // other provider, already propagates).
+    if (sends?.error) {
+      const { message, name, statusCode } = sends.error as {
+        message?: string;
+        name?: string;
+        statusCode?: number;
+      };
+      throw new Error(
+        `Resend rejected the email (${name ?? 'error'}${
+          statusCode ? ` ${statusCode}` : ''
+        }): ${message ?? 'unknown error'}`
+      );
     }
 
-    return { sent: false };
+    return sends;
   }
 }

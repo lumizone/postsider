@@ -366,13 +366,26 @@ export class PostActivity {
       }
     );
 
+    // Nothing to deliver — skip the work (and the import below) entirely.
+    if (webhooks.length === 0) {
+      return;
+    }
+
     const post = await this._postService.getPostByForWebhookId(postId, orgId);
     // Re-validate egress at fire time. The stored URL was only checked for
     // public-HTTPS at create time, so a domain that later rebinds to an
     // internal IP (127.0.0.1 / 169.254.169.254 / RFC1918) would otherwise be
     // reachable. Dynamic import keeps undici out of any static bundle.
+    //
+    // The specifier MUST stay relative. `nest build` rewrites the `@postsider/*`
+    // tsconfig path aliases only in STATIC import statements; a dynamic
+    // `import()` keeps its literal string, so the alias survived into dist and
+    // threw `Cannot find module '@postsider/...'` at runtime on every publish —
+    // failing the activity, and with it every workflow step that follows
+    // (internal/global plugs never ran). This relative path is exactly what the
+    // compiler emits for the static imports in this file.
     const { ssrfSafeDispatcher } = await import(
-      '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher'
+      '../../../../libraries/nestjs-libraries/src/dtos/webhooks/ssrf.safe.dispatcher'
     );
     await Promise.all(
       webhooks.map(async (webhook) => {

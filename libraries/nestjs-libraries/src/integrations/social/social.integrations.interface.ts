@@ -14,7 +14,13 @@ export interface IAuthenticator {
     },
     clientInformation?: ClientInformation
   ): Promise<AuthTokenDetails | string>;
-  refreshToken(refreshToken: string): Promise<AuthTokenDetails>;
+  // `integration` is optional and only consumed by providers whose stored
+  // `token` is a composite (e.g. Instagram's `pageToken___userToken`) that a
+  // bare refreshed token cannot reconstruct on its own.
+  refreshToken(
+    refreshToken: string,
+    integration?: Integration
+  ): Promise<AuthTokenDetails>;
   reConnect?(
     id: string,
     requiredId: string,

@@ -43,6 +43,49 @@ const stripHtml = (value: string) =>
     .replace(/\s+/g, ' ')
     .trim();
 
+/**
+ * pdf-lib's standard fonts are WinAnsi (CP1252) only: `drawText` THROWS on any
+ * character outside it — emoji ("WinAnsi cannot encode 0x1f319"), Polish
+ * ą/ę/ł/ż/ś/ć/ń/ź, Cyrillic, CJK, and the curly quotes editors insert. Post
+ * bodies, org names, customer names and channel names are all free text, so an
+ * unsanitised draw turned the whole report endpoint into a 500 for a large
+ * share of real data. Everything drawn on the page goes through here.
+ *
+ * Latin letters are decomposed to their base form (ż → z) so text stays
+ * readable; anything else with no sensible ASCII shape is dropped. Rendering
+ * these scripts properly needs an embedded Unicode TTF (fontkit) — tracked
+ * separately; this keeps the endpoint alive rather than pretending otherwise.
+ */
+// ASCII printable + Latin-1 supplement + the CP1252 punctuation block that
+// WinAnsi maps into 0x80-0x9F (curly quotes, dashes, bullet, ellipsis).
+const WIN_ANSI_SAFE =
+  /[\u0020-\u007e\u00a0-\u00ff\u20ac\u201a\u0192\u201e\u2026\u2020\u2021\u02c6\u2030\u0160\u2039\u0152\u017d\u2018\u2019\u201c\u201d\u2022\u2013\u2014\u02dc\u2122\u0161\u203a\u0153\u017e\u0178]/;
+// Letters whose NFD form keeps a non-WinAnsi base (no combining mark to strip).
+const LATIN_FALLBACK: Record<string, string> = {
+  ł: 'l', Ł: 'L', đ: 'd', Đ: 'D', ø: 'o', Ø: 'O',
+  ħ: 'h', Ħ: 'H', ŧ: 't', Ŧ: 'T', ı: 'i', ĸ: 'k',
+};
+
+const toWinAnsi = (value: string): string => {
+  let out = '';
+  for (const char of value) {
+    if (WIN_ANSI_SAFE.test(char)) {
+      out += char;
+      continue;
+    }
+    // Strip combining marks: "ż" (U+017C) decomposes to "z" + U+0307.
+    const folded = char
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .split('')
+      .filter((c) => WIN_ANSI_SAFE.test(c))
+      .join('');
+    // No combining mark to strip (e.g. Polish l-stroke) - map explicitly.
+    out += folded || LATIN_FALLBACK[char] || '';
+  }
+  return out;
+};
+
 const shortDate = (iso: string) => {
   const d = new Date(iso);
   return isNaN(d.getTime())
@@ -83,7 +126,7 @@ export class ReportPdfService {
       opts: { font?: PDFFont; size?: number; color?: typeof BLACK; x?: number; leading?: number },
     ) => {
       const { font = regular, size = 10, color = BLACK, x = MARGIN, leading = size * 1.35 } = opts;
-      page.drawText(text, { x, y, size, font, color });
+      page.drawText(toWinAnsi(text), { x, y, size, font, color });
       y -= leading;
     };
 
@@ -96,7 +139,9 @@ export class ReportPdfService {
       maxLines: number,
       x = MARGIN,
     ) => {
-      const words = text.split(/\s+/).filter(Boolean);
+      // Sanitise BEFORE measuring: widthOfTextAtSize throws on unencodable
+      // characters just like drawText does.
+      const words = toWinAnsi(text).split(/\s+/).filter(Boolean);
       let line = '';
       let lines = 0;
       for (const word of words) {
@@ -174,7 +219,7 @@ export class ReportPdfService {
       for (const m of metrics) {
         ensureSpace(16);
         const x = leftCol ? MARGIN : MARGIN + colWidth;
-        page.drawText(m.metric, { x, y, size: 10, font: regular, color: MUTED });
+        page.drawText(toWinAnsi(m.metric), { x, y, size: 10, font: regular, color: MUTED });
         page.drawText(String(m.total).replace(/\B(?=(\d{3})+(?!\d))/g, ','), { x, y: y - 14, size: 20, font: bold, color: BLACK });
         if (leftCol) {
           leftCol = false;
@@ -198,7 +243,7 @@ export class ReportPdfService {
     for (const channel of data.delivery.perChannel) {
       ensureSpace(14);
       const status = channel.disabled ? 'disabled' : 'active';
-      page.drawText(channel.name, { x: MARGIN, y, size: 10, font: regular, color: BLACK });
+      page.drawText(toWinAnsi(channel.name), { x: MARGIN, y, size: 10, font: regular, color: BLACK });
       page.drawText(String(channel.published), { x: MARGIN + 180, y, size: 10, font: bold, color: BLACK });
       page.drawText(status, { x: MARGIN + 230, y, size: 9, font: regular, color: channel.disabled ? MUTED : rgb(0.09, 0.5, 0.24) });
       y -= 14;

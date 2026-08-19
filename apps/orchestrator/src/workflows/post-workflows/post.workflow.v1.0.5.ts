@@ -129,6 +129,22 @@ export async function postWorkflowV105({
     return;
   }
 
+  // Channel was deleted while this post sat in QUEUE — never publish to it.
+  // `deleteChannel` only soft-deletes the Integration (deletedAt) and leaves
+  // the token intact, and the post-deletion sweep that accompanies it is
+  // best-effort, so a surviving QUEUE post would otherwise sail past the
+  // refreshNeeded/disabled guards below and publish to an account the user
+  // already disconnected. Fail closed here instead.
+  if (post.integration?.deletedAt) {
+    await changeState(
+      postsListBefore[0].id,
+      'ERROR',
+      'Channel deleted',
+      postsListBefore
+    );
+    return;
+  }
+
   // if it's disabled, inform the user
   if (post.integration?.disabled) {
     await inAppNotification(

@@ -185,7 +185,7 @@ export class RefreshIntegrationService implements OnApplicationBootstrap {
     cause = ''
   ): Promise<AuthTokenDetails | false> {
     const refresh: false | AuthTokenDetails = await socialProvider
-      .refreshToken(integration.refreshToken!)
+      .refreshToken(integration.refreshToken!, integration)
       .catch((err) => {
         // Log the underlying failure instead of swallowing it — a transient
         // network/5xx otherwise looks identical to a genuinely revoked token.

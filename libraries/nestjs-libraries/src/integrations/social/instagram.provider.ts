@@ -68,13 +68,43 @@ export class InstagramProvider
     return true;
   }
 
-  async refreshToken(refresh_token: string): Promise<AuthTokenDetails> {
+  async refreshToken(
+    refresh_token: string,
+    integration?: Integration
+  ): Promise<AuthTokenDetails> {
+    // Same fb_exchange_token re-mint as FacebookProvider — this stored
+    // refresh_token is the long-lived Meta USER token. The stored `token`
+    // column, though, is the composite `pageToken___userToken`
+    // (see fetchPageInformation/post): a bare refreshed user token can't
+    // replace it wholesale without breaking every `token.split('___')` call.
+    // The page-token half doesn't independently expire (it's minted from the
+    // user token on demand), so we keep it as-is and only refresh the user
+    // token half.
+    const { access_token, expires_in } = await (
+      await fetch(
+        'https://graph.facebook.com/v20.0/oauth/access_token' +
+          '?grant_type=fb_exchange_token' +
+          `&client_id=${process.env.FACEBOOK_APP_ID}` +
+          `&client_secret=${process.env.FACEBOOK_APP_SECRET}` +
+          `&fb_exchange_token=${refresh_token}`
+      )
+    ).json();
+
+    if (!access_token) {
+      throw new Error('Instagram token refresh failed: no access_token returned');
+    }
+
+    const [existingPageToken] = (integration?.token || '').split('___');
+
     return {
-      refreshToken: '',
-      expiresIn: 0,
-      accessToken: '',
       id: '',
       name: '',
+      accessToken: existingPageToken
+        ? `${existingPageToken}___${access_token}`
+        : access_token,
+      refreshToken: access_token,
+      expiresIn:
+        expires_in || dayjs().add(59, 'days').unix() - dayjs().unix(),
       picture: '',
       username: '',
     };

@@ -504,8 +504,19 @@ export class PublicIntegrationsController {
       id
     );
     if (isTherePosts.length) {
-      for (const post of isTherePosts) {
-        this._postsService.deletePost(org.id, post.group).catch(() => {});
+      // Awaited + surfaced, same as the dashboard route: the documented
+      // behaviour ("posts scheduled to that channel are removed as well")
+      // only actually holds if the deletions complete before the channel is
+      // soft-deleted, and a swallowed failure left publishable orphans.
+      const results = await Promise.allSettled(
+        isTherePosts.map((post) => this._postsService.deletePost(org.id, post.group))
+      );
+      const failed = results.filter((r) => r.status === 'rejected');
+      if (failed.length) {
+        console.error(
+          `[public-delete-channel] ${failed.length}/${results.length} post group(s) could not be deleted for integration ${id}`,
+          failed.map((f) => (f as PromiseRejectedResult).reason)
+        );
       }
     }
 
