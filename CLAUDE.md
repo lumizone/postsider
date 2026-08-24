@@ -13,6 +13,24 @@ blokady u źródła — złożenie audytu, materiały do review, zgodność kodu
 
 ## Status
 
+- **Incident: edycja running workflowu Temporala = awaria publikacji (2026-08-24, NAPRAWIONE).**
+  Monitor `vps-bd41b901` krzyknął „2 post(ów) wisi w QUEUE >30 min po terminie bez błędu".
+  Workerzy 32/32 healthy, kanały i org zdrowe — to nie była awaria workerów.
+  **Root cause:** gate Emergency Pause (`claimPostForPublish`) został dodany **w miejscu**
+  funkcji `postWorkflowV105`, a nie jako nowa wersja. Workflowy wystartowane PRZED deployem
+  miały historię `getPost → sleep`; nowy kod produkował `getPost → claimPostForPublish → sleep`
+  → przy wybudzeniu timera **niedeterministyczny replay** → `WorkflowTaskFailed` w pętli.
+  Posty zostawały w QUEUE bez błędu (dokładnie sygnatura „bez błędu"). **Skala:** ~30 running
+  V105 (1–5 dni wstecz); 2 miały termin dziś 12:00.
+  **Fix (wdrożony 12:47):** `postWorkflowV105` przywrócone do oryginału, gate przeniesiony do
+  nowego `postWorkflowV106`; `startWorkflow` + sweep `missing-post` celują w V106. Stare V105
+  replayują deterministycznie; nowe posty idą przez V106. 2 utknięte posty: IG wyleczył się sam,
+  X — terminate osieroconego workflowu + ręczne uzbrojenie V106 (`temporal workflow start`).
+  Commity: `9d0465d` (feature), `9fe8f6e` (fix wersjonowania). Oba na `fix/publish-pipeline-and-report-bugs`.
+  **Lekcja (zasada na zawsze):** zmiana logiki workflowu Temporala = ZAWSZE nowa wersja
+  (V105 → V106), NIGDY edycja istniejącej funkcji — running workflowy replayują się wobec
+  kodu z momentu startu.
+
 - **Powiadomienia w aplikacji: dzwonek, tłumaczenia, czyszczenie (2026-08-22, WDROŻONE).**
   Migracja `20260822120000_notification_event_key` zastosowana na prodzie 14:16.
   - **Backend zapisywał powiadomienia od zawsze, ale UI ich nie miało.** W bazie
@@ -551,6 +569,7 @@ Cloud and self-host are the SAME build; env vars switch behavior. Helpers: `isBi
 - First comment: optional per-post `firstComment`, persisted on the main post row, published best-effort by the publish workflow (`post.workflow.v1.0.5`) for comment-capable providers (`integrations/social/comment.capability.ts`).
 - Recurring jobs (Temporal): activity class + self-looping workflow, registered in `apps/orchestrator/src/app.module.ts` `activities` + exported from `workflows/index.ts`, started in `InfiniteWorkflowRegister` gated by `process.env.RUN_CRON` (e.g. `evergreenWorkflow`).
 - **Workflow code runs in Temporal's deterministic sandbox — no node-only module imports.** Anything reachable from `apps/orchestrator/src/workflows/` (even transitively — `makeId` in `services/make.is.ts` is imported by `post.workflow.v1.0.x` for the `workflowId` suffix) must NOT import `crypto`/`undici`/other node-only modules. `Math.random` IS allowed (Temporal patches it to be deterministic); the `crypto` MODULE is hard-blocked. The workflow bundle is built at orchestrator **startup**, so a bad import passes `docker build` and only crash-loops the orchestrator at boot — `/health/workers` catches it, the build does not (learned the hard way 2026-07-22). A crypto/secure-random helper for non-workflow use (storage keys, tokens) must live in activity/service code only, and reach it via a dynamic `import()` if the file is anywhere near the workflow graph.
+- **NEVER edit a running workflow function in place — always create a NEW version.** Running workflows replay against the code from their start time; adding/removing/reordering commands inside an existing `post.workflow.v1.0.x` (e.g. inserting `claimPostForPublish` between `getPost` and `sleep`) makes their recorded history non-deterministic → `WorkflowTaskFailed` on the next timer-fire, posts silently stuck in QUEUE with no error (2026-08-24 incident, fixed by restoring V105 + moving the change to V106). To change the publish pipeline: copy to `post.workflow.v1.0.N+1.ts`, rename the function + its `startChild`, export from `workflows/index.ts`, and point `posts.service.ts startWorkflow` + `post.activity.ts searchForMissingThreeHoursPosts` at the new version string. Old workflows keep publishing on the old version; new posts use the new one.
 - Frontend: `@/lib/api` `api.{get,post,put,del}`; settings pages mirror `app/settings/api/page.tsx` and use `settings-ui` (`PageHeader`, `Card`, `settingsStyles`); nav in `settings-shell.tsx` / `dashboard-shell.tsx` `NAV_ITEMS`; i18n `lib/i18n` (`en.ts` authoritative, other locales fall back). The api-client auto-logs-out ONLY on **401** (never 403 — a 403 is a permission/plan gate the calling page must handle); pass `{ silent: true }` to opt a call out of global error handling.
 - Brand/copy: B&W Apple-minimal; **no em/en-dashes in rendered copy** (LLM-facing prompt text is exempt).
 
