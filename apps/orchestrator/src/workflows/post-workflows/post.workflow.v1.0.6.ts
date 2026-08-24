@@ -31,6 +31,7 @@ const proxyTaskQueue = (taskQueue: string) => {
 const {
   getPostsList,
   getPost,
+  claimPostForPublish,
   inAppNotification,
   changeState,
   updatePost,
@@ -49,7 +50,7 @@ const poke = defineSignal('poke');
 
 const iterate = Array.from({ length: 5 });
 
-export async function postWorkflowV105({
+export async function postWorkflowV106({
   taskQueue,
   postId,
   organizationId,
@@ -89,6 +90,22 @@ export async function postWorkflowV105({
 
   if (!postNow && firstPost.state !== 'QUEUE') {
     await changeState(firstPost.id, 'ERROR', 'Already posted', [firstPost]);
+    return;
+  }
+
+  // Emergency Pause gate — atomic with the DB: a paused org parks a QUEUE post
+  // to HELD (inside a single transaction with the state read), so this check
+  // cannot race a pause landing in the same millisecond. Runs regardless of
+  // `postNow` (repeat-post children skip the QUEUE check above but must also
+  // never publish into a paused org).
+  const claim = await claimPostForPublish(organizationId, postId);
+  if (claim.outcome === 'held') {
+    // Post already flipped to HELD inside the transaction — nothing more to do.
+    return;
+  }
+  if (claim.outcome === 'abort') {
+    // Paused but post not QUEUE (e.g. repeat-post of an already-published
+    // post) — simply don't publish, don't touch state.
     return;
   }
 
@@ -536,7 +553,7 @@ export async function postWorkflowV105({
 
     // process repeat post in a new workflow, this is important so the other plugs can keep running
     if (todo.type === 'repeat-post') {
-      await startChild(postWorkflowV105, {
+      await startChild(postWorkflowV106, {
         parentClosePolicy: 'ABANDON',
         args: [
           {
