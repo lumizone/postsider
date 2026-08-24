@@ -34,7 +34,7 @@ export async function uploadMedia(
   return { id: res.id, path: res.path };
 }
 
-export type BackendPostState = "QUEUE" | "PUBLISHED" | "ERROR" | "DRAFT" | "APPROVAL";
+export type BackendPostState = "QUEUE" | "PUBLISHED" | "ERROR" | "DRAFT" | "APPROVAL" | "HELD";
 
 /** One media attachment as it appears inside a post's `image` JSON column. */
 export interface PostMedia {
@@ -143,7 +143,8 @@ export async function fetchPostsList(params: {
     | "draft"
     | "published"
     | "failed"
-    | "approval";
+    | "approval"
+    | "held";
 }): Promise<PostsListResponse> {
   const minified = await api.get<unknown>("/posts/list", {
     page: params.page ?? 0,

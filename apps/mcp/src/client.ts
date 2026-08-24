@@ -63,6 +63,17 @@ export class PostsiderClient {
           : typeof data === 'string'
           ? data
           : res.statusText;
+      // 423 = Emergency Pause (kill switch): surface WHY the post did not go
+      // out so an agent understands a paused org instead of a generic failure.
+      if (res.status === 423) {
+        const d = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
+        const reason = typeof d.reason === 'string' ? d.reason : undefined;
+        throw new Error(
+          `Publishing is paused for this organization${
+            reason ? ` (${reason})` : ''
+          }. No posts can be scheduled or published until an owner resumes from the PostSider dashboard.`
+        );
+      }
       if (res.status === 401 || res.status === 403) {
         throw new Error(
           `Unauthorized (${res.status}). The POSTSIDER_API_KEY is missing or invalid. Generate one in PostSider under Settings -> API.`

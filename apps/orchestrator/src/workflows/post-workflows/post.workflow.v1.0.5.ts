@@ -31,6 +31,7 @@ const proxyTaskQueue = (taskQueue: string) => {
 const {
   getPostsList,
   getPost,
+  claimPostForPublish,
   inAppNotification,
   changeState,
   updatePost,
@@ -92,6 +93,22 @@ export async function postWorkflowV105({
     return;
   }
 
+  // Emergency Pause gate — atomic with the DB: a paused org parks a QUEUE post
+  // to HELD (inside a single transaction with the state read), so this check
+  // cannot race a pause landing in the same millisecond. Runs regardless of
+  // `postNow` (repeat-post children skip the QUEUE check above but must also
+  // never publish into a paused org).
+  const claim = await claimPostForPublish(organizationId, postId);
+  if (claim.outcome === 'held') {
+    // Post already flipped to HELD inside the transaction — nothing more to do.
+    return;
+  }
+  if (claim.outcome === 'abort') {
+    // Paused but post not QUEUE (e.g. repeat-post of an already-published
+    // post) — simply don't publish, don't touch state.
+    return;
+  }
+
   // if it's a repeatable post, we should ignore this.
   if (!postNow) {
     await sleep(
@@ -117,7 +134,15 @@ export async function postWorkflowV105({
       `We couldn't post to ${post.integration?.providerIdentifier} for ${post?.integration?.name} because you need to reconnect it. Please enable it and try again.`,
       true,
       false,
-      'info'
+      'info',
+      undefined,
+      {
+        key: 'postFailedReconnect',
+        params: {
+          channel: post?.integration?.name ?? '',
+          provider: post.integration?.providerIdentifier ?? '',
+        },
+      }
     );
 
     await changeState(
@@ -153,7 +178,15 @@ export async function postWorkflowV105({
       `We couldn't post to ${post.integration?.providerIdentifier} for ${post?.integration?.name} because it's disabled. Please enable it and try again.`,
       true,
       false,
-      'info'
+      'info',
+      undefined,
+      {
+        key: 'postFailedDisabled',
+        params: {
+          channel: post?.integration?.name ?? '',
+          provider: post.integration?.providerIdentifier ?? '',
+        },
+      }
     );
 
     await changeState(
@@ -239,7 +272,16 @@ export async function postWorkflowV105({
                 post.integration.providerIdentifier
               )} at ${postsResults[0].releaseURL}`,
               true,
-              true
+              true,
+              'success',
+              postsResults[0].releaseURL,
+              {
+                key: 'postPublished',
+                params: {
+                  channel: post.integration.name ?? '',
+                  provider: capitalize(post.integration.providerIdentifier),
+                },
+              }
             );
           } catch (notificationError) {
             // The post is already durable and published. Notification retry

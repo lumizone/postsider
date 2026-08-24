@@ -63,6 +63,9 @@ import {
   SubscriptionService,
   TrialUsageLimitError,
 } from '@postsider/nestjs-libraries/database/prisma/subscriptions/subscription.service';
+import { OrganizationRepository } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.repository';
+import { PublishingPausedException } from '@postsider/nestjs-libraries/services/publishing.paused.exception';
+import { NotificationService } from '@postsider/nestjs-libraries/database/prisma/notifications/notification.service';
 
 type PostWithConditionals = Post & {
   integration?: Integration;
@@ -84,11 +87,110 @@ export class PostsService {
     private _refreshIntegrationService: RefreshIntegrationService,
     private _postAnalyticsService: PostAnalyticsService,
     private _subscriptionService: SubscriptionService,
+    private _organizationRepository: OrganizationRepository,
+    private _notificationService: NotificationService,
   ) {}
 
   searchForMissingThreeHoursPosts() {
     return this._postRepository.searchForMissingThreeHoursPosts();
   }
+
+  // ── Emergency Pause (kill switch) ──────────────────────────────────────────
+
+  getPublishingState(orgId: string) {
+    return this._organizationRepository.getPublishingState(orgId);
+  }
+
+  /** Pause all publishing for the org (idempotent). Stamps who/when/why. */
+  async pausePublishing(orgId: string, userId: string, reason?: string) {
+    await this._organizationRepository.setPublishingState(orgId, {
+      publishingState: 'PAUSED',
+      publishingPausedAt: new Date(),
+      publishingPausedById: userId,
+      publishingPauseReason: reason || null,
+    });
+    await this._notificationService.inAppNotification(
+      orgId,
+      'Publishing paused',
+      'All publishing for this organization has been paused.',
+      false,
+      false,
+      'info',
+      undefined,
+      { key: 'publishingPaused', params: { reason: reason ?? '' } }
+    );
+    return this._organizationRepository.getPublishingState(orgId);
+  }
+
+  /**
+   * Public-API pause (auto-pause by monitoring/webhook): there is no session
+   * user, so the pause is attributed to the org's own SUPERADMIN (falling back
+   * to any ADMIN, then any member) — "the org itself, via API" — mirroring
+   * ApprovalService's resolveApiRequester.
+   */
+  async pausePublishingFromApi(orgId: string, reason?: string) {
+    const org = await this._organizationRepository.getAllUsersOrgs(orgId);
+    const users = (org?.users || []) as Array<{
+      role: string;
+      user: { id: string };
+    }>;
+    const chosen =
+      users.find((u) => u.role === 'SUPERADMIN') ||
+      users.find((u) => u.role === 'ADMIN') ||
+      users[0];
+    if (!chosen) {
+      throw new BadRequestException(
+        'Organization has no users to attribute this pause to'
+      );
+    }
+    return this.pausePublishing(orgId, chosen.user.id, reason);
+  }
+
+  /**
+   * Resume publishing. `to_draft` (default) parks every HELD post to DRAFT so
+   * a human re-approves before anything goes out; `auto_resume` only requeues
+   * HELD posts whose publishDate is still in the future (re-arming their
+   * Temporal workflows) and drafts the rest.
+   */
+  async resumePublishing(orgId: string, behavior: 'to_draft' | 'auto_resume') {
+    const { heldPostsProcessed, requeued } =
+      await this._postRepository.resumePublishing(orgId, behavior);
+    for (const post of requeued) {
+      await this.startWorkflow(post.taskQueue, post.id, orgId, 'QUEUE').catch(
+        (err) =>
+          this._logger.error(
+            `resumePublishing: scheduling failed for post ${post.id}: ${err}`
+          )
+      );
+    }
+    const state = await this._organizationRepository.getPublishingState(orgId);
+    await this._notificationService.inAppNotification(
+      orgId,
+      'Publishing resumed',
+      'Publishing has been resumed for this organization.',
+      false,
+      false,
+      'info',
+      undefined,
+      { key: 'publishingResumed', params: { count: String(heldPostsProcessed) } }
+    );
+    return { state, heldPostsProcessed };
+  }
+
+  /** Atomic publish gate called by the Temporal workflow at fire time. */
+  claimPostForPublish(orgId: string, postId: string) {
+    return this._postRepository.claimPostForPublish(orgId, postId);
+  }
+
+  private async assertOrgNotPausedForSchedule(orgId: string): Promise<void> {
+    const orgState =
+      await this._organizationRepository.getPublishingState(orgId);
+    if (orgState?.publishingState === 'PAUSED') {
+      throw new PublishingPausedException(orgState.publishingPauseReason);
+    }
+  }
+
+  // ── End Emergency Pause ────────────────────────────────────────────────────
 
   findRecentPublishedForAnalytics(since: Date, limit?: number) {
     return this._postRepository.findRecentPublishedForAnalytics(since, limit);
@@ -820,7 +922,10 @@ export class PostsService {
       );
     }
 
-    if (state === 'DRAFT') {
+    if (state === 'DRAFT' || state === 'HELD') {
+      // DRAFT is never armed (a draft publish must not fire). HELD is a post
+      // parked by the Emergency Pause — it must not be (re)armed until a human
+      // resume moves it back to QUEUE.
       return;
     }
 
@@ -1005,6 +1110,13 @@ export class PostsService {
     body: CreatePostDto,
     creationMethod: CreationMethod
   ): Promise<any[]> {
+    // Emergency Pause gate — a paused org cannot create `now`/`schedule`
+    // posts (deterministic 423, nothing persisted). Drafts stay fully
+    // editable; only queueing for publish is blocked.
+    if (body.type === 'schedule' || body.type === 'now') {
+      await this.assertOrgNotPausedForSchedule(orgId);
+    }
+
     // Apply the private trial safety cap centrally so dashboard, API, CSV,
     // duplicate, and evergreen creation all follow the same rule.
     const newXIntegrationIds = body.type === 'update'
@@ -1234,6 +1346,10 @@ export class PostsService {
     }
 
     const state: State = status === 'draft' ? 'DRAFT' : 'QUEUE';
+    if (status === 'schedule') {
+      // A paused org may move posts to draft, but not arm them for publish.
+      await this.assertOrgNotPausedForSchedule(orgId);
+    }
     await this._postRepository.changeState(id, state, undefined, undefined, orgId);
 
     // No swallow: if the workflow cannot be scheduled the post is already
@@ -1270,6 +1386,13 @@ export class PostsService {
       throw new BadRequestException('Post not found');
     }
     this.assertMutable(getPostById);
+
+    // Emergency Pause gate: rescheduling a post that would be re-armed to
+    // QUEUE is blocked while paused (a draft reschedule stays a draft, so it
+    // is allowed).
+    if (action === 'schedule' && getPostById.state !== 'DRAFT') {
+      await this.assertOrgNotPausedForSchedule(orgId);
+    }
 
     // schedule: Set status to QUEUE and change date (reschedule the post)
     // update: Just change the date without changing the status

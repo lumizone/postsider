@@ -90,8 +90,25 @@ Konsola: developers.pinterest.com > My apps.
 
 ## TikTok — app audit (wymagany do publicznego postowania)
 
-Konsola: developers.tiktok.com > Manage apps. Bez audytu posty lądują jako
-prywatne/draft (unaudited client).
+Konsola: developers.tiktok.com > Manage apps. **App „Live" to NIE to samo co
+audyt Content Posting API.** Appka `aw1p127qvsb7d9oz` jest Live od 19.08 i mimo
+to API zwraca `unaudited_client_can_only_post_to_private_accounts` na Direct Post
+(sprawdzone 2026-08-20: również dla `SELF_ONLY` — ten błąd dotyczy *konta*, nie
+`privacy_level`; konto publiczne jest blokowane niezależnie od ustawień posta).
+Bez zdanego audytu Direct Post nie ma publikacji na konta publiczne — kropka.
+
+Wymagania UX z content-sharing-guidelines **spełnione w kodzie 2026-08-20**
+(kompozer, `create-post-modal.tsx` + `provider-requirements.ts`, dane z nowego
+`TiktokProvider.creatorInfo()` przez `/integrations/function`):
+
+- [x] Opcje prywatności wyłącznie z `creator_info.privacy_level_options`
+- [x] Żadnego wstępnie zaznaczonego poziomu prywatności (pole startuje puste,
+      publikacja bez wyboru jest blokowana walidacją)
+- [x] Duet/stitch/komentarze wyszarzone, gdy twórca je wyłączył
+      (`duet_disabled`/`stitch_disabled`/`comment_disabled`)
+- [x] Treść komercyjna nie może być `SELF_ONLY` (walidacja kompozera)
+- [x] Widoczne oświadczenia: Music Usage Confirmation + Branded Content Policy
+      (linki) oraz etykieta „Promotional content" / „Paid partnership"
 
 - [ ] Privacy / Terms URL jak wyżej
 - [ ] Weryfikacja domeny publikacji (pull-from-URL) w portalu

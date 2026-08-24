@@ -20,6 +20,10 @@ model Organization {
   brandRules           String?
   brandForbiddenWords  String?
   agencyMode           Boolean                    @default(false)
+  publishingState      PublishingState            @default(ACTIVE)
+  publishingPausedAt   DateTime?
+  publishingPausedById String?
+  publishingPauseReason String?
   apiKey               String?
   paymentId            String?
   streakSince          DateTime?
@@ -520,8 +524,17 @@ model PostAnalytics {
 model Notifications {
   id             String       @id @default(uuid())
   organizationId String
+  // Rendered English text. Still written for every notification: it is what
+  // the email carries, and it is the fallback for rows created before
+  // eventKey existed (and for any event the dashboard has no translation for).
   content        String
   link           String?
+  // Structured form of the same notification, so the dashboard can render it
+  // in the customer's own language instead of showing English to everyone:
+  // eventKey selects the i18n message, eventParams (JSON object of strings)
+  // fills its placeholders.
+  eventKey       String?
+  eventParams    String?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   deletedAt      DateTime?
@@ -831,6 +844,12 @@ enum State {
   ERROR
   DRAFT
   APPROVAL
+  HELD
+}
+
+enum PublishingState {
+  ACTIVE
+  PAUSED
 }
 
 enum SubscriptionTier {

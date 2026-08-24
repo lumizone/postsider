@@ -63,7 +63,12 @@ export class ApprovalService {
     await this._notifications.inAppNotification(
       orgId,
       'Approval requested',
-      'A post has been submitted for approval.'
+      'A post has been submitted for approval.',
+      false,
+      false,
+      'info',
+      `${process.env.FRONTEND_URL}/approval`,
+      { key: 'approvalRequested' }
     );
     await this._notifications.notifyApprovers(
       orgId,
@@ -238,7 +243,12 @@ export class ApprovalService {
     await this._notifications.inAppNotification(
       orgId,
       'Post approved',
-      'A post was approved and scheduled.'
+      'A post was approved and scheduled.',
+      false,
+      false,
+      'success',
+      `${process.env.FRONTEND_URL}/approval`,
+      { key: 'approvalApproved' }
     );
     if (requesterEmail) {
       try {
@@ -263,7 +273,15 @@ export class ApprovalService {
     await this._notifications.inAppNotification(
       orgId,
       'Post rejected',
-      note ? `A post was rejected: ${note}` : 'A post was rejected.'
+      note ? `A post was rejected: ${note}` : 'A post was rejected.',
+      false,
+      false,
+      'info',
+      `${process.env.FRONTEND_URL}/approval`,
+      {
+        key: note ? 'approvalRejectedNote' : 'approvalRejected',
+        ...(note ? { params: { note } } : {}),
+      }
     );
     if (requesterEmail) {
       try {

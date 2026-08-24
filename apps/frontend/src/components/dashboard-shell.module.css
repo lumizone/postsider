@@ -72,6 +72,25 @@
   display: none;
 }
 
+/* Sidebar nav items — background/color live here (not inline) so :hover works. */
+.navLink {
+  border-radius: var(--radius-md);
+  color: var(--fg);
+  transition: background 160ms var(--ease), color 160ms var(--ease),
+    padding 220ms var(--ease);
+}
+
+.navLink:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--fg);
+}
+
+.navLinkActive,
+.navLinkActive:hover {
+  background: var(--fg);
+  color: var(--bg);
+}
+
 @media (max-width: 900px) {
   .shell {
     display: block;

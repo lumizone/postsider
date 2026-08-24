@@ -68,6 +68,42 @@ export class InstagramProvider
     return true;
   }
 
+  /**
+   * Poll an Instagram media container until it leaves IN_PROGRESS.
+   *
+   * The previous loop slept a flat 30s at the END of every iteration —
+   * including the one that already saw FINISHED — so a container that Meta
+   * reported ready on the first check (typical: 1-3s for an image) still cost
+   * a full 30s, and a carousel paid that twice. That was the whole reason
+   * Instagram posts landed 70-105s after their scheduled time while X landed
+   * in 3-6s. Return as soon as the status settles, and start with a short
+   * interval that backs off, so quick containers are fast and slow ones
+   * (video transcoding) still get roughly the same ~20 minute budget.
+   */
+  private async waitForContainer(url: string): Promise<string> {
+    const MAX_WAIT_MS = 20 * 60 * 1000;
+    const MAX_INTERVAL_MS = 30000;
+    let interval = 2000;
+    const deadline = Date.now() + MAX_WAIT_MS;
+    let status = 'IN_PROGRESS';
+
+    while (Date.now() < deadline) {
+      const { status_code } = await (
+        await this.fetch(url, undefined, '', 0, true)
+      ).json();
+      // A missing status_code is an error payload, not "done" — keep polling
+      // so we never publish an unfinished container.
+      status = status_code || 'IN_PROGRESS';
+      if (status !== 'IN_PROGRESS') {
+        return status;
+      }
+      await timer(Math.min(interval, deadline - Date.now()));
+      interval = Math.min(interval * 1.5, MAX_INTERVAL_MS);
+    }
+
+    return status;
+  }
+
   async refreshToken(
     refresh_token: string,
     integration?: Integration
@@ -701,29 +737,11 @@ export class InstagramProvider
         ).json();
         console.log('in progress2', id);
 
-        let status = 'IN_PROGRESS';
-        const maxStatusAttempts = 40; // ~20 minutes at 30s intervals
-        for (
-          let attempt = 0;
-          status === 'IN_PROGRESS' && attempt < maxStatusAttempts;
-          attempt++
-        ) {
-          const { status_code } = await (
-            await this.fetch(
-              `https://${type}/v20.0/${photoId}?access_token=${
-                userToken || accessToken
-              }&fields=status_code`,
-              undefined,
-              '',
-              0,
-              true
-            )
-          ).json();
-          // A missing status_code is an error payload, not "done" — keep polling
-          // so we never publish an unfinished container.
-          status = status_code || 'IN_PROGRESS';
-          await timer(30000);
-        }
+        const status = await this.waitForContainer(
+          `https://${type}/v20.0/${photoId}?access_token=${
+            userToken || accessToken
+          }&fields=status_code`
+        );
         if (status !== 'FINISHED') {
           throw new Error(`Instagram media not ready (status: ${status})`);
         }
@@ -806,27 +824,11 @@ export class InstagramProvider
         )
       ).json();
 
-      let status = 'IN_PROGRESS';
-      const maxStatusAttempts = 40; // ~20 minutes at 30s intervals
-      for (
-        let attempt = 0;
-        status === 'IN_PROGRESS' && attempt < maxStatusAttempts;
-        attempt++
-      ) {
-        const { status_code } = await (
-          await this.fetch(
-            `https://${type}/v20.0/${containerId}?fields=status_code&access_token=${
-              userToken || accessToken
-            }`,
-            undefined,
-            '',
-            0,
-            true
-          )
-        ).json();
-        status = status_code || 'IN_PROGRESS';
-        await timer(30000);
-      }
+      const status = await this.waitForContainer(
+        `https://${type}/v20.0/${containerId}?fields=status_code&access_token=${
+          userToken || accessToken
+        }`
+      );
       if (status !== 'FINISHED') {
         throw new Error(`Instagram carousel not ready (status: ${status})`);
       }

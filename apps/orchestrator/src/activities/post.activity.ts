@@ -136,6 +136,11 @@ export class PostActivity {
   }
 
   @ActivityMethod()
+  async claimPostForPublish(orgId: string, postId: string) {
+    return this._postService.claimPostForPublish(orgId, postId);
+  }
+
+  @ActivityMethod()
   async getPostsList(orgId: string, postId: string) {
     if (isBillingEnabled()) {
       const subscription = await this._subscriptionService.getSubscription(
@@ -319,7 +324,9 @@ export class PostActivity {
     message: string,
     sendEmail = false,
     digest = false,
-    type: NotificationType = 'success'
+    type: NotificationType = 'success',
+    link?: string,
+    event?: { key: string; params?: Record<string, string> }
   ) {
     await this._notificationService.inAppNotification(
       orgId,
@@ -327,7 +334,9 @@ export class PostActivity {
       message,
       sendEmail,
       digest,
-      type
+      type,
+      link,
+      event
     );
   }
 

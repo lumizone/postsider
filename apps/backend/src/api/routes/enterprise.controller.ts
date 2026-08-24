@@ -133,16 +133,10 @@ export class EnterpriseController {
         return { success: false };
       }
 
-      const isTherePosts = await this._integrationService.getPostsForChannel(
-        org.id,
-        load.id
-      );
-      if (isTherePosts.length) {
-        for (const post of isTherePosts) {
-          this._postsService.deletePost(org.id, post.group).catch(() => {});
-        }
-      }
-
+      // No post sweep here: `deleteChannel` parks unpublished posts as drafts
+      // for every caller. The loop this replaces deleted them outright, and did
+      // it fire-and-forget with errors swallowed — so it destroyed content the
+      // caller never asked to delete, and lied about having done so.
       await this._integrationService.deleteChannel(org.id, load.id);
       return { success: true };
     } catch (err) {

@@ -31,6 +31,10 @@ function statusFromBackend(state: BackendPost["state"]): PostStatus {
       return "draft";
     case "APPROVAL":
       return "pendingApproval";
+    case "HELD":
+      // Parked by the Emergency Pause — stays on its scheduled date but is not
+      // going out (and is not reschedulable) until an owner resumes.
+      return "held";
     case "QUEUE":
     default:
       return "scheduled";

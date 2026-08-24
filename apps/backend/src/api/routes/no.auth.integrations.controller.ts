@@ -202,7 +202,21 @@ export class NoAuthIntegrationsController {
               refresh,
               auth.accessToken
             );
-            return res({ ...newAuth, refreshToken: body.refresh });
+            // `reConnect` only resolves WHICH page/channel was picked — it
+            // returns no credentials. They come from the OAuth exchange in
+            // `authenticate` above. This used to write `body.refresh` (a
+            // client-supplied flag telling us this is a reconnect, never a
+            // token) into `refreshToken`, so every reconnect stored an EMPTY
+            // refresh token: the channel kept working until the access token
+            // expired, then died with "No refresh token is set." and could
+            // only be fixed by reconnecting — which wiped it again. Live case:
+            // the YouTube channel connected 2026-08-07 stopped publishing on
+            // 2026-08-20.
+            return res({
+              ...newAuth,
+              refreshToken: auth.refreshToken,
+              expiresIn: auth.expiresIn,
+            });
           } catch (err: any) {
             return res({
               error: err.message,

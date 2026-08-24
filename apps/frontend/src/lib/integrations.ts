@@ -301,4 +301,31 @@ export async function getIntegrationChannels(
   return Array.isArray(res) ? res : [];
 }
 
+/**
+ * What the connected TikTok account itself allows. Required by TikTok's
+ * Content Posting API audit: the composer may only offer the privacy levels
+ * TikTok returns here, and must respect the creator's duet/stitch/comment
+ * settings instead of showing its own fixed list.
+ */
+export interface TiktokCreatorInfo {
+  nickname: string;
+  username: string;
+  avatarUrl: string;
+  privacyOptions: string[];
+  duetDisabled: boolean;
+  stitchDisabled: boolean;
+  commentDisabled: boolean;
+  maxDurationSeconds: number;
+}
+
+export async function getTiktokCreatorInfo(
+  integrationId: string,
+): Promise<TiktokCreatorInfo> {
+  return api.post<TiktokCreatorInfo>(
+    `/integrations/function`,
+    { id: integrationId, name: "creatorInfo", data: {} },
+    { silent: true },
+  );
+}
+
 

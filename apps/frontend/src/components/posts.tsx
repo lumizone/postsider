@@ -43,6 +43,7 @@ const STATUS_LABEL_KEYS: Record<PostStatus, string> = {
   scheduled: "posts.status.scheduled",
   published: "posts.status.published",
   failed: "posts.status.error",
+  held: "posts.status.held",
 };
 
 function deriveStatus(ev: CalendarEvent): PostStatus {
@@ -292,6 +293,7 @@ export function Posts() {
       scheduled: 0,
       published: 0,
       failed: 0,
+      held: 0,
     };
     for (const { status } of allWithStatus) c[status] += 1;
     return c;
@@ -302,9 +304,10 @@ export function Posts() {
     const STATUS_ORDER: Record<PostStatus, number> = {
       failed: 0,
       pendingApproval: 1,
-      scheduled: 2,
-      draft: 3,
-      published: 4,
+      held: 2,
+      scheduled: 3,
+      draft: 4,
+      published: 5,
     };
     return allWithStatus
       .filter(({ status }) => filter === "all" || status === filter)
@@ -483,13 +486,14 @@ export function Posts() {
   const refreshList = async () => {
     setLoading(true);
     try {
-      const states: ("all" | "scheduled" | "draft" | "published" | "failed" | "approval")[] = [
-        "scheduled",
-        "draft",
-        "published",
-        "failed",
-        "approval",
-      ];
+        const states: ("all" | "scheduled" | "draft" | "published" | "failed" | "approval" | "held")[] = [
+          "scheduled",
+          "draft",
+          "published",
+          "failed",
+          "approval",
+          "held",
+        ];
       const collected: BackendPost[] = [];
       let truncated = false;
       for (const state of states) {
@@ -562,7 +566,7 @@ export function Posts() {
 
       <div className={styles.filters}>
         <div className={styles.tabs} role="tablist" aria-label={t("posts.statusFilter")}>
-          {(["all", "scheduled", "draft", "published", "failed", "pendingApproval"] as StatusFilter[]).map(
+          {(["all", "scheduled", "draft", "published", "failed", "pendingApproval", "held"] as StatusFilter[]).map(
             (f) => (
               <button
                 key={f}

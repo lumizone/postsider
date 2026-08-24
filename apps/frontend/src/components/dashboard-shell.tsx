@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useT, type MessageKey } from "@/lib/i18n";
 import { LanguageSwitcher } from "./language-switcher";
+import { NotificationsBell } from "./notifications-bell";
+import { PublishingPauseBanner, usePublishingState } from "./publishing-pause";
 import styles from "./dashboard-shell.module.css";
 
 interface NavItem {
@@ -219,6 +221,12 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const drawerCloseRef = useRef<HTMLButtonElement | null>(null);
 
+  // Emergency Pause (kill switch) — live state for the dashboard-wide banner.
+  const {
+    state: publishingState,
+    refresh: refreshPublishingState,
+  } = usePublishingState();
+
   // Restore collapsed state from localStorage on mount.
   useEffect(() => {
     try {
@@ -313,6 +321,11 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             PostSider
           </span>
         </span>
+        {/* The sidebar copy lives in a drawer on mobile, so the bell needs its
+            own always-visible spot here. */}
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+          <NotificationsBell compact />
+        </div>
       </header>
 
       {mobileNavOpen && (
@@ -485,17 +498,16 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                   <Link
                     href={item.href}
                     title={isCollapsed ? t(item.labelKey) : undefined}
+                    className={
+                      styles.navLink +
+                      (isActive ? " " + styles.navLinkActive : "")
+                    }
                     style={{
                       display: "flex",
                       alignItems: "center",
                       gap: isCollapsed ? 0 : "12px",
                       justifyContent: isCollapsed ? "center" : "flex-start",
                       padding: isCollapsed ? "10px 0" : "10px 14px",
-                      borderRadius: "var(--radius-md)",
-                      background: isActive ? "var(--fg)" : "transparent",
-                      color: isActive ? "var(--bg)" : "var(--fg)",
-                      transition:
-                        "background 160ms var(--ease), color 160ms var(--ease), padding 220ms var(--ease)",
                       fontWeight: isActive ? 600 : 500,
                     }}
                   >
@@ -521,18 +533,17 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         </nav>
 
         {!isCollapsed && (
-          <div style={{ marginTop: "auto", padding: "0 6px", display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
+            <NotificationsBell />
             <OrgSwitcher />
-            <div style={{ padding: "0 8px" }}>
-              <LanguageSwitcher />
-            </div>
+            <LanguageSwitcher />
             {user && (
               <div
                 style={{
                   display: "flex",
                   flexDirection: "column",
                   gap: 2,
-                  padding: "10px 8px",
+                  padding: "10px 10px",
                   borderTop: "1px solid var(--line-soft)",
                 }}
               >
@@ -570,8 +581,14 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           border: "1px solid var(--line-soft)",
           padding: "32px",
           minHeight: "calc(100vh - 32px)",
+          minWidth: 0,
         }}
       >
+        <PublishingPauseBanner
+          state={publishingState}
+          refresh={refreshPublishingState}
+          canManage={user?.role === "SUPERADMIN"}
+        />
         {user?.onTrial &&
           user.trialDaysLeft !== null &&
           !pathname?.startsWith("/billing") && (
@@ -687,7 +704,7 @@ function OrgSwitcher() {
   const currentOrg = orgs.find((o) => o.id === currentOrgId);
 
   return (
-    <div ref={ref} style={{ position: "relative", padding: "0 8px" }}>
+    <div ref={ref} style={{ position: "relative" }}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -699,7 +716,7 @@ function OrgSwitcher() {
           alignItems: "center",
           gap: 10,
           padding: "8px 10px",
-          borderRadius: 10,
+          borderRadius: "var(--radius-md)",
           border: "1px solid var(--line-soft)",
           background: "var(--bg)",
           color: "var(--fg)",
@@ -721,14 +738,14 @@ function OrgSwitcher() {
           style={{
             position: "absolute",
             bottom: "100%",
-            left: 8,
-            right: 8,
+            left: 0,
+            right: 0,
             margin: "0 0 4px 0",
             padding: 4,
             listStyle: "none",
             background: "var(--bg)",
             border: "1px solid var(--line-soft)",
-            borderRadius: 10,
+            borderRadius: "var(--radius-md)",
             boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
             zIndex: 50,
             display: "flex",

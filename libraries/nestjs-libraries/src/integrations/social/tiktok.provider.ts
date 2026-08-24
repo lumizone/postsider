@@ -16,6 +16,7 @@ import { timer } from '@postsider/helpers/utils/timer';
 import { hasExtension } from '@postsider/helpers/utils/has.extension';
 import { Integration } from '@prisma/client';
 import { Rules } from '@postsider/nestjs-libraries/chat/rules.description.decorator';
+import { Tool } from '@postsider/nestjs-libraries/integrations/tool.decorator';
 
 @Rules(
   'TikTok can have one video or one picture or multiple pictures, it cannot be without an attachment'
@@ -31,6 +32,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     'video.upload',
     'user.info.profile',
     'user.info.stats',
+    'video.list',
   ];
   override maxConcurrentJob = 300;
   dto = TikTokDto;
@@ -405,6 +407,49 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     };
   }
 
+  /**
+   * Creator info for the composer. TikTok's Content Posting API audit checks
+   * the posting UI, not just the API calls: the privacy options offered MUST
+   * come from `creator_info` (a private account can never be offered a public
+   * option), the duet/stitch/comment switches MUST respect the creator's own
+   * settings, and nothing may be preselected for the user. Serving this to the
+   * frontend is what makes those rules enforceable there.
+   *
+   * Reached through the generic `/integrations/function` endpoint, hence @Tool.
+   */
+  @Tool({
+    description:
+      'TikTok creator info: allowed privacy levels and interaction limits',
+    dataSchema: [],
+  })
+  async creatorInfo(accessToken: string) {
+    const { data } = await (
+      await this.fetch(
+        'https://open.tiktokapis.com/v2/post/publish/creator_info/query/',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json; charset=UTF-8',
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      )
+    ).json();
+
+    return {
+      nickname: data?.creator_nickname ?? '',
+      username: data?.creator_username ?? '',
+      avatarUrl: data?.creator_avatar_url ?? '',
+      // No fallback list on purpose: if TikTok did not say what is allowed, the
+      // composer must offer nothing rather than guess a public default.
+      privacyOptions: (data?.privacy_level_options ?? []) as string[],
+      duetDisabled: !!data?.duet_disabled,
+      stitchDisabled: !!data?.stitch_disabled,
+      commentDisabled: !!data?.comment_disabled,
+      maxDurationSeconds: data?.max_video_post_duration_sec ?? 0,
+    };
+  }
+
   private async uploadedVideoSuccess(
     id: string,
     publishId: string,
@@ -681,11 +726,6 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
         }
       }
 
-      // Video-level analytics require the optional video.list scope.
-      if (!this.scopes.includes('video.list')) {
-        return result;
-      }
-
       // Get recent videos and aggregate their stats
       const videoListResponse = await this.fetch(
         'https://open.tiktokapis.com/v2/video/list/?fields=id',
@@ -777,10 +817,6 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     id: string,
     accessToken: string
   ): Promise<{ id: string; url: string }[]> {
-    if (!this.scopes.includes('video.list')) {
-      return [];
-    }
-
     try {
       const videoListResponse = await this.fetch(
         'https://open.tiktokapis.com/v2/video/list/?fields=id,cover_image_url,title',
@@ -818,10 +854,6 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     fromDate: number
   ): Promise<AnalyticsData[]> {
     const today = dayjs().format('YYYY-MM-DD');
-
-    if (!this.scopes.includes('video.list')) {
-      return [];
-    }
 
     if (postId.indexOf('v_pub_url') > -1) {
       const post = await (

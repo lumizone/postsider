@@ -52,6 +52,29 @@ export class IntegrationsController {
     return (org as any).users?.[0]?.role ?? 'USER';
   }
 
+  /**
+   * The dashboard's reconnect button sends our own `Integration.id`, but
+   * `reConnect(id, requiredId, token)` compares `requiredId` against the ids
+   * the PLATFORM returns from `pages()` — i.e. `Integration.internalId`. Passed
+   * through verbatim, no page ever matched and every reconnect died on the
+   * provider's "Channel not found" (surfaced as a bare 409 in the UI).
+   *
+   * Translate here, org-scoped, so the client never has to know internal ids.
+   * An unknown value is passed through unchanged: callers that already send an
+   * internalId (or a provider-specific handle) keep working.
+   */
+  private async resolveRefreshInternalId(
+    orgId: string,
+    refresh: string
+  ): Promise<string> {
+    const integration = await this._integrationService.getIntegrationById(
+      orgId,
+      refresh
+    );
+
+    return integration?.internalId || refresh;
+  }
+
   // Optional per-channel scoping (ADMIN/SUPERADMIN only). No assignments for
   // a USER = unrestricted access, unchanged from before this feature existed.
   @Get('/:id/assignments')
@@ -273,7 +296,12 @@ export class IntegrationsController {
       await ioRedis.set(`login:${state}`, 'none', 'EX', 3600);
 
       if (refresh) {
-        await ioRedis.set(`refresh:${state}`, refresh, 'EX', 3600);
+        await ioRedis.set(
+          `refresh:${state}`,
+          await this.resolveRefreshInternalId(org.id, refresh),
+          'EX',
+          3600
+        );
       }
 
       if (onboarding === 'true') {
@@ -331,7 +359,12 @@ export class IntegrationsController {
               await ioRedis.set(`login:${result.state}`, result.codeVerifier, 'EX', 3600);
               await ioRedis.set(`organization:${result.state}`, org.id, 'EX', 3600);
               if (refresh) {
-                await ioRedis.set(`refresh:${result.state}`, refresh, 'EX', 3600);
+                await ioRedis.set(
+                  `refresh:${result.state}`,
+                  await this.resolveRefreshInternalId(org.id, refresh),
+                  'EX',
+                  3600
+                );
               }
               if (onboarding === 'true') {
                 await ioRedis.set(`onboarding:${result.state}`, 'true', 'EX', 3600);
@@ -771,28 +804,11 @@ export class IntegrationsController {
     @GetOrgFromRequest() org: Organization,
     @Body('id') id: string
   ) {
-    const isTherePosts = await this._integrationService.getPostsForChannel(
-      org.id,
-      id
-    );
-    if (isTherePosts.length) {
-      // Await the sweep instead of firing it off unawaited: the old
-      // fire-and-forget loop let the request finish (and the channel flip to
-      // deletedAt) while deletions were still in flight, and swallowed every
-      // failure, so scheduled posts routinely survived the channel they
-      // belonged to. Failures are surfaced rather than silently dropped.
-      const results = await Promise.allSettled(
-        isTherePosts.map((post) => this._postService.deletePost(org.id, post.group))
-      );
-      const failed = results.filter((r) => r.status === 'rejected');
-      if (failed.length) {
-        console.error(
-          `[delete-channel] ${failed.length}/${results.length} post group(s) could not be deleted for integration ${id}`,
-          failed.map((f) => (f as PromiseRejectedResult).reason)
-        );
-      }
-    }
-
+    // Was: delete every post group of the channel. That destroyed real user
+    // content on a plain disconnect/reconnect (a live report: weeks of queued
+    // posts gone, published history with them) — awaiting the sweep, as the
+    // previous fix did, only made the destruction reliable. `deleteChannel`
+    // now parks the unpublished posts as drafts instead.
     return this._integrationService.deleteChannel(org.id, id);
   }
 

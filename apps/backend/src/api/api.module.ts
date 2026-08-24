@@ -18,6 +18,7 @@ import { ApprovalController } from '@postsider/backend/api/routes/approval.contr
 import { AgencyController } from '@postsider/backend/api/routes/agency.controller';
 import { ReportController } from '@postsider/backend/api/routes/report.controller';
 import { ReportPdfService } from '@postsider/backend/services/report.pdf.service';
+import { PublishingController } from '@postsider/backend/api/routes/publishing.controller';
 import { MediaController } from '@postsider/backend/api/routes/media.controller';
 import { UploadModule } from '@postsider/nestjs-libraries/upload/upload.module';
 import { BillingController } from '@postsider/backend/api/routes/billing.controller';
@@ -73,6 +74,7 @@ const authenticatedController = [
   ApprovalController,
   AgencyController,
   ReportController,
+  PublishingController,
 ];
 @Module({
   imports: [UploadModule],

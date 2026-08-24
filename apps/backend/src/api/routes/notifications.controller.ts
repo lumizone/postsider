@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Delete, Get } from '@nestjs/common';
 import { GetUserFromRequest } from '@postsider/nestjs-libraries/user/user.from.request';
 import { Organization, User } from '@prisma/client';
 import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
@@ -18,6 +18,14 @@ export class NotificationsController {
       organization.id,
       user.id
     );
+  }
+
+  @Delete('/')
+  async clear(@GetOrgFromRequest() organization: Organization) {
+    const { count } = await this._notificationsService.clearNotifications(
+      organization.id
+    );
+    return { cleared: count };
   }
 
   @Get('/list')

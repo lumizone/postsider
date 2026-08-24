@@ -21,7 +21,9 @@ import { DatePicker, TimePicker } from "./date-picker";
 import { type Channel } from "@/lib/calendar-data";
 import {
   getIntegrationChannels,
+  getTiktokCreatorInfo,
   type IntegrationChannel,
+  type TiktokCreatorInfo,
 } from "@/lib/integrations";
 import {
   getProviderRequirement,
@@ -359,6 +361,12 @@ export function CreatePostModal({
   // `integrationId::remoteFn` (e.g. Discord channels, Pinterest boards).
   const [remoteOptions, setRemoteOptions] = useState<
     Record<string, IntegrationChannel[] | undefined>
+  >({});
+  // TikTok creator info per integration id. Drives the privacy options and the
+  // duet/stitch/comment locks — TikTok's audit requires both to come from the
+  // account, not from our own hardcoded list.
+  const [tiktokCreators, setTiktokCreators] = useState<
+    Record<string, TiktokCreatorInfo | undefined>
   >({});
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -750,6 +758,59 @@ export function CreatePostModal({
       cancelled = true;
     };
   }, [selectedChannels, requirementFor, channelSettings]);
+
+  // Load TikTok creator info once per selected TikTok channel. Everything the
+  // composer offers for TikTok (allowed privacy levels, whether duet/stitch/
+  // comments may be enabled) has to come from the account itself — offering a
+  // public option to a private account, or a duet switch to a creator who
+  // turned duets off, is exactly what the Content Posting API audit rejects.
+  const tiktokFetchedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    let cancelled = false;
+    for (const c of selectedChannels) {
+      if (channelIdentifier(c) !== "tiktok") continue;
+      if (tiktokFetchedRef.current.has(c.id)) continue;
+      tiktokFetchedRef.current.add(c.id);
+      void (async () => {
+        try {
+          const info = await getTiktokCreatorInfo(c.id);
+          if (!cancelled) {
+            setTiktokCreators((prev) => ({ ...prev, [c.id]: info }));
+          } else {
+            tiktokFetchedRef.current.delete(c.id);
+          }
+        } catch {
+          // Leave it undefined: the panel then shows "couldn't load" and keeps
+          // the privacy picker empty rather than falling back to a guessed
+          // public default.
+          tiktokFetchedRef.current.delete(c.id);
+        }
+      })();
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedChannels]);
+
+  // Drop a privacy level the account doesn't actually allow (e.g. a post
+  // prefilled as public for an account that has since gone private), so it can
+  // never be submitted just because it was set earlier.
+  useEffect(() => {
+    setChannelSettings((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const [id, info] of Object.entries(tiktokCreators)) {
+        const current = next[id]?.privacy_level as string | undefined;
+        if (!info || !current) continue;
+        if (!info.privacyOptions.includes(current)) {
+          const { privacy_level: _dropped, ...rest } = next[id]!;
+          next[id] = rest;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [tiktokCreators]);
 
   // Seed default provider settings for selected channels so required DTO
   // fields (e.g. TikTok privacy_level, Instagram post_type) are always present
@@ -1390,6 +1451,7 @@ export function CreatePostModal({
                 settings={channelSettings[c.id] ?? {}}
                 problems={channelProblems[c.id] ?? []}
                 remoteOptions={remoteOptions}
+                creatorInfo={tiktokCreators[c.id]}
                 bodyLength={bodyForChannel(c.id).length}
                 onChange={(key, value) => setChannelSetting(c.id, key, value)}
               />
@@ -1787,6 +1849,8 @@ interface ProviderSettingsPanelProps {
   problems: string[];
   /** Remote-select options keyed by `integrationId::remoteFn`. */
   remoteOptions: Record<string, IntegrationChannel[] | undefined>;
+  /** TikTok only: what the connected account allows. */
+  creatorInfo?: TiktokCreatorInfo;
   /** Current body length for this channel (for the character counter). */
   bodyLength: number;
   onChange: (key: string, value: unknown) => void;
@@ -1802,12 +1866,18 @@ function ProviderSettingsPanel({
   settings,
   problems,
   remoteOptions,
+  creatorInfo,
   bodyLength,
   onChange,
 }: ProviderSettingsPanelProps) {
+  const t = useT();
   const visibleFields = requirement.fields.filter(
     (f) => !f.showIf || f.showIf(settings),
   );
+  const isTiktok = requirement.identifier === "tiktok";
+  const commercial =
+    Boolean(settings.brand_content_toggle) ||
+    Boolean(settings.brand_organic_toggle);
 
   const maxLen = effectiveMaxLength(requirement, { verified: channel.verified });
   const overLimit = bodyLength > maxLen;
@@ -1861,6 +1931,13 @@ function ProviderSettingsPanel({
         </div>
       )}
 
+      {isTiktok && !creatorInfo && (
+        <div className={styles.providerHint}>
+          <WarnIcon />
+          <span>{t("createPost.tiktok.loadingCreator")}</span>
+        </div>
+      )}
+
       {visibleFields.length > 0 && (
         <div className={styles.providerFields}>
           {visibleFields.map((field) => (
@@ -1875,9 +1952,51 @@ function ProviderSettingsPanel({
                   : undefined
               }
               remoteOptions={remoteOptions}
+              creatorInfo={creatorInfo}
               onChange={(value) => onChange(field.key, value)}
             />
           ))}
+        </div>
+      )}
+
+      {/*
+        Required by TikTok's content-sharing guidelines: the creator has to see,
+        at posting time, which policies they are agreeing to and how commercial
+        content will be labelled. Wording follows TikTok's own required copy.
+      */}
+      {isTiktok && (
+        <div className={styles.providerHint}>
+          <span>
+            {commercial && (
+              <>
+                {Boolean(settings.brand_content_toggle)
+                  ? t("createPost.tiktok.labelPaidPartnership")
+                  : t("createPost.tiktok.labelPromotional")}{" "}
+              </>
+            )}
+            {commercial
+              ? t("createPost.tiktok.consentBranded")
+              : t("createPost.tiktok.consentMusic")}{" "}
+            <a
+              href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en"
+              target="_blank"
+              rel="noreferrer noopener"
+            >
+              {t("createPost.tiktok.musicPolicy")}
+            </a>
+            {commercial && (
+              <>
+                {" · "}
+                <a
+                  href="https://www.tiktok.com/legal/page/global/bc-policy/en"
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >
+                  {t("createPost.tiktok.brandedPolicy")}
+                </a>
+              </>
+            )}
+          </span>
         </div>
       )}
     </div>
@@ -1891,6 +2010,8 @@ interface ProviderFieldProps {
   /** For a dependent remote-select: the current value of its `remoteParam`. */
   remoteParamValue?: string;
   remoteOptions: Record<string, IntegrationChannel[] | undefined>;
+  /** TikTok only: what the connected account allows. */
+  creatorInfo?: TiktokCreatorInfo;
   onChange: (value: unknown) => void;
 }
 
@@ -1900,6 +2021,7 @@ function ProviderField({
   value,
   remoteParamValue,
   remoteOptions,
+  creatorInfo,
   onChange,
 }: ProviderFieldProps) {
   const t = useT();
@@ -1910,23 +2032,52 @@ function ProviderField({
     </label>
   );
 
+  // A creator who turned duet/stitch/comments off on TikTok must not be able
+  // to turn them back on from here — the API would reject it and the audit
+  // treats offering it as a violation.
+  const lockedByCreator =
+    !!field.dynamicDisabled &&
+    !!creatorInfo &&
+    ((field.dynamicDisabled === "duet" && creatorInfo.duetDisabled) ||
+      (field.dynamicDisabled === "stitch" && creatorInfo.stitchDisabled) ||
+      (field.dynamicDisabled === "comment" && creatorInfo.commentDisabled));
+
   if (field.type === "checkbox") {
     return (
       <label className={styles.fieldCheckbox}>
         <input
           type="checkbox"
-          checked={!!value}
+          checked={lockedByCreator ? false : !!value}
+          disabled={lockedByCreator}
           onChange={(e) => onChange(e.target.checked)}
         />
         <span>
           {field.label}
           {field.required && <span className={styles.fieldRequired}> *</span>}
+          {lockedByCreator && (
+            <span className={styles.fieldHelp}>
+              {" "}
+              {t("createPost.tiktok.disabledByCreator")}
+            </span>
+          )}
         </span>
       </label>
     );
   }
 
   if (field.type === "select") {
+    // TikTok privacy: only what `creator_info` allows, and nothing preselected
+    // — both are audit requirements, so an unloaded creator info means an empty
+    // picker rather than our own default.
+    const options =
+      field.dynamicOptions === "tiktok-privacy"
+        ? (field.options ?? []).filter((opt) =>
+            (creatorInfo?.privacyOptions ?? []).includes(opt.value),
+          )
+        : (field.options ?? []);
+    const needsExplicitChoice =
+      field.dynamicOptions === "tiktok-privacy" || !field.required;
+
     return (
       <div className={styles.field}>
         {label}
@@ -1935,8 +2086,14 @@ function ProviderField({
           value={(value as string) ?? ""}
           onChange={(e) => onChange(e.target.value)}
         >
-          {!field.required && <option value="">-</option>}
-          {field.options?.map((opt) => (
+          {needsExplicitChoice && (
+            <option value="">
+              {field.dynamicOptions === "tiktok-privacy"
+                ? t("createPost.select")
+                : "-"}
+            </option>
+          )}
+          {options.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
             </option>

@@ -1,10 +1,11 @@
-import { PrismaRepository } from '@postsider/nestjs-libraries/database/prisma/prisma.service';
+import { PrismaRepository, PrismaTransaction } from '@postsider/nestjs-libraries/database/prisma/prisma.service';
 import { Injectable } from '@nestjs/common';
 import { Post as PostBody } from '@postsider/nestjs-libraries/dtos/posts/create.post.dto';
 import {
   APPROVED_SUBMIT_FOR_ORDER,
   CreationMethod,
   Post,
+  PublishingState,
   State,
 } from '@prisma/client';
 import { GetPostsDto } from '@postsider/nestjs-libraries/dtos/posts/get.posts.dto';
@@ -32,7 +33,8 @@ export class PostsRepository {
     private _comments: PrismaRepository<'comments'>,
     private _tags: PrismaRepository<'tags'>,
     private _tagsPosts: PrismaRepository<'tagsPosts'>,
-    private _errors: PrismaRepository<'errors'>
+    private _errors: PrismaRepository<'errors'>,
+    private _transaction: PrismaTransaction
   ) {}
 
   searchForMissingThreeHoursPosts() {
@@ -55,6 +57,13 @@ export class PostsRepository {
         state: 'QUEUE',
         deletedAt: null,
         parentPostId: null,
+        // A paused org (Emergency Pause) must NOT be re-armed by this hourly
+        // safety net — its posts are parked to HELD and only a human resume
+        // may move them. Without this, signalWithStart + poke would wake the
+        // workflow every hour only for claimPostForPublish to hold it again.
+        organization: {
+          publishingState: PublishingState.ACTIVE,
+        },
       },
       select: {
         id: true,
@@ -66,6 +75,112 @@ export class PostsRepository {
         },
         publishDate: true,
       },
+    });
+  }
+
+  /**
+   * Emergency Pause gate — the atomic decision of whether a post may publish.
+   *
+   * Runs in ONE transaction so a pause landing in the same millisecond as the
+   * claim cannot race the publish: the org-state read, the post-state read and
+   * (when paused) the HELD write are a single atomic unit.
+   *
+   * Returns:
+   *  - `{ outcome: 'publish' }`  org is ACTIVE — the workflow may publish.
+   *  - `{ outcome: 'held', reason }`  org is PAUSED and the post was QUEUE — the
+   *    post is flipped to HELD here (inside the transaction) and the workflow
+   *    must NOT publish it.
+   *  - `{ outcome: 'abort', reason }`  org is PAUSED but the post is in any other
+   *    state (e.g. a repeat-post of an already-PUBLISHED post) — nothing is
+   *    changed, the workflow must simply not publish.
+   *  - `{ outcome: 'abort' }`  org or post missing (defensive; the workflow's
+   *    getPost guard already errored before this is reached).
+   */
+  claimPostForPublish(orgId: string, postId: string) {
+    return this._transaction.model.$transaction(async (tx) => {
+      const org = await tx.organization.findUnique({
+        where: { id: orgId },
+        select: { publishingState: true, publishingPauseReason: true },
+      });
+      const post = await tx.post.findFirst({
+        where: { id: postId, organizationId: orgId, deletedAt: null },
+        select: { state: true },
+      });
+
+      if (!org || !post) {
+        return { outcome: 'abort' } as const;
+      }
+      if (org.publishingState === PublishingState.ACTIVE) {
+        return { outcome: 'publish' } as const;
+      }
+      if (post.state === 'QUEUE') {
+        await tx.post.update({
+          where: { id: postId },
+          data: { state: 'HELD' },
+        });
+        return {
+          outcome: 'held',
+          reason: org.publishingPauseReason ?? undefined,
+        } as const;
+      }
+      return {
+        outcome: 'abort',
+        reason: org.publishingPauseReason ?? undefined,
+      } as const;
+    });
+  }
+
+  /**
+   * Resume publishing after an Emergency Pause, in one transaction:
+   *  - the org is set back to ACTIVE and the pause audit fields cleared;
+   *  - every HELD post is moved to DRAFT (default, the "human door you
+   *    control") or, for `auto_resume`, back to QUEUE when its publishDate is
+   *    still in the FUTURE — a post with a past publishDate is ALWAYS parked to
+   *    DRAFT, never auto-republished.
+   *
+   * Returns the number of processed HELD posts plus the ids/task queues that
+   * were requeued so the caller can re-arm their Temporal workflows.
+   */
+  resumePublishing(orgId: string, behavior: 'to_draft' | 'auto_resume') {
+    return this._transaction.model.$transaction(async (tx) => {
+      const held = await tx.post.findMany({
+        where: { organizationId: orgId, state: 'HELD', deletedAt: null },
+        select: {
+          id: true,
+          publishDate: true,
+          integration: { select: { providerIdentifier: true } },
+        },
+      });
+
+      await tx.organization.update({
+        where: { id: orgId },
+        data: {
+          publishingState: PublishingState.ACTIVE,
+          publishingPausedAt: null,
+          publishingPausedById: null,
+          publishingPauseReason: null,
+        },
+      });
+
+      const now = new Date();
+      const requeued: { id: string; taskQueue: string }[] = [];
+      for (const p of held) {
+        const toQueue = behavior === 'auto_resume' && p.publishDate > now;
+        await tx.post.update({
+          where: { id: p.id },
+          data: { state: toQueue ? 'QUEUE' : 'DRAFT' },
+        });
+        if (toQueue) {
+          requeued.push({
+            id: p.id,
+            taskQueue: p.integration.providerIdentifier
+              .split('-')[0]
+              .toLowerCase(),
+          });
+        }
+      }
+
+      return { heldPostsProcessed: held.length, requeued };
     });
   }
 
@@ -275,6 +390,8 @@ export class PostsRepository {
         ? { state: State.ERROR }
         : stateFilter === 'approval'
         ? { state: State.APPROVAL }
+        : stateFilter === 'held'
+        ? { state: State.HELD }
         : {
           state: {
               in: [
@@ -283,6 +400,7 @@ export class PostsRepository {
                 State.PUBLISHED,
                 State.ERROR,
                 State.APPROVAL,
+                State.HELD,
               ],
             },
           };

@@ -193,13 +193,30 @@ export class IntegrationService {
     integration: Integration,
     err = ''
   ) {
+    // Two things were wrong for the people who actually receive this: it named
+    // only the provider ("your youtube channel" — which one, when the customer
+    // runs three?), and it linked to /launches, a Postiz route that does not
+    // exist in this product, so the one action it asked for ended on a 404.
+    const channel = `${integration.name} (${integration.providerIdentifier})`;
+    const link = `${process.env.FRONTEND_URL}/calendar`;
+
     await this._notificationService.inAppNotification(
       orgId,
-      `Could not refresh your ${integration.providerIdentifier} channel ${err}`,
-      `Could not refresh your ${integration.providerIdentifier} channel ${err}. Please go back to the system and connect it again ${process.env.FRONTEND_URL}/launches`,
+      `Reconnect needed: ${channel}`,
+      `We can no longer post to ${channel}${
+        err ? ` (${err})` : ''
+      }. Open your channels and connect it again to resume publishing: ${link}`,
       true,
       false,
-      'info'
+      'info',
+      link,
+      {
+        key: 'channelReconnect',
+        params: {
+          channel: integration.name,
+          provider: integration.providerIdentifier,
+        },
+      }
     );
   }
 
@@ -308,7 +325,49 @@ export class IntegrationService {
     return this._integrationRepository.getPostsForChannel(org, id);
   }
 
+  /**
+   * A disconnected channel must stop talking to the platform. `refreshTokenWorkflow`
+   * is per-integration and self-loops forever, and nothing used to stop it on
+   * disconnect — so we kept refreshing tokens for accounts the user had already
+   * removed (11 such workflows were running in production on 2026-08-21, 4 of
+   * them for integrations that no longer exist in the database at all). Beyond
+   * the wasted calls, "we stop using your data when you disconnect" is what we
+   * tell the platforms in their app reviews, so it has to be true.
+   */
+  private async stopRefreshWorkflow(id: string) {
+    try {
+      const handle = await this._temporalService.client.getWorkflowHandle(
+        `refresh_${id}`
+      );
+      if ((await handle.describe()).status.name === 'RUNNING') {
+        await handle.terminate('channel disconnected');
+      }
+    } catch (err) {
+      // Not running, already gone, or Temporal unreachable — disconnecting the
+      // channel must never fail because of the cleanup.
+      console.error(`[delete-channel] could not stop refresh workflow for ${id}`, err);
+    }
+  }
+
   async deleteChannel(org: string, id: string) {
+    // Park BEFORE the soft-delete, and in every caller (dashboard, public API,
+    // "disconnect all" in settings) by doing it here rather than per-route:
+    // an unpublished post left in QUEUE would otherwise be picked up by a
+    // workflow that then fails on the deleted-channel guard, and a post
+    // deleted outright is content the user never asked to lose.
+    const parked = await this._integrationRepository.parkPostsForDeletedChannel(
+      org,
+      id
+    );
+
+    if (parked.count) {
+      console.log(
+        `[delete-channel] parked ${parked.count} unpublished post(s) as DRAFT for integration ${id}`
+      );
+    }
+
+    await this.stopRefreshWorkflow(id);
+
     return this._integrationRepository.deleteChannel(org, id);
   }
 

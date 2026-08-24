@@ -307,6 +307,55 @@ server.registerTool(
 );
 
 // ───────────────────────────────────────────────────────────────────────────
+// Emergency Pause (kill switch)
+// ───────────────────────────────────────────────────────────────────────────
+
+server.registerTool(
+  'postsider_pause_publishing',
+  {
+    title: 'Pause all publishing',
+    description:
+      'Immediately halt ALL publishing for this organization (kill switch): no `now` or `schedule` posts can be created, and queued posts are parked to HELD instead of going out. Use when something is wrong — a PR crisis, a post on the wrong channel, a runaway automation loop. Resume is human-only (owner, dashboard); this cannot be undone via the API.',
+    inputSchema: {
+      reason: z
+        .string()
+        .optional()
+        .describe('Optional reason, recorded in the audit trail and shown to the team.'),
+    },
+    annotations: {
+      readOnlyHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+  },
+  async ({ reason }) => {
+    try {
+      return ok(await client.post('/publishing/pause', { reason }));
+    } catch (e) {
+      return fail(e);
+    }
+  }
+);
+
+server.registerTool(
+  'postsider_get_publishing_state',
+  {
+    title: 'Get publishing state',
+    description:
+      'Check whether publishing is active or paused for this organization. Useful before scheduling (a paused org rejects new posts with publishing_paused), and to confirm a kill switch is on.',
+    inputSchema: {},
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+  },
+  async () => {
+    try {
+      return ok(await client.get('/publishing/state'));
+    } catch (e) {
+      return fail(e);
+    }
+  }
+);
+
+// ───────────────────────────────────────────────────────────────────────────
 // Media
 // ───────────────────────────────────────────────────────────────────────────
 

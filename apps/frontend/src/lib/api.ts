@@ -184,12 +184,17 @@ async function request<T>(
       window.location.href = "/login";
     }
 
+    const raw = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
     const message =
-      (parsed && typeof parsed === "object" && ("message" in parsed || "msg" in parsed)
-        ? String((parsed as { message?: unknown; msg?: unknown }).message ?? (parsed as { msg?: unknown }).msg)
+      (raw.message !== undefined || raw.msg !== undefined
+        ? String(raw.message ?? raw.msg)
         : typeof parsed === "string"
           ? parsed
-          : res.statusText) || `HTTP ${res.status}`;
+          : res.status === 423
+            ? `Publishing is paused${
+                typeof raw.reason === "string" && raw.reason ? ` (${raw.reason})` : ""
+              }`
+            : res.statusText) || `HTTP ${res.status}`;
     throw new ApiError(res.status, message, parsed);
   }
 

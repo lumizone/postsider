@@ -499,28 +499,47 @@ export class PublicIntegrationsController {
     @Param('id') id: string
   ) {
     Sentry.metrics.count('public_api-request', 1);
-    const isTherePosts = await this._integrationService.getPostsForChannel(
-      org.id,
-      id
-    );
-    if (isTherePosts.length) {
-      // Awaited + surfaced, same as the dashboard route: the documented
-      // behaviour ("posts scheduled to that channel are removed as well")
-      // only actually holds if the deletions complete before the channel is
-      // soft-deleted, and a swallowed failure left publishable orphans.
-      const results = await Promise.allSettled(
-        isTherePosts.map((post) => this._postsService.deletePost(org.id, post.group))
-      );
-      const failed = results.filter((r) => r.status === 'rejected');
-      if (failed.length) {
-        console.error(
-          `[public-delete-channel] ${failed.length}/${results.length} post group(s) could not be deleted for integration ${id}`,
-          failed.map((f) => (f as PromiseRejectedResult).reason)
-        );
-      }
-    }
-
+    // Same non-destructive behaviour as the dashboard route (`deleteChannel`
+    // parks unpublished posts as drafts): removing a channel can never wipe
+    // content the caller did not ask to delete. Older docs said the scheduled
+    // posts are removed — they are only unscheduled now; `DELETE /posts/:group`
+    // is still the way to actually delete them.
     return this._integrationService.deleteChannel(org.id, id);
+  }
+
+  // Emergency Pause (kill switch) — public API surface so an external monitor
+  // (sentiment watcher, n8n loop-guard, security scanner) can halt ALL
+  // publishing programmatically. Resume stays human-only (dashboard, owner).
+  // NOTE: the pause is attributed to the org's own SUPERADMIN — there is no
+  // session user on the public API.
+  @Post('/publishing/pause')
+  async pausePublishing(
+    @GetOrgFromRequest() org: Organization,
+    @Body() body: { reason?: string }
+  ) {
+    Sentry.metrics.count('public_api-request', 1);
+    const state = await this._postsService.pausePublishingFromApi(
+      org.id,
+      body?.reason
+    );
+    return {
+      state: state?.publishingState ?? 'PAUSED',
+      pausedAt: state?.publishingPausedAt ?? null,
+      pausedBy: state?.publishingPausedById ?? null,
+      reason: state?.publishingPauseReason ?? null,
+    };
+  }
+
+  @Get('/publishing/state')
+  async getPublishingState(@GetOrgFromRequest() org: Organization) {
+    Sentry.metrics.count('public_api-request', 1);
+    const state = await this._postsService.getPublishingState(org.id);
+    return {
+      state: state?.publishingState ?? 'ACTIVE',
+      pausedAt: state?.publishingPausedAt ?? null,
+      pausedBy: state?.publishingPausedById ?? null,
+      reason: state?.publishingPauseReason ?? null,
+    };
   }
 
   @Get('/integration-settings/:id')

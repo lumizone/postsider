@@ -14,7 +14,8 @@ export type PostListStateFilter =
   | 'draft'
   | 'published'
   | 'failed'
-  | 'approval';
+  | 'approval'
+  | 'held';
 
 export class GetPostsListDto {
   @IsOptional()
@@ -35,6 +36,6 @@ export class GetPostsListDto {
   customer?: string;
 
   @IsOptional()
-  @IsIn(['all', 'scheduled', 'draft', 'published', 'failed', 'approval'])
+  @IsIn(['all', 'scheduled', 'draft', 'published', 'failed', 'approval', 'held'])
   state?: PostListStateFilter = 'all';
 }

@@ -770,6 +770,51 @@ export class FacebookProvider extends SocialAbstract implements SocialProvider {
     );
   }
 
+  // Metrics verified against the live Graph API on 2026-08-22. Keep this list
+  // in sync when Meta retires one — but the per-metric fallback below means a
+  // retirement degrades the numbers instead of zeroing them.
+  private static readonly POST_INSIGHT_METRICS = [
+    'post_reactions_by_type_total',
+    'post_clicks',
+    'post_clicks_by_type',
+    'post_activity_by_action_type',
+    'post_video_views',
+  ];
+
+  private async fetchPostInsights(
+    postId: string,
+    accessToken: string
+  ): Promise<any[]> {
+    const url = (metrics: string) =>
+      `https://graph.facebook.com/v20.0/${postId}/insights?metric=${metrics}&access_token=${accessToken}`;
+
+    try {
+      const { data } = await (
+        await this.fetch(url(FacebookProvider.POST_INSIGHT_METRICS.join(',')))
+      ).json();
+      return data ?? [];
+    } catch (err) {
+      console.error(
+        `[facebook-analytics] batch insights call failed for ${postId}, retrying per metric`,
+        err
+      );
+    }
+
+    const collected: any[] = [];
+    for (const metric of FacebookProvider.POST_INSIGHT_METRICS) {
+      try {
+        const { data } = await (await this.fetch(url(metric))).json();
+        if (data?.length) {
+          collected.push(...data);
+        }
+      } catch {
+        // This one metric is unavailable (retired, or not applicable to this
+        // post type) — keep the rest rather than losing the whole post.
+      }
+    }
+    return collected;
+  }
+
   async postAnalytics(
     integrationId: string,
     accessToken: string,
@@ -779,12 +824,18 @@ export class FacebookProvider extends SocialAbstract implements SocialProvider {
     const today = dayjs().format('YYYY-MM-DD');
 
     try {
-      // Fetch post insights from Facebook Graph API
-      const { data } = await (
-        await this.fetch(
-          `https://graph.facebook.com/v20.0/${postId}/insights?metric=post_impressions_unique,post_reactions_by_type_total,post_clicks,post_clicks_by_type&access_token=${accessToken}`
-        )
-      ).json();
+      // Fetch post insights from Facebook Graph API.
+      //
+      // `post_impressions_unique` used to be in this list and Meta now rejects
+      // it (verified live 2026-08-22: "(#100) The value must be a valid
+      // insights metric" — the whole post_impressions* family and
+      // post_engaged_users are gone). Insights are requested in ONE call, so a
+      // single retired metric failed the batch and Facebook analytics silently
+      // collected NOTHING — no engagement in the dashboard and zeroes in client
+      // PDF reports. Meta retires metrics without warning, so the request no
+      // longer trusts the list: on a batch failure each metric is retried on
+      // its own and whatever still works is kept.
+      const data = await this.fetchPostInsights(postId, accessToken);
 
       if (!data || data.length === 0) {
         return [];
@@ -800,9 +851,22 @@ export class FacebookProvider extends SocialAbstract implements SocialProvider {
         let total = '';
 
         switch (metric.name) {
-          case 'post_impressions_unique':
-            label = 'Impressions';
+          case 'post_video_views':
+            label = 'Video views';
             total = String(value);
+            break;
+          case 'post_activity_by_action_type':
+            // Object keyed by action (share, like, comment) — the closest
+            // remaining stand-in for the retired engagement metric.
+            if (typeof value === 'object') {
+              label = 'Engagement';
+              total = String(
+                Object.values(value as Record<string, number>).reduce(
+                  (sum: number, v: number) => sum + v,
+                  0
+                )
+              );
+            }
             break;
           case 'post_clicks':
             label = 'Clicks';

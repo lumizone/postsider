@@ -70,6 +70,19 @@ export interface SettingsField {
   remoteParam?: string;
   /** Only show this field when `predicate(settings)` is true. */
   showIf?: (settings: Record<string, unknown>) => boolean;
+  /**
+   * Options come from the channel's creator info rather than a static list.
+   * Required by TikTok's Content Posting API audit: the privacy options shown
+   * must be exactly `creator_info.privacy_level_options` (a private account is
+   * never offered a public option), and the field starts empty — TikTok
+   * forbids preselecting a privacy level for the user.
+   */
+  dynamicOptions?: "tiktok-privacy";
+  /**
+   * Lock the control when the creator disabled that interaction on TikTok
+   * (`duet_disabled` / `stitch_disabled` / `comment_disabled`).
+   */
+  dynamicDisabled?: "duet" | "stitch" | "comment";
 }
 
 export type MediaPolicy = "required" | "optional" | "none";
@@ -152,12 +165,16 @@ const REGISTRY: Record<string, ProviderRequirement> = {
         help: "Used as the title when posting photos.",
       },
       {
+        // No defaultValue on purpose — TikTok's audit rejects a preselected
+        // privacy level. Options are replaced with the creator's own allowed
+        // list at render time (see `dynamicOptions`); PRIVACY_LEVELS is only
+        // the label source for them.
         key: "privacy_level",
-        label: "Who can see this video?",
+        label: "Who can see this post?",
         type: "select",
         required: true,
-        defaultValue: "PUBLIC_TO_EVERYONE",
         options: PRIVACY_LEVELS,
+        dynamicOptions: "tiktok-privacy",
       },
       {
         key: "content_posting_method",
@@ -181,9 +198,27 @@ const REGISTRY: Record<string, ProviderRequirement> = {
           { value: "no", label: "No" },
         ],
       },
-      { key: "comment", label: "Allow comments", type: "checkbox", defaultValue: true },
-      { key: "duet", label: "Allow duet", type: "checkbox", defaultValue: false },
-      { key: "stitch", label: "Allow stitch", type: "checkbox", defaultValue: false },
+      {
+        key: "comment",
+        label: "Allow comments",
+        type: "checkbox",
+        defaultValue: true,
+        dynamicDisabled: "comment",
+      },
+      {
+        key: "duet",
+        label: "Allow duet",
+        type: "checkbox",
+        defaultValue: false,
+        dynamicDisabled: "duet",
+      },
+      {
+        key: "stitch",
+        label: "Allow stitch",
+        type: "checkbox",
+        defaultValue: false,
+        dynamicDisabled: "stitch",
+      },
       {
         key: "video_made_with_ai",
         label: "Video made with AI",
@@ -203,7 +238,7 @@ const REGISTRY: Record<string, ProviderRequirement> = {
         defaultValue: false,
       },
     ],
-    validate: ({ media }) => {
+    validate: ({ media, settings }) => {
       const problems: string[] = [];
       if (media.length === 0) {
         problems.push("Add a video or at least one photo — TikTok can't post without media.");
@@ -212,6 +247,21 @@ const REGISTRY: Record<string, ProviderRequirement> = {
       if (countVideos(media) >= 1 && media.length !== 1) {
         problems.push(
           "A video post can only contain one media item — use photos only when selecting multiple items.",
+        );
+      }
+      // TikTok content-sharing rules, enforced here because the audit checks
+      // the composer: the creator must pick a privacy level themselves, and
+      // commercial content can never be private.
+      const privacy = settings.privacy_level;
+      if (!privacy) {
+        problems.push("Choose who can see this post on TikTok.");
+      }
+      const commercial =
+        Boolean(settings.brand_content_toggle) ||
+        Boolean(settings.brand_organic_toggle);
+      if (commercial && privacy === "SELF_ONLY") {
+        problems.push(
+          "TikTok doesn't allow commercial content to be visible to you only — pick a wider audience or turn the brand options off.",
         );
       }
       return problems;

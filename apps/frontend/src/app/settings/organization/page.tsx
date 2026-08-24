@@ -15,6 +15,10 @@ import {
 import { uploadMedia, backendMediaToUrl } from "@/lib/media-api";
 import { useAuth } from "@/lib/auth-context";
 import { useT } from "@/lib/i18n";
+import {
+  PublishingPauseControl,
+  usePublishingState,
+} from "@/components/publishing-pause";
 
 // Falls back to a short list on runtimes without Intl.supportedValuesOf
 // (older browsers) rather than hand-maintaining every IANA zone — mirrors
@@ -30,6 +34,15 @@ export default function OrganizationSettingsPage() {
   const t = useT();
   const { user, refresh } = useAuth();
   const canManage = user?.role === "ADMIN" || user?.role === "SUPERADMIN";
+  const isOwner = user?.role === "SUPERADMIN";
+
+  // Emergency Pause (kill switch) — shown as a card here so the owner can stop
+  // all publishing from Settings. The dashboard banner (publishing-pause.tsx)
+  // is the always-visible signal when it's on.
+  const {
+    state: publishingState,
+    refresh: refreshPublishingState,
+  } = usePublishingState();
 
   const zoneOptions = useMemo<string[]>(() => {
     try {
@@ -320,6 +333,42 @@ export default function OrganizationSettingsPage() {
               </span>
             </label>
             <span className={s.hint}>{t("settingsOrganization.agencyModeHint")}</span>
+          </div>
+        </Card>
+      )}
+
+      {isOwner && (
+        <Card
+          title={t("publishing.pauseTitle")}
+          subtitle={t("publishing.pauseSettingsSubtitle")}
+        >
+          <div className={s.field} style={{ marginBottom: 0 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 16,
+                flexWrap: "wrap",
+              }}
+            >
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>
+                  {publishingState?.state === "PAUSED"
+                    ? t("publishing.pausedBanner")
+                    : t("publishing.statusActive")}
+                </div>
+                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+                  {publishingState?.state === "PAUSED"
+                    ? publishingState.reason || t("publishing.pausedHint")
+                    : t("publishing.pauseHint")}
+                </div>
+              </div>
+              <PublishingPauseControl
+                state={publishingState}
+                refresh={refreshPublishingState}
+              />
+            </div>
           </div>
         </Card>
       )}

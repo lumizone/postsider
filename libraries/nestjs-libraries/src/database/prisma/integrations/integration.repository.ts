@@ -565,6 +565,31 @@ export class IntegrationRepository {
     });
   }
 
+  /**
+   * Disconnecting a channel used to delete every post that belonged to it —
+   * published history included — so a reconnect (disconnect + connect) wiped
+   * weeks of scheduled content with no warning and no undo. Nothing about
+   * removing an integration means the user wanted the content gone.
+   *
+   * Instead, park everything unpublished as DRAFT: the publish workflow only
+   * acts on `QUEUE` (`post.workflow.v1.0.5.ts:90`), so a draft can never fire
+   * at its old scheduled time, and the user keeps the text/media to re-assign
+   * to the reconnected channel. PUBLISHED rows are left untouched as history.
+   */
+  parkPostsForDeletedChannel(org: string, id: string) {
+    return this._posts.model.post.updateMany({
+      where: {
+        organizationId: org,
+        integrationId: id,
+        deletedAt: null,
+        state: { in: ['QUEUE', 'ERROR', 'APPROVAL'] },
+      },
+      data: {
+        state: 'DRAFT',
+      },
+    });
+  }
+
   deleteChannel(org: string, id: string) {
     return this._integration.model.integration.update({
       where: {
@@ -573,6 +598,16 @@ export class IntegrationRepository {
       },
       data: {
         deletedAt: new Date(),
+        // Disconnecting used to soft-delete the row and leave a WORKING access
+        // token (and refresh token) in the database indefinitely — the user
+        // revoked our access in their eyes, and we kept the keys. Drop the
+        // credentials with the channel; a later reconnect goes through
+        // `createOrUpdateIntegration`, which revives the row (`deletedAt: null`)
+        // with fresh tokens from OAuth, so nothing depends on keeping them.
+        // Name/picture/internalId stay so past posts remain attributable.
+        token: '',
+        refreshToken: null,
+        tokenExpiration: null,
       },
     });
   }

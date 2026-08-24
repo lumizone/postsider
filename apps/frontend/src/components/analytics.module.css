@@ -11,11 +11,12 @@
   align-items: stretch;
   gap: 24px;
   width: 100%;
+  min-width: 0;
 }
 
 .header {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 24px;
   flex-wrap: wrap;
@@ -36,8 +37,8 @@
 }
 
 .h1 {
-  font-size: 38px;
-  font-weight: 600;
+  font-size: 42px;
+  font-weight: 700;
   letter-spacing: -0.04em;
 }
 
@@ -55,19 +56,94 @@
   flex-wrap: wrap;
 }
 
-.refreshBtn {
-  padding: 6px 12px;
-  border: 1px solid var(--border, #e0e0e0);
+.actionBtn {
+  height: 32px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line-soft);
   background: var(--bg, #fff);
   color: var(--fg, #000);
-  border-radius: 6px;
+  border-radius: var(--radius-pill);
   font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  transition: opacity 0.15s;
+  transition: background 140ms var(--ease), border-color 140ms var(--ease);
 }
-.refreshBtn:hover { opacity: 0.7; }
-.refreshBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+.actionBtn:hover { background: rgba(0, 0, 0, 0.04); }
+.actionBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Custom date range */
+.customWrap {
+  position: relative;
+}
+
+.customBtn {
+  height: 32px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--line-soft);
+  background: var(--bg);
+  color: var(--fg);
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  transition: background 140ms var(--ease), border-color 140ms var(--ease);
+}
+
+.customBtn:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.customBtnActive {
+  background: var(--fg);
+  color: var(--bg);
+  border-color: var(--fg);
+}
+
+.customBtnActive:hover {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.customMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  padding: 12px;
+  background: var(--bg);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.customLabel {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.customInput {
+  padding: 6px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 13px;
+}
 
 /* segmented control */
 .segmented {
@@ -117,6 +193,7 @@
 }
 
 .kpi {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -176,6 +253,225 @@
 .kpiHint {
   font-size: 12px;
   color: var(--muted);
+}
+
+/* Impressions is the primary card — a very subtle purple accent. */
+.kpiAccent {
+  border-color: rgba(139, 92, 246, 0.35);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.05);
+}
+
+.kpiAccent.kpiActive {
+  border-color: var(--fg);
+  box-shadow: none;
+}
+
+.kpiSpark {
+  margin-top: 4px;
+  display: block;
+  line-height: 0;
+}
+
+.sparkline {
+  display: block;
+}
+
+/* Info tooltip (the little "i"). Anchored to the KPI card (nearest positioned
+ * ancestor), so it never overflows the viewport — even on the rightmost card. */
+.infoTip {
+  display: inline-flex;
+  margin-left: 4px;
+  color: var(--muted);
+  cursor: help;
+  vertical-align: middle;
+}
+
+.infoTipText {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 200px;
+  padding: 8px 10px;
+  background: var(--fg);
+  color: var(--bg);
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.4;
+  text-transform: none;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms var(--ease);
+  z-index: 40;
+}
+
+.infoTip:hover .infoTipText,
+.infoTip:focus .infoTipText {
+  opacity: 1;
+}
+
+/* Growth badges (green / red / neutral). */
+.growthBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.growthUp {
+  background: rgba(22, 163, 74, 0.1);
+  color: #15803d;
+}
+
+.growthDown {
+  background: rgba(220, 38, 38, 0.08);
+  color: #b91c1c;
+}
+
+.growthNeutral {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--muted);
+}
+
+/* Series breakdown table. */
+.tableWrap {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.thNum {
+  text-align: right;
+}
+
+.tr {
+  border-bottom: 1px solid var(--line-soft);
+  transition: background 120ms var(--ease);
+}
+
+.tr:last-child {
+  border-bottom: none;
+}
+
+.tr:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.td {
+  padding: 12px;
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+.tdSeries {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 100%;
+}
+
+.tdSeriesText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tdTitle {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tdMeta {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tdNum {
+  text-align: right;
+}
+
+.tdValue {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* Skeleton + state cards. */
+.skeletonWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.skeleton,
+.skeletonTall {
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.04) 25%, rgba(0, 0, 0, 0.07) 50%, rgba(0, 0, 0, 0.04) 75%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.4s ease-in-out infinite;
+  border: 1px solid transparent;
+}
+
+.skeletonTall {
+  min-height: 240px;
+}
+
+@keyframes skeletonShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.stateCard {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  padding: 40px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.stateTitle {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.stateDesc {
+  font-size: 13px;
+  color: var(--muted);
+  max-width: 480px;
 }
 
 /* Chart card */

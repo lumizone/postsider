@@ -2,7 +2,222 @@
 
 The PostSider product app (NestJS backend + Next 15/React 19 frontend + Temporal orchestrator, pnpm monorepo, Postiz fork). **This is now the single open-source repo** (AGPL-3.0) for both our managed hosting (`app.postsider.com`) and self-hosting via Docker, switched entirely by env vars (see "Run modes" below).
 
+## Zasada produktowa (nie negocjowalna)
+
+PostSider jest produkcyjnym SaaS-em z klientami. **Publikacja musi działać w pełni
+automatycznie, na publiczne konta, bez żadnego ręcznego kroku po stronie użytkownika.**
+Tryby wymagające dokliknięcia (szkice/inbox TikToka `content_posting_method: UPLOAD`,
+posty prywatne, „opublikuj sam w apce") NIE są rozwiązaniem i nie wolno ich proponować
+ani wdrażać jako obejścia. Gdy blokuje platforma (audyt/review), jedyna droga to zdjęcie
+blokady u źródła — złożenie audytu, materiały do review, zgodność kodu z wymaganiami.
+
 ## Status
+
+- **Powiadomienia w aplikacji: dzwonek, tłumaczenia, czyszczenie (2026-08-22, WDROŻONE).**
+  Migracja `20260822120000_notification_event_key` zastosowana na prodzie 14:16.
+  - **Backend zapisywał powiadomienia od zawsze, ale UI ich nie miało.** W bazie
+    leżały **102 wpisy, których nikt nigdy nie zobaczył** — w tym alert
+    „reconnect YouTube" z 21.08. Jedynym kanałem dostarczania był mail, a domena
+    w Resend była niezweryfikowana od czerwca, więc komunikacja z użytkownikiem
+    faktycznie nie istniała. Doszedł `notifications-bell.tsx` (stopka sidebara
+    + pasek mobilny), licznik nieprzeczytanych odpytywany co 60 s, lista przy
+    otwarciu. **Uwaga: `GET /notifications/list` oznacza wszystko jako
+    przeczytane po stronie serwera** — dlatego polling pyta wyłącznie o licznik,
+    inaczej plakietka kasowałaby się w tle.
+  - **Panel był przycinany.** 320 px panelu w kolumnie sidebara szerokiej
+    260 px, zakotwiczony do prawej → wychodził poza lewą krawędź okna. Teraz
+    `createPortal` na `<body>` + pozycja liczona z `getBoundingClientRect`
+    i dociskana do widoku (`placePanel`), otwieranie w górę lub w dół zależnie
+    od miejsca. Wykrywanie kliknięcia poza panelem musiało objąć też portal —
+    bez tego każde kliknięcie w listę ją zamykało.
+  - **Tłumaczenia.** `Notifications.eventKey` + `eventParams` (JSON) obok
+    dotychczasowego `content`. Backend nadal renderuje angielski `content` (idzie
+    mailem i jest awaryjny dla starych wierszy), a panel renderuje 8 zdarzeń
+    z i18n w języku klienta. Mapa `eventKey → MessageKey` jest **wypisana
+    jawnie**, żeby TypeScript pilnował istnienia komunikatów.
+  - **Martwy link naprawiony.** Alert o reconnectcie wysyłał klienta na
+    `${FRONTEND_URL}/launches` — trasa z Postiza, **w PostSiderze nie istnieje**,
+    czyli 404 na jedynej instrukcji naprawy. Teraz `/calendar`. Komunikat podaje
+    też nazwę kanału, nie samo `providerIdentifier` (klient agencyjny z trzema
+    kontami YouTube nie wiedział, które padło). Kolumna `link` była w modelu od
+    początku i **nikt jej nigdy nie zapisywał** — teraz wypełniana, a dzwonek
+    renderuje przycisk „Napraw"; linki spoza naszej domeny są odrzucane
+    (`toRelative`).
+  - **`DELETE /notifications`** — miękkie czyszczenie listy (org-wide, bo lista
+    jest wspólna dla organizacji). Przy okazji `getNotifications` filtruje
+    `deletedAt: null`, tak jak licznik (wcześniej rozjazd).
+
+- **Analityka Facebooka nie zbierała się WCALE (2026-08-22, WDROŻONE).**
+  W logach `(#100) The value must be a valid insights metric`. Sprawdzone na
+  żywym tokenie, metryka po metryce: **`post_impressions_unique`,
+  `post_impressions`, `post_impressions_organic` i `post_engaged_users` są przez
+  Metę wycofane**; działają `post_reactions_by_type_total`, `post_clicks`,
+  `post_clicks_by_type`, `post_activity_by_action_type`, `post_video_views`.
+  Wszystkie leciały w JEDNYM zapytaniu, więc jedna wycofana wywalała całość →
+  zero zaangażowania w panelu i zera w raportach PDF klientów. Fix:
+  `POST_INSIGHT_METRICS` tylko ze zweryfikowanych + `fetchPostInsights()` przy
+  odrzuceniu paczki pyta o każdą osobno i zachowuje to, co działa — następne
+  wycofanie przez Metę pogorszy liczby zamiast je wyzerować.
+
+- **Odświeżanie tokenów: audyt + sprzątanie (2026-08-22, WDROŻONE).**
+  - Rozłączony kanał **nie przestawał odświeżać tokenów** — `refreshTokenWorkflow`
+    jest per kanał i sam się zapętla, a nic go nie zatrzymywało. Na prodzie
+    biegło 18 workflowów przy 10 żywych kanałach: 7 dla usuniętych, **4 dla
+    integracji nieistniejących już w bazie**. `deleteChannel` terminuje teraz
+    `refresh_<id>`; 11 sierot zatrzymanych ręcznie, zostało 7 (potem 8 po
+    reconnectcie YT).
+  - `deleteChannel` czyści też `token`/`refreshToken`/`tokenExpiration` —
+    wcześniej rozłączony kanał zostawiał w bazie **ważny token**. Reconnect
+    ożywia wiersz świeżymi tokenami, więc nic na tym nie traci.
+  - Trasa enterprise `/delete-channel` nadal kasowała posty (fire-and-forget,
+    błędy połykane) — usunięte, idzie przez `deleteChannel` jak reszta.
+  - **Dowód na żywo, że auto-odświeżanie działa:** YouTube po reconnectcie
+    odświeżył się sam o 14:21:19 (plan 14:21:18), wygaśnięcie 14:26 → 15:21,
+    workflow ustawił kolejny timer 3238 s. Token dostępowy Google **zawsze** żyje
+    godzinę — to norma platformy, nie awaria; użytkownik podłącza kanał raz.
+
+- **Awaria mediów + reconnect + kasowanie kanału (2026-08-20). WDROŻONE 2026-08-21/22.**
+  Working tree na branchu `fix/publish-pipeline-and-report-bugs`.
+  - **Publikacje X/Instagram padały nie z winy PostSidera.** `unattended-upgrade`
+    06:55 UTC podbił nginx hosta do `1.28.3-2ubuntu1.9`, w której `rewrite ... $1`
+    gubi ostatni znak URI — `storage.postsider.com` zwracał 404 na każdy plik,
+    więc X i Meta nie mogły pobrać mediów („Unknown Error", „Instagram media not
+    ready", „Media fetch failed"). Naprawione host-side (szczegóły i zasada
+    „żadnych `rewrite $1` w nginx" w `~/CLAUDE.md`). **Wniosek dla kodu: komunikat
+    providera o mediach zawsze warto zweryfikować `curl`em na publiczny URL —
+    ścieżka storage jest poza aplikacją.**
+  - **Reconnect kanału był całkowicie zepsuty (409 `{"msg":"Channel not found"}`).**
+    Dashboard wysyła `?refresh=<Integration.id>`, backend wkładał tę wartość do
+    Redisa 1:1, a `reConnect(id, requiredId, token)` porównuje `requiredId` z
+    idami zwracanymi przez `pages()` platformy, czyli z `internalId`. Nic nigdy
+    nie pasowało — YouTube „Channel not found", i tak samo każdy inny provider
+    z `reConnect` (to dlatego reconnect Facebooka tworzył NOWY wiersz zamiast
+    odświeżyć istniejący). Fix: `resolveRefreshInternalId()` w
+    `integrations.controller.ts` tłumaczy id org-scoped na `internalId`
+    (nieznana wartość przechodzi bez zmian, więc callerzy podający już
+    `internalId` działają dalej).
+  - **Odłączenie kanału kasowało wszystkie jego posty — łącznie z historią
+    PUBLISHED.** Reconnect Facebooka 19.08 zabrał tak 10 zaplanowanych postów.
+    `IntegrationService.deleteChannel` parkuje teraz nieopublikowane posty
+    (`QUEUE`/`ERROR`/`APPROVAL` → `DRAFT`) zamiast je kasować — workflow
+    publikuje wyłącznie ze stanu `QUEUE`, więc szkic nie wystrzeli, a treść
+    zostaje do przepięcia. Parkowanie siedzi w serwisie, więc łapie wszystkie
+    ścieżki (dashboard, public API, „disconnect all" w ustawieniach). Teksty
+    potwierdzeń en/pl poprawione (już nie straszą kasowaniem postów).
+    **Uwaga: to zmiana udokumentowanego zachowania public API**
+    (`DELETE /integrations/:id` już nie kasuje postów — od tego jest
+    `DELETE /posts/:group`).
+  - **Reconnect KASOWAŁ refresh token (2026-08-21).** W `no.auth.integrations.controller.ts`
+    ścieżka reconnectu robiła `res({ ...newAuth, refreshToken: body.refresh })`.
+    `reConnect()` nie zwraca żadnych poświadczeń (tylko rozstrzyga, którą stronę/kanał
+    wybrano), a `body.refresh` to flaga od klienta („to jest reconnect"), nie token —
+    więc każdy reconnect zapisywał **pusty** refresh token. Kanał działał do wygaśnięcia
+    access tokena, potem umierał na `No refresh token is set.`, a jedyne „lekarstwo"
+    (reconnect) kasowało go ponownie. Teraz bierzemy `auth.refreshToken` + `auth.expiresIn`
+    z wymiany OAuth. **Ofiary na produkcji:** YouTube `cmsj94tzh…` (connect 08-07, padł
+    08-20 18:00) i Discord „Local Waifu" `cmskdtwve…` (08-08, `refreshNeeded` od 15.08 —
+    to NIE było odrzucenie tokenu przez Discorda, jak wcześniej zapisano). Oba wymagają
+    reconnectu **po** deployu tej poprawki, inaczej znowu zapiszą pusty token.
+  - **AI (Post Checker + rewrite) przeniesione na PLATFORMOWY DeepSeek (2026-08-21).**
+    Wcześniej klucz DeepSeeka siedział tylko jako BYO jednej organizacji
+    (`ProviderCredentials`, provider `post-checker`, model `deepseek-v4-flash`,
+    zapisany 29.06) — czyli każdy nowy klient dostawał 409 „No AI key configured".
+    Ten sam klucz wpisany do `.env.production` jako `AI_PROVIDER=deepseek` /
+    `AI_API_KEY` / `AI_MODEL=deepseek-v4-flash`; kontener przecreowany z
+    `--env-file`. Zweryfikowane na żywo: `isPlatformAiEnabled() = true`,
+    provider `deepseek`. Limity: `pricing.ts ai_uses_per_month` (FREE 0,
+    STANDARD 50, TEAM 150, PRO 500, ULTIMATE/SAMURAI 1000). Backup env:
+    `.env.production.bak-pre-ai-*`. **Uwaga: `deepseek-v4-flash` to model
+    rozumujący** — zużywa tokeny na `reasoning_content` przed treścią;
+    sprawdzone realnym wywołaniem, że limity `CHECK_MAX_TOKENS=400` /
+    `REWRITE_MAX_TOKENS=600` wystarczają (`finish_reason: stop`), ale przy
+    dłuższych promptach to pierwsze miejsce do podniesienia.
+    `OpenaiService` jest wstrzykiwany w modułach, ale **nigdzie nie wywoływany**
+    — martwe okablowanie po Postizie, cała AI leci przez `PostCheckerService`.
+  - **TikTok `video.list` przywrócony** po zatwierdzeniu scope (wpis niżej).
+  - **Kompozer TikToka przerobiony pod audyt Content Posting API.** App „Live"
+    nie zdejmuje blokady `unaudited_client_can_only_post_to_private_accounts` —
+    sprawdzone na żywym tokenie: błąd leci również przy `SELF_ONLY`, bo dotyczy
+    *konta* (publiczne), nie `privacy_level`. Audyt ocenia UI, więc doszło:
+    `TiktokProvider.creatorInfo()` (`@Tool`, wołane przez `/integrations/function`)
+    → opcje prywatności wyłącznie z `privacy_level_options`, **nic nie jest
+    wstępnie zaznaczone** (post bez wyboru nie przejdzie walidacji), duet/stitch/
+    komentarze wyszarzone wg `*_disabled`, treść komercyjna nie może być
+    `SELF_ONLY`, widoczne Music Usage Confirmation + Branded Content Policy
+    i etykieta „Promotional content"/„Paid partnership". Nowe pola
+    `dynamicOptions`/`dynamicDisabled` w `SettingsField`. Klucze i18n
+    `createPost.tiktok.*` (en+pl). **Zostało po stronie właściciela:** złożyć
+    wniosek o audyt Direct Post + demo video, zweryfikować domenę
+    `storage.postsider.com` dla PULL_FROM_URL w portalu.
+  - **Ręczne naprawy danych na prodzie (SQL).** 8 postów FB przepiętych ze
+    zmarłego kanału `cmsj634320003tj2hu9ehyjt0` na żywy
+    `cmszfdi8x000drv2kwmfk9lhy` — publikują poprawnie od 21.08. 6 postów X/IG/FB,
+    które padły przez awarię nginx, przekolejkowanych na 27–28.08.
+    **Uwaga na przyszłość: sam `UPDATE` stanu na `QUEUE` NIE wystarczy** —
+    publikacją steruje workflow Temporala, a `missingPostWorkflow` łapie
+    wyłącznie posty z datą w PRZESZŁOŚCI. Post z przyszłą datą trzeba uzbroić
+    ręcznie: `postWorkflowV105`, `workflowId: post_<id>`, `taskQueue: 'main'`,
+    args `{ taskQueue: <provider>, postId, organizationId }` + atrybuty
+    `postId`/`organizationId`, `TERMINATE_EXISTING`.
+
+- **Cicha-awaria bug hunt: 9 defektów znalezionych przez audyt DZIAŁAJĄCEJ produkcji
+  względem kodu (2026-08-19).** Commit `2c7c729` na branchu
+  `fix/publish-pipeline-and-report-bugs` (15 plików, **NIE zmergowany do `main`,
+  NIE wypchnięty na origin**). Zdeployowane 02:45 przez `sudo ./deploy.sh`,
+  zweryfikowane na żywo: 12/12 kontenerów, 32/32 workerów, 168/168 testów,
+  build backend+orchestrator+frontend `tsc` czyste. Wszystkie 9 było CICHYCH —
+  kontenery healthy, endpointy 200, monitoring milczał.
+  - **Alias `@postsider/*` w DYNAMICZNYM imporcie nie jest przepisywany przez
+    `nest build`** (statyczne owszem — emitują `require("../../../../libraries/…")`).
+    `post.activity.ts` + `webhooks.controller.ts` importowały tak
+    `ssrf.safe.dispatcher` → `Cannot find module` w runtime, 18×/24h. Posty
+    publikowały się, ale `sendWebhooks` padał ZAWSZE i zabierał ze sobą resztę
+    workflow — **`internalPlugs`/`globalPlugs` nigdy się nie wykonywały**
+    (6 workflowów Failed w Temporalu). Fix: specyfikatory relatywne + skip
+    importu gdy brak webhooków. **Uwaga na przyszłość: nigdy alias w `import()`.**
+  - **Publikacja na usunięty kanał.** `deleteChannel` robi tylko soft-delete
+    (`deletedAt`) i ZOSTAWIA ważny token — nie ustawia `disabled`/`refreshNeeded`.
+    Workflow nie sprawdzał `deletedAt`, więc ocalały post z QUEUE przechodził przez
+    guardy i publikował na konto, które user odłączył. Dodany guard fail-closed
+    (stan `Channel deleted`).
+  - **Sweep kasowania postów przy usuwaniu kanału był fire-and-forget**
+    (`.catch(()=>{})`, bez `await`) w OBU ścieżkach (dashboard + public API) —
+    request kończył się zanim kasowanie dobiegło, błędy połykane. Dowód na żywej
+    bazie: 8 postów QUEUE przeżyło usunięcie kanału. Teraz `Promise.allSettled`
+    + await + log.
+  - **`refreshToken()` w facebook/instagram to były puste stuby** zwracające
+    `accessToken: ''` → `RefreshIntegrationService` czytał to jako revoke i
+    ustawiał `refreshNeeded`, blokując ZDROWE kanały Meta ~60 dni po connect.
+    Oba re-mintują teraz przez `fb_exchange_token`. **Instagram: token w bazie to
+    kompozyt `pageToken___userToken`** — podmieniana jest tylko połówka user,
+    page zostaje (gołe nadpisanie rozwaliłoby każdy `token.split('___')`).
+    `refreshToken()` dostał opcjonalny 2. arg `integration`.
+  - **PDF raportu padał na realnych danych.** `pdf-lib` ze standardowymi fontami
+    to WinAnsi — `drawText` ORAZ `widthOfTextAtSize` rzucają na wszystkim spoza
+    CP1252. Emoji w treści posta i polskie znaki w nazwie org/klienta = 500 na
+    `/report/customers/:id/pdf`. Dodany `toWinAnsi()` (transliteracja ż→z, ł→l;
+    reszta wycinana) na każdej ścieżce rysowania + test regresyjny (stary spec
+    był ASCII-only, dlatego to przeszło). **Cyrylica/CJK są wycinane — pełny
+    rendering wymaga `@pdf-lib/fontkit` + plik TTF, nie zrobione.**
+  - **Raport zawyżał posty per kanał** — `perChannel` kluczowane po `name`
+    zamiast `id`. Jedno konto pod tą samą nazwą na kilku platformach (u nas 5×
+    "Local Waifu") → każdy wiersz pokazywał sumę wszystkich. Bratni
+    `agency-overview.service.ts` kluczuje poprawnie po `id`.
+  - **Cron analytics nigdy by nie dokończył przebiegu** — workflow deklaruje
+    `heartbeatTimeout: '10 minute'`, aktywność NIGDY nie wołała heartbeat
+    (jedyne użycie `heartbeatTimeout` w repo, zero wywołań). Duża org = timeout,
+    3 retry w błoto, raporty z zerowym engagementem. Dodany
+    `Context.current().heartbeat()`.
+  - **`resend.provider` maskował każdą awarię maila.** SDK Resenda NIE rzuca —
+    resolve'uje `{ data: null, error }`. Provider zwracał to jako sukces i
+    dodatkowo połykał prawdziwe wyjątki w `{ sent: false }`, więc cała maszyneria
+    retry/throw w `email.service.ts` (zbudowana po audycie 07.2026 właśnie po to)
+    była omijana. Teraz rzuca, jak `node.mailer`.
+  - **Reconnect w dashboardzie prowadził na 404.** `calendar.tsx` sprawdzał
+    `res.url` PRZED `res.oauthUrl`, a `url` to zawsze state-token (nie link) →
+    `window.location.href = "aB3dEfGhIj"`. `addChannelForPlatform` sprawdza
+    poprawnie. Przy okazji reconnect nie pokazywał userowi ŻADNEGO błędu (tylko
+    `console.error`) — dodane `channelError` + obsługa 402.
 
 - **Agency/Overview rework + client reports (PDF + engagement) + agency-mode flag (2026-08-18).**
   All built + deployed via `sudo ./deploy.sh` (health-gated, full build — new
@@ -160,14 +375,21 @@ The PostSider product app (NestJS backend + Next 15/React 19 frontend + Temporal
   after the release. Offsite backup and a full DB+MinIO restore still require
   manual verification. The current VPS backup helper backs up PostgreSQL, not
   the MinIO media volume.
-- **TikTok `video.list` temporarily disabled (2026-08-14).** TikTok rejected
-  OAuth because the production app does not yet have this scope approved.
-  `tiktok.provider.ts` requests only `user.info.basic`, `video.publish`,
-  `video.upload`, `user.info.profile`, and `user.info.stats`; video-level
-  analytics and missing-content lookup return no data while it is absent.
-  After TikTok for Developers approves `video.list`, add it back to the
-  provider's `scopes` array and remove the no-`video.list` guards before
-  deploying.
+- **TikTok `video.list` re-enabled (2026-08-20).** TikTok for Developers
+  approved the scope, so the 2026-08-14 workaround is reverted:
+  `tiktok.provider.ts` requests all 6 scopes again (`user.info.basic`,
+  `video.publish`, `video.upload`, `user.info.profile`, `user.info.stats`,
+  `video.list`) and the three `!this.scopes.includes('video.list')` guards are
+  gone (`analytics()` video aggregation, `missing()`, `postAnalytics()`).
+  Build clean, 168/168 tests green. **Existing TikTok integrations need a
+  reconnect** — their stored tokens were granted before approval, so any
+  `/v2/video/list/` call on them returns `scope_not_authorized`; it is caught by
+  the surrounding try/catch (empty analytics + a console error, no publish
+  impact), but video-level analytics stay empty until the user re-authorizes.
+  `refreshToken()` does not call `checkScopes`, so old integrations keep
+  publishing; only connect/reconnect enforces the full scope list.
+  - **History — temporarily disabled (2026-08-14).** TikTok rejected OAuth
+    because the production app did not have `video.list` approved yet.
 
 - **Discord own-bot connect broken by the audit fix, fixed same day (`863604c`, 2026-08-09).** Live owner report right after the audit deploy: "can't add my own bot to Discord". The audit's `checkPreviousConnections` fix was a genuine regression — OSS returned true only for CROSS-org matches, so same-org re-adds sailed through to the upsert; scoping the query to the caller's org inverted that and same-org reconnects (shared-bot → own-bot switch on the same server) 409'd. **Fix: delete `checkPreviousConnections` + service wrapper entirely** — the upsert already dedups on `organizationId_internalId`, and removal closes the leak (no probe exists to leak). Also: own-bot errors were invisible — `authenticateWithOwnBot` threw a plain Error collapsed to generic "Authentication failed", and `this.fetch()` swallows Discord's body into `ApplicationFailure.details` ('Unknown Error'). Now raw `fetch` (host fixed, guildId digits-only — no SSRF) with status-mapped `NotEnoughScopes`: 401 → "Invalid bot token — reset in Developer Portal", 404 → "bot is not a member of that server". Owner re-tested: works. 138 tests green, deployed + verified healthy.
   - **Lesson:** an org-scoped query that flips `true`/`false` semantics is NOT a drop-in for a cross-org one — trace the caller's branch before "fixing" a leak. The audit report's recommendation to "scope to current org" was applied too literally; deleting the check entirely was both the leak fix AND the behavior fix.
@@ -340,3 +562,22 @@ Cloud and self-host are the SAME build; env vars switch behavior. Helpers: `isBi
 - **Known open issues (2026-06-30 review, left OPEN by design).** (1) For upgrades from live Postiz data, run the documented preflight remap in `DEPLOYMENT.md` or `docs/PRODUCTION.md` before `migrate deploy`; otherwise migration `20260628160000` can abort on legacy `Post` rows holding `MCP`/`AUTOPOST`. Do NOT edit the applied migration (Prisma checksum). (2) `provider-env.helper.ts withCredentials` injects per-org OAuth creds via global `process.env` (mutate-then-restore), a race for two concurrent BYO self-host orgs on the same provider; cloud (platform keys set globally, so `withCredentials` short-circuits) is unaffected. Real fix: pass creds explicitly into provider calls.
 - `streakWorkflow` / `digestEmailWorkflow` null-guard (org null for orphaned/deleted orgs) was **fixed this session** (`if (!org) ...` guards added).
 - MCP self-host base URL: the public API is served under `/api` behind nginx, so set `POSTSIDER_API_URL=https://<domain>/api` (default `https://api.postsider.com`).
+- **`pages_video_upload` NIE ISTNIEJE.** Dwa razy w sesji 2026-08-19 przyszło zadanie
+  "dodaj brakujący scope `pages_video_upload`, bo przez to nie działa wideo na FB".
+  Tego uprawnienia nie ma w Meta Permissions Reference ani w dokumentacji
+  `/{page-id}/videos`. Sprawdzone na żywym tokenie (`debug_token`): wszystkie 6
+  scope'ów z `facebook.provider.ts` JEST przyznanych, granularnie do tej strony,
+  rola na stronie pełna (`CREATE_CONTENT`, `MANAGE`). Prawdziwa przyczyna
+  `(#100) No permission to publish the video` to **Standard Access** — Meta blokuje
+  `/{page-id}/videos` z `published:true` dla appek bez Advanced Access, niezależnie
+  od roli testera. Dokumentacja Meta: wideo na Page wymaga `pages_manage_posts` +
+  `pages_read_engagement` + `pages_show_list`, czyli tego, co appka już ma.
+  Rozwiązanie = App Review, NIE zmiana w kodzie. Nie dodawać martwego scope'a.
+- **Latencja publikacji na Instagramie to był NASZ bug, nie API Meta.** Pętla
+  pollingu kontenera robiła `await timer(30000)` na KOŃCU każdej iteracji, także
+  tej, w której status był już `FINISHED` — a zdjęcie jest gotowe w 1-3 s. Karuzela
+  przechodzi przez dwie takie pętle = ~60 s martwego czekania. Zmierzone na
+  produkcji: **IG 70-105 s vs X 3-6 s** od zaplanowanej godziny. Zastąpione
+  wspólnym `waitForContainer()` (wyjście od razu po zmianie statusu, interwał 2 s
+  z narastaniem do 30 s, budżet ~20 min zachowany na wideo).
+  **Niezacommitowane i NIEZDEPLOYOWANE** — build+testy przechodzą.

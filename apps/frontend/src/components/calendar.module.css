@@ -3,6 +3,7 @@
   align-items: stretch;
   gap: 24px;
   width: 100%;
+  min-width: 0;
 }
 
 .root {
@@ -29,8 +30,8 @@
 }
 
 .titleMain {
-  font-size: 38px;
-  font-weight: 600;
+  font-size: 42px;
+  font-weight: 700;
   letter-spacing: -0.04em;
 }
 
@@ -44,8 +45,154 @@
 .headerRight {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
+}
+
+/* Toolbar: search + filters + timezone — very light, never dominates the grid. */
+.searchWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  transition: border-color 140ms var(--ease), box-shadow 140ms var(--ease);
+}
+
+.searchWrap:focus-within {
+  border-color: rgba(0, 0, 0, 0.25);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.04);
+}
+
+.searchIcon {
+  width: 15px;
+  height: 15px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.searchInput {
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--fg);
+  font-size: 13px;
+  width: 150px;
+  letter-spacing: -0.005em;
+}
+
+.searchInput::placeholder {
+  color: var(--muted);
+}
+
+.searchKbd {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  border: 1px solid var(--line-soft);
+  border-radius: 5px;
+  padding: 1px 5px;
+  line-height: 1.4;
+  font-family: var(--font-sans);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.filterWrap {
+  position: relative;
+}
+
+.filterBtn {
+  height: 34px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  transition: background 140ms var(--ease), border-color 140ms var(--ease);
+}
+
+.filterBtn:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.filterBtnActive {
+  background: var(--fg);
+  color: var(--bg);
+  border-color: var(--fg);
+}
+
+.filterBtnActive:hover {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.filterIcon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.filterMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  min-width: 180px;
+  padding: 4px;
+  background: var(--bg);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.filterOption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms var(--ease);
+}
+
+.filterOption:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.filterOptionActive {
+  background: rgba(0, 0, 0, 0.06);
+  font-weight: 600;
+}
+
+.tzLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+  padding: 0 2px;
+  white-space: nowrap;
 }
 
 /* Apple-style segmented control */
@@ -185,8 +332,8 @@
   background: var(--bg);
   border-right: 1px solid var(--line-soft);
   border-bottom: 1px solid var(--line-soft);
-  padding: 10px 12px 12px;
-  min-height: 116px;
+  padding: 12px 14px 14px;
+  min-height: 140px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -204,6 +351,32 @@
 
 .cell:hover {
   background: rgba(0, 0, 0, 0.025);
+}
+
+.cellAdd {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(0.9);
+  transition: opacity 120ms var(--ease), transform 120ms var(--ease);
+  pointer-events: none;
+}
+
+.cell:hover .cellAdd {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .cell:focus-visible {
@@ -275,13 +448,13 @@
 }
 
 .event {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--fg);
   background: var(--bg);
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-sm);
-  padding: 3px 6px 3px 6px;
+  padding: 4px 7px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -667,7 +840,102 @@
   margin-top: 2px;
 }
 
+/* SUMMARY BAR */
+.summaryBar {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  overflow: hidden;
+}
+
+.summaryItem {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+}
+
+.summaryItemBorder {
+  border-left: 1px solid var(--line-soft);
+}
+
+.summaryIcon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--fg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.summaryValue {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.summaryValueAccent {
+  color: #d97706;
+}
+
+.summaryLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0.01em;
+}
+
 /* RESPONSIVE (narrow screens) */
+@media (max-width: 640px) {
+  /* Compact month grid: 7 columns don't fit event cards on a phone, so cells
+   * shrink to a tap target showing the day number + a post-count, and tapping
+   * opens the DayPopup with the full list (standard mobile calendar UX). */
+  .weekdays {
+    padding: 0 2px;
+  }
+
+  .weekday {
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    padding: 0 0 6px;
+  }
+
+  .cell {
+    min-height: 52px;
+    padding: 6px 5px;
+    gap: 2px;
+  }
+
+  .dayNumber {
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    font-size: 12px;
+  }
+
+  .eventCount {
+    font-size: 10px;
+  }
+
+  .event,
+  .eventMore {
+    display: none;
+  }
+
+  .cellAdd {
+    display: none;
+  }
+}
+
 @media (max-width: 900px) {
   /* Stack the channels panel above the calendar. */
   .shell {
@@ -694,5 +962,18 @@
   .yearGrid {
     grid-template-columns: repeat(2, 1fr);
     gap: 16px;
+  }
+
+  .summaryBar {
+    flex-wrap: wrap;
+  }
+
+  .summaryItem {
+    min-width: 50%;
+    flex-basis: 50%;
+  }
+
+  .summaryItemBorder:nth-child(3) {
+    border-left: none;
   }
 }

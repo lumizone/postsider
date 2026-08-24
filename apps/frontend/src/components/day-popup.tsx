@@ -2,10 +2,9 @@
 
 import { useEffect, useMemo } from "react";
 import styles from "./day-popup.module.css";
-import { ChannelAvatar } from "./channel-avatar";
+import { PlatformIcon } from "./platform-icon";
 import { type CalendarEvent, type Channel } from "@/lib/calendar-data";
 import { useT } from "@/lib/i18n";
-import { PostMediaThumb } from "./post-media-thumb";
 import { layoutOverlappingEvents } from "@/lib/event-lanes";
 
 interface DayPopupProps {
@@ -233,11 +232,10 @@ export function DayPopup({
                   >
                     <div className={styles.eventHead}>
                       {c ? (
-                        <ChannelAvatar channel={c} size={20} radius={6} />
+                        <PlatformIcon platform={c.platform} size={18} />
                       ) : (
                         <span className={styles.eventBadge} aria-hidden>?</span>
                       )}
-                      <PostMediaThumb media={ev.media} size={20} />
                       <span className={styles.eventTitle}>{ev.title}</span>
                     </div>
                     <span className={styles.eventMeta}>

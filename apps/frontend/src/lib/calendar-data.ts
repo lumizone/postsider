@@ -52,7 +52,7 @@ export const CHANNEL_COLOR_PALETTE: { value: string; label: string }[] = [
   { value: "#8B5CF6", label: "Violet" },
 ];
 
-export type PostStatus = "draft" | "scheduled" | "published" | "failed" | "pendingApproval";
+export type PostStatus = "draft" | "scheduled" | "published" | "failed" | "pendingApproval" | "held";
 
 export interface CalendarEvent {
   id: string;

@@ -63,8 +63,8 @@ function Avatar({
   return (
     <ChannelAvatar
       channel={channel}
-      size={32}
-      radius={9}
+      size={38}
+      radius={11}
       inverted={inverted}
       showPlatformBadge={withBadge}
     />
@@ -91,7 +91,12 @@ export function ChannelsPanel({
       aria-label={t("channels.add")}
     >
       <div className={styles.head}>
-        {!collapsed && <span className={styles.headTitle}>{t("channels.title")}</span>}
+        {!collapsed && (
+          <div className={styles.headText}>
+            <span className={styles.headEyebrow}>{t("channels.eyebrow")}</span>
+            <span className={styles.headTitle}>{t("channels.title")}</span>
+          </div>
+        )}
         <button
           type="button"
           className={styles.collapseBtn}

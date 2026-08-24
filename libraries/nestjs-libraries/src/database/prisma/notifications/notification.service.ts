@@ -33,6 +33,10 @@ export class NotificationService {
     );
   }
 
+  clearNotifications(organizationId: string) {
+    return this._notificationRepository.clearNotifications(organizationId);
+  }
+
   getNotifications(organizationId: string, userId: string) {
     return this._notificationRepository.getNotifications(
       organizationId,
@@ -46,9 +50,18 @@ export class NotificationService {
     message: string,
     sendEmail = false,
     digest = false,
-    type: NotificationType = 'success'
+    type: NotificationType = 'success',
+    link?: string,
+    // Structured twin of `message`, so the dashboard can show it in the
+    // customer's language. The email still uses the English `message`.
+    event?: { key: string; params?: Record<string, string> }
   ) {
-    await this._notificationRepository.createNotification(orgId, message);
+    await this._notificationRepository.createNotification(
+      orgId,
+      message,
+      link,
+      event
+    );
     if (!sendEmail) {
       return;
     }

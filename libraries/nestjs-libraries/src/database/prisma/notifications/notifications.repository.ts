@@ -38,11 +38,44 @@ export class NotificationsRepository {
     };
   }
 
-  async createNotification(organizationId: string, content: string) {
+  /**
+   * Clear the organization's notification list (soft delete, so nothing is
+   * actually lost). Org-wide by design: the list itself is org-wide, every
+   * member sees the same entries.
+   */
+  async clearNotifications(organizationId: string) {
+    return this._notifications.model.notifications.updateMany({
+      where: {
+        organizationId,
+        deletedAt: null,
+      },
+      data: {
+        deletedAt: new Date(),
+      },
+    });
+  }
+
+  async createNotification(
+    organizationId: string,
+    content: string,
+    link?: string,
+    event?: { key: string; params?: Record<string, string> }
+  ) {
     await this._notifications.model.notifications.create({
       data: {
         organizationId,
         content,
+        ...(event
+          ? {
+              eventKey: event.key,
+              eventParams: JSON.stringify(event.params ?? {}),
+            }
+          : {}),
+        // The column existed from the start but nothing ever wrote it, so every
+        // notification was a dead end: "reconnect your channel" with no way to
+        // get there. Customers are the audience here, not us — they should not
+        // have to work out which page fixes it.
+        ...(link ? { link } : {}),
       },
     });
   }
@@ -118,10 +151,17 @@ export class NotificationsRepository {
         take: 10,
         where: {
           organizationId,
+          // Match getMainPageCount, which already excludes these — otherwise a
+          // soft-deleted notification is missing from the badge but still
+          // rendered in the list.
+          deletedAt: null,
         },
         select: {
           createdAt: true,
           content: true,
+          link: true,
+          eventKey: true,
+          eventParams: true,
         },
       }),
     };

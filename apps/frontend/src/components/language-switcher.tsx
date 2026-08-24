@@ -16,6 +16,7 @@ export function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
         display: "flex",
         alignItems: "center",
         gap: 8,
+        padding: "0 10px",
         fontSize: 12,
         color: "var(--muted)",
       }}

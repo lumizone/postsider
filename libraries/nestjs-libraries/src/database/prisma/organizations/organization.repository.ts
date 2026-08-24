@@ -1,5 +1,10 @@
 import { PrismaRepository, PrismaService } from '@postsider/nestjs-libraries/database/prisma/prisma.service';
-import { Role, ShortLinkPreference, SubscriptionTier } from '@prisma/client';
+import {
+  PublishingState,
+  Role,
+  ShortLinkPreference,
+  SubscriptionTier,
+} from '@prisma/client';
 import { Injectable } from '@nestjs/common';
 import { AuthService } from '@postsider/helpers/auth/auth.service';
 import { CreateOrgUserDto } from '@postsider/nestjs-libraries/dtos/auth/create.org.user.dto';
@@ -697,6 +702,52 @@ export class OrganizationRepository {
       },
       select: {
         shortlink: true,
+      },
+    });
+  }
+
+  /**
+   * Emergency Pause / kill switch state for an org.
+   */
+  getPublishingState(orgId: string) {
+    return this._organization.model.organization.findUnique({
+      where: { id: orgId },
+      select: {
+        publishingState: true,
+        publishingPausedAt: true,
+        publishingPausedById: true,
+        publishingPauseReason: true,
+      },
+    });
+  }
+
+  /**
+   * Flip the org-wide publishing state. When pausing, `publishingPausedAt` /
+   * `publishingPausedById` / `publishingPauseReason` are stamped; resuming
+   * clears them (pass null).
+   */
+  setPublishingState(
+    orgId: string,
+    data: {
+      publishingState: PublishingState;
+      publishingPausedAt?: Date | null;
+      publishingPausedById?: string | null;
+      publishingPauseReason?: string | null;
+    }
+  ) {
+    return this._organization.model.organization.update({
+      where: { id: orgId },
+      data: {
+        publishingState: data.publishingState,
+        ...(data.publishingPausedAt !== undefined
+          ? { publishingPausedAt: data.publishingPausedAt }
+          : {}),
+        ...(data.publishingPausedById !== undefined
+          ? { publishingPausedById: data.publishingPausedById }
+          : {}),
+        ...(data.publishingPauseReason !== undefined
+          ? { publishingPauseReason: data.publishingPauseReason }
+          : {}),
       },
     });
   }

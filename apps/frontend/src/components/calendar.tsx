@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./calendar.module.css";
 import { ChannelsPanel } from "./channels-panel";
-import { ChannelAvatar } from "./channel-avatar";
+import { PlatformIcon } from "./platform-icon";
 import { ChannelDetailModal } from "./channel-detail-modal";
 import { AddChannelModal } from "./add-channel-modal";
 import { CustomFieldsModal } from "./custom-fields-modal";
@@ -45,7 +45,6 @@ import {
   type AttachedMedia,
 } from "./create-post-modal";
 import { useAuth } from "@/lib/auth-context";
-import { PostMediaThumb } from "./post-media-thumb";
 import { layoutOverlappingEvents } from "@/lib/event-lanes";
 
 /** Monday-first weekday names for the given locale (2024-01-01 is a Monday). */
@@ -109,7 +108,14 @@ function stripDiscriminator(
  * did not), so dragging a draft was a no-op with no visible cause.
  */
 function isDraggableStatus(status: PostStatus | undefined): boolean {
-  return !!status && status !== "published" && status !== "pendingApproval";
+  return (
+    !!status &&
+    status !== "published" &&
+    status !== "pendingApproval" &&
+    // A HELD post is parked by the Emergency Pause: dragging it would try to
+    // reschedule to QUEUE, which the backend rejects with 423 while paused.
+    status !== "held"
+  );
 }
 
 function isSameDay(a: Date, b: Date): boolean {
@@ -207,6 +213,33 @@ export function Calendar({ year, month }: CalendarProps) {
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [editRetryEvent, setEditRetryEvent] = useState<CalendarEvent | null>(null);
+
+  // Toolbar: search + status filter. Lightweight, non-destructive — the grid
+  // stays mounted and just re-filters what's shown.
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | PostStatus>("all");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement | null>(null);
+
+  // Close the status-filter dropdown on outside click / Escape, matching the
+  // other dropdowns in the shell (notifications bell, org switcher).
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+        setFiltersOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFiltersOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [filtersOpen]);
 
   const { user } = useAuth();
   const isMember = user?.role === "USER";
@@ -314,8 +347,19 @@ export function Calendar({ year, month }: CalendarProps) {
   }, [channels]);
 
   const visibleEvents = useMemo(
-    () => events.filter((e) => enabled.has(e.channelId)),
-    [enabled, events],
+    () =>
+      events.filter((e) => {
+        if (!enabled.has(e.channelId)) return false;
+        if (statusFilter !== "all" && e.status !== statusFilter) return false;
+        if (search.trim()) {
+          const q = search.trim().toLowerCase();
+          if (!(e.title + " " + (e.excerpt ?? "")).toLowerCase().includes(q)) {
+            return false;
+          }
+        }
+        return true;
+      }),
+    [enabled, events, statusFilter, search],
   );
 
   const eventsByDay = useMemo(() => {
@@ -565,6 +609,34 @@ export function Calendar({ year, month }: CalendarProps) {
     if (view === "year") return t("calendar.twelveMonths");
     return String(cursor.getFullYear());
   }, [view, cursor, t]);
+
+  // Read-only display of the browser's timezone as a GMT offset — a light
+  // context cue in the toolbar, not a setting.
+  const timezoneLabel = useMemo(() => {
+    const offset = -new Date().getTimezoneOffset() / 60;
+    const sign = offset >= 0 ? "+" : "-";
+    const abs = Math.abs(offset);
+    const hh = String(Math.floor(abs)).padStart(2, "0");
+    const mm = String(Math.round((abs - Math.floor(abs)) * 60)).padStart(2, "0");
+    return `GMT${sign}${hh}:${mm}`;
+  }, []);
+
+  const summaryMetrics = useMemo(() => {
+    let scheduled = 0;
+    let awaiting = 0;
+    let drafts = 0;
+    for (const ev of events) {
+      if (ev.status === "scheduled") scheduled += 1;
+      else if (ev.status === "pendingApproval") awaiting += 1;
+      else if (ev.status === "draft") drafts += 1;
+    }
+    return {
+      scheduled,
+      channels: channels.length,
+      awaiting,
+      drafts,
+    };
+  }, [events, channels]);
 
   /**
    * Send the composer payload to the backend. The composer doesn't know about
@@ -959,6 +1031,67 @@ export function Calendar({ year, month }: CalendarProps) {
           </div>
 
           <div className={styles.headerRight}>
+            <div className={styles.searchWrap}>
+              <svg viewBox="0 0 16 16" fill="none" aria-hidden className={styles.searchIcon}>
+                <circle cx="7" cy="7" r="4.25" stroke="currentColor" strokeWidth="1.5" />
+                <path d="m10.25 10.25 3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+              <input
+                type="text"
+                className={styles.searchInput}
+                placeholder={t("calendar.searchPlaceholder")}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                aria-label={t("calendar.searchPlaceholder")}
+              />
+              <kbd className={styles.searchKbd}>⌘K</kbd>
+            </div>
+
+            <div className={styles.filterWrap} ref={filterRef}>
+              <button
+                type="button"
+                className={styles.filterBtn + (statusFilter !== "all" ? " " + styles.filterBtnActive : "")}
+                onClick={() => setFiltersOpen((v) => !v)}
+                aria-expanded={filtersOpen}
+              >
+                {t("calendar.filters")}
+                <svg viewBox="0 0 16 16" fill="none" aria-hidden className={styles.filterIcon}>
+                  <path d="M4 6.5 8 10.5 12 6.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              {filtersOpen && (
+                <div className={styles.filterMenu} role="listbox">
+                  {(
+                    [
+                      ["all", "posts.all"],
+                      ["scheduled", "posts.status.scheduled"],
+                      ["draft", "posts.status.draft"],
+                      ["pendingApproval", "posts.status.pendingApproval"],
+                      ["failed", "posts.status.error"],
+                      ["held", "posts.status.held"],
+                    ] as const
+                  ).map(([value, labelKey]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      role="option"
+                      aria-selected={statusFilter === value}
+                      className={styles.filterOption + (statusFilter === value ? " " + styles.filterOptionActive : "")}
+                      onClick={() => {
+                        setStatusFilter(value);
+                        setFiltersOpen(false);
+                      }}
+                    >
+                      {t(labelKey as any)}
+                      {statusFilter === value && <span aria-hidden>✓</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <span className={styles.tzLabel}>{timezoneLabel}</span>
+
             <div className={styles.segmented} role="tablist" aria-label="View">
               {(Object.keys(VIEW_LABELS) as ViewMode[]).map((m) => (
                 <button
@@ -1083,6 +1216,10 @@ export function Calendar({ year, month }: CalendarProps) {
           />
         )}
           </>
+        )}
+
+        {channels.length > 0 && (
+          <SummaryBar metrics={summaryMetrics} />
         )}
       </div>
 
@@ -1436,15 +1573,14 @@ function MonthView({
                                 ? { cursor: "grab" }
                                 : undefined
                           }
-                          title={`${ev.time} ${ev.title}${
-                            c ? " · " + c.name : ""
+                          title={`${ev.time} · ${ev.title}${
+                            c ? ` · ${c.name} (${c.platform})` : ""
                           }`}
                         >
                           {c ? (
-                            <ChannelAvatar
-                              channel={c}
-                              size={14}
-                              radius="999px"
+                            <PlatformIcon
+                              platform={c.platform}
+                              size={16}
                             />
                           ) : (
                             <span
@@ -1452,7 +1588,6 @@ function MonthView({
                               aria-hidden
                             >?</span>
                           )}
-                          <PostMediaThumb media={ev.media} size={16} />
                           <span className={styles.eventLabel}>{ev.title}</span>
                         </span>
                       );
@@ -1466,12 +1601,74 @@ function MonthView({
                     )}
                   </div>
                 )}
+
+                {cell.inCurrentMonth && dayEvents.length === 0 && (
+                  <span className={styles.cellAdd} aria-hidden>
+                    +
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
       </div>
     </>
+  );
+}
+
+function SummaryBar({
+  metrics,
+}: {
+  metrics: {
+    scheduled: number;
+    channels: number;
+    awaiting: number;
+    drafts: number;
+  };
+}) {
+  const t = useT();
+  const items = [
+    { label: t("calendar.summaryScheduled"), value: metrics.scheduled, accent: false },
+    { label: t("calendar.summaryChannels"), value: metrics.channels, accent: false },
+    { label: t("calendar.summaryAwaiting"), value: metrics.awaiting, accent: true },
+    { label: t("calendar.summaryDrafts"), value: metrics.drafts, accent: false },
+  ];
+  return (
+    <div className={styles.summaryBar}>
+      {items.map((it, i) => (
+        <div
+          key={it.label}
+          className={styles.summaryItem + (i > 0 ? " " + styles.summaryItemBorder : "")}
+        >
+          <span className={styles.summaryIcon} aria-hidden>
+            {it.label === t("calendar.summaryScheduled") ? (
+              <svg viewBox="0 0 16 16" fill="none" width="16" height="16">
+                <rect x="2.5" y="3" width="11" height="10" rx="2" stroke="currentColor" strokeWidth="1.4" />
+                <path d="M2.5 6h11M5 1.5v3M11 1.5v3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+            ) : it.label === t("calendar.summaryChannels") ? (
+              <svg viewBox="0 0 16 16" fill="none" width="16" height="16">
+                <circle cx="5.5" cy="5.5" r="3" stroke="currentColor" strokeWidth="1.4" />
+                <circle cx="10.5" cy="5.5" r="3" stroke="currentColor" strokeWidth="1.4" />
+                <path d="M2.5 12c.8-1.6 2-2.5 3-2.5s2.2.9 3 2.5M7.5 12c.8-1.6 2-2.5 3-2.5s2.2.9 3 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+            ) : it.label === t("calendar.summaryAwaiting") ? (
+              <svg viewBox="0 0 16 16" fill="none" width="16" height="16">
+                <path d="M3.5 9.5l2.5 2.5 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 16 16" fill="none" width="16" height="16">
+                <path d="M3.5 4.5h9M3.5 8h9M3.5 11.5h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+            )}
+          </span>
+          <span className={styles.summaryValue + (it.accent ? " " + styles.summaryValueAccent : "")}>
+            {it.value}
+          </span>
+          <span className={styles.summaryLabel}>{it.label}</span>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -1689,14 +1886,13 @@ function Timeline({
                     >
                       <div className={styles.timelineEventHead}>
                         {c ? (
-                          <ChannelAvatar channel={c} size={16} radius={5} />
+                          <PlatformIcon platform={c.platform} size={16} />
                         ) : (
                           <span
                             className={styles.timelineEventBadge}
                             aria-hidden
                           >?</span>
                         )}
-                        <PostMediaThumb media={ev.media} size={16} />
                         <span className={styles.timelineEventTitle}>
                           {ev.title}
                         </span>
