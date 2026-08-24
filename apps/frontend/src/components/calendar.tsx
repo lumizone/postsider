@@ -1471,7 +1471,7 @@ function MonthView({
 
   return (
     <>
-      <div>
+      <div className={styles.monthWrap}>
         <div className={styles.weekdays}>
           {weekdays.map((d, idx) => (
             <div

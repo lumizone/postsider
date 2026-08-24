@@ -34,6 +34,15 @@
   padding: 20px 12px;
 }
 
+/* Only the calendar needs a bounded height: its month grid can then distribute
+ * its rows across the available viewport without changing other dashboard pages. */
+.mainCalendar {
+  height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
 /* Mobile-only topbar with the hamburger; hidden on desktop. */
 .topbar {
   display: none;
@@ -99,6 +108,14 @@
 
   .topbar {
     display: flex;
+  }
+
+  /* Revert to natural page scroll on mobile (fixed height would fight the
+   * hamburger topbar + drawer). */
+  .mainCalendar {
+    height: auto;
+    min-height: calc(100vh - 80px);
+    overflow: visible;
   }
 
   /* Sidebar becomes an off-canvas drawer. */

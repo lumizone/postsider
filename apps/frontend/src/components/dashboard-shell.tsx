@@ -576,6 +576,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
       </aside>
 
       <main
+        className={pathname === "/calendar" ? styles.mainCalendar : undefined}
         style={{
           borderRadius: "var(--radius-xl)",
           border: "1px solid var(--line-soft)",
