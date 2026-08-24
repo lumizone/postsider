@@ -13,6 +13,21 @@ blokady u źródła — złożenie audytu, materiały do review, zgodność kodu
 
 ## Status
 
+- **Calendar: pionowe skalowanie MonthView (2026-08-24, WDROŻONE).** Commit
+  `a148953` na `fix/publish-pipeline-and-report-bugs`; pełny `sudo ./deploy.sh`
+  przeszedł, backup pre-deploy: `postsider_backups/predeploy-20260824-173006`.
+  MonthView ma zamknięty łańcuch flex (`shell` → `root` → `monthWrap` → `grid`),
+  więc sześć wierszy rozdziela dostępną wysokość zamiast wymuszać 140 px na
+  kafelek. Desktopowe komórki płynnie schodzą do 42 px; niższy viewport używa
+  scrolla panelu zamiast obcinać interakcje. Mobile zachowuje naturalny scroll,
+  52 px touch target i brak poziomego overflow. Zmiana wysokości jest ograniczona
+  do `/calendar`, więc nie zmienia layoutu innych ekranów dashboardu. Sprawdzone
+  Playwright: desktop 1000/900/800/700 px → komórki 97/81/64/47 px; mobile
+  390×800 → 52 px, bez horizontal overflow. Po deployu: `/calendar` 200,
+  `/api/health` Redis/PostgreSQL/Temporal OK, workery 32/32 healthy; nowy kod
+  potwierdzony w obrazie. Commit jest lokalny, `origin/fix/publish-pipeline-and-report-bugs`
+  pozostaje 1 commit za nim (nie pushowano, bo polecenie obejmowało tylko commit+deploy).
+
 - **Incident: edycja running workflowu Temporala = awaria publikacji (2026-08-24, NAPRAWIONE).**
   Monitor `vps-bd41b901` krzyknął „2 post(ów) wisi w QUEUE >30 min po terminie bez błędu".
   Workerzy 32/32 healthy, kanały i org zdrowe — to nie była awaria workerów.

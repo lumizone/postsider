@@ -2,6 +2,19 @@
 
 All notable changes to the PostSider dashboard.
 
+## Unreleased
+
+### Calendar
+
+- **Month view scales to the viewport height on desktop.** The calendar shell
+  and month grid use a bounded flex layout, so its six week rows share the
+  available height instead of forcing a 140 px minimum per day.
+- Day cells compact smoothly down to a usable 42 px minimum. At shorter desktop
+  heights the calendar panel scrolls rather than clipping controls; mobile keeps
+  its natural page scroll and 52 px touch targets without horizontal overflow.
+- The bounded-height behavior is scoped to `/calendar`; all other dashboard
+  pages retain their existing layout and scrolling.
+
 ## 1.1.0 — Production deployment readiness
 
 Docker image, deploy tooling, and runtime fixes that make PostSider actually
