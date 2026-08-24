@@ -949,15 +949,9 @@
     border-bottom: 1px solid var(--line-soft);
   }
 
-  /* Week/day timeline scrolls horizontally instead of squeezing columns. */
-  .timeline {
-    overflow-x: auto;
-  }
-
-  .timelineHeader,
-  .timelineBody {
-    min-width: 620px;
-  }
+  /* Week/day timeline scales to the viewport width (columns shrink with the
+   * `1fr` tracks) instead of forcing a fixed 620px minimum + horizontal
+   * scroll — that made the calendar "not fit" when the window is smaller. */
 
   .yearGrid {
     grid-template-columns: repeat(2, 1fr);

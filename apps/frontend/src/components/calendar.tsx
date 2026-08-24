@@ -575,6 +575,19 @@ export function Calendar({ year, month }: CalendarProps) {
     setSelected(new Date());
   };
 
+  // Switching to a day/week timeline should center on today (or the currently
+  // selected day), NOT the 1st of the month — otherwise "Week"/"Day" jump back
+  // to the start of the month. Month/Year keep the cursor (their period is
+  // derived from it).
+  const changeView = (m: ViewMode) => {
+    if (m === "day" || m === "week") {
+      const anchor = selected ?? new Date();
+      setCursor(anchor);
+      setSelected(anchor);
+    }
+    setView(m);
+  };
+
   const monthNames = useMemo(() => buildMonthNames(locale), [locale]);
 
   const headerTitle = useMemo(() => {
@@ -1103,7 +1116,7 @@ export function Calendar({ year, month }: CalendarProps) {
                     styles.segment +
                     (view === m ? " " + styles.segmentActive : "")
                   }
-                  onClick={() => setView(m)}
+                  onClick={() => changeView(m)}
                 >
                   {t(VIEW_LABELS[m] as any)}
                 </button>
