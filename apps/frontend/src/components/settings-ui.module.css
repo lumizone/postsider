@@ -581,3 +581,23 @@
   }
   .tokenActions { justify-content: flex-start; }
 }
+
+/* Phone touch targets: 30px buttons and a 22px switch are mouse-sized. */
+@media (max-width: 768px) {
+  .btnDanger,
+  .btnGhost,
+  .btn {
+    min-height: 36px;
+  }
+
+  /* 16px keeps iOS from zooming the viewport when the select is focused. */
+  .select,
+  .input {
+    font-size: 16px;
+  }
+
+  .switch {
+    height: 28px;
+    width: 46px;
+  }
+}

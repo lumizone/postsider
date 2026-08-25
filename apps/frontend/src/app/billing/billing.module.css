@@ -434,3 +434,10 @@
 .faqCard:hover {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05);
 }
+
+/* Phone touch target for the monthly/yearly switch. */
+@media (max-width: 768px) {
+  .periodBtn {
+    height: 36px;
+  }
+}

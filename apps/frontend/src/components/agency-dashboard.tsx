@@ -42,7 +42,9 @@ export function AgencyDashboard() {
       .then((data) => {
         if (cancelled) return;
         setOverview(data);
-        const firstCustomer = data.clients.find((client) => client.id)?.id ?? "";
+        // A payload without `clients` would otherwise throw here and replace
+        // the whole page with a raw "Cannot read properties of undefined".
+        const firstCustomer = data.clients?.find((client) => client.id)?.id ?? "";
         setCustomerId((current) => current || firstCustomer);
       })
       .catch((err) => {

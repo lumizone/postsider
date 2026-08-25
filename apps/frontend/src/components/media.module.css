@@ -804,3 +804,11 @@
     text-align: right;
   }
 }
+
+/* Phone touch target for the grid/list toggle (28px is mouse-sized). */
+@media (max-width: 768px) {
+  .viewBtn {
+    width: 36px;
+    height: 36px;
+  }
+}

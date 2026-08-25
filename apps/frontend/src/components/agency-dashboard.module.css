@@ -27,3 +27,12 @@
 .notice { margin-bottom: 18px; padding: 12px 14px; border: 1px solid var(--line-soft); border-radius: 9px; color: var(--muted); font-size: 13px; }
 @media (max-width: 900px) { .metrics { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 680px) { .page { padding: 24px 16px 40px; }.header, .cardHeader { flex-direction: column; }.controls { width: 100%; justify-content: space-between; }.controls select { flex: 1; }.metrics, .grid { grid-template-columns: 1fr; }.reportStats { grid-template-columns: repeat(2, 1fr); } }
+
+/* Phone: 16px stops iOS zooming the viewport when the range select is focused. */
+@media (max-width: 768px) {
+  .controls input,
+  .controls select,
+  .secondary {
+    font-size: 16px;
+  }
+}

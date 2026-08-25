@@ -34,6 +34,10 @@ export function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
       <select
         aria-label="Language"
         value={locale}
+        // Font size lives in globals.css (.lang-select), not inline: an inline
+        // 12px beat the phone rule that keeps fields at 16px, and iOS zoomed
+        // the whole page whenever this select was focused.
+        className="lang-select"
         onChange={(e) => setLocale(e.target.value as Locale)}
         style={{
           appearance: "none",
@@ -43,7 +47,6 @@ export function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
           color: "var(--fg)",
           borderRadius: 999,
           padding: "5px 26px 5px 12px",
-          fontSize: 12,
           fontWeight: 600,
           cursor: "pointer",
           backgroundImage:

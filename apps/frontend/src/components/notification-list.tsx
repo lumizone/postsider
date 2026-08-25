@@ -253,7 +253,10 @@ export function NotificationRow({
     display: "inline-flex",
     alignItems: "center",
     gap: 4,
-    padding: compact ? "3px 8px" : "5px 11px",
+    padding: compact ? "5px 10px" : "7px 12px",
+    // A thumb has to be able to hit this: it is the only action the
+    // notification offers.
+    minHeight: compact ? 30 : 34,
     border: "1px solid var(--line-soft)",
     borderRadius: "var(--radius-pill)",
     background: "var(--bg)",

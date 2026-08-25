@@ -160,3 +160,11 @@
     text-align: center;
   }
 }
+
+/* Phone touch target for the dismiss link. */
+@media (max-width: 768px) {
+  .dismiss {
+    min-height: 32px;
+    padding: 6px 8px;
+  }
+}

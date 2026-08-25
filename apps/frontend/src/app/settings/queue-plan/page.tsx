@@ -22,8 +22,10 @@ import {
 
 function dayChip(active: boolean): React.CSSProperties {
   return {
+    // Seven of these sit in a row and each is a real toggle, so they get a
+    // square target rather than a 28px sliver.
     width: 34,
-    height: 28,
+    height: 34,
     borderRadius: 6,
     fontSize: 11,
     fontWeight: 600,
@@ -258,7 +260,14 @@ export default function QueuePlanPage() {
                   const active = Array.isArray(slot.days) ? slot.days : [0, 1, 2, 3, 4, 5, 6];
                   return (
                     <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <input type="time" className={s.input} style={{ width: 120 }} value={minutesToHHMM(slot.time)} onChange={(e) => setTime(c.id, i, e.target.value)} />
+                      <input
+                        type="time"
+                        className={s.input}
+                        style={{ width: 120 }}
+                        aria-label={t("settingsQueuePlan.slotTime")}
+                        value={minutesToHHMM(slot.time)}
+                        onChange={(e) => setTime(c.id, i, e.target.value)}
+                      />
                       <div style={{ display: "flex", gap: 4 }}>
                         {dayLabels.map((lbl, d) => (
                           <button
@@ -285,13 +294,19 @@ export default function QueuePlanPage() {
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
                       {team.map((m) => (
-                        <label key={m.user.id} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}>
+                        <label
+                          key={m.user.id}
+                          // An email has no spaces to break on, so a long one
+                          // pushed this row past the card and put the whole
+                          // page into horizontal scroll on a phone.
+                          style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, minWidth: 0, maxWidth: "100%" }}
+                        >
                           <input
                             type="checkbox"
                             checked={(assignments[c.id] || []).includes(m.user.id)}
                             onChange={() => toggleAssignment(c.id, m.user.id)}
                           />
-                          {m.user.email}
+                          <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{m.user.email}</span>
                         </label>
                       ))}
                     </div>

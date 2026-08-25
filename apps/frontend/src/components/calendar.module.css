@@ -985,3 +985,12 @@
     border-left: none;
   }
 }
+
+/* Phone: 16px stops iOS zooming the viewport on focus, and the field gets a
+   real target height instead of the 17px it inherits from the toolbar row. */
+@media (max-width: 768px) {
+  .searchInput {
+    font-size: 16px;
+    min-height: 32px;
+  }
+}

@@ -348,7 +348,9 @@ export default function UsersSettingsPage() {
                         )
                       }
                       className={s.select}
-                      style={{ width: 120, fontSize: 13 }}
+                      // No inline font-size: it beat the phone rule that keeps
+                      // fields at 16px, and iOS zoomed the page on focus.
+                      style={{ width: 130 }}
                     >
                       <option value="USER">{t("settingsUsers.roleMember")}</option>
                       <option value="ADMIN">{t("settingsUsers.roleAdmin")}</option>

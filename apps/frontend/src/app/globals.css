@@ -189,3 +189,53 @@ ul {
   font-weight: 400;
   letter-spacing: 0;
 }
+
+/*
+ * iOS Safari zooms the whole viewport when a focused field renders under 16px,
+ * and the zoom does not spring back. Individual components had been fixing
+ * this one control at a time (posts search, auth forms), leaving the calendar
+ * search, CSV import, agency range, organization, team role, queue plan and
+ * evergreen fields still zooming. Scoped to phones on purpose: an earlier
+ * unconditional bump changed desktop typography.
+ */
+@media (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/*
+ * Phone touch targets. The segmented controls across the app (calendar
+ * day/week/month/year, media type, analytics range, posts status, composer
+ * write modes) are 28-30px tall, which is fine for a mouse and below the
+ * comfortable target size on a phone. Raised here rather than in each of the
+ * six modules, keyed on the role they already carry.
+ */
+@media (max-width: 768px) {
+  [role="tab"] {
+    min-height: 36px;
+  }
+}
+
+/* Native checkboxes render ~13px, well under a comfortable thumb target. */
+@media (max-width: 768px) {
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 18px;
+    min-width: 18px;
+    height: 18px;
+  }
+}
+
+/* Language switcher: small on desktop, 16px on phones (see the rule above). */
+.lang-select {
+  font-size: 12px;
+}
+
+@media (max-width: 768px) {
+  .lang-select {
+    font-size: 16px;
+  }
+}

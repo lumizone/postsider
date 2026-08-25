@@ -333,3 +333,11 @@
   outline-offset: 2px;
   border-radius: 10px;
 }
+
+/* Phone touch target for the panel collapse toggle. */
+@media (max-width: 768px) {
+  .collapseBtn {
+    width: 36px;
+    height: 36px;
+  }
+}
