@@ -13,6 +13,67 @@ blokady u źródła — złożenie audytu, materiały do review, zgodność kodu
 
 ## Status
 
+- **UI: powiadomienia, filtry postów, przegląd całego dashboardu, polskie tłumaczenia
+  (2026-08-25). CZĘŚCIOWO WDROŻONE.** Cztery commity na `fix/publish-pipeline-and-report-bugs`,
+  branch **4 commity przed `origin`, nic nie wypchnięte**. **Na prodzie jest TYLKO
+  `79e8c40`** (deploy 09:47, backup `postsider_backups/predeploy-20260825-094733`);
+  `b17c323`, `cc7cbf0` i `c5bd007` są wyłącznie w gicie lokalnym.
+  - **`79e8c40` (WDROŻONE) — powiadomienia.** `GET /notifications/page` +
+    strona `/notifications` (pełna historia za „zobacz wszystkie" w dzwonku;
+    strona 0 oznacza przeczytane i zwraca POPRZEDNI znacznik, głębsze strony
+    nie ruszają znacznika, więc podświetlenie „nowe" nie znika przy stronicowaniu).
+    Wspólny renderer (nagłówki dni, czas względny, waga zdarzenia z `eventKey`)
+    dla panelu i strony. **Przycisk akcji zgodny z linkiem:** opublikowany post
+    ma „Zobacz post" i otwiera URL platformy w nowej karcie, błędy mają „Napraw",
+    wiersz bez linku nie ma przycisku. Wcześniej `toRelative()` przepisywał KAŻDY
+    link spoza naszego origin na `/calendar`, więc udana publikacja oferowała
+    „Napraw" i wyrzucała na kalendarz, a powiadomienia o NIEUDANEJ publikacji
+    nie miały linku w ogóle — fallback (`/calendar`) dodany w
+    `NotificationService.DEFAULT_EVENT_LINKS`, **nie w workflow Temporala**
+    (workflowu nie wolno edytować w miejscu). Dzwonek: podświetlenie nowych
+    z `lastReadNotifications` (pole było zwracane i wyrzucane), bottom sheet
+    poniżej 600 px, focus trap, czyszczenie org-wide za potwierdzeniem, plakietka
+    gaśnie od razu po wejściu na stronę (event `postsider:notifications-read`).
+  - **`b17c323` + `cc7cbf0` (NIE wdrożone) — filtry i sortowanie postów.**
+    Filtr po kanale i zakresie dat (presety + własny), kontrolka sortowania.
+    **Domyślne sortowanie: „Najpierw opublikowane"** (opublikowane od najnowszego
+    na górze, pod spodem stara kolejność wymagających uwagi). Liczniki na
+    zakładkach statusów liczą się PO filtrach. Pigułka statusu nie wychodzi już
+    poza kolumnę i nie drukuje się na tytule (`.list` trzyma kolumny, wiersz
+    bierze je przez `subgrid`, fallback `max-content`); wąski ekran daje pigułce
+    własną linię, a pasek zakładek scrolluje się w swoim boksie. Klucz
+    `posts.emptyFiltered` istniał od dawna i nigdy nie był użyty.
+    **Ograniczenie:** filtrowanie jest klientowe po ≤500 postach na stan
+    (`fetchPostsList` nie przyjmuje zakresu dat ani kanału).
+  - **`c5bd007` (NIE wdrożone) — audyt UI całej apki + polski katalog.**
+    23 trasy × desktop 1440×900 i telefon 390×844, mockowane API. Naprawione:
+    `/settings/queue-plan` wpychał stronę w poziomy scroll (email bez spacji
+    w wierszu przypisania — JEDYNA trasa z overflow), **12 pól < 16 px**
+    (iOS zoomuje viewport i nie wraca) załatwione jedną regułą w `globals.css`
+    + 3 miejsca bijące ją klasą/inline, cele dotykowe 28–30 px podniesione do 36
+    (segmenty przez `[role="tab"]`, menu wiersza, przełączniki, dni tygodnia,
+    checkboxy 13→18 px, „?" dostał niewidoczne pole 32 px), `aria-label` na polu
+    godziny, `data.clients?.find` w `AgencyDashboard` (payload bez `clients`
+    zamieniał stronę na surowy TypeError). **Polski katalog: 179 brakujących
+    kluczy** (EN 1075, PL 896) — całe obszary leciały po angielsku: Overview,
+    ustawienia organizacji, zużycie AI, szczegóły postu, checklist, przełącznik
+    organizacji, info-tipy i **ekran recenzji dla klienta zewnętrznego**.
+    Uzupełnione, parzystość `{placeholderów}` zweryfikowana. Podtytuł planu
+    kolejki twierdził, że godziny są w UTC, choć strefa jest per kanał.
+    Pozostałe 9 locale ma po 323 braki i dalej leci fallbackiem na angielski.
+  - **Jak to było sprawdzane (do powtórzenia).** Prawdziwy Chrome + Playwright
+    przeciwko `next dev` na :4300 z `NEXT_PUBLIC_BACKEND_URL=/api` i pełnym
+    mockiem API przez `page.route('**/api/**')` — bez dotykania produkcji i bez
+    kont testowych. Skrypty: `scratchpad/ui-audit.js` (przemiał tras),
+    `ui-check.js`, `ui-check2.js`. **Dwie pułapki środowiskowe:**
+    (1) `pnpm --filter ./apps/frontend run build` nadpisuje ten sam katalog
+    `.next`, z którego żyje działający dev server — dev zaczyna serwować 404 na
+    własne chunki i 500 na stronę; ubić dev, `rm -rf .next`, wystartować od nowa;
+    (2) **Playwright 1.60 odmawia instalacji przeglądarek na Ubuntu 26.04**,
+    a pobieranie z CDN jest z tego hosta zablokowane (400/403) — użyty
+    cache'owany Chrome 133 z `~/.cache/puppeteer/chrome/linux-133.0.6943.141/`
+    przez `chromium.launch({ executablePath })`.
+
 - **Calendar: pionowe skalowanie MonthView (2026-08-24, WDROŻONE).** Commit
   `a148953` na `fix/publish-pipeline-and-report-bugs`; pełny `sudo ./deploy.sh`
   przeszedł, backup pre-deploy: `postsider_backups/predeploy-20260824-173006`.
