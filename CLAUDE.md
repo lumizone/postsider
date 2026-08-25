@@ -13,7 +13,7 @@ blokady u źródła — złożenie audytu, materiały do review, zgodność kodu
 
 ## Status
 
-- **ConfirmDialog był NIEKLIKALNY w sidebarze — `position: sticky` (2026-08-25).**
+- **ConfirmDialog był NIEKLIKALNY w sidebarze — `position: sticky` (2026-08-25, WDROŻONE 14:52).**
   Zgłoszone jako „nie da się wyczyścić powiadomień w ciemnym motywie". **To nie
   była wina motywu** — pada identycznie w jasnym, na desktopie i mobile;
   zweryfikowane, że mój diff w `confirm-dialog.tsx` to wyłącznie kolory.
@@ -33,7 +33,19 @@ blokady u źródła — złożenie audytu, materiały do review, zgodność kodu
   i ze strony, usuwanie mediów, webhooka, członka zespołu. Dialogi z wpisywanym
   słowem na `/settings/security` (DISCONNECT / DELETE) to osobne, ręcznie pisane
   overlaye w `<main>` — działają, przycisk jest `disabled` do czasu wpisania słowa.
-  **Audyt martwych kontrolek** (22 widoki × 2 motywy, `elementFromPoint` w środku
+  **Deploy 14:52 został PRZERWANY (SIGTERM) na etapie czekania na health** —
+  obraz był już zbudowany, a kontener przecreowany, więc wdrożenie doszło do
+  skutku, ale **własna bramka health i ewentualny auto-rollback skryptu NIE
+  wykonały się**. Domknięte ręcznie: 12/12 kontenerów, docker health `healthy`,
+  `/api/health` redis+database+temporal ok, pm2 3/3 online z 0 restartów,
+  pollery na `main`, storage 200, 5 endpointów 200, timery ×5 active, obraz
+  produkcyjny = nowy build (`:prev` zachowany jako rollback). Flaga
+  `monitoring/MAINTENANCE` NIE została (deploy.sh łapie SIGTERM, nie tylko EXIT),
+  więc monitoring nie był wyciszony. Dorobiony też pominięty
+  `docker builder prune --keep-storage=5GB`.
+  **Uwaga na przyszłość: po przerwanym deployu weryfikować ręcznie CAŁĄ listę —
+  skrypt nie zdąży ani zbadać zdrowia, ani cofnąć wdrożenia.**
+    **Audyt martwych kontrolek** (22 widoki × 2 motywy, `elementFromPoint` w środku
   każdej widocznej kontrolki): zero nieosiągalnych elementów w aktywnej warstwie,
   zero różnic między motywami.
 
