@@ -51,14 +51,17 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
       onClick={toggle}
       title={preference === "system" ? t("theme.followingSystem") : label}
       aria-label={label}
+      // Height lives in globals.css, not here: inline styles cannot be
+      // overridden, and the copy that sits beside the language select has to
+      // match that select's box while the topbar copy stays a full touch target.
+      className="theme-toggle"
       style={{
         display: "flex",
         alignItems: "center",
         gap: 8,
         alignSelf: "flex-start",
         margin: compact ? 0 : "0 10px",
-        padding: compact ? 6 : "5px 12px",
-        minHeight: 32,
+        padding: compact ? "0 6px" : "5px 12px",
         border: "1px solid var(--line-soft)",
         borderRadius: 999,
         background: "var(--bg)",

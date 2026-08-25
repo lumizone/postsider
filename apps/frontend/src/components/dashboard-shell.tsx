@@ -543,7 +543,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                 read as a pair, and the sidebar footer has no height to spare. */}
             {/* gap 0: the language switcher already carries 10px of its own
                 padding on that side, which is the spacing we want. */}
-            <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
+            <div className="lang-theme-row" style={{ display: "flex", alignItems: "center", gap: 0 }}>
               <LanguageSwitcher />
               <ThemeToggle compact />
             </div>

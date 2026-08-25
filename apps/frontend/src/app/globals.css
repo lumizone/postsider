@@ -346,3 +346,25 @@ ul {
     font-size: 16px;
   }
 }
+
+/*
+ * Theme toggle. On its own (the mobile topbar) it stays a comfortable touch
+ * target. Beside the language select in the sidebar footer it must read as
+ * that select's twin, so it takes the select's exact height instead of its
+ * own: 26px from 12px type plus 5px padding and a 1px border, and 29px on
+ * phones where .lang-select above bumps to 16px. Measured, not guessed.
+ */
+.theme-toggle {
+  min-height: 32px;
+}
+
+.lang-theme-row .theme-toggle {
+  min-height: 0;
+  height: 26px;
+}
+
+@media (max-width: 768px) {
+  .lang-theme-row .theme-toggle {
+    height: 29px;
+  }
+}
