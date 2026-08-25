@@ -182,7 +182,7 @@ export default function ApprovalPage() {
       </div>
 
       {error && (
-        <div role="alert" style={{ padding: "10px 12px", borderRadius: 8, background: "rgba(192,57,43,0.08)", color: "#c0392b", fontSize: 13 }}>{error}</div>
+        <div role="alert" style={{ padding: "10px 12px", borderRadius: 8, background: "var(--danger-soft)", color: "var(--danger)", fontSize: 13 }}>{error}</div>
       )}
 
       {loading ? (
@@ -214,7 +214,7 @@ export default function ApprovalPage() {
                       <img
                         src={picture}
                         alt=""
-                        style={{ width: 30, height: 30, borderRadius: 7, objectFit: "cover", background: "rgba(0,0,0,0.06)" }}
+                        style={{ width: 30, height: 30, borderRadius: 7, objectFit: "cover", background: "rgb(var(--tint) / 0.06)" }}
                       />
                     ) : (
                       <span
@@ -242,7 +242,7 @@ export default function ApprovalPage() {
                               width: 22,
                               height: 22,
                               borderRadius: 6,
-                              background: "rgba(0,0,0,0.05)",
+                              background: "rgb(var(--tint) / 0.05)",
                               flexShrink: 0,
                             }}
                           >
@@ -298,7 +298,7 @@ export default function ApprovalPage() {
                         className={ap.reasonInput}
                       />
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <button type="button" style={{ ...ghostBtn, color: "#DC2626", borderColor: "rgba(220,38,38,0.25)" }} disabled={busyIds.has(a.id)} onClick={() => act(a.id, () => rejectPost(a.id, note || undefined))}>{t("approval.confirmReject")}</button>
+                        <button type="button" style={{ ...ghostBtn, color: "var(--danger-bright)", borderColor: "color-mix(in srgb, var(--danger) 38%, transparent)" }} disabled={busyIds.has(a.id)} onClick={() => act(a.id, () => rejectPost(a.id, note || undefined))}>{t("approval.confirmReject")}</button>
                         <button type="button" style={ghostBtn} onClick={() => { setRejectFor(null); setNote(""); }}>{t("common.cancel")}</button>
                       </div>
                     </div>

@@ -1,7 +1,7 @@
 .backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--scrim);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   z-index: 60;
@@ -20,7 +20,7 @@
   border: 1px solid var(--line-soft);
   display: flex;
   flex-direction: column;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 30px 80px rgb(var(--shadow) / calc(0.18 * var(--shadow-boost)));
   animation: scaleIn 180ms var(--ease);
   overflow: hidden;
 }
@@ -64,7 +64,7 @@
   transition: background 140ms var(--ease), transform 120ms var(--ease);
 }
 
-.closeBtn:hover { background: rgba(0, 0, 0, 0.05); }
+.closeBtn:hover { background: rgb(var(--tint) / 0.05); }
 .closeBtn:active { transform: scale(0.94); }
 .closeBtn svg { width: 14px; height: 14px; }
 
@@ -102,7 +102,7 @@
 
 .input:focus {
   border-color: var(--fg);
-  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 0 0 3px rgb(var(--shadow) / calc(0.05 * var(--shadow-boost)));
 }
 
 .input:disabled {
@@ -119,16 +119,16 @@
 
 .error {
   font-size: 12px;
-  color: #dc2626;
+  color: var(--danger-bright);
 }
 
 .formError {
   font-size: 13px;
-  color: #dc2626;
+  color: var(--danger-bright);
   padding: 10px 12px;
   border-radius: var(--radius-md);
-  background: rgba(220, 38, 38, 0.06);
-  border: 1px solid rgba(220, 38, 38, 0.15);
+  background: var(--danger-soft);
+  border: 1px solid color-mix(in srgb, var(--danger) 24%, transparent);
 }
 
 .submitBtn {

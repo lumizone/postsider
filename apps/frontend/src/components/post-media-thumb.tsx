@@ -26,7 +26,7 @@ export function PostMediaThumb({
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "rgba(0,0,0,0.06)",
+        background: "rgb(var(--tint) / 0.06)",
       }}
       aria-hidden
     >
@@ -73,7 +73,7 @@ export function PostMediaThumb({
             color: "#fff",
             fontSize: Math.max(8, Math.round(size * 0.5)),
             lineHeight: 1,
-            textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+            textShadow: "0 1px 2px rgb(var(--shadow) / calc(0.5 * var(--shadow-boost)))",
           }}
         >
           ▶

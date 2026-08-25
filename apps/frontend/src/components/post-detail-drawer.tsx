@@ -170,7 +170,7 @@ export function PostDetailDrawer({ postId, status, onClose }: PostDetailDrawerPr
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.3)",
+        background: "var(--scrim)",
         display: "flex",
         justifyContent: "flex-end",
         zIndex: 200,
@@ -196,7 +196,7 @@ export function PostDetailDrawer({ postId, status, onClose }: PostDetailDrawerPr
         </div>
 
         {error && (
-          <div role="alert" style={{ padding: "10px 12px", borderRadius: 8, background: "rgba(192,57,43,0.08)", color: "#c0392b", fontSize: 13 }}>{error}</div>
+          <div role="alert" style={{ padding: "10px 12px", borderRadius: 8, background: "var(--danger-soft)", color: "var(--danger)", fontSize: 13 }}>{error}</div>
         )}
 
         {loading ? (
@@ -224,7 +224,7 @@ export function PostDetailDrawer({ postId, status, onClose }: PostDetailDrawerPr
                   {(analytics as Exclude<PostAnalyticsResponse, { missing: true }>).map((series) => {
                     const total = series.data.reduce((sum, p) => sum + (Number(p.total) || 0), 0);
                     return (
-                      <div key={series.label} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "6px 0", borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
+                      <div key={series.label} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "6px 0", borderBottom: "1px solid rgb(var(--tint) / 0.05)" }}>
                         <span style={{ color: "var(--fg)" }}>{series.label}</span>
                         <span style={{ fontWeight: 600 }}>{total.toLocaleString()}</span>
                       </div>

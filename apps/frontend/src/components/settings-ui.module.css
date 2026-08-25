@@ -37,7 +37,7 @@
 }
 
 .card:hover {
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 10px 30px rgb(var(--shadow) / calc(0.06 * var(--shadow-boost)));
 }
 
 .cardHead {
@@ -195,7 +195,7 @@
   width: 38px;
   height: 22px;
   border-radius: var(--radius-pill);
-  background: rgba(0, 0, 0, 0.12);
+  background: rgb(var(--tint) / 0.12);
   border: none;
   padding: 0;
   cursor: pointer;
@@ -212,7 +212,7 @@
   border-radius: var(--radius-pill);
   background: var(--bg);
   transition: transform 200ms var(--ease);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 2px rgb(var(--shadow) / calc(0.2 * var(--shadow-boost)));
 }
 
 .switchOn {
@@ -296,7 +296,7 @@
 }
 
 .btnGhost:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: rgb(var(--tint) / 0.05);
 }
 
 .btnDanger {
@@ -346,7 +346,7 @@
 }
 
 .chipMuted .chipDot {
-  background: rgba(0, 0, 0, 0.3);
+  background: rgb(var(--tint) / 0.3);
 }
 
 .chipFilled {
@@ -422,7 +422,7 @@
   align-items: center;
   padding: 3px;
   border-radius: var(--radius-pill);
-  background: rgba(0, 0, 0, 0.04);
+  background: rgb(var(--tint) / 0.04);
   gap: 2px;
   align-self: flex-start;
 }
@@ -443,7 +443,7 @@
 }
 
 .tabBtn:hover {
-  background: rgba(0, 0, 0, 0.06);
+  background: rgb(var(--tint) / 0.06);
 }
 
 .tabBtn:active {
@@ -478,7 +478,7 @@
 }
 
 .clientBtn:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: rgb(var(--tint) / 0.04);
 }
 
 .clientBtn:active {
@@ -508,7 +508,7 @@
 .codeBlock {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-size: 12px;
-  background: rgba(0, 0, 0, 0.04);
+  background: rgb(var(--tint) / 0.04);
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-md);
   padding: 12px 14px;

@@ -24,8 +24,8 @@
   height: calc(100vh - 32px);
   background: linear-gradient(
     180deg,
-    rgba(0, 0, 0, 0.02) 0%,
-    rgba(0, 0, 0, 0) 60%
+    rgb(var(--tint) / 0.02) 0%,
+    transparent 60%
   );
   transition: padding 220ms var(--ease), transform 220ms var(--ease);
 }
@@ -90,7 +90,7 @@
 }
 
 .navLink:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: rgb(var(--tint) / 0.04);
   color: var(--fg);
 }
 
@@ -163,7 +163,7 @@
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.35);
+    background: var(--scrim);
     z-index: 50;
   }
 }

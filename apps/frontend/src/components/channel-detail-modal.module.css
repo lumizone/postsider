@@ -1,7 +1,7 @@
 .backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--scrim);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   z-index: 50;
@@ -21,7 +21,7 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 30px 80px rgb(var(--shadow) / calc(0.18 * var(--shadow-boost)));
   animation: scaleIn 180ms var(--ease);
 }
 
@@ -93,7 +93,7 @@
 }
 
 .closeBtn:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: rgb(var(--tint) / 0.05);
 }
 
 .closeBtn:active {
@@ -148,7 +148,7 @@
 .code {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-size: 12px;
-  background: rgba(0, 0, 0, 0.04);
+  background: rgb(var(--tint) / 0.04);
   padding: 3px 8px;
   border-radius: 6px;
   letter-spacing: 0;
@@ -169,7 +169,7 @@
 }
 
 .iconBtn:hover {
-  background: rgba(0, 0, 0, 0.06);
+  background: rgb(var(--tint) / 0.06);
 }
 
 .iconBtn:active {

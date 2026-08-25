@@ -113,13 +113,13 @@ export default function WebhooksSettingsPage() {
       />
 
       {error && (
-        <div role="alert" style={{ margin: "0 0 16px", padding: "10px 12px", borderRadius: 8, background: "rgba(192,57,43,0.08)", color: "#c0392b", fontSize: 13 }}>
+        <div role="alert" style={{ margin: "0 0 16px", padding: "10px 12px", borderRadius: 8, background: "var(--danger-soft)", color: "var(--danger)", fontSize: 13 }}>
           {error}
         </div>
       )}
 
       {newSecret && (
-        <div role="alert" style={{ margin: "0 0 16px", padding: "12px", borderRadius: 8, background: "rgba(180,140,0,0.10)", fontSize: 13 }}>
+        <div role="alert" style={{ margin: "0 0 16px", padding: "12px", borderRadius: 8, background: "var(--warning-soft)", fontSize: 13 }}>
           <strong>{t("settingsWebhooks.secretOnceTitle")}</strong>
           <div style={{ marginTop: 6, fontFamily: "monospace", wordBreak: "break-all" }}>{newSecret}</div>
           <div style={{ marginTop: 6, color: "var(--muted)" }}>{t("settingsWebhooks.secretOnceHint")}</div>
@@ -165,13 +165,13 @@ export default function WebhooksSettingsPage() {
                   alignItems: "center",
                   gap: 14,
                   padding: "14px 0",
-                  borderBottom: "1px solid rgba(0,0,0,0.04)",
+                  borderBottom: "1px solid rgb(var(--tint) / 0.04)",
                 }}
               >
                 <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ fontSize: 14, fontWeight: 600 }}>{h.name}</span>
-                    <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 99, background: "rgba(16,185,129,0.08)", color: "#10B981", fontWeight: 600 }}>
+                    <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 99, background: "var(--success-soft)", color: "var(--success)", fontWeight: 600 }}>
                       {t("settingsWebhooks.active")}
                     </span>
                   </div>
@@ -183,7 +183,7 @@ export default function WebhooksSettingsPage() {
                       {h.integrations.map((i) => (
                         <span
                           key={i.integration.id}
-                          style={{ fontSize: 11, padding: "2px 8px", borderRadius: 99, background: "rgba(0,0,0,0.04)", color: "var(--muted)" }}
+                          style={{ fontSize: 11, padding: "2px 8px", borderRadius: 99, background: "rgb(var(--tint) / 0.04)", color: "var(--muted)" }}
                         >
                           {i.integration.name}
                         </span>
@@ -250,7 +250,7 @@ export default function WebhooksSettingsPage() {
                         borderRadius: 8,
                         fontSize: 12,
                         cursor: "pointer",
-                        background: selectedChannels.has(ch.id) ? "rgba(0,0,0,0.03)" : "transparent",
+                        background: selectedChannels.has(ch.id) ? "rgb(var(--tint) / 0.03)" : "transparent",
                         transition: "border-color 120ms ease",
                       }}
                     >

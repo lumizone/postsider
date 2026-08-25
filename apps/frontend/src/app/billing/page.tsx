@@ -602,9 +602,9 @@ function BillingInner() {
                 className={styles.planBtn}
                 style={{
                   padding: '0 18px',
-                  background: '#dc2626',
-                  borderColor: '#dc2626',
-                  color: '#fff',
+                  background: 'var(--danger-bright)',
+                  borderColor: 'var(--danger-bright)',
+                  color: "var(--on-fg)",
                 }}
               >
                 {cancelBusy

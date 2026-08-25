@@ -1249,9 +1249,9 @@ export function CreatePostModal({
                 style={{
                   padding: "10px 14px",
                   borderRadius: 8,
-                  background: "rgba(220,38,38,0.06)",
-                  border: "1px solid rgba(220,38,38,0.2)",
-                  color: "#DC2626",
+                  background: "var(--danger-soft)",
+                  border: "1px solid color-mix(in srgb, var(--danger) 30%, transparent)",
+                  color: "var(--danger-bright)",
                   fontSize: 13,
                   display: "flex",
                   flexDirection: "column",
@@ -1278,9 +1278,9 @@ export function CreatePostModal({
                 style={{
                   padding: "10px 14px",
                   borderRadius: 8,
-                  background: "rgba(245,158,11,0.06)",
-                  border: "1px solid rgba(245,158,11,0.25)",
-                  color: "#D97706",
+                  background: "var(--warning-soft)",
+                  border: "1px solid color-mix(in srgb, var(--warning) 38%, transparent)",
+                  color: "var(--warning-bright)",
                   fontSize: 13,
                   marginBottom: 12,
                 }}

@@ -164,7 +164,7 @@ export default function ApiSettingsPage() {
       />
 
       {error && (
-        <div role="alert" style={{ margin: "0 0 16px", padding: "10px 12px", borderRadius: 8, background: "rgba(192,57,43,0.08)", color: "#c0392b", fontSize: 13 }}>
+        <div role="alert" style={{ margin: "0 0 16px", padding: "10px 12px", borderRadius: 8, background: "var(--danger-soft)", color: "var(--danger)", fontSize: 13 }}>
           {error}
         </div>
       )}
@@ -193,7 +193,7 @@ export default function ApiSettingsPage() {
 
             {/* Rows */}
             {keys.map((k) => (
-              <div key={k.id} style={{ display: "grid", gridTemplateColumns: "1fr 2fr 120px 70px", gap: 10, padding: "12px 0", borderBottom: "1px solid rgba(0,0,0,0.04)", fontSize: 13, alignItems: "center" }}>
+              <div key={k.id} style={{ display: "grid", gridTemplateColumns: "1fr 2fr 120px 70px", gap: 10, padding: "12px 0", borderBottom: "1px solid rgb(var(--tint) / 0.04)", fontSize: 13, alignItems: "center" }}>
                 <span style={{ fontWeight: 500 }}>{k.name}</span>
                 <span style={{ fontFamily: "monospace", fontSize: 12, color: "var(--muted)" }}>
                   {maskKey(k.key)}
@@ -247,7 +247,7 @@ export default function ApiSettingsPage() {
       {/* Usage card */}
       <Card title={t("settingsApi.usageTitle")}>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 13, color: "var(--muted)" }}>
-          <span>{t("settingsApi.usageIntroPrefix")} <code style={{ background: "rgba(0,0,0,0.04)", padding: "2px 5px", borderRadius: 4 }}>Authorization</code> {t("settingsApi.usageIntroSuffix")}</span>
+          <span>{t("settingsApi.usageIntroPrefix")} <code style={{ background: "rgb(var(--tint) / 0.04)", padding: "2px 5px", borderRadius: 4 }}>Authorization</code> {t("settingsApi.usageIntroSuffix")}</span>
           <pre className={s.codeBlock} style={{ fontSize: 12, lineHeight: 1.7, padding: "14px 16px", borderRadius: 10 }}>{`curl ${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000"}/public/v1/posts \\
   -H "Authorization: ps_your_key_here" \\
   -H "Content-Type: application/json"`}</pre>
@@ -258,15 +258,15 @@ export default function ApiSettingsPage() {
 
       {/* New key modal */}
       {showModal && (
-        <div role="dialog" aria-modal="true" aria-label={t("settingsApi.keyCreatedTitle")} style={{ position: "fixed", inset: 0, zIndex: 9999, display: "grid", placeItems: "center", background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }}>
-          <div style={{ width: "100%", maxWidth: 480, background: "var(--bg)", borderRadius: 16, padding: "28px 24px 24px", boxShadow: "0 24px 64px rgba(0,0,0,0.18)", display: "flex", flexDirection: "column", gap: 16 }}>
+        <div role="dialog" aria-modal="true" aria-label={t("settingsApi.keyCreatedTitle")} style={{ position: "fixed", inset: 0, zIndex: 9999, display: "grid", placeItems: "center", background: "rgb(var(--tint) / 0.45)", backdropFilter: "blur(4px)" }}>
+          <div style={{ width: "100%", maxWidth: 480, background: "var(--bg)", borderRadius: 16, padding: "28px 24px 24px", boxShadow: "0 24px 64px rgb(var(--shadow) / calc(0.18 * var(--shadow-boost)))", display: "flex", flexDirection: "column", gap: 16 }}>
             <div>
               <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 6px" }}>{t("settingsApi.keyCreatedTitle")}</h2>
               <p style={{ margin: 0, fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
                 {t("settingsApi.keyCreatedDesc", { name: revealedName })}
               </p>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", background: "rgba(0,0,0,0.03)", borderRadius: 10, border: "1px solid var(--line-soft)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", background: "rgb(var(--tint) / 0.03)", borderRadius: 10, border: "1px solid var(--line-soft)" }}>
               <span style={{ flex: 1, fontFamily: "monospace", fontSize: 14, fontWeight: 600, wordBreak: "break-all", lineHeight: 1.5, userSelect: "all" }}>
                 {revealedKey}
               </span>
@@ -289,8 +289,8 @@ export default function ApiSettingsPage() {
       )}
       {/* Rename modal */}
       {renameTarget && (
-        <div role="dialog" aria-modal="true" aria-label={t("settingsApi.renameTitle")} style={{ position: "fixed", inset: 0, zIndex: 9999, display: "grid", placeItems: "center", background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }} onClick={() => !renameBusy && setRenameTarget(null)}>
-          <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 420, background: "var(--bg)", borderRadius: 16, padding: "28px 24px 24px", boxShadow: "0 24px 64px rgba(0,0,0,0.18)", display: "flex", flexDirection: "column", gap: 16 }}>
+        <div role="dialog" aria-modal="true" aria-label={t("settingsApi.renameTitle")} style={{ position: "fixed", inset: 0, zIndex: 9999, display: "grid", placeItems: "center", background: "rgb(var(--tint) / 0.45)", backdropFilter: "blur(4px)" }} onClick={() => !renameBusy && setRenameTarget(null)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 420, background: "var(--bg)", borderRadius: 16, padding: "28px 24px 24px", boxShadow: "0 24px 64px rgb(var(--shadow) / calc(0.18 * var(--shadow-boost)))", display: "flex", flexDirection: "column", gap: 16 }}>
             <div>
               <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 6px" }}>{t("settingsApi.renameTitle")}</h2>
               <p style={{ margin: 0, fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
@@ -343,13 +343,13 @@ function IconBtn({ onClick, title, danger, children }: { onClick: () => void; ti
         width: 28,
         height: 28,
         borderRadius: 6,
-        border: `1px solid ${danger ? "rgba(220,38,38,0.25)" : "var(--line-soft)"}`,
+        border: `1px solid ${danger ? "color-mix(in srgb, var(--danger) 38%, transparent)" : "var(--line-soft)"}`,
         background: "var(--bg)",
         cursor: "pointer",
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-        color: danger ? "#DC2626" : "var(--muted)",
+        color: danger ? "var(--danger-bright)" : "var(--muted)",
         padding: 0,
       }}
     >

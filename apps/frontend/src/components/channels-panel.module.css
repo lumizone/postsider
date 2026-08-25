@@ -63,7 +63,7 @@
 }
 
 .collapseBtn:hover {
-  background: rgba(0, 0, 0, 0.06);
+  background: rgb(var(--tint) / 0.06);
   color: var(--fg);
 }
 
@@ -169,7 +169,7 @@
 }
 
 .row:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: rgb(var(--tint) / 0.04);
 }
 
 .rowDisabled .name,
@@ -188,7 +188,7 @@
 }
 
 .rowActive .platform {
-  color: rgba(255, 255, 255, 0.7);
+  color: rgb(var(--on-fg-rgb) / 0.7);
 }
 
 .avatarWrap {
@@ -295,7 +295,7 @@
 
 .toggleDotOff {
   background: transparent;
-  border: 1px solid rgba(0, 0, 0, 0.3);
+  border: 1px solid rgb(var(--tint) / 0.3);
 }
 
 .empty {

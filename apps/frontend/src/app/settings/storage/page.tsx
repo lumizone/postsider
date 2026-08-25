@@ -148,7 +148,7 @@ export default function StorageSettingsPage() {
             padding: "28px 28px 24px",
             borderRadius: 20,
             border: "1px solid var(--line-soft)",
-            background: "linear-gradient(135deg, rgba(0,0,0,0.015) 0%, rgba(0,0,0,0) 100%)",
+            background: "linear-gradient(135deg, rgb(var(--tint) / 0.015) 0%, transparent 100%)",
           }}
         >
           {/* Header row */}
@@ -177,10 +177,10 @@ export default function StorageSettingsPage() {
               style={{
                 padding: "6px 14px",
                 borderRadius: 99,
-                background: isLocal ? "rgba(0,0,0,0.05)" : "rgba(37,99,235,0.08)",
+                background: isLocal ? "rgb(var(--tint) / 0.05)" : "var(--info-soft)",
                 fontSize: 12,
                 fontWeight: 600,
-                color: isLocal ? "var(--fg)" : "#2563EB",
+                color: isLocal ? "var(--fg)" : "var(--info)",
               }}
             >
               {isLocal ? t("settingsStorage.localDisk") : "Cloudflare R2"}
@@ -192,7 +192,7 @@ export default function StorageSettingsPage() {
             style={{
               height: 8,
               borderRadius: 99,
-              background: "rgba(0,0,0,0.06)",
+              background: "rgb(var(--tint) / 0.06)",
               overflow: "hidden",
               marginBottom: 18,
             }}
@@ -202,7 +202,7 @@ export default function StorageSettingsPage() {
                 style={{
                   height: "100%",
                   width: `${Math.max(usedPct, stats.total > 0 ? 2 : 0)}%`,
-                  background: usedPct > 90 ? "#EF4444" : usedPct > 70 ? "#F59E0B" : "#0F0F0F",
+                  background: usedPct > 90 ? "var(--danger-bright)" : usedPct > 70 ? "var(--warning-bright)" : "var(--fg)",
                   borderRadius: 99,
                   transition: "width 300ms ease",
                 }}
@@ -210,13 +210,13 @@ export default function StorageSettingsPage() {
             ) : (
               <div style={{ height: "100%", display: "flex" }}>
                 {imgPct > 0 && (
-                  <div style={{ height: "100%", width: `${imgPct}%`, background: "#0F0F0F" }} />
+                  <div style={{ height: "100%", width: `${imgPct}%`, background: "var(--fg)" }} />
                 )}
                 {vidPct > 0 && (
-                  <div style={{ height: "100%", width: `${vidPct}%`, background: "#737373" }} />
+                  <div style={{ height: "100%", width: `${vidPct}%`, background: "rgb(var(--tint) / 0.55)" }} />
                 )}
                 {stats.total > 0 && imgPct + vidPct < 100 && (
-                  <div style={{ height: "100%", width: `${100 - imgPct - vidPct}%`, background: "#D4D4D4" }} />
+                  <div style={{ height: "100%", width: `${100 - imgPct - vidPct}%`, background: "rgb(var(--tint) / 0.18)" }} />
                 )}
               </div>
             )}
@@ -224,10 +224,10 @@ export default function StorageSettingsPage() {
 
           {/* Breakdown */}
           <div style={{ display: "flex", gap: 28, fontSize: 13 }}>
-            <Stat color="#0F0F0F" label={t("media.images")} value={stats.images} />
-            <Stat color="#737373" label={t("media.videos")} value={stats.videos} />
+            <Stat color="var(--fg)" label={t("media.images")} value={stats.images} />
+            <Stat color="rgb(var(--tint) / 0.55)" label={t("media.videos")} value={stats.videos} />
             <Stat
-              color="#D4D4D4"
+              color="rgb(var(--tint) / 0.18)"
               label={t("settingsStorage.other")}
               value={Math.max(0, stats.total - stats.images - stats.videos)}
             />
@@ -256,7 +256,7 @@ export default function StorageSettingsPage() {
             ))}
           </select>
           {limitActive && (
-            <span style={{ fontSize: 12, color: usedPct > 90 ? "#EF4444" : "var(--muted)" }}>
+            <span style={{ fontSize: 12, color: usedPct > 90 ? "var(--danger-bright)" : "var(--muted)" }}>
               {t("settingsStorage.pctUsed", { pct: usedPct.toFixed(1) })}
             </span>
           )}
@@ -309,7 +309,7 @@ export default function StorageSettingsPage() {
                 height: 24,
                 borderRadius: 99,
                 border: "none",
-                background: cleanOrphans ? "var(--fg)" : "rgba(0,0,0,0.1)",
+                background: cleanOrphans ? "var(--fg)" : "rgb(var(--tint) / 0.1)",
                 position: "relative",
                 cursor: "pointer",
                 transition: "background 150ms ease",
@@ -325,8 +325,8 @@ export default function StorageSettingsPage() {
                   width: 18,
                   height: 18,
                   borderRadius: "50%",
-                  background: "#fff",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                  background: "var(--bg)",
+                  boxShadow: "0 1px 3px rgb(var(--shadow) / calc(0.2 * var(--shadow-boost)))",
                   transition: "left 150ms ease",
                 }}
               />
@@ -406,8 +406,8 @@ export default function StorageSettingsPage() {
               padding: "10px 12px",
               borderRadius: 8,
               fontSize: 13,
-              background: cleanupMsg.kind === "error" ? "rgba(192,57,43,0.08)" : "rgba(0,0,0,0.03)",
-              color: cleanupMsg.kind === "error" ? "#c0392b" : "var(--fg)",
+              background: cleanupMsg.kind === "error" ? "var(--danger-soft)" : "rgb(var(--tint) / 0.03)",
+              color: cleanupMsg.kind === "error" ? "var(--danger)" : "var(--fg)",
             }}
           >
             {cleanupMsg.text}
@@ -435,7 +435,7 @@ export default function StorageSettingsPage() {
             marginTop: 16,
             padding: "12px 14px",
             borderRadius: 10,
-            background: "rgba(0,0,0,0.025)",
+            background: "rgb(var(--tint) / 0.025)",
             fontSize: 12,
             color: "var(--muted)",
             lineHeight: 1.6,
@@ -481,7 +481,7 @@ function ConfigRow({ label, value }: { label: string; value: string }) {
         alignItems: "baseline",
         gap: 14,
         padding: "10px 0",
-        borderBottom: "1px solid rgba(0,0,0,0.04)",
+        borderBottom: "1px solid rgb(var(--tint) / 0.04)",
         fontSize: 13,
       }}
     >
@@ -566,7 +566,7 @@ function CleanupAction({
           alignItems: "center",
           justifyContent: "space-between",
           padding: "14px 0",
-          borderBottom: "1px solid rgba(0,0,0,0.04)",
+          borderBottom: "1px solid rgb(var(--tint) / 0.04)",
         }}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -601,7 +601,7 @@ function CleanupAction({
             zIndex: 9999,
             display: "grid",
             placeItems: "center",
-            background: "rgba(0,0,0,0.4)",
+            background: "var(--scrim)",
             backdropFilter: "blur(4px)",
           }}
           onClick={() => setShowConfirm(false)}
@@ -614,7 +614,7 @@ function CleanupAction({
               background: "var(--bg)",
               borderRadius: 16,
               padding: "28px 24px 22px",
-              boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
+              boxShadow: "0 20px 60px rgb(var(--shadow) / calc(0.15 * var(--shadow-boost)))",
               display: "flex",
               flexDirection: "column",
               gap: 16,
@@ -676,8 +676,8 @@ function CleanupAction({
                   padding: "10px 20px",
                   borderRadius: 10,
                   border: "none",
-                  background: typed === confirmWord ? "#DC2626" : "rgba(220,38,38,0.3)",
-                  color: "#fff",
+                  background: typed === confirmWord ? "var(--danger-bright)" : "color-mix(in srgb, var(--danger) 45%, transparent)",
+                  color: "var(--on-fg)",
                   fontSize: 14,
                   fontWeight: 600,
                   cursor: typed === confirmWord ? "pointer" : "not-allowed",

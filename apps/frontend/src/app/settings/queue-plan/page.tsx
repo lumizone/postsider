@@ -220,7 +220,7 @@ export default function QueuePlanPage() {
         subtitle={t("settingsQueuePlan.subtitle")}
       />
       {error && (
-        <div role="alert" style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 0 16px", padding: "10px 12px", borderRadius: 8, background: "rgba(192,57,43,0.08)", color: "#c0392b", fontSize: 13 }}>
+        <div role="alert" style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 0 16px", padding: "10px 12px", borderRadius: 8, background: "var(--danger-soft)", color: "var(--danger)", fontSize: 13 }}>
           <span style={{ flex: 1 }}>{error}</span>
           <button type="button" onClick={() => setLoadAttempt((attempt) => attempt + 1)} style={{ border: 0, background: "transparent", color: "inherit", cursor: "pointer", fontWeight: 600, textDecoration: "underline" }}>
             {t("calendar.retry")}

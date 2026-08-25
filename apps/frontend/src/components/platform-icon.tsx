@@ -150,5 +150,5 @@ export function PlatformIcon({
 
 /** Background colour for the tile that hosts the platform icon. */
 export function platformBadgeColor(_platform: string): { bg: string; fg: string } {
-  return { bg: "rgba(0, 0, 0, 0.04)", fg: "var(--fg)" };
+  return { bg: "rgb(var(--tint) / 0.04)", fg: "var(--fg)" };
 }

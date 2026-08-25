@@ -34,6 +34,16 @@ const en = {
     pickDate: "Pick a date",
     pickTime: "Pick a time",
   },
+  theme: {
+    appearance: "Appearance",
+    light: "Light",
+    dark: "Dark",
+    system: "System",
+    hint: "System follows your device setting and keeps following it. The sun/moon button in the sidebar switches light and dark directly.",
+    switchToDark: "Switch to dark theme",
+    switchToLight: "Switch to light theme",
+    followingSystem: "Following your device setting",
+  },
   nav: {
     calendar: "Calendar",
     analytics: "Analytics",

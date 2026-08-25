@@ -905,8 +905,8 @@ export function Calendar({ year, month }: CalendarProps) {
               gap: 10,
               padding: "12px 14px",
               borderRadius: "var(--radius-md)",
-              background: "rgba(220, 38, 38, 0.08)",
-              color: "#c0392b",
+              background: "var(--danger-soft)",
+              color: "var(--danger)",
               fontSize: 13,
               marginBottom: 16,
             }}
@@ -917,7 +917,7 @@ export function Calendar({ year, month }: CalendarProps) {
                 href="/billing"
                 style={{
                   fontWeight: 600,
-                  color: "#c0392b",
+                  color: "var(--danger)",
                   textDecoration: "underline",
                   whiteSpace: "nowrap",
                 }}
@@ -932,7 +932,7 @@ export function Calendar({ year, month }: CalendarProps) {
               style={{
                 border: "none",
                 background: "transparent",
-                color: "#c0392b",
+                color: "var(--danger)",
                 cursor: "pointer",
                 fontSize: 16,
                 lineHeight: 1,
@@ -952,8 +952,8 @@ export function Calendar({ year, month }: CalendarProps) {
               gap: 10,
               padding: "12px 14px",
               borderRadius: "var(--radius-md)",
-              background: "rgba(220, 38, 38, 0.08)",
-              color: "#c0392b",
+              background: "var(--danger-soft)",
+              color: "var(--danger)",
               fontSize: 13,
               marginBottom: 16,
             }}
@@ -969,7 +969,7 @@ export function Calendar({ year, month }: CalendarProps) {
                 border: "none",
                 background: "transparent",
                 fontWeight: 600,
-                color: "#c0392b",
+                color: "var(--danger)",
                 textDecoration: "underline",
                 whiteSpace: "nowrap",
                 cursor: "pointer",
@@ -990,8 +990,8 @@ export function Calendar({ year, month }: CalendarProps) {
               gap: 10,
               padding: "12px 14px",
               borderRadius: "var(--radius-md)",
-              background: "rgba(220, 38, 38, 0.08)",
-              color: "#c0392b",
+              background: "var(--danger-soft)",
+              color: "var(--danger)",
               fontSize: 13,
               marginBottom: 16,
             }}
@@ -1006,7 +1006,7 @@ export function Calendar({ year, month }: CalendarProps) {
                   border: "none",
                   background: "transparent",
                   fontWeight: 600,
-                  color: "#c0392b",
+                  color: "var(--danger)",
                   textDecoration: "underline",
                   whiteSpace: "nowrap",
                   cursor: editLoading ? "default" : "pointer",

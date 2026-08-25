@@ -4,6 +4,7 @@ import { Inter, Changa_One } from "next/font/google";
 import { AppRoot } from "@/components/app-root";
 import { AuthProvider } from "@/lib/auth-context";
 import { I18nProvider } from "@/lib/i18n";
+import { THEME_INIT_SCRIPT, ThemeProvider } from "@/lib/theme";
 import "./globals.css";
 
 const inter = Inter({
@@ -27,13 +28,25 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${changaOne.variable}`}>
+    // suppressHydrationWarning: the inline script below stamps data-theme on
+    // <html> before React hydrates, so the served markup and the live DOM
+    // differ by that one attribute on purpose.
+    <html
+      lang="en"
+      className={`${inter.variable} ${changaOne.variable}`}
+      suppressHydrationWarning
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body>
-        <I18nProvider>
-          <AuthProvider>
-            <AppRoot>{children}</AppRoot>
-          </AuthProvider>
-        </I18nProvider>
+        <ThemeProvider>
+          <I18nProvider>
+            <AuthProvider>
+              <AppRoot>{children}</AppRoot>
+            </AuthProvider>
+          </I18nProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -79,7 +79,7 @@ export function RewritePanel({ content, platform, onInsert, onClose }: Props) {
           {user.aiUsage.remaining === null ? t("postChecker.unlimitedUses") : t("postChecker.usesRemaining", { count: user.aiUsage.remaining })}
         </p>}
 
-        {state === "error" && <p style={{ fontSize: 12, color: "#DC2626", margin: 0 }}>Could not generate. Try again.</p>}
+        {state === "error" && <p style={{ fontSize: 12, color: "var(--danger-bright)", margin: 0 }}>Could not generate. Try again.</p>}
 
         {state === "done" && variants.map((v, i) => (
           <div key={i} style={{ border: "1px solid var(--line-soft)", borderRadius: 8, padding: 10, display: "flex", flexDirection: "column", gap: 8 }}>

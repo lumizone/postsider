@@ -1,17 +1,68 @@
 /* PostSider UI — strict black & white, Apple-inspired premium feel */
 
-:root {
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter",
-    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-brand: "Changa One", Impact, "Arial Black", sans-serif;
+/*
+ * Theming
+ * ───────
+ * Two surfaces, one tint channel.
+ *
+ *   --page     the page ground (only <body> paints it)
+ *   --bg       every panel, card, input, modal — one step above the page
+ *   --tint     the RGB channel of every translucent overlay in the app,
+ *              written as rgb(var(--tint) / α). Light mode tints with black,
+ *              dark mode with white, so one α keeps the same relative weight
+ *              in both themes. Never write a literal rgba(0, 0, 0, α) again.
+ *   --shadow   shadows stay black in both themes (light does not fall upward);
+ *              dark multiplies their alpha by --shadow-boost, because a soft
+ *              black blur is nearly invisible on a dark ground.
+ *   --scrim    modal backdrops: black in both themes, by design.
+ *
+ * In light mode --page and --bg are the same white, so the token split is
+ * invisible; in dark mode it is what separates a card from the page.
+ *
+ * The active theme is an explicit data-theme="light|dark" on <html>, written
+ * before first paint by the inline script in layout.tsx. "System" is resolved
+ * to one of those two by that script (and kept in sync with the OS), so no
+ * rule here needs prefers-color-scheme.
+ */
 
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+
+  --page: #ffffff;
   --bg: #ffffff;
   --fg: #000000;
   --line: #000000;
-  --line-soft: rgba(0, 0, 0, 0.08);
-  --muted: rgba(0, 0, 0, 0.55);
-  --hover: rgba(0, 0, 0, 0.04);
-  --hover-strong: rgba(0, 0, 0, 0.08);
+  --tint: 0 0 0;
+  --shadow: 0 0 0;
+  --shadow-boost: 1;
+  --scrim: rgb(0 0 0 / 0.5);
+  /* Foreground of anything painted in --fg (inverted pills, active rows).
+   * --on-fg-rgb is the same ink as a tint channel, for the translucent
+   * secondary text that sits on those inverted surfaces. */
+  --on-fg: #ffffff;
+  --on-fg-rgb: 255 255 255;
+
+  /* The one non-neutral accent in the UI (primary analytics card). */
+  --accent: #8b5cf6;
+
+  /* Status colors. *-soft is the tinted background behind them. */
+  --danger: #c0392b;
+  --danger-strong: #b91c1c;
+  --danger-bright: #dc2626;
+  --danger-soft: rgb(192 57 43 / 0.08);
+  --warning: #b45309;
+  --warning-bright: #d97706;
+  --warning-soft: rgb(245 158 11 / 0.1);
+  --success: #15803d;
+  --success-soft: rgb(21 128 61 / 0.1);
+  --info: #2563eb;
+  --info-soft: rgb(37 99 235 / 0.08);
+
+  --line-soft: rgb(var(--tint) / 0.08);
+  --muted: rgb(var(--tint) / 0.55);
+  --hover: rgb(var(--tint) / 0.04);
+  --hover-strong: rgb(var(--tint) / 0.08);
 
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -20,6 +71,38 @@
   --radius-pill: 999px;
 
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --page: #08080a;
+  --bg: #141416;
+  --fg: #f2f2f3;
+  /* Not pure --fg: a hairline at full white reads as a glowing edge. */
+  --line: rgb(255 255 255 / 0.82);
+  --tint: 255 255 255;
+  --shadow: 0 0 0;
+  --shadow-boost: 2.2;
+  --scrim: rgb(0 0 0 / 0.66);
+  --on-fg: #08080a;
+  --on-fg-rgb: 8 8 10;
+
+  --accent: #a78bfa;
+
+  /* Lifted for legibility on a dark ground — the light-mode inks fail
+   * contrast at these sizes. */
+  --danger: #ff7a6b;
+  --danger-strong: #ff9c90;
+  --danger-bright: #ff6b5e;
+  --danger-soft: rgb(255 122 107 / 0.14);
+  --warning: #f5b544;
+  --warning-bright: #fbbf24;
+  --warning-soft: rgb(245 181 68 / 0.14);
+  --success: #4ade80;
+  --success-soft: rgb(74 222 128 / 0.14);
+  --info: #7aa2ff;
+  --info-soft: rgb(122 162 255 / 0.14);
 }
 
 *,
@@ -90,11 +173,18 @@ input[type="number"]::-webkit-inner-spin-button {
   opacity: 1;
 }
 
+/* The glyph is a dark bitmap the browser supplies; grayscale alone leaves it
+ * black-on-black in dark mode, so invert it back to light. */
+[data-theme="dark"] ::-webkit-calendar-picker-indicator {
+  filter: grayscale(1) invert(1);
+}
+
 html,
 body {
   margin: 0;
   padding: 0;
-  background: var(--bg);
+  /* The page ground; panels paint --bg on top of it (see the theming note). */
+  background: var(--page);
   color: var(--fg);
   font-family: var(--font-sans);
   font-size: 14px;

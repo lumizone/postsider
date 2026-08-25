@@ -24,6 +24,16 @@ const pl = {
     pickDate: "Wybierz datę",
     pickTime: "Wybierz godzinę",
   },
+  theme: {
+    appearance: "Wygląd",
+    light: "Jasny",
+    dark: "Ciemny",
+    system: "Systemowy",
+    hint: "Tryb systemowy podąża za ustawieniem urządzenia i reaguje na jego zmiany. Przycisk słońca/księżyca w panelu bocznym przełącza jasny i ciemny od razu.",
+    switchToDark: "Przełącz na ciemny motyw",
+    switchToLight: "Przełącz na jasny motyw",
+    followingSystem: "Zgodnie z ustawieniem urządzenia",
+  },
   nav: {
     calendar: "Kalendarz",
     analytics: "Analityka",

@@ -174,8 +174,8 @@ export default function UsersSettingsPage() {
             margin: "0 0 16px",
             padding: "10px 12px",
             borderRadius: "var(--radius-md)",
-            background: "rgba(192, 57, 43, 0.08)",
-            color: "#c0392b",
+            background: "var(--danger-soft)",
+            color: "var(--danger)",
             fontSize: 13,
           }}
         >
@@ -238,7 +238,7 @@ export default function UsersSettingsPage() {
               padding: 18,
               border: "1px solid var(--line-soft)",
               borderRadius: "var(--radius-md)",
-              background: "rgba(0,0,0,0.02)",
+              background: "rgb(var(--tint) / 0.02)",
               fontSize: 13,
               display: "flex",
               flexDirection: "column",
@@ -258,7 +258,7 @@ export default function UsersSettingsPage() {
                     fontFamily: "monospace",
                     fontSize: 13,
                     padding: "12px 14px",
-                    background: "#fff",
+                    background: "var(--bg)",
                     border: "1px solid var(--line-soft)",
                     borderRadius: "var(--radius-md)",
                   }}

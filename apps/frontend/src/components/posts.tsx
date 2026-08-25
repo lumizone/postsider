@@ -792,7 +792,7 @@ export function Posts() {
         </div>
       </div>
       {listTruncated && (
-        <div role="status" style={{ margin: "12px 0", padding: "10px 12px", borderRadius: 8, background: "rgba(0,0,0,0.04)", color: "var(--muted)", fontSize: 12 }}>
+        <div role="status" style={{ margin: "12px 0", padding: "10px 12px", borderRadius: 8, background: "rgb(var(--tint) / 0.04)", color: "var(--muted)", fontSize: 12 }}>
           {t("posts.listTruncated")}
         </div>
       )}

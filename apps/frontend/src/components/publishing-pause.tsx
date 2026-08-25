@@ -120,8 +120,8 @@ export function PublishingPauseControl({
         title={paused ? t("publishing.resume") : t("publishing.pause")}
         style={{
           ...commonButton,
-          background: paused ? "var(--fg)" : "#DC2626",
-          color: paused ? "var(--bg)" : "#fff",
+          background: paused ? "var(--fg)" : "var(--danger-bright)",
+          color: paused ? "var(--bg)" : "var(--on-fg)",
         }}
       >
         {paused ? (
@@ -150,7 +150,7 @@ export function PublishingPauseControl({
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.4)",
+            background: "var(--scrim)",
             zIndex: 100,
             display: "grid",
             placeItems: "center",
@@ -166,7 +166,7 @@ export function PublishingPauseControl({
               border: "1px solid var(--line-soft)",
               borderRadius: "var(--radius-lg)",
               padding: 24,
-              boxShadow: "0 16px 48px rgba(0,0,0,0.2)",
+              boxShadow: "0 16px 48px rgb(var(--shadow) / calc(0.2 * var(--shadow-boost)))",
             }}
           >
             <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>
@@ -280,8 +280,8 @@ export function PublishingPauseControl({
                 style={{
                   marginTop: 12,
                   fontSize: 13,
-                  color: "#DC2626",
-                  background: "rgba(220,38,38,0.08)",
+                  color: "var(--danger-bright)",
+                  background: "var(--danger-soft)",
                   borderRadius: 8,
                   padding: "8px 10px",
                 }}
@@ -319,9 +319,9 @@ export function PublishingPauseControl({
                   border: "none",
                   background:
                     open === "pause"
-                      ? "#DC2626"
+                      ? "var(--danger-bright)"
                       : "var(--fg)",
-                  color: open === "pause" ? "#fff" : "var(--bg)",
+                  color: open === "pause" ? "var(--on-fg)" : "var(--bg)",
                   fontSize: 13,
                   fontWeight: 600,
                   cursor: busy ? "default" : "pointer",
@@ -384,8 +384,8 @@ export function PublishingPauseBanner({
         padding: "12px 16px",
         borderRadius: "var(--radius-md)",
         marginBottom: 24,
-        background: "rgba(220,38,38,0.08)",
-        border: "1px solid rgba(220,38,38,0.25)",
+        background: "var(--danger-soft)",
+        border: "1px solid color-mix(in srgb, var(--danger) 38%, transparent)",
       }}
     >
       <span
@@ -396,8 +396,8 @@ export function PublishingPauseBanner({
           borderRadius: 999,
           display: "grid",
           placeItems: "center",
-          background: "#DC2626",
-          color: "#fff",
+          background: "var(--danger-bright)",
+          color: "var(--on-fg)",
           flexShrink: 0,
           fontSize: 15,
         }}
@@ -405,7 +405,7 @@ export function PublishingPauseBanner({
         ⏸
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: "#B91C1C" }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--danger-strong)" }}>
           {t("publishing.pausedBanner")}
           {state.reason ? ` — ${state.reason}` : ""}
         </div>
@@ -436,7 +436,7 @@ export function PublishingPauseBanner({
         </button>
       )}
       {error && (
-        <span style={{ fontSize: 12, color: "#B91C1C" }}>{error}</span>
+        <span style={{ fontSize: 12, color: "var(--danger-strong)" }}>{error}</span>
       )}
     </div>
   );

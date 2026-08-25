@@ -119,7 +119,7 @@ export function ChannelAvatar({
             width: badgeSize,
             height: badgeSize,
             borderRadius: "50%",
-            background: "#fff",
+            background: "var(--bg)",
             color: "var(--fg)",
             border: "2px solid var(--bg)",
             display: "inline-flex",

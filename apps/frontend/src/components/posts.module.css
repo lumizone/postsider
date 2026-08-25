@@ -122,7 +122,7 @@
   align-items: center;
   padding: 3px;
   border-radius: var(--radius-pill);
-  background: rgba(0, 0, 0, 0.04);
+  background: rgb(var(--tint) / 0.04);
   gap: 2px;
   max-width: 100%;
   overflow-x: auto;
@@ -156,7 +156,7 @@
 }
 
 .tab:hover {
-  background: rgba(0, 0, 0, 0.06);
+  background: rgb(var(--tint) / 0.06);
 }
 
 .tab:active {
@@ -174,14 +174,14 @@
   font-weight: 700;
   padding: 1px 7px;
   border-radius: var(--radius-pill);
-  background: rgba(0, 0, 0, 0.06);
+  background: rgb(var(--tint) / 0.06);
   color: var(--fg);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
 }
 
 .tabActive .tabCount {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgb(var(--on-fg-rgb) / 0.2);
   color: var(--bg);
 }
 
@@ -401,7 +401,7 @@
 }
 
 .row:hover {
-  background: rgba(0, 0, 0, 0.02);
+  background: rgb(var(--tint) / 0.02);
 }
 
 .statusCell {
@@ -432,11 +432,11 @@
 }
 
 .statusPillDraft .statusDot {
-  background: rgba(0, 0, 0, 0.25);
+  background: rgb(var(--tint) / 0.25);
 }
 
 .statusPillScheduled .statusDot {
-  background: rgba(0, 0, 0, 0.55);
+  background: rgb(var(--tint) / 0.55);
 }
 
 .statusPillPublished {
@@ -659,7 +659,7 @@
   background: var(--bg);
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-md);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  box-shadow: 0 8px 24px rgb(var(--shadow) / calc(0.12 * var(--shadow-boost)));
   padding: 4px;
   min-width: 180px;
   animation: scaleIn 120ms var(--ease);
@@ -683,7 +683,7 @@
 .pickerBackdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.5);
+  background: var(--scrim);
   backdrop-filter: blur(8px);
   z-index: 60;
   display: flex;
@@ -701,7 +701,7 @@
   border: 1px solid var(--line-soft);
   display: flex;
   flex-direction: column;
-  box-shadow: 0 30px 80px rgba(0,0,0,0.18);
+  box-shadow: 0 30px 80px rgb(var(--shadow) / calc(0.18 * var(--shadow-boost)));
   animation: scaleIn 180ms var(--ease);
   overflow: hidden;
 }

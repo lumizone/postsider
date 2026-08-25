@@ -111,12 +111,12 @@ function PasswordCard() {
         </div>
       </div>
       {err && (
-        <div role="alert" style={{ marginTop: 8, fontSize: 13, color: "#c0392b" }}>
+        <div role="alert" style={{ marginTop: 8, fontSize: 13, color: "var(--danger)" }}>
           {err}
         </div>
       )}
       {msg && (
-        <div role="status" style={{ marginTop: 8, fontSize: 13, color: "#27ae60" }}>
+        <div role="status" style={{ marginTop: 8, fontSize: 13, color: "var(--success)" }}>
           {msg}
         </div>
       )}
@@ -146,15 +146,15 @@ function DangerZone() {
       <section
         style={{
           borderRadius: "var(--radius-lg)",
-          border: "1px solid rgba(220, 38, 38, 0.3)",
-          background: "rgba(220, 38, 38, 0.02)",
+          border: "1px solid color-mix(in srgb, var(--danger) 45%, transparent)",
+          background: "var(--danger-soft)",
           padding: "22px 24px",
           display: "flex",
           flexDirection: "column",
           gap: 4,
         }}
       >
-        <div style={{ fontSize: 16, fontWeight: 600, color: "#dc2626" }}>
+        <div style={{ fontSize: 16, fontWeight: 600, color: "var(--danger-bright)" }}>
           {t("security.dangerZone")}
         </div>
         <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 8 }}>
@@ -167,7 +167,7 @@ function DangerZone() {
           buttonLabel={t("security.disconnectBtn")}
           onClick={() => setAction("channels")}
         />
-        <div style={{ height: 1, background: "rgba(220,38,38,0.15)", margin: "4px 0" }} />
+        <div style={{ height: 1, background: "color-mix(in srgb, var(--danger) 24%, transparent)", margin: "4px 0" }} />
         <DangerRow
           title={t("security.deleteTitle")}
           description={t("security.deleteDesc")}
@@ -243,9 +243,9 @@ function DangerRow({
           height: 36,
           padding: "0 16px",
           borderRadius: "var(--radius-pill)",
-          border: "1px solid rgba(220, 38, 38, 0.4)",
+          border: "1px solid color-mix(in srgb, var(--danger) 55%, transparent)",
           background: "var(--bg)",
-          color: "#dc2626",
+          color: "var(--danger-bright)",
           fontSize: 13,
           fontWeight: 600,
           cursor: "pointer",
@@ -253,12 +253,12 @@ function DangerRow({
           transition: "background 140ms var(--ease), color 140ms var(--ease)",
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.background = "#dc2626";
-          e.currentTarget.style.color = "#fff";
+          e.currentTarget.style.background = "var(--danger-bright)";
+          e.currentTarget.style.color = "var(--on-fg)";
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.background = "var(--bg)";
-          e.currentTarget.style.color = "#dc2626";
+          e.currentTarget.style.color = "var(--danger-bright)";
         }}
       >
         {buttonLabel}
@@ -320,7 +320,7 @@ function DangerModal({
         zIndex: 9999,
         display: "grid",
         placeItems: "center",
-        background: "rgba(0,0,0,0.45)",
+        background: "var(--scrim)",
         backdropFilter: "blur(4px)",
         padding: 16,
       }}
@@ -334,14 +334,14 @@ function DangerModal({
           background: "var(--bg)",
           borderRadius: 16,
           padding: "26px 24px 22px",
-          boxShadow: "0 24px 64px rgba(0,0,0,0.18)",
+          boxShadow: "0 24px 64px rgb(var(--shadow) / calc(0.18 * var(--shadow-boost)))",
           display: "flex",
           flexDirection: "column",
           gap: 16,
         }}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#dc2626" }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--danger-bright)" }}>
             {title}
           </h2>
           <p style={{ margin: 0, fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
@@ -370,7 +370,7 @@ function DangerModal({
         </div>
 
         {err && (
-          <div role="alert" style={{ fontSize: 13, color: "#c0392b" }}>{err}</div>
+          <div role="alert" style={{ fontSize: 13, color: "var(--danger)" }}>{err}</div>
         )}
 
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
@@ -398,8 +398,8 @@ function DangerModal({
               padding: "10px 18px",
               borderRadius: 10,
               border: "none",
-              background: ready ? "#dc2626" : "#e5e7eb",
-              color: ready ? "#fff" : "#9ca3af",
+              background: ready ? "var(--danger-bright)" : "rgb(var(--tint) / 0.1)",
+              color: ready ? "var(--on-fg)" : "rgb(var(--tint) / 0.38)",
               fontSize: 14,
               fontWeight: 600,
               cursor: ready && !busy ? "pointer" : "not-allowed",

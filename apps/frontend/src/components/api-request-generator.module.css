@@ -5,7 +5,7 @@
   line-height: 1.55;
 }
 .codeInline {
-  background: rgba(0, 0, 0, 0.05);
+  background: rgb(var(--tint) / 0.05);
   padding: 1px 5px;
   border-radius: 4px;
   font-size: 12px;
@@ -138,9 +138,9 @@
   white-space: nowrap;
   transition: background 0.15s;
 }
-.ghost:hover { background: rgba(0, 0, 0, 0.03); }
+.ghost:hover { background: rgb(var(--tint) / 0.03); }
 .ghost:disabled { opacity: 0.6; cursor: default; }
-.removeBtn { color: #dc2626; border-color: rgba(220, 38, 38, 0.25); }
+.removeBtn { color: var(--danger-bright); border-color: color-mix(in srgb, var(--danger) 38%, transparent); }
 .imgNote { font-size: 11px; color: var(--muted); word-break: break-all; }
 
 /* Live request output — a sticky code panel that mirrors the composer preview. */
@@ -181,7 +181,7 @@
   font-size: 12px;
   cursor: pointer;
 }
-.copyBtn:hover { background: rgba(0, 0, 0, 0.03); }
+.copyBtn:hover { background: rgb(var(--tint) / 0.03); }
 .codeBlock {
   margin: 0;
   padding: 14px 16px;

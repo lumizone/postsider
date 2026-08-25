@@ -13,4 +13,4 @@
 .bar { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--fg); }
 .bar span { width: 90px; } .track { flex: 1; height: 6px; background: var(--line-soft); border-radius: 99px; overflow: hidden; } .fill { height: 100%; background: var(--fg); }
 .good, .bad { list-style: none; padding: 0; margin: 10px 0 0; font-size: 11px; line-height: 1.5; }
-.good li { color: #1a7f37; } .bad li { color: #b3261e; }
+.good li { color: var(--success); } .bad li { color: var(--danger-strong); }

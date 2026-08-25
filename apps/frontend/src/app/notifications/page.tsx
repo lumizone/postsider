@@ -152,8 +152,8 @@ export default function NotificationsPage() {
           style={{
             padding: "10px 12px",
             borderRadius: 8,
-            background: "rgba(192,57,43,0.08)",
-            color: "#c0392b",
+            background: "var(--danger-soft)",
+            color: "var(--danger)",
             fontSize: 13,
           }}
         >

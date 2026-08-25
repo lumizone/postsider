@@ -47,7 +47,7 @@
   text-align: left;
   white-space: normal;
   /* Matches the popover treatment used by the post row menu and the modals. */
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 8px 24px rgb(var(--shadow) / calc(0.12 * var(--shadow-boost)));
   /*
    * Opacity only, deliberately. The shared scaleIn keyframes animate
    * `transform`, which would clobber the translateX(-50%) that centres this

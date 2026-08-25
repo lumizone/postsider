@@ -98,7 +98,7 @@ export function GuestReviewView({ token }: { token: string }) {
           </div>
         </div>
       ) : error && !post ? (
-        <div role="alert" style={{ padding: "16px", borderRadius: 8, background: "rgba(192,57,43,0.08)", color: "#c0392b", fontSize: 14 }}>
+        <div role="alert" style={{ padding: "16px", borderRadius: 8, background: "var(--danger-soft)", color: "var(--danger)", fontSize: 14 }}>
           {error}
         </div>
       ) : post ? (
@@ -129,7 +129,7 @@ export function GuestReviewView({ token }: { token: string }) {
           </div>
 
           {error && (
-            <div role="alert" style={{ padding: "10px 12px", borderRadius: 8, background: "rgba(192,57,43,0.08)", color: "#c0392b", fontSize: 13 }}>
+            <div role="alert" style={{ padding: "10px 12px", borderRadius: 8, background: "var(--danger-soft)", color: "var(--danger)", fontSize: 13 }}>
               {error}
             </div>
           )}
@@ -144,7 +144,7 @@ export function GuestReviewView({ token }: { token: string }) {
                 style={{ borderRadius: 8, border: "1px solid var(--line-soft)", background: "var(--bg)", color: "var(--fg)", padding: 10, fontSize: 14 }}
               />
               <div style={{ display: "flex", gap: 8 }}>
-                <button type="button" style={{ ...ghostBtn, color: "#DC2626", borderColor: "rgba(220,38,38,0.25)" }} disabled={busy} onClick={() => act("reject")}>
+                <button type="button" style={{ ...ghostBtn, color: "var(--danger-bright)", borderColor: "color-mix(in srgb, var(--danger) 38%, transparent)" }} disabled={busy} onClick={() => act("reject")}>
                   {t("guestReview.confirmReject")}
                 </button>
                 <button type="button" style={ghostBtn} onClick={() => setRejecting(false)}>{t("common.cancel")}</button>

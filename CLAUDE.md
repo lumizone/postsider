@@ -13,6 +13,48 @@ blokady u źródła — złożenie audytu, materiały do review, zgodność kodu
 
 ## Status
 
+- **Dark theme — cała aplikacja (2026-08-25, ZACOMMITOWANE, NIE wdrożone).**
+  Trzy stany: Light / Dark / System (`postsider:theme` w localStorage, jak
+  `postsider:locale`). Przełącznik słońce/księżyc w stopce sidebara i w pasku
+  mobilnym (`theme-toggle.tsx`), trójstanowy wybór w Settings → General
+  („Appearance"), klucze i18n `theme.*` w en+pl. Backend i baza nietknięte.
+  - **Kontrakt tokenów (`globals.css`) — trzymać się go w nowym kodzie:**
+    `--page` maluje TYLKO `<body>`, `--bg` to każdy panel/karta/input/modal.
+    W jasnym oba są białe (zero zmian wizualnych), w ciemnym `--bg` (#141416)
+    jest o stopień jaśniejsze od `--page` (#08080a) — i to jedyne, co odkleja
+    kartę od tła. Dzięki temu 97 istniejących `background: var(--bg)` dostało
+    elewację bez dotykania modułów.
+  - **`--tint` zamiast `rgba(0,0,0,α)`.** Każda półprzezroczysta nakładka to
+    `rgb(var(--tint) / α)`; jasny tintuje czernią, ciemny bielą, więc jedna
+    alfa daje tę samą wagę względną w obu motywach. **Nie pisać literalnego
+    `rgba(0, 0, 0, α)`** — przerobione 142 wystąpienia w CSS + reszta w inline
+    style. Wyjątki: `--shadow` (cienie zostają czarne, w ciemnym alfa ×
+    `--shadow-boost`, bo czarny blur na ciemnym tle znika) i `--scrim`
+    (backdropy modali, czarne w obu motywach).
+  - Do tego `--on-fg`/`--on-fg-rgb` (treść na powierzchni malowanej `--fg`),
+    `--danger`/`--warning`/`--success`/`--info` + warianty `-soft`/`-strong`/
+    `-bright` (w ciemnym podniesione, bo jasne tusze nie przechodzą kontrastu
+    na ciemnym tle) i `--accent` (fiolet głównej karty analytics).
+  - **Brak migotania.** `THEME_INIT_SCRIPT` (w `lib/theme.tsx`, wstrzykiwany
+    do `<head>` w `layout.tsx`) stempluje `data-theme` na `<html>` przed
+    pierwszym malowaniem; `<html suppressHydrationWarning>` bo serwer tego
+    atrybutu nie zna. **Pułapka złapana w testach:** efekt zapisujący
+    `data-theme` odpalał się z placeholderem `light` z pierwszego renderu i
+    nadpisywał to, co skrypt poprawnie namalował — użytkownik „System" na
+    ciemnej maszynie dostawał błysk na biało. Stąd flaga `ready`: React nie
+    tyka atrybutu, dopóki nie odczyta prawdziwej preferencji.
+  - Zweryfikowane Playwrightem (Chrome 133 z cache, mock API): 18 tras ×
+    2 motywy × desktop 1440×900, zero poziomego overflow, zero błędów
+    konsoli/hydracji; modale (kompozytor, dzwonek, DayPopup); mobile 390×844;
+    persystencja i podążanie za `prefers-color-scheme` na żywo; pierwszy
+    paint poprawny w 4 kombinacjach (stored/system × light/dark).
+    **Audyt kontrastu WCAG AA na wszystkich trasach: ciemny nie wprowadza
+    ANI JEDNEJ nowej porażki** — każde trafienie ma bliźniaka w jasnym o tym
+    samym lub gorszym współczynniku (monogramy awatarów na kolorach marek,
+    wygaszone dni spoza miesiąca). Przy okazji wyszło, że **„Danger zone"
+    w JASNYM motywie ma 4.29 przy wymaganych 4.5** (stare, nie ruszone).
+  - 168/168 testów zielone, `tsc --noEmit` czysty, `next build` czysty.
+
 - **UI: powiadomienia, filtry postów, przegląd całego dashboardu, polskie tłumaczenia
   (2026-08-25). CZĘŚCIOWO WDROŻONE.** Cztery commity na `fix/publish-pipeline-and-report-bugs`,
   branch **4 commity przed `origin`, nic nie wypchnięte**. **Na prodzie jest TYLKO

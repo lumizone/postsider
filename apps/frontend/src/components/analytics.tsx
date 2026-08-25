@@ -114,13 +114,13 @@ function Sparkline({
     y: h - 3 - ((d.value - min) / range) * (h - 6),
   }));
   const line = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
-  const stroke = accent ? "#8b5cf6" : "var(--fg)";
+  const stroke = accent ? "var(--accent)" : "var(--fg)";
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden className={styles.sparkline}>
       {pts.length > 1 && (
         <path
           d={`${line} L ${w} ${h} L 0 ${h} Z`}
-          fill={accent ? "rgba(139, 92, 246, 0.10)" : "rgba(0,0,0,0.05)"}
+          fill={accent ? "color-mix(in srgb, var(--accent) 12%, transparent)" : "rgb(var(--tint) / 0.05)"}
         />
       )}
       {pts.length > 1 && (
@@ -827,7 +827,7 @@ function LineChart({ data }: { data: LineChartPoint[] }) {
                 x2={width - padding.right}
                 y1={y}
                 y2={y}
-                stroke="rgba(0,0,0,0.06)"
+                stroke="rgb(var(--tint) / 0.06)"
                 strokeWidth={1}
               />
               <text
@@ -842,7 +842,7 @@ function LineChart({ data }: { data: LineChartPoint[] }) {
           );
         })}
 
-        {areaPath && <path d={areaPath} fill="rgba(0,0,0,0.05)" />}
+        {areaPath && <path d={areaPath} fill="rgb(var(--tint) / 0.05)" />}
         {linePath && (
           <path
             d={linePath}
@@ -876,7 +876,7 @@ function LineChart({ data }: { data: LineChartPoint[] }) {
               x2={points[hover].x}
               y1={padding.top}
               y2={padding.top + innerH}
-              stroke="rgba(0,0,0,0.25)"
+              stroke="rgb(var(--tint) / 0.25)"
               strokeDasharray="3 3"
               strokeWidth={1}
             />

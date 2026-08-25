@@ -1,7 +1,7 @@
 .backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--scrim);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   z-index: 50;
@@ -20,7 +20,7 @@
   border: 1px solid var(--line-soft);
   display: flex;
   flex-direction: column;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 30px 80px rgb(var(--shadow) / calc(0.18 * var(--shadow-boost)));
   animation: scaleIn 180ms var(--ease);
   overflow: hidden;
 }
@@ -106,7 +106,7 @@
 }
 
 .closeBtn:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: rgb(var(--tint) / 0.05);
 }
 
 .closeBtn:active {
@@ -163,7 +163,7 @@
 }
 
 .hourSlot:hover {
-  background: rgba(0, 0, 0, 0.025);
+  background: rgb(var(--tint) / 0.025);
 }
 
 .plusBubble {
@@ -212,7 +212,7 @@
 }
 
 .event:hover {
-  background: rgba(0, 0, 0, 0.025);
+  background: rgb(var(--tint) / 0.025);
 }
 
 .event:active {

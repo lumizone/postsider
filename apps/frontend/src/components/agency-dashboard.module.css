@@ -18,12 +18,12 @@
 .card { padding: 20px; min-width: 0; }
 .clientList { display: flex; flex-direction: column; margin-top: 18px; }
 .client { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 4px; border: 0; border-top: 1px solid var(--line-soft); background: transparent; color: var(--fg); text-align: left; cursor: pointer; }
-.client:first-child { border-top: 0; }.client:disabled { cursor: default; }.selected { margin: 0 -10px; padding-left: 14px; padding-right: 14px; border-radius: 8px; background: var(--surface, #f5f5f5); }
-.client span:first-child, .channelList li span:first-child { display: flex; flex-direction: column; gap: 4px; }.clientStatus { font-size: 12px; color: var(--muted); }.clientStatus.warn { color: #c0392b; }
+.client:first-child { border-top: 0; }.client:disabled { cursor: default; }.selected { margin: 0 -10px; padding-left: 14px; padding-right: 14px; border-radius: 8px; background: rgb(var(--tint) / 0.05); }
+.client span:first-child, .channelList li span:first-child { display: flex; flex-direction: column; gap: 4px; }.clientStatus { font-size: 12px; color: var(--muted); }.clientStatus.warn { color: var(--danger); }
 .secondary { cursor: pointer; }.secondary:disabled { opacity: .45; cursor: default; }
 .reportStats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 22px 0; }.reportStats div { display: flex; flex-direction: column; gap: 4px; }.reportStats strong { font-size: 20px; }
-.channelList { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--line-soft); }.channelList li { display: flex; justify-content: space-between; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--line-soft); font-size: 13px; }.active { color: #16803c; font-size: 12px; }.disabled { color: var(--muted); font-size: 12px; }
-.error { margin-bottom: 16px; padding: 10px 12px; border-radius: 8px; background: rgba(192,57,43,.08); color: #c0392b; font-size: 13px; }
+.channelList { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--line-soft); }.channelList li { display: flex; justify-content: space-between; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--line-soft); font-size: 13px; }.active { color: var(--success); font-size: 12px; }.disabled { color: var(--muted); font-size: 12px; }
+.error { margin-bottom: 16px; padding: 10px 12px; border-radius: 8px; background: var(--danger-soft); color: var(--danger); font-size: 13px; }
 .notice { margin-bottom: 18px; padding: 12px 14px; border: 1px solid var(--line-soft); border-radius: 9px; color: var(--muted); font-size: 13px; }
 @media (max-width: 900px) { .metrics { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 680px) { .page { padding: 24px 16px 40px; }.header, .cardHeader { flex-direction: column; }.controls { width: 100%; justify-content: space-between; }.controls select { flex: 1; }.metrics, .grid { grid-template-columns: 1fr; }.reportStats { grid-template-columns: repeat(2, 1fr); } }

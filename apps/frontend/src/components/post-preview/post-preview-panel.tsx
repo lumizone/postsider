@@ -159,7 +159,7 @@ export function PostPreviewPanel({
           </div>
         )}
 
-        <div style={{ display: "flex", justifyContent: "flex-end", fontSize: 11, color: over ? "#DC2626" : "var(--muted)", fontWeight: over ? 600 : 400 }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", fontSize: 11, color: over ? "var(--danger-bright)" : "var(--muted)", fontWeight: over ? 600 : 400 }}>
           {body.length}{max > 0 ? ` / ${max}` : ""}{over ? " · over limit" : ""}
         </div>
       </article>

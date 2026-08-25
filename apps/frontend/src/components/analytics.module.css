@@ -63,8 +63,8 @@
   align-items: center;
   gap: 6px;
   border: 1px solid var(--line-soft);
-  background: var(--bg, #fff);
-  color: var(--fg, #000);
+  background: var(--bg);
+  color: var(--fg);
   border-radius: var(--radius-pill);
   font-size: 13px;
   font-weight: 600;
@@ -72,7 +72,7 @@
   white-space: nowrap;
   transition: background 140ms var(--ease), border-color 140ms var(--ease);
 }
-.actionBtn:hover { background: rgba(0, 0, 0, 0.04); }
+.actionBtn:hover { background: rgb(var(--tint) / 0.04); }
 .actionBtn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* Custom date range */
@@ -99,7 +99,7 @@
 }
 
 .customBtn:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: rgb(var(--tint) / 0.04);
 }
 
 .customBtnActive {
@@ -122,7 +122,7 @@
   background: var(--bg);
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-md);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 24px rgb(var(--shadow) / calc(0.1 * var(--shadow-boost)));
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -151,7 +151,7 @@
   align-items: center;
   padding: 3px;
   border-radius: var(--radius-pill);
-  background: rgba(0, 0, 0, 0.04);
+  background: rgb(var(--tint) / 0.04);
   gap: 2px;
 }
 
@@ -171,7 +171,7 @@
 }
 
 .segment:hover {
-  background: rgba(0, 0, 0, 0.06);
+  background: rgb(var(--tint) / 0.06);
   color: var(--fg);
 }
 
@@ -214,7 +214,7 @@
 }
 
 .kpiClickable:hover {
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.07);
+  box-shadow: 0 10px 30px rgb(var(--shadow) / calc(0.07 * var(--shadow-boost)));
   border-color: transparent;
   transform: translateY(-2px);
 }
@@ -232,7 +232,7 @@
 
 .kpiActive .kpiLabel,
 .kpiActive .kpiHint {
-  color: rgba(255, 255, 255, 0.65);
+  color: rgb(var(--on-fg-rgb) / 0.65);
 }
 
 .kpiLabel {
@@ -257,8 +257,8 @@
 
 /* Impressions is the primary card — a very subtle purple accent. */
 .kpiAccent {
-  border-color: rgba(139, 92, 246, 0.35);
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.05);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
 .kpiAccent.kpiActive {
@@ -326,17 +326,17 @@
 }
 
 .growthUp {
-  background: rgba(22, 163, 74, 0.1);
-  color: #15803d;
+  background: var(--success-soft);
+  color: var(--success);
 }
 
 .growthDown {
-  background: rgba(220, 38, 38, 0.08);
-  color: #b91c1c;
+  background: var(--danger-soft);
+  color: var(--danger-strong);
 }
 
 .growthNeutral {
-  background: rgba(0, 0, 0, 0.05);
+  background: rgb(var(--tint) / 0.05);
   color: var(--muted);
 }
 
@@ -377,7 +377,7 @@
 }
 
 .tr:hover {
-  background: rgba(0, 0, 0, 0.02);
+  background: rgb(var(--tint) / 0.02);
 }
 
 .td {
@@ -436,7 +436,7 @@
 
 .skeleton,
 .skeletonTall {
-  background: linear-gradient(90deg, rgba(0, 0, 0, 0.04) 25%, rgba(0, 0, 0, 0.07) 50%, rgba(0, 0, 0, 0.04) 75%);
+  background: linear-gradient(90deg, rgb(var(--tint) / 0.04) 25%, rgb(var(--tint) / 0.07) 50%, rgb(var(--tint) / 0.04) 75%);
   background-size: 200% 100%;
   animation: skeletonShimmer 1.4s ease-in-out infinite;
   border: 1px solid transparent;
@@ -486,7 +486,7 @@
 }
 
 .chartCard:hover {
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 10px 30px rgb(var(--shadow) / calc(0.06 * var(--shadow-boost)));
 }
 
 .chartHead {
@@ -579,7 +579,7 @@
 }
 
 .card:hover {
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 10px 30px rgb(var(--shadow) / calc(0.06 * var(--shadow-boost)));
 }
 
 .sectionHead {
@@ -625,7 +625,7 @@
 }
 
 .postRow:hover {
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 6px 18px rgb(var(--shadow) / calc(0.06 * var(--shadow-boost)));
   transform: translateY(-1px);
 }
 

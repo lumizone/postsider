@@ -121,7 +121,7 @@ export default function CsvImportPage() {
       </div>
 
       {error && (
-        <div role="alert" style={{ padding: "10px 12px", borderRadius: 8, background: "rgba(192,57,43,0.08)", color: "#c0392b", fontSize: 13 }}>{error}</div>
+        <div role="alert" style={{ padding: "10px 12px", borderRadius: 8, background: "var(--danger-soft)", color: "var(--danger)", fontSize: 13 }}>{error}</div>
       )}
 
       <div
@@ -143,7 +143,7 @@ export default function CsvImportPage() {
           padding: "40px 20px",
           textAlign: "center",
           cursor: "pointer",
-          background: dragging ? "rgba(0,0,0,0.02)" : "transparent",
+          background: dragging ? "rgb(var(--tint) / 0.02)" : "transparent",
         }}
       >
         <input ref={inputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={(e) => pick(e.target.files?.[0])} />
@@ -210,9 +210,9 @@ export default function CsvImportPage() {
               <span>{t("csvImport.detailHeader")}</span>
             </div>
             {results.map((r) => (
-              <div key={r.row} style={{ display: "grid", gridTemplateColumns: "56px 1fr 1.4fr", gap: 8, padding: "10px 12px", borderBottom: "1px solid rgba(0,0,0,0.05)", fontSize: 13, alignItems: "center" }}>
+              <div key={r.row} style={{ display: "grid", gridTemplateColumns: "56px 1fr 1.4fr", gap: 8, padding: "10px 12px", borderBottom: "1px solid rgb(var(--tint) / 0.05)", fontSize: 13, alignItems: "center" }}>
                 <span style={{ color: "var(--muted)" }}>{r.row}</span>
-                <span style={{ fontWeight: 600, color: r.ok ? "#15803d" : "#DC2626" }}>{r.ok ? (importedAsDraft ? t("csvImport.statusDraft") : t("csvImport.statusScheduled")) : t("csvImport.statusError")}</span>
+                <span style={{ fontWeight: 600, color: r.ok ? "var(--success)" : "var(--danger-bright)" }}>{r.ok ? (importedAsDraft ? t("csvImport.statusDraft") : t("csvImport.statusScheduled")) : t("csvImport.statusError")}</span>
                 <span style={{ color: "var(--muted)" }}>{r.ok ? `${r.channels ?? ""}${r.scheduledFor ? ` · ${r.scheduledFor.replace("T", " ")}` : ""}` : r.error}</span>
               </div>
             ))}

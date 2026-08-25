@@ -331,7 +331,7 @@ export function NotificationsBell({ compact = false }: { compact?: boolean }) {
               position: "fixed",
               inset: 0,
               zIndex: 199,
-              background: "rgba(0,0,0,0.35)",
+              background: "var(--scrim)",
             }}
           />
         )}
@@ -352,7 +352,7 @@ export function NotificationsBell({ compact = false }: { compact?: boolean }) {
             background: "var(--bg)",
             border: "1px solid var(--line-soft)",
             borderRadius: pos.sheet ? "var(--radius-lg)" : 12,
-            boxShadow: "0 12px 32px rgba(0,0,0,0.16)",
+            boxShadow: "0 12px 32px rgb(var(--shadow) / calc(0.16 * var(--shadow-boost)))",
             zIndex: 200,
             overflow: "hidden",
             outline: "none",

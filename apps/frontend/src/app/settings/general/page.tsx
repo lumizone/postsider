@@ -16,7 +16,8 @@ import {
   type UserPersonal,
 } from "@/lib/user-api";
 import { useAuth } from "@/lib/auth-context";
-import { useT } from "@/lib/i18n";
+import { useT, type MessageKey } from "@/lib/i18n";
+import { THEME_PREFERENCES, useTheme, type ThemePreference } from "@/lib/theme";
 
 const TIMEZONES: { offset: number; label: string }[] = [
   { offset: -720, label: "(UTC-12:00) Baker Island" },
@@ -58,6 +59,60 @@ const TIMEZONES: { offset: number; label: string }[] = [
   { offset: 780, label: "(UTC+13:00) Tonga, Samoa" },
   { offset: 840, label: "(UTC+14:00) Line Islands" },
 ];
+
+const THEME_LABEL: Record<ThemePreference, MessageKey> = {
+  light: "theme.light",
+  dark: "theme.dark",
+  system: "theme.system",
+};
+
+/**
+ * Three-way appearance picker. The sidebar toggle only flips light ⇄ dark;
+ * "follow the system" needs a name, so it lives here.
+ */
+function AppearanceCard() {
+  const t = useT();
+  const { preference, setPreference } = useTheme();
+
+  return (
+    <Card title={t("theme.appearance")}>
+      <div
+        role="radiogroup"
+        aria-label={t("theme.appearance")}
+        style={{ display: "flex", flexWrap: "wrap", gap: 8 }}
+      >
+        {THEME_PREFERENCES.map((p) => {
+          const active = preference === p;
+          return (
+            <button
+              key={p}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => setPreference(p)}
+              style={{
+                minHeight: 36,
+                padding: "8px 16px",
+                borderRadius: "var(--radius-pill)",
+                border: `1px solid ${active ? "var(--fg)" : "var(--line-soft)"}`,
+                background: active ? "var(--fg)" : "var(--bg)",
+                color: active ? "var(--on-fg)" : "var(--fg)",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              {t(THEME_LABEL[p])}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ marginTop: 10, fontSize: 12, color: "var(--muted)" }}>
+        {t("theme.hint")}
+      </div>
+    </Card>
+  );
+}
 
 export default function GeneralSettingsPage() {
   const { user, refresh } = useAuth();
@@ -128,8 +183,8 @@ export default function GeneralSettingsPage() {
             margin: "0 0 16px",
             padding: "10px 12px",
             borderRadius: "var(--radius-md)",
-            background: "rgba(192, 57, 43, 0.08)",
-            color: "#c0392b",
+            background: "var(--danger-soft)",
+            color: "var(--danger)",
             fontSize: 13,
           }}
         >
@@ -239,6 +294,8 @@ export default function GeneralSettingsPage() {
           </>
         )}
       </Card>
+
+      <AppearanceCard />
 
       <Card title={t("settingsGeneral.emailNotifs")}>
         {emailNotifs == null ? (

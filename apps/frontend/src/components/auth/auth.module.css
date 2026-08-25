@@ -34,7 +34,7 @@
   border-radius: var(--radius-xl);
   padding: 32px;
   background: var(--bg);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 12px 40px rgb(var(--shadow) / calc(0.04 * var(--shadow-boost)));
 }
 
 .brand {
@@ -115,7 +115,7 @@
 .input:focus {
   outline: none;
   border-color: var(--fg);
-  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 0 0 3px rgb(var(--shadow) / calc(0.05 * var(--shadow-boost)));
 }
 
 .submit {
@@ -147,8 +147,8 @@
 .error {
   margin-top: -2px;
   font-size: 13px;
-  color: #c0392b;
-  background: rgba(192, 57, 43, 0.08);
+  color: var(--danger);
+  background: var(--danger-soft);
   padding: 8px 10px;
   border-radius: var(--radius-md);
 }
@@ -174,7 +174,7 @@
   margin-top: 12px;
   padding: 12px 14px;
   border-radius: var(--radius-md);
-  background: rgba(0, 0, 0, 0.04);
+  background: rgb(var(--tint) / 0.04);
   font-size: 13px;
   color: var(--muted);
 }
@@ -217,7 +217,7 @@
 
 .oauthButton:hover {
   border-color: var(--fg);
-  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 0 0 3px rgb(var(--shadow) / calc(0.04 * var(--shadow-boost)));
 }
 
 .oauthButton:disabled {

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useT, type MessageKey } from "@/lib/i18n";
 import { LanguageSwitcher } from "./language-switcher";
+import { ThemeToggle } from "./theme-toggle";
 import { NotificationsBell } from "./notifications-bell";
 import { PublishingPauseBanner, usePublishingState } from "./publishing-pause";
 import styles from "./dashboard-shell.module.css";
@@ -324,6 +325,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         {/* The sidebar copy lives in a drawer on mobile, so the bell needs its
             own always-visible spot here. */}
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+          <ThemeToggle compact />
           <NotificationsBell compact />
         </div>
       </header>
@@ -441,7 +443,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                 "background 140ms var(--ease), transform 120ms var(--ease)",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = "rgba(0, 0, 0, 0.06)";
+              e.currentTarget.style.background = "rgb(var(--tint) / 0.06)";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.background = "transparent";
@@ -474,7 +476,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                 "background 140ms var(--ease), transform 120ms var(--ease)",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = "rgba(0, 0, 0, 0.06)";
+              e.currentTarget.style.background = "rgb(var(--tint) / 0.06)";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.background = "transparent";
@@ -537,6 +539,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             <NotificationsBell />
             <OrgSwitcher />
             <LanguageSwitcher />
+            <ThemeToggle />
             {user && (
               <div
                 style={{
@@ -639,7 +642,7 @@ function OrgAvatar({
         width: size,
         height: size,
         borderRadius: size >= 28 ? 8 : 6,
-        background: invert ? "var(--fg)" : "rgba(0,0,0,0.1)",
+        background: invert ? "var(--fg)" : "rgb(var(--tint) / 0.1)",
         color: invert ? "var(--bg)" : "var(--fg)",
         display: "grid",
         placeItems: "center",
@@ -747,7 +750,7 @@ function OrgSwitcher() {
             background: "var(--bg)",
             border: "1px solid var(--line-soft)",
             borderRadius: "var(--radius-md)",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+            boxShadow: "0 8px 24px rgb(var(--shadow) / calc(0.12 * var(--shadow-boost)))",
             zIndex: 50,
             display: "flex",
             flexDirection: "column",
@@ -772,7 +775,7 @@ function OrgSwitcher() {
                     padding: "7px 10px",
                     borderRadius: 8,
                     border: "none",
-                    background: isCurrent ? "rgba(0,0,0,0.04)" : "transparent",
+                    background: isCurrent ? "rgb(var(--tint) / 0.04)" : "transparent",
                     color: "var(--fg)",
                     cursor: isCurrent ? "default" : "pointer",
                     fontSize: 13,
@@ -813,7 +816,7 @@ function OrgSwitcher() {
                   {t("orgSwitcher.newOrgHint")}
                 </span>
                 {createError && (
-                  <span style={{ fontSize: 11, color: "#DC2626" }}>{createError}</span>
+                  <span style={{ fontSize: 11, color: "var(--danger-bright)" }}>{createError}</span>
                 )}
                 <div style={{ display: "flex", gap: 6 }}>
                   <button
@@ -889,9 +892,9 @@ function TrialBanner({ daysLeft }: { daysLeft: number }) {
         padding: "12px 16px",
         borderRadius: "var(--radius-md)",
         marginBottom: 24,
-        background: urgent ? "rgba(217, 119, 6, 0.1)" : "rgba(0,0,0,0.04)",
+        background: urgent ? "var(--warning-soft)" : "rgb(var(--tint) / 0.04)",
         border: urgent
-          ? "1px solid rgba(217, 119, 6, 0.25)"
+          ? "1px solid color-mix(in srgb, var(--warning) 38%, transparent)"
           : "1px solid var(--line-soft)",
       }}
     >
@@ -903,8 +906,8 @@ function TrialBanner({ daysLeft }: { daysLeft: number }) {
           borderRadius: 999,
           display: "grid",
           placeItems: "center",
-          background: urgent ? "#d97706" : "var(--fg)",
-          color: "#fff",
+          background: urgent ? "var(--warning-bright)" : "var(--fg)",
+          color: "var(--on-fg)",
           flexShrink: 0,
         }}
       >
@@ -920,7 +923,7 @@ function TrialBanner({ daysLeft }: { daysLeft: number }) {
         </svg>
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: urgent ? "#b45309" : "var(--fg)" }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: urgent ? "var(--warning)" : "var(--fg)" }}>
           {label}
         </div>
         <div style={{ fontSize: 12, color: "var(--muted)" }}>

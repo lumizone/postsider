@@ -172,8 +172,8 @@ export function useRelativeTime() {
 const ACCENT: Record<NotificationSeverity, string> = {
   // The product is deliberately black and white, so color is spent only where
   // it carries meaning: something is broken and publishing has stopped.
-  error: "#dc2626",
-  warning: "#b45309",
+  error: "var(--danger-bright)",
+  warning: "var(--warning)",
   success: "var(--fg)",
   info: "var(--muted)",
 };

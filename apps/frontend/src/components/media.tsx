@@ -334,8 +334,8 @@ export function Media() {
             gap: 10,
             padding: "12px 14px",
             borderRadius: "var(--radius-md)",
-            background: "rgba(220, 38, 38, 0.08)",
-            color: "#c0392b",
+            background: "var(--danger-soft)",
+            color: "var(--danger)",
             fontSize: 13,
           }}
         >
@@ -347,7 +347,7 @@ export function Media() {
             style={{
               border: "none",
               background: "transparent",
-              color: "#c0392b",
+              color: "var(--danger)",
               cursor: "pointer",
               fontSize: 16,
               lineHeight: 1,

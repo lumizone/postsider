@@ -46,7 +46,7 @@ export function ConfirmDialog({
     };
   }, [onCancel, busy]);
 
-  const accent = danger ? "#dc2626" : "var(--fg)";
+  const accent = danger ? "var(--danger-bright)" : "var(--fg)";
 
   return (
     <div
@@ -60,7 +60,7 @@ export function ConfirmDialog({
         zIndex: 9999,
         display: "grid",
         placeItems: "center",
-        background: "rgba(0,0,0,0.45)",
+        background: "var(--scrim)",
         backdropFilter: "blur(4px)",
         padding: 16,
       }}
@@ -73,7 +73,7 @@ export function ConfirmDialog({
           background: "var(--bg)",
           borderRadius: 16,
           padding: "26px 24px 22px",
-          boxShadow: "0 24px 64px rgba(0,0,0,0.18)",
+          boxShadow: "0 24px 64px rgb(var(--shadow) / calc(0.18 * var(--shadow-boost)))",
           display: "flex",
           flexDirection: "column",
           gap: 16,
@@ -114,7 +114,7 @@ export function ConfirmDialog({
               borderRadius: 10,
               border: "none",
               background: accent,
-              color: "#fff",
+              color: "var(--on-fg)",
               fontSize: 14,
               fontWeight: 600,
               cursor: busy ? "default" : "pointer",

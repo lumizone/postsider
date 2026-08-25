@@ -45,7 +45,7 @@
   background: var(--bg);
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-lg);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.14), 0 4px 12px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 16px 48px rgb(var(--shadow) / calc(0.14 * var(--shadow-boost))), 0 4px 12px rgb(var(--shadow) / calc(0.06 * var(--shadow-boost)));
   animation: popIn 140ms var(--ease);
 }
 
@@ -181,7 +181,7 @@
   background: var(--bg);
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-lg);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.14), 0 4px 12px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 16px 48px rgb(var(--shadow) / calc(0.14 * var(--shadow-boost))), 0 4px 12px rgb(var(--shadow) / calc(0.06 * var(--shadow-boost)));
   animation: popIn 140ms var(--ease);
 }
 

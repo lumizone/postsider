@@ -142,8 +142,8 @@ export default function OrganizationSettingsPage() {
             margin: "0 0 16px",
             padding: "10px 12px",
             borderRadius: "var(--radius-md)",
-            background: "rgba(192, 57, 43, 0.08)",
-            color: "#c0392b",
+            background: "var(--danger-soft)",
+            color: "var(--danger)",
             fontSize: 13,
           }}
         >

@@ -59,8 +59,8 @@ export default function AiUsageSettingsPage() {
               <span>{t("settingsAiUsage.usedOf", { used: usage.used, limit: usage.limit ?? 0 })}</span>
               <span>{t("settingsAiUsage.renews", { date: renewalDate })}</span>
             </div>
-            <div style={{ height: 8, overflow: "hidden", borderRadius: 999, background: "rgba(0,0,0,0.08)" }}>
-              <div style={{ width: `${percent}%`, height: "100%", borderRadius: "inherit", background: percent >= 80 ? "#b45309" : "var(--fg)", transition: "width 180ms ease" }} />
+            <div style={{ height: 8, overflow: "hidden", borderRadius: 999, background: "rgb(var(--tint) / 0.08)" }}>
+              <div style={{ width: `${percent}%`, height: "100%", borderRadius: "inherit", background: percent >= 80 ? "var(--warning)" : "var(--fg)", transition: "width 180ms ease" }} />
             </div>
           </div>
         )}
