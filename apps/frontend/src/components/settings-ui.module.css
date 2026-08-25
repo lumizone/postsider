@@ -37,7 +37,8 @@
 }
 
 .card:hover {
-  box-shadow: 0 10px 30px rgb(var(--shadow) / calc(0.06 * var(--shadow-boost)));
+  box-shadow: inset 0 0 0 1px var(--lift-ring),
+    0 10px 30px rgb(var(--shadow) / calc(0.06 * var(--shadow-boost)));
 }
 
 .cardHead {

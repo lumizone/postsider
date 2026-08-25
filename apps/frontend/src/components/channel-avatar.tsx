@@ -84,6 +84,11 @@ export function ChannelAvatar({
     fontWeight: 700,
     letterSpacing: 0,
     overflow: "hidden",
+    // The channel colour is stored data, so it cannot follow the theme: the
+    // dark end of the palette ("Ink" #0F0F0F) would otherwise be an invisible
+    // disc on a dark surface. A tint-aware hairline gives every colour an edge
+    // in both themes and is invisible against the saturated ones.
+    boxShadow: "inset 0 0 0 1px rgb(var(--tint) / 0.18)",
   };
 
   const badgeSize = Math.max(12, Math.round(size * 0.42));

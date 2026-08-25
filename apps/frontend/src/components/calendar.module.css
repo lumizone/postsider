@@ -481,8 +481,9 @@
 }
 
 .event:hover {
-  border-color: transparent;
-  box-shadow: 0 4px 14px rgb(var(--shadow) / calc(0.1 * var(--shadow-boost)));
+  border-color: var(--lift-ring);
+  box-shadow: inset 0 0 0 1px var(--lift-ring),
+    0 4px 14px rgb(var(--shadow) / calc(0.1 * var(--shadow-boost)));
   transform: translateY(-1px);
 }
 

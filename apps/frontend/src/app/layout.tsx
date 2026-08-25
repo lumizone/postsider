@@ -36,10 +36,15 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       className={`${inter.variable} ${changaOne.variable}`}
       suppressHydrationWarning
     >
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
-      </head>
       <body>
+        {/*
+          First child of <body>, not inside a hand-written <head>: React hoists
+          a <script> out of a manual <head> in the App Router, and the served
+          markup then disagrees with the hydrated tree (React #418 on every
+          route). Here it is plain markup that runs while the body is still
+          being parsed — still before anything paints.
+        */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <ThemeProvider>
           <I18nProvider>
             <AuthProvider>

@@ -112,6 +112,11 @@ export function PlatformIcon({
           background: fallback.bg,
           color: fallback.fg,
           borderRadius: Math.max(4, Math.round(size * 0.22)),
+          // These are brand colours, so they stay literal — which leaves the
+          // near-black tile (Ghost) invisible on a dark surface and the white
+          // ones (Notion, Mataroa) invisible on a light one. The hairline gives
+          // every tile an edge in both themes.
+          boxShadow: "inset 0 0 0 1px rgb(var(--tint) / 0.2)",
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",

@@ -46,6 +46,13 @@
   /* The one non-neutral accent in the UI (primary analytics card). */
   --accent: #8b5cf6;
 
+  /* Hover elevation. The design lifts cards with a soft black shadow, which
+   * simply does not exist on a dark ground — and several of those rules also
+   * drop the border, so hovering in dark would make an element LESS defined.
+   * Light keeps the shadow alone (this ring is transparent, so nothing
+   * changes); dark adds the ring that carries the affordance instead. */
+  --lift-ring: transparent;
+
   /* Status colors. *-soft is the tinted background behind them. */
   --danger: #c0392b;
   --danger-strong: #b91c1c;
@@ -89,6 +96,7 @@
   --on-fg-rgb: 8 8 10;
 
   --accent: #a78bfa;
+  --lift-ring: rgb(255 255 255 / 0.16);
 
   /* Lifted for legibility on a dark ground — the light-mode inks fail
    * contrast at these sizes. */

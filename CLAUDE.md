@@ -54,6 +54,44 @@ blokady u źródła — złożenie audytu, materiały do review, zgodność kodu
     wygaszone dni spoza miesiąca). Przy okazji wyszło, że **„Danger zone"
     w JASNYM motywie ma 4.29 przy wymaganych 4.5** (stare, nie ruszone).
   - 168/168 testów zielone, `tsc --noEmit` czysty, `next build` czysty.
+  - **Audyt głęboki (2026-08-25, druga tura) — 44 widoki × 2 motywy, 16 355
+    porównanych elementów.** Metoda: ten sam widok renderowany w obu motywach,
+    `getComputedStyle` diffowany element po elemencie (`color`, `background`,
+    `border*`, `fill`, `stroke`, `boxShadow`, `outline`). Wartość IDENTYCZNA
+    w obu motywach = kolor, który nie podąża za motywem. Skrypty w scratchpadzie
+    sesji (`deep-audit.js`, `mocks.js`, `states.js`, `hydra.js`, `noflash.js`).
+    Znalazło cztery rzeczy, których nie widać na zrzutach:
+    - **BŁĄD HYDRACJI, który sam wprowadziłem.** Ręczny `<head>` z inline
+      `<script>` w `layout.tsx`: App Router hoistuje `<script>` z ręcznego
+      `<head>`, więc serwowany HTML rozjeżdżał się z drzewem po hydracji —
+      **React #418 na 8–9 z 15 wejść, w OBU motywach**. Baseline (commit sprzed
+      dark theme, przebudowany i zmierzony tym samym skryptem) miał 0/15.
+      Fix: skrypt jest teraz **pierwszym dzieckiem `<body>`**, bez ręcznego
+      `<head>` — wykonuje się, gdy body dopiero się parsuje, czyli nadal przed
+      pierwszym malowaniem. Po poprawce 0/15 w obu motywach, a pierwszy paint
+      dalej poprawny w 4/4 kombinacjach. **Zasada: nie renderować ręcznego
+      `<head>` w `app/layout.tsx`.**
+    - **Hover w całej apce to „uniesienie cieniem", a cień jest czarny** —
+      na ciemnym tle nie istnieje. W czterech miejscach reguła hover dodatkowo
+      robiła `border-color: transparent`, więc w ciemnym najechanie sprawiało,
+      że element **tracił** krawędź. Token `--lift-ring` (jasny: `transparent`,
+      czyli zero zmian; ciemny: `rgb(255 255 255 / 0.16)`) doszedł jako
+      `inset 0 0 0 1px` do 11 reguł hover oraz w miejsce `transparent`
+      w `border-color`. Zweryfikowane na 6 powierzchniach × 2 motywy.
+    - **Kolor kanału to dane, więc nie może podążać za motywem** — paleta
+      `CHANNEL_COLOR_PALETTE` zaczyna się od „Ink" `#0F0F0F`, czyli w ciemnym
+      niewidoczny dysk awatara, kropka kanału i próbka w modalu. Wszystkie trzy
+      dostały `inset 0 0 0 1px rgb(var(--tint) / 0.18–0.22)`.
+    - **Kafelki marek w „Add channel"** (`SVG_FALLBACKS` w `platform-icon.tsx`)
+      — Ghost `#15171A` ginął w ciemnym, a Notion i Mataroa `#fff` ginęły
+      w JASNYM (**stary błąd, nie z tej sesji**). Ten sam hairline naprawia oba.
+    - Reszta trafień to świadome decyzje: wygaszone dni spoza miesiąca
+      (w jasnym mają GORSZY kontrast), monogramy awatarów na kolorach marek
+      (identyczne w obu) i jeden przycisk `disabled` (WCAG 1.4.3 nie obejmuje).
+      Domyślny `border-color: gray` tabeli analytics ma `border-width: 0` —
+      fałszywy alarm detektora.
+    - Stany `:hover`/`:focus-visible` zmierzone na 15 typach kontrolek: każda
+      ma widoczną reakcję w ciemnym (outline `--fg`, tint tła albo `--lift-ring`).
 
 - **UI: powiadomienia, filtry postów, przegląd całego dashboardu, polskie tłumaczenia
   (2026-08-25). CZĘŚCIOWO WDROŻONE.** Cztery commity na `fix/publish-pipeline-and-report-bugs`,
