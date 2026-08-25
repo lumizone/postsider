@@ -13,7 +13,17 @@ blokady u źródła — złożenie audytu, materiały do review, zgodność kodu
 
 ## Status
 
-- **Dark theme — cała aplikacja (2026-08-25, ZACOMMITOWANE, NIE wdrożone).**
+- **Dark theme — cała aplikacja (2026-08-25, WDROŻONE 13:49).**
+  Commity `38df951` (motyw) + `ad80d78` (audyt widoczności + fix hydracji).
+  Backup przed-deployowy: `postsider_backups/predeploy-20260825-134910`,
+  rollback: obraz `postsider_app-postsider:prev`. Po deployu potwierdzone
+  na żywo: 12/12 kontenerów, `/api/health` redis+database+temporal ok,
+  pollery na kolejce `main` (workflow+activity, backlog 0), pm2 3/3 online
+  z 0 restartów, `storage.postsider.com/image/<plik>` → 200 (regresja nginx),
+  5 endpointów 200, timery ×5 active. **Skrypt motywu w serwowanym HTML
+  siedzi ZA `</head>`, czyli w `<body>`** — dowód, że fix hydracji wszedł.
+  Playwright na żywej produkcji: `firstPaint=dark` dla stored-dark
+  i system-dark, `light` dla stored-light, zero błędów konsoli.
   Trzy stany: Light / Dark / System (`postsider:theme` w localStorage, jak
   `postsider:locale`). Przełącznik słońce/księżyc w stopce sidebara i w pasku
   mobilnym (`theme-toggle.tsx`), trójstanowy wybór w Settings → General
