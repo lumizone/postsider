@@ -74,7 +74,7 @@ export function AgencyDashboard() {
   const exportReport = () => {
     if (!report) return;
     downloadCsv(
-      `${report.customer.name.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "customer"}-report.csv`,
+      `${(report.customer?.name ?? "").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "customer"}-report.csv`,
       rowsToCsv(
         ["Metric", "Value"],
         Object.entries(report.summary).map(([key, value]) => [key, value]),
@@ -87,7 +87,7 @@ export function AgencyDashboard() {
     setPdfBusy(true);
     setError(null);
     try {
-      const filename = `${report.customer.name.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "customer"}-report.pdf`;
+      const filename = `${(report.customer?.name ?? "").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "customer"}-report.pdf`;
       await downloadReportPdf(customerId, days, filename);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("agency.reportError"));
@@ -179,16 +179,16 @@ export function AgencyDashboard() {
 
             <div className={styles.card}>
               <div className={styles.cardHeader}>
-                <div><p className={styles.eyebrow}>{t("agency.reportEyebrow")}</p><h2>{report?.customer.name ?? t("agency.selectClient")}</h2></div>
+                <div><p className={styles.eyebrow}>{t("agency.reportEyebrow")}</p><h2>{report?.customer?.name ?? t("agency.selectClient")}</h2></div>
                 <button className={styles.secondary} onClick={exportPdf} disabled={!report || reportLoading || pdfBusy}>{t("agency.downloadPdf")}</button>
                 <button className={styles.secondary} onClick={exportReport} disabled={!report || reportLoading}>{t("agency.export")}</button>
               </div>
               {reportLoading ? <p className={styles.muted}>{t("common.loading")}</p> : report ? (
                 <>
                   <div className={styles.reportStats}>
-                    {[[t("agency.channels"), report.summary.channels], [t("agency.queued"), report.summary.queued], [t("agency.published"), report.summary.published], [t("agency.approvals"), report.summary.pendingApprovals]].map(([label, value]) => <div key={String(label)}><strong>{number(Number(value))}</strong><span>{label}</span></div>)}
+                    {[[t("agency.channels"), report.summary?.channels ?? 0], [t("agency.queued"), report.summary?.queued ?? 0], [t("agency.published"), report.summary?.published ?? 0], [t("agency.approvals"), report.summary?.pendingApprovals ?? 0]].map(([label, value]) => <div key={String(label)}><strong>{number(Number(value))}</strong><span>{label}</span></div>)}
                   </div>
-                  <ul className={styles.channelList}>{report.channels.map((channel) => <li key={channel.id}><span>{channel.name}<small>{channel.providerIdentifier}</small></span><span className={channel.disabled ? styles.disabled : styles.active}>{channel.disabled ? t("agency.disabled") : t("agency.active")}</span></li>)}</ul>
+                  <ul className={styles.channelList}>{(report.channels ?? []).map((channel) => <li key={channel.id}><span>{channel.name}<small>{channel.providerIdentifier}</small></span><span className={channel.disabled ? styles.disabled : styles.active}>{channel.disabled ? t("agency.disabled") : t("agency.active")}</span></li>)}</ul>
                 </>
               ) : <p className={styles.muted}>{t("agency.selectClientHint")}</p>}
             </div>

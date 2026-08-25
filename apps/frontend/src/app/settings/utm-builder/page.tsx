@@ -39,7 +39,10 @@ export default function UtmBuilderPage() {
 
   const refresh = async () => {
     try {
-      setItems((await getUtmPresets()) || []);
+      // `|| []` only covers null: a payload that is not an array at all still
+      // reached items.map and blanked the page.
+      const presets = await getUtmPresets();
+      setItems(Array.isArray(presets) ? presets : []);
     } catch (e) {
       setError(e instanceof Error ? e.message : t("settingsUtm.loadError"));
     } finally {

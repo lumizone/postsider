@@ -13,6 +13,34 @@ blokady u źródła — złożenie audytu, materiały do review, zgodność kodu
 
 ## Status
 
+- **Polowanie na błędy UI + kontrola SaaS (2026-08-25).** Sweep 28 tras ×
+  2 motywy × desktop/mobile: błędy konsoli i `pageerror`, odpowiedzi 4xx/5xx,
+  poziomy overflow, wyciekające surowe klucze i18n, cele linków. Znalezione
+  i naprawione **3 realne wady, wszystkie niezależne od motywu**:
+  - **`/agency` biały ekran.** `report?.customer.name` — `?.` zabezpieczało
+    tylko `report`, `.customer.name` to już twardy dostęp, więc payload bez
+    `customer` wywalał stronę. **Ten plik miał już raz tę klasę błędu**
+    (`data.clients?.find`), więc utwardzone też `report.summary.*`
+    i `report.channels.map`.
+  - **`/settings/utm-builder` biały ekran.** `setItems((await getUtmPresets()) || [])`
+    — `|| []` łapie `null`, ale nie payload, który nie jest tablicą; `items.map`
+    padał. Teraz `Array.isArray`.
+  - **`/settings/storage`: 10 px poziomego overflow na 390 px.** Rząd statystyk
+    `display:flex` bez zawijania wypychał „N files total" poza ekran.
+    Dodane `flexWrap`.
+  Po poprawkach sweep czysty, wszystkie 24 linki wewnętrzne prowadzą do
+  istniejących tras.
+  **Kontrola z perspektywy SaaS:** wszystkie dzisiejsze zmiany to **wyłącznie
+  `apps/frontend/` + dokumentacja — zero plików w backendzie, orchestratorze,
+  workflowach Temporala, Prismie, public API, SDK i MCP, zero migracji.**
+  Maszyneria publikacji nietknięta. Do tego macierz najemców (świeża org bez
+  kanałów, USER/ADMIN/SUPERADMIN, `agencyMode` on/off, trial, plan FREE,
+  klient z kolorowym logo, gościnny link recenzji bez konta) — gating ról
+  poprawny, zero awarii, zero surowych kluczy, zero overflow.
+  Produkcja przed deployem: 0 workflowów Failed, 0 zaległych postów,
+  6 postów ERROR to stare, znane sprawy platformowe. Pusty `refreshToken`
+  na kanale X jest **celowy** — ten provider używa OAuth 1.0a.
+
 - **DECYZJA PRODUKTOWA: logo NIE zmienia się między motywami (2026-08-25, na życzenie właściciela).**
   Cofnięte: wariant `postsider-logo-dark.png` (plik usunięty), podmiana przez
   `content: url(...)`, jasna płytka pod logo organizacji, klasy `.brand-mark`

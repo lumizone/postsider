@@ -223,7 +223,7 @@ export default function StorageSettingsPage() {
           </div>
 
           {/* Breakdown */}
-          <div style={{ display: "flex", gap: 28, fontSize: 13 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 28, rowGap: 10, fontSize: 13 }}>
             <Stat color="var(--fg)" label={t("media.images")} value={stats.images} />
             <Stat color="rgb(var(--tint) / 0.55)" label={t("media.videos")} value={stats.videos} />
             <Stat
