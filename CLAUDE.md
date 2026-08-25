@@ -13,6 +13,28 @@ blokady u źródła — złożenie audytu, materiały do review, zgodność kodu
 
 ## Status
 
+- **Logo w ciemnym motywie: inwersja BYŁA ZŁA, potrzebny wariant konturowy (2026-08-25).**
+  Pierwsze podejście (`filter: invert(1)`) wyglądało poprawnie „matematycznie"
+  (grafika to czysta skala szarości), ale **znszczyło czytelność postaci**:
+  to nie jest rysunek konturowy, tylko ilustracja z WYPEŁNIENIAMI. Negatyw
+  odwraca tożsamość tonalną — czarna czapka staje się białą plamą, a jasna
+  twarz czarną dziurą; w renderowanych 28–36 px dziewczynka przestaje być
+  rozpoznawalna. Zweryfikowane renderem w docelowych rozmiarach, nie na oko.
+  **Rozwiązanie:** nowy plik `postsider-logo-dark.png` — kontury tego samego
+  rysunku na biało, na przezroczystym tle (detekcja krawędzi laplasjanem +
+  pogrubienie o 3 px, żeby przetrwały zejście do 32 px). Czapka jest teraz
+  kształtem, nie masą. Podmiana przez `content: url(...)` na `.brand-mark`,
+  więc markup bez zmian i **poprawnie już przy pierwszym malowaniu** (inaczej
+  niż podmiana `src` w JS). Przeglądarka bez obsługi `content` zostaje przy
+  jasnym znaku.
+  **Przy okazji: `postsider-logo.png` ważyło 1,26 MB** przy renderze max 36 px.
+  Przeskalowane do 521 px (ta sama proporcja): **142 KB, −89%**, różnica
+  w docelowym rozmiarze niemierzalna okiem (średnia różnica 0,16/255, max 3).
+  Ciemny motyw pobiera dziś 193 KB zamiast 1,3 MB. Kopia oryginału leży
+  w scratchpadzie sesji. **Logo organizacji klienta NIE jest ruszane** —
+  `.brand-mark` trafia wyłącznie na nasz znak (zweryfikowane podstawionym
+  logo org: brak klasy, `filter: none` w obu motywach).
+
 - **ConfirmDialog był NIEKLIKALNY w sidebarze — `position: sticky` (2026-08-25, WDROŻONE 14:52).**
   Zgłoszone jako „nie da się wyczyścić powiadomień w ciemnym motywie". **To nie
   była wina motywu** — pada identycznie w jasnym, na desktopie i mobile;
