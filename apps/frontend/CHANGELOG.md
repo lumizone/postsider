@@ -4,6 +4,58 @@ All notable changes to the PostSider dashboard.
 
 ## Unreleased
 
+### Dark theme
+
+- **The dashboard has a dark theme, with a light / dark / system preference.**
+  The choice is stored per browser (`postsider:theme`), the same way the
+  language switcher already works. A sun/moon toggle sits beside the language
+  select in the sidebar footer and in the mobile topbar; the three-way choice,
+  including "follow the system", lives in Settings → General.
+- "System" keeps following the operating system while it is selected, so a
+  machine that switches to dark at sunset switches the app with it.
+- **No flash of the wrong theme.** An inline script stamps the resolved theme
+  on `<html>` before the first paint, so a dark-mode user never sees a white
+  frame — verified for stored and system preferences in both directions.
+- Colours run through one token layer: a single tint channel drives every
+  translucent overlay, shadows stay black but scale on dark, and status inks
+  (danger / warning / success) are lifted so they stay legible on a dark
+  ground. A contrast sweep over every route found no failure that dark
+  introduces.
+- Hover states no longer rely on a shadow alone. The design lifted cards with a
+  soft black shadow, which does not exist on a dark background — and several of
+  those rules also dropped the border, so hovering made an element *less*
+  defined. Hovered surfaces now gain a hairline in dark mode.
+
+### Fixes
+
+- **Confirmation dialogs were unclickable from the sidebar.** The dashboard
+  sidebar is `position: sticky`, which always opens a stacking context, so a
+  dialog rendered inside it had its z-index scoped to the sidebar and the page
+  content painted over it — clearing notifications did nothing at all, in
+  either theme. Dialogs now render through a portal on `<body>`, which repairs
+  every confirmation in the app.
+- **The Overview page could white-screen** on a report payload without a
+  `customer` field: the optional chain covered only the outer object. The
+  summary and channel list are guarded the same way.
+- **The UTM builder could white-screen** on a payload that was not an array.
+- **Storage settings overflowed 10 px** on a 390 px screen; the stats row now
+  wraps.
+- Channel colours, colour swatches and platform tiles carry a hairline, so the
+  dark end of the palette (and a near-black brand tile) stays visible on either
+  surface.
+
+### Branding
+
+- **The brand lockup always shows the PostSider mark.** An organisation's own
+  logo used to replace it in the corner beside the "PostSider" wordmark; the
+  organisation's identity belongs to the switcher at the bottom of the sidebar,
+  and that is where it stays.
+- Logos are deliberately theme-independent: the PostSider mark and a customer's
+  uploaded logo render identically in light and dark, with no inversion,
+  swapped asset or backing plate.
+- `postsider-logo.png` was resampled from 1.26 MB to 142 KB — it is never drawn
+  larger than 36 px, and the difference at that size is imperceptible.
+
 ### Calendar
 
 - **Month view scales to the viewport height on desktop.** The calendar shell

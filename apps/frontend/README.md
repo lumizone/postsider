@@ -12,6 +12,38 @@ on top of the NestJS backend.
 - `next/font/google` for `Inter` and `Changa One`
 - `simple-icons` for select platform marks; bespoke PNGs in `public/platforms/`
 
+## Theming
+
+The UI is black-and-white in both directions: one light theme and one dark
+theme, chosen per browser (`postsider:theme`) as light, dark, or system.
+`lib/theme.tsx` owns the preference and exports the inline script that stamps
+`data-theme` on `<html>` before the first paint — without it a dark-mode user
+gets a white flash on every full page load.
+
+New styles must go through the tokens in `app/globals.css`:
+
+| Token | Use |
+| --- | --- |
+| `--page` | the page ground — only `<body>` paints it |
+| `--bg` | every panel, card, input and modal |
+| `--tint` | the RGB channel of any translucent overlay: `rgb(var(--tint) / .06)` |
+| `--shadow` / `--shadow-boost` | shadows stay black; dark scales their alpha |
+| `--scrim` | modal backdrops |
+| `--lift-ring` | hover elevation that survives a dark background |
+| `--on-fg` / `--on-fg-rgb` | content sitting on a `--fg`-filled surface |
+| `--danger` / `--warning` / `--success` / `--info` | status inks, lifted in dark |
+
+Two rules worth knowing:
+
+- **Never write a literal `rgba(0, 0, 0, α)`.** Use `rgb(var(--tint) / α)` so
+  the same alpha carries the same weight in both themes.
+- **Overlays must be portalled to `<body>`.** The sidebar is `position: sticky`,
+  which always opens a stacking context, so a fixed overlay rendered inside it
+  is trapped beneath the main column no matter how high its z-index.
+
+Logos are deliberately theme-independent — the PostSider mark and a customer's
+uploaded logo render identically in both themes.
+
 ## Layout
 
 ```
@@ -47,7 +79,10 @@ src/
     posts.tsx                 # filter tabs + search + status pills
     settings-shell.tsx        # secondary sidebar for /settings/*
     settings-ui.tsx           # shared cards/switches/etc.
+    theme-toggle.tsx          # sun/moon switch (sidebar footer + mobile topbar)
+    confirm-dialog.tsx        # shared confirmation modal (portalled to <body>)
   lib/
+    theme.tsx                 # light/dark/system preference + no-flash init script
     calendar-data.ts          # demo channels + events (replace with API later)
     media-data.ts             # demo media items
     platform-labels.ts        # platform-specific KPI / unit labels
@@ -95,6 +130,8 @@ matching backend routes:
 
 - Black-and-white only. Brand colours appear strictly inside platform avatars
   and platform icons in the Add Channel modal.
+- Colours come from the tokens in `app/globals.css` (see Theming). A literal
+  `rgba(0, 0, 0, α)` is always a bug — it does not follow the theme.
 - No external chart library. The line charts on `/analytics` are pure SVG.
 - `public/platforms/*.png` are the source of truth for channel icons; drop a
   new file there and add it to the map in `components/platform-icon.tsx`.
