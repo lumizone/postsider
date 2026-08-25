@@ -47,7 +47,7 @@ type RangePreset =
   | "thisMonth"
   | "custom";
 
-type SortMode = "smart" | "newest" | "oldest";
+type SortMode = "publishedFirst" | "smart" | "newest" | "oldest";
 
 const STATUS_LABEL_KEYS: Record<PostStatus, string> = {
   draft: "posts.status.draft",
@@ -230,7 +230,7 @@ export function Posts() {
   const [range, setRange] = useState<RangePreset>("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [sort, setSort] = useState<SortMode>("smart");
+  const [sort, setSort] = useState<SortMode>("publishedFirst");
   const { channels } = useChannels();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [listTruncated, setListTruncated] = useState(false);
@@ -384,6 +384,8 @@ export function Posts() {
   }, [preStatus]);
 
   const items = useMemo(() => {
+    // "Needs attention first": what is broken or waiting on a human, then what
+    // is still going out, then what already went out.
     const STATUS_ORDER: Record<PostStatus, number> = {
       failed: 0,
       pendingApproval: 1,
@@ -391,6 +393,16 @@ export function Posts() {
       scheduled: 3,
       draft: 4,
       published: 5,
+    };
+    // Default view: what actually went live, newest at the top. The rest keeps
+    // the needs-attention ordering underneath it.
+    const PUBLISHED_FIRST_ORDER: Record<PostStatus, number> = {
+      published: 0,
+      failed: 1,
+      pendingApproval: 2,
+      held: 3,
+      scheduled: 4,
+      draft: 5,
     };
     const byDate = (a: typeof preStatus[number], b: typeof preStatus[number]) => {
       const aDate = parseDate(a.ev.date)?.getTime() ?? 0;
@@ -405,13 +417,15 @@ export function Posts() {
     return preStatus
       .filter(({ status }) => filter === "all" || status === filter)
       .sort((a, b) => {
-        if (sort !== "smart") return byDate(a, b);
-        // Smart: failed first, then scheduled (closest first), then drafts
-        // (newest first), then published (newest first).
-        const orderDelta = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
+        if (sort === "newest" || sort === "oldest") return byDate(a, b);
+        const order =
+          sort === "smart" ? STATUS_ORDER : PUBLISHED_FIRST_ORDER;
+        const orderDelta = order[a.status] - order[b.status];
         if (orderDelta !== 0) return orderDelta;
         const aDate = parseDate(a.ev.date)?.getTime() ?? 0;
         const bDate = parseDate(b.ev.date)?.getTime() ?? 0;
+        // Within a status: scheduled reads best soonest-first (what goes out
+        // next), everything else newest-first.
         if (a.status === "scheduled") return aDate - bDate;
         return bDate - aDate;
       });
@@ -760,6 +774,7 @@ export function Posts() {
             onChange={(e) => setSort(e.target.value as SortMode)}
             aria-label={t("posts.sort")}
           >
+            <option value="publishedFirst">{t("posts.sortPublishedFirst")}</option>
             <option value="smart">{t("posts.sortSmart")}</option>
             <option value="newest">{t("posts.sortNewest")}</option>
             <option value="oldest">{t("posts.sortOldest")}</option>

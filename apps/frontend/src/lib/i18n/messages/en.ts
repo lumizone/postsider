@@ -315,6 +315,7 @@ const en = {
     dateFrom: "From",
     dateTo: "To",
     sort: "Sort",
+    sortPublishedFirst: "Published first",
     sortSmart: "Needs attention first",
     sortNewest: "Newest first",
     sortOldest: "Oldest first",

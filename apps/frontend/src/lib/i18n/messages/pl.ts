@@ -255,6 +255,7 @@ const pl = {
     dateFrom: "Od",
     dateTo: "Do",
     sort: "Sortowanie",
+    sortPublishedFirst: "Najpierw opublikowane",
     sortSmart: "Najpierw wymagające uwagi",
     sortNewest: "Od najnowszych",
     sortOldest: "Od najstarszych",
