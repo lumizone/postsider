@@ -13,6 +13,20 @@ blokady u źródła — złożenie audytu, materiały do review, zgodność kodu
 
 ## Status
 
+- **KONIEC SESJI 2026-08-25: wszystko wdrożone, wypchnięte i zmergowane.**
+  `main`, `fix/publish-pipeline-and-report-bugs` oraz obie referencje na
+  `origin` wskazują ten sam commit **`f738d4b`** — zero rozjazdu.
+  Merge był **fast-forward** (`--ff-only`; `main` nie miał ani jednego commita
+  spoza brancha), więc historia została liniowa i konflikty były niemożliwe.
+  Przy okazji na `main` trafiły wreszcie dwie migracje, które **na produkcji
+  działały od dawna, ale nie były w gałęzi głównej**:
+  `20260822120000_notification_event_key` i `20260824000000_emergency_pause`.
+  Repo: `origin` = `github.com/lumizone/postsider_production`;
+  `old-origin` (stare publiczne `postsider_app`) **nietknięty**.
+  Stan produkcji na koniec: 12/12 kontenerów, pm2 3/3 online z 0 restartów,
+  `/api/health` redis+database+temporal ok, pollery na kolejce `main`,
+  0 zaległych postów, storage 200, timery ×5 active.
+
 - **Polowanie na błędy UI + kontrola SaaS (2026-08-25).** Sweep 28 tras ×
   2 motywy × desktop/mobile: błędy konsoli i `pageerror`, odpowiedzi 4xx/5xx,
   poziomy overflow, wyciekające surowe klucze i18n, cele linków. Znalezione
@@ -221,10 +235,10 @@ blokady u źródła — złożenie audytu, materiały do review, zgodność kodu
       ma widoczną reakcję w ciemnym (outline `--fg`, tint tła albo `--lift-ring`).
 
 - **UI: powiadomienia, filtry postów, przegląd całego dashboardu, polskie tłumaczenia
-  (2026-08-25). CZĘŚCIOWO WDROŻONE.** Cztery commity na `fix/publish-pipeline-and-report-bugs`,
-  branch **4 commity przed `origin`, nic nie wypchnięte**. **Na prodzie jest TYLKO
-  `79e8c40`** (deploy 09:47, backup `postsider_backups/predeploy-20260825-094733`);
-  `b17c323`, `cc7cbf0` i `c5bd007` są wyłącznie w gicie lokalnym.
+  (2026-08-25). WDROŻONE.** Cztery commity na `fix/publish-pipeline-and-report-bugs`.
+  Historyczny stan tego wpisu („4 commity przed origin, prod tylko na `79e8c40`")
+  jest **nieaktualny** — pod koniec 25.08 wszystko zostało wdrożone, wypchnięte
+  na `origin` i zmergowane do `main` (patrz wpis zamykający sesję na górze).
   - **`79e8c40` (WDROŻONE) — powiadomienia.** `GET /notifications/page` +
     strona `/notifications` (pełna historia za „zobacz wszystkie" w dzwonku;
     strona 0 oznacza przeczytane i zwraca POPRZEDNI znacznik, głębsze strony
@@ -463,8 +477,8 @@ blokady u źródła — złożenie audytu, materiały do review, zgodność kodu
 
 - **Cicha-awaria bug hunt: 9 defektów znalezionych przez audyt DZIAŁAJĄCEJ produkcji
   względem kodu (2026-08-19).** Commit `2c7c729` na branchu
-  `fix/publish-pipeline-and-report-bugs` (15 plików, **NIE zmergowany do `main`,
-  NIE wypchnięty na origin**). Zdeployowane 02:45 przez `sudo ./deploy.sh`,
+  `fix/publish-pipeline-and-report-bugs` (15 plików; **zmergowany do `main`
+  i wypchnięty 25.08 wieczorem** — w chwili pisania tego wpisu nie był). Zdeployowane 02:45 przez `sudo ./deploy.sh`,
   zweryfikowane na żywo: 12/12 kontenerów, 32/32 workerów, 168/168 testów,
   build backend+orchestrator+frontend `tsc` czyste. Wszystkie 9 było CICHYCH —
   kontenery healthy, endpointy 200, monitoring milczał.
