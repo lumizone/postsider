@@ -313,6 +313,18 @@ ul {
 }
 
 /*
+ * An organisation's uploaded logo is THEIR artwork — we never recolour it.
+ * But a monochrome dark mark on a transparent background (which is what the
+ * PostSider org itself uploaded) is black-on-black on a dark sidebar and
+ * simply vanishes. So in dark mode it gets the same light plate it
+ * effectively has in light mode: the logo is untouched, and no customer's
+ * mark can disappear, whatever they upload.
+ */
+[data-theme="dark"] .org-logo {
+  background: #ffffff;
+}
+
+/*
  * iOS Safari zooms the whole viewport when a focused field renders under 16px,
  * and the zoom does not spring back. Individual components had been fixing
  * this one control at a time (posts search, auth forms), leaving the calendar

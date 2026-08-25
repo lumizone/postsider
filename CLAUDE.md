@@ -13,6 +13,24 @@ blokady u źródła — złożenie audytu, materiały do review, zgodność kodu
 
 ## Status
 
+- **Logo organizacji NADPISYWAŁO znak PostSidera w rogu sidebara (2026-08-25).**
+  Zgłoszone jako „obrazek obok napisu PostSider jest czarny i zlewa się
+  z ciemnym motywem". Diagnoza z bazy: `admin@setup.local` należy do org
+  „PostSider", która ma ustawione własne logo (`image/ksaWmbytJR.png` —
+  **czarny rysunek na przezroczystym tle, 65% alfy, zero bieli**).
+  **To był błąd produktowy, nie kosmetyczny:** wszystkie trzy sloty lockupu
+  marki (pasek mobilny, nagłówek sidebara, wersja zwinięta) renderowały
+  `user?.orgLogo || "/brand/postsider-logo.png"`, więc logo organizacji
+  **nadpisywało znak firmy tuż obok napisu „PostSider"** — a przy ciemnym,
+  monochromatycznym logo róg robił się pusty. Tożsamość organizacji ma swoje
+  miejsce: przełącznik org na DOLE sidebara. Slot marki pokazuje teraz zawsze
+  nasz znak (z wariantem `brand-mark` na ciemny), a `OrgAvatar` na dole nadal
+  pokazuje logo klienta — **nigdy przekolorowane**, tylko z jasną płytką
+  w ciemnym motywie (`.org-logo`), żeby monochromatyczne logo nie zniknęło.
+  Zweryfikowane prawdziwym plikiem z produkcji podstawionym jako `orgLogo`:
+  góra = znak PostSidera na biało, dół = grafika klienta na płytce, jasny
+  motyw bez zmian.
+
 - **Logo w ciemnym motywie: inwersja BYŁA ZŁA, potrzebny wariant konturowy (2026-08-25).**
   Pierwsze podejście (`filter: invert(1)`) wyglądało poprawnie „matematycznie"
   (grafika to czysta skala szarości), ale **znszczyło czytelność postaci**:

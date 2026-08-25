@@ -301,13 +301,13 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         <span className={styles.topbarBrand}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={user?.orgLogo || "/brand/postsider-logo.png"}
+            src="/brand/postsider-logo.png"
             alt=""
             width={28}
             height={28}
             aria-hidden
             // Invert our own mark in dark mode only — never the org's logo.
-            className={user?.orgLogo ? undefined : "brand-mark"}
+            className="brand-mark"
             style={{
               width: 28,
               height: 28,
@@ -381,12 +381,12 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={user?.orgLogo || "/brand/postsider-logo.png"}
+                src="/brand/postsider-logo.png"
                 alt=""
                 width={32}
                 height={32}
                 aria-hidden
-                className={user?.orgLogo ? undefined : "brand-mark"}
+                className="brand-mark"
                 style={{
                   width: 32,
                   height: 32,
@@ -410,12 +410,12 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={user?.orgLogo || "/brand/postsider-logo.png"}
+              src="/brand/postsider-logo.png"
               alt=""
               width={32}
               height={32}
               aria-hidden
-              className={user?.orgLogo ? undefined : "brand-mark"}
+              className="brand-mark"
               style={{
                 width: 32,
                 height: 32,
@@ -635,6 +635,10 @@ function OrgAvatar({
         width={size}
         height={size}
         aria-hidden
+        // Never recoloured — it is the customer's artwork. The class only
+        // gives it a light plate in dark mode so a monochrome dark logo on a
+        // transparent background cannot vanish into the sidebar.
+        className="org-logo"
         style={{
           width: size,
           height: size,
