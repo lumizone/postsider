@@ -306,6 +306,8 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             width={28}
             height={28}
             aria-hidden
+            // Invert our own mark in dark mode only — never the org's logo.
+            className={user?.orgLogo ? undefined : "brand-mark"}
             style={{
               width: 28,
               height: 28,
@@ -384,6 +386,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                 width={32}
                 height={32}
                 aria-hidden
+                className={user?.orgLogo ? undefined : "brand-mark"}
                 style={{
                   width: 32,
                   height: 32,
@@ -412,6 +415,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
               width={32}
               height={32}
               aria-hidden
+              className={user?.orgLogo ? undefined : "brand-mark"}
               style={{
                 width: 32,
                 height: 32,
@@ -538,8 +542,14 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
             <NotificationsBell />
             <OrgSwitcher />
-            <LanguageSwitcher />
-            <ThemeToggle />
+            {/* Language and theme share one row: two small preferences that
+                read as a pair, and the sidebar footer has no height to spare. */}
+            {/* gap 0: the language switcher already carries 10px of its own
+                padding on that side, which is the spacing we want. */}
+            <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
+              <LanguageSwitcher />
+              <ThemeToggle compact />
+            </div>
             {user && (
               <div
                 style={{

@@ -30,7 +30,7 @@ export function AuthShell({
             width={36}
             height={36}
             aria-hidden
-            className={styles.brandLogo}
+            className={`${styles.brandLogo} brand-mark`}
           />
           <span className={styles.brandName}>PostSider</span>
         </div>

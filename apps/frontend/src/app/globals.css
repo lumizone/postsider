@@ -289,6 +289,19 @@ ul {
 }
 
 /*
+ * The PostSider mark is black line art on an opaque white plate (no alpha at
+ * all), so in dark mode it renders as a bright white tile. The artwork is pure
+ * greyscale — measured max channel spread 9/255 — which makes inverting it
+ * exact and saves shipping a second 1.2 MB asset that could drift from this one.
+ *
+ * Only ever put this class on OUR mark. An organisation's uploaded logo is
+ * their artwork, usually in colour, and inverting it would be plain wrong.
+ */
+[data-theme="dark"] .brand-mark {
+  filter: invert(1);
+}
+
+/*
  * iOS Safari zooms the whole viewport when a focused field renders under 16px,
  * and the zoom does not spring back. Individual components had been fixing
  * this one control at a time (posts search, auth forms), leaving the calendar
