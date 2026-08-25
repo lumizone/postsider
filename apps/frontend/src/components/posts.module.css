@@ -96,27 +96,53 @@
 /* Filter row */
 .filters {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 10px;
+  /* The status strip scrolls inside itself; nothing here may push the page
+     sideways on a phone. */
+  min-width: 0;
 }
 
+.filterRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+/*
+ * Seven status pills with counts do not fit a phone. As an `inline-flex` row
+ * with no wrap and no bounds they simply ran off the right edge and dragged
+ * the whole page into horizontal scroll. It stays one strip (wrapping would
+ * break the pill background into ragged rows) and scrolls inside its own box.
+ */
 .tabs {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   padding: 3px;
   border-radius: var(--radius-pill);
   background: rgba(0, 0, 0, 0.04);
   gap: 2px;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .tab {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex: 0 0 auto;
   height: 30px;
   padding: 0 14px;
+  white-space: nowrap;
   border: none;
   background: transparent;
   color: var(--fg);
@@ -161,7 +187,68 @@
 
 .search {
   position: relative;
-  width: min(320px, 100%);
+  flex: 1 1 200px;
+  max-width: 320px;
+  min-width: 0;
+}
+
+/* Filter controls (channel, date range, sort) */
+.select,
+.dateInput {
+  height: 32px;
+  max-width: 100%;
+  border: 1px solid var(--line-soft);
+  background: var(--bg);
+  border-radius: var(--radius-pill);
+  padding: 0 12px;
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: -0.005em;
+  color: var(--fg);
+  cursor: pointer;
+  transition: border-color 140ms var(--ease);
+}
+
+.select:focus,
+.dateInput:focus {
+  outline: none;
+  border-color: var(--fg);
+}
+
+.dateInput {
+  padding: 0 10px;
+}
+
+.filterLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 0;
+}
+
+.resetBtn {
+  height: 32px;
+  padding: 0 12px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+}
+
+.resetBtn:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+.resultCount {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .searchInput {
@@ -209,6 +296,48 @@
   display: block;
 }
 
+/*
+ * Phone layout for the toolbar. Controls get 16px text (iOS Safari zooms the
+ * whole viewport on a focused field under that) and 36px targets, the search
+ * takes its own full-width line, and the title stops eating half the screen.
+ */
+@media (max-width: 640px) {
+  .h1 {
+    font-size: 28px;
+  }
+
+  .tab {
+    height: 34px;
+    padding: 0 12px;
+  }
+
+  /* Fade the right edge so the strip reads as scrollable rather than cut. */
+  .tabs {
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  }
+
+  .search {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+
+  .select,
+  .dateInput {
+    height: 36px;
+    font-size: 16px;
+    flex: 1 1 140px;
+  }
+
+  .filterLabel {
+    flex: 1 1 140px;
+  }
+
+  .filterRow {
+    gap: 8px;
+  }
+}
+
 /* List */
 .list {
   border-radius: var(--radius-lg);
@@ -217,11 +346,28 @@
   /* overflow is NOT hidden here — the post-row dropdown (position: absolute,
      top: 100%) must be able to overflow the row. Rounded corners are kept by
      rounding the first/last rows instead (see .row:first-child/last-child). */
+
+  /*
+   * The list itself owns the columns so every row shares one set of track
+   * widths (see .row's `subgrid`). Sizing the status column per row instead
+   * left each row's title starting at a different x.
+   */
+  display: grid;
+  grid-template-columns: minmax(110px, max-content) minmax(0, 2fr) minmax(0, 1.3fr) 130px 130px 40px;
 }
 
 .row {
   display: grid;
-  grid-template-columns: 110px minmax(0, 2fr) minmax(0, 1.3fr) 130px 130px 40px;
+  /*
+   * Fallback for browsers without `subgrid` (declared again below): the status
+   * column is sized to its own pill rather than a guessed 110px. At a fixed
+   * width "Pending approval" / "Held (paused)" - and every longer translation,
+   * e.g. PL "Oczekuje na akceptację" - spilled out of the column and printed
+   * on top of the post title.
+   */
+  grid-template-columns: minmax(110px, max-content) minmax(0, 2fr) minmax(0, 1.3fr) 130px 130px 40px;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
   gap: 16px;
   padding: 14px 18px;
@@ -421,17 +567,29 @@
   text-align: center;
 }
 
+/*
+ * Narrow layout: the row becomes a card. The status pill gets the top line to
+ * itself instead of sharing it with the title - squeezed next to a title it
+ * either overflowed the card (long labels) or crushed the title to three
+ * characters. The actions button moves up beside it, which also stops its
+ * dropdown from opening off the bottom of the card.
+ */
 @media (max-width: 1100px) {
-  .row {
-    grid-template-columns: 1fr auto;
-    gap: 8px 16px;
+  /* Cards, not a table: the list stops owning shared columns. */
+  .list {
+    display: block;
   }
-  .statusCell { grid-column: 2; grid-row: 1; justify-self: end; }
-  .titleCell { grid-column: 1; grid-row: 1; }
-  .channelCell { grid-column: 1 / -1; grid-row: 2; }
-  .dateCell { grid-column: 1; grid-row: 3; }
-  .metricsCell { grid-column: 2; grid-row: 3; }
-  .actionsCell { grid-column: 2; grid-row: 4; justify-self: end; }
+  .row {
+    grid-column: auto;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 12px;
+  }
+  .statusCell { grid-column: 1; grid-row: 1; justify-self: start; min-width: 0; }
+  .actionsCell { grid-column: 2; grid-row: 1; justify-self: end; }
+  .titleCell { grid-column: 1 / -1; grid-row: 2; }
+  .channelCell { grid-column: 1 / -1; grid-row: 3; }
+  .dateCell { grid-column: 1; grid-row: 4; }
+  .metricsCell { grid-column: 2; grid-row: 4; justify-self: end; }
 }
 
 /* Toast */

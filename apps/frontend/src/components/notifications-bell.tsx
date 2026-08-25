@@ -1,9 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useT, type MessageKey } from "@/lib/i18n";
+import { useT } from "@/lib/i18n";
+import { ConfirmDialog } from "./confirm-dialog";
+import { NotificationGroups } from "./notification-list";
 import {
+  NOTIFICATIONS_READ_EVENT,
   clearNotifications,
   getNotificationCount,
   getNotificationList,
@@ -11,30 +15,48 @@ import {
 } from "@/lib/notifications-api";
 
 const POLL_MS = 60_000;
-const PANEL_WIDTH = 320;
-const PANEL_MAX_HEIGHT = 380;
+const PANEL_WIDTH = 360;
+const PANEL_MAX_HEIGHT = 440;
 const GAP = 8;
 const EDGE = 8;
+/** Below this the panel becomes a bottom sheet instead of a dropdown. */
+const SHEET_BREAKPOINT = 600;
 
 interface PanelPos {
   top: number;
   left: number;
   width: number;
   maxHeight: number;
+  sheet: boolean;
 }
 
 /**
  * Where to draw the panel, in viewport coordinates.
  *
  * The panel is rendered in a portal on <body> rather than next to the button:
- * the desktop bell sits in a 260px sidebar column, so a 320px panel anchored to
+ * the desktop bell sits in a 260px sidebar column, so a wider panel anchored to
  * the trigger ran off the left edge of the screen and got cut in half. Fixed
  * positioning + clamping keeps it fully on screen from either mount point, and
  * a portal means no ancestor's overflow or stacking context can clip it.
+ *
+ * On a phone the same dropdown was a cramped floating card next to a 44px
+ * button, so there it becomes a bottom sheet: full width, thumb reachable.
  */
 function placePanel(rect: DOMRect): PanelPos {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
+
+  if (vw <= SHEET_BREAKPOINT) {
+    const maxHeight = Math.min(Math.round(vh * 0.7), PANEL_MAX_HEIGHT + 80);
+    return {
+      top: vh - maxHeight - EDGE,
+      left: EDGE,
+      width: vw - EDGE * 2,
+      maxHeight,
+      sheet: true,
+    };
+  }
+
   const width = Math.min(PANEL_WIDTH, vw - EDGE * 2);
 
   // Prefer aligning to the trigger's left edge, then pull it back inside.
@@ -44,73 +66,36 @@ function placePanel(rect: DOMRect): PanelPos {
   const above = rect.top - GAP - EDGE;
   const openDown = below >= Math.min(PANEL_MAX_HEIGHT, above);
   const maxHeight = Math.max(
-    160,
+    200,
     Math.min(PANEL_MAX_HEIGHT, openDown ? below : above)
   );
   const top = openDown ? rect.bottom + GAP : Math.max(EDGE, rect.top - GAP - maxHeight);
 
-  return { top, left, width, maxHeight };
-}
-
-/**
- * Event key -> translated message. Notifications are produced server-side in
- * English (the email needs a rendered string), so the dashboard re-renders the
- * known ones from this map in the customer's own language. Anything not listed
- * — older rows, or an event added later — falls back to the stored English
- * text, which is why `content` is still written for every notification.
- *
- * Listed explicitly rather than built from the key so the message ids stay
- * compile-checked.
- */
-const EVENT_MESSAGES: Record<string, MessageKey> = {
-  channelReconnect: "notifications.events.channelReconnect",
-  postFailedReconnect: "notifications.events.postFailedReconnect",
-  postFailedDisabled: "notifications.events.postFailedDisabled",
-  postPublished: "notifications.events.postPublished",
-  approvalRequested: "notifications.events.approvalRequested",
-  approvalApproved: "notifications.events.approvalApproved",
-  approvalRejected: "notifications.events.approvalRejected",
-  approvalRejectedNote: "notifications.events.approvalRejectedNote",
-  publishingPaused: "notifications.events.publishingPaused",
-  publishingResumed: "notifications.events.publishingResumed",
-};
-
-/**
- * Links are stored absolute (the backend builds them from FRONTEND_URL, since
- * the same text is reused in the email). Inside the dashboard we want an
- * in-app navigation, and we must never follow a link to some other host that
- * ended up in the column.
- */
-function toRelative(link: string): string {
-  try {
-    const url = new URL(link, window.location.origin);
-    return url.origin === window.location.origin
-      ? url.pathname + url.search
-      : "/calendar";
-  } catch {
-    return link.startsWith("/") ? link : "/calendar";
-  }
+  return { top, left, width, maxHeight, sheet: false };
 }
 
 /**
  * Notification bell for the dashboard.
  *
  * The backend already records every notable event (publish succeeded, publish
- * failed, "reconnect this channel", approval requests) — nothing here creates
+ * failed, "reconnect this channel", approval requests) - nothing here creates
  * notifications, it only finally shows them. Before this, the only delivery
  * channel was email, so a channel that needed reconnecting could sit dead for
  * days with the user having no in-product signal at all.
  *
  * Opening the panel marks everything read server-side, so the list is fetched
- * on open only; the poll asks for the count alone.
+ * on open only; the poll asks for the count alone. The read mark the server
+ * returns is the one from BEFORE that bump, which is what flags the new rows.
  */
 export function NotificationsBell({ compact = false }: { compact?: boolean }) {
   const t = useT();
   const [count, setCount] = useState(0);
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<AppNotification[] | null>(null);
+  const [lastReadAt, setLastReadAt] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [pos, setPos] = useState<PanelPos | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
   const [clearing, setClearing] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -120,22 +105,37 @@ export function NotificationsBell({ compact = false }: { compact?: boolean }) {
     try {
       setCount(await getNotificationCount());
     } catch {
-      // Never surface a failed poll — the bell is ambient, not a task.
+      // Never surface a failed poll - the bell is ambient, not a task.
     }
   }, []);
 
   useEffect(() => {
     void refreshCount();
     const timer = setInterval(() => void refreshCount(), POLL_MS);
-    return () => clearInterval(timer);
+    // The notifications page marks everything read as it loads. Without this
+    // the badge kept claiming unread items for the rest of the poll interval,
+    // on the one screen where the reader had just read them.
+    const onRead = () => setCount(0);
+    window.addEventListener(NOTIFICATIONS_READ_EVENT, onRead);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener(NOTIFICATIONS_READ_EVENT, onRead);
+    };
   }, [refreshCount]);
+
+  const close = useCallback(() => {
+    setOpen(false);
+    // Send focus back where it came from, or a keyboard user is stranded at
+    // the top of the document every time the panel closes.
+    triggerRef.current?.focus();
+  }, []);
 
   // Close on outside click and on Escape, like the other dropdowns in the shell.
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
       const target = e.target as Node;
-      // The panel lives in a portal, so it is NOT inside wrapRef — check both
+      // The panel lives in a portal, so it is NOT inside wrapRef - check both
       // or every click inside the list would close it.
       if (wrapRef.current?.contains(target) || panelRef.current?.contains(target)) {
         return;
@@ -143,7 +143,27 @@ export function NotificationsBell({ compact = false }: { compact?: boolean }) {
       setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        close();
+        return;
+      }
+      if (e.key !== "Tab" || !panelRef.current) return;
+      // Keep Tab inside the panel while it is open: it is a dialog, and
+      // tabbing out of it leaves an open overlay behind the focus ring.
+      const focusable = panelRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || active === panelRef.current)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     const reposition = () => {
       const rect = triggerRef.current?.getBoundingClientRect();
@@ -159,21 +179,28 @@ export function NotificationsBell({ compact = false }: { compact?: boolean }) {
       window.removeEventListener("resize", reposition);
       window.removeEventListener("scroll", reposition, true);
     };
-  }, [open]);
+  }, [open, close]);
+
+  // Move focus into the panel once it is mounted so screen readers announce it.
+  useEffect(() => {
+    if (open && pos) panelRef.current?.focus();
+  }, [open, pos]);
 
   const toggle = async () => {
     if (open) {
-      setOpen(false);
+      close();
       return;
     }
     const rect = triggerRef.current?.getBoundingClientRect();
     if (rect) setPos(placePanel(rect));
     setOpen(true);
     setItems(null);
+    setLastReadAt(null);
     setFailed(false);
     try {
       const res = await getNotificationList();
       setItems(res?.notifications ?? []);
+      setLastReadAt(res?.lastReadNotifications ?? null);
       // The server bumped lastReadNotifications while serving that list, so the
       // badge is stale by definition now.
       setCount(0);
@@ -188,38 +215,25 @@ export function NotificationsBell({ compact = false }: { compact?: boolean }) {
       await clearNotifications();
       setItems([]);
       setCount(0);
+      setConfirmClear(false);
     } catch {
       setFailed(true);
+      setConfirmClear(false);
     } finally {
       setClearing(false);
     }
   };
 
-  const textOf = (n: AppNotification) => {
-    const key = n.eventKey ? EVENT_MESSAGES[n.eventKey] : undefined;
-    if (!key) return n.content;
-    let params: Record<string, string> = {};
-    if (n.eventParams) {
-      try {
-        params = JSON.parse(n.eventParams) ?? {};
-      } catch {
-        // Malformed params must not blank the notification — show the English
-        // text rather than a message full of empty placeholders.
-        return n.content;
-      }
-    }
-    return t(key, params);
-  };
+  const nothingToClear = !items || items.length === 0;
 
-  const formatWhen = (iso: string) => {
-    const date = new Date(iso);
-    if (Number.isNaN(date.getTime())) return "";
-    return date.toLocaleString(undefined, {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+  const linkStyle: React.CSSProperties = {
+    border: "none",
+    background: "transparent",
+    padding: 0,
+    fontSize: 12,
+    color: "var(--muted)",
+    textDecoration: "none",
+    cursor: "pointer",
   };
 
   return (
@@ -234,6 +248,7 @@ export function NotificationsBell({ compact = false }: { compact?: boolean }) {
             : t("notifications.title")
         }
         aria-expanded={open}
+        aria-haspopup="dialog"
         style={{
           position: "relative",
           display: "inline-flex",
@@ -285,15 +300,46 @@ export function NotificationsBell({ compact = false }: { compact?: boolean }) {
               textAlign: "center",
             }}
           >
-            {count > 9 ? "9+" : count}
+            {count > 99 ? "99+" : count}
           </span>
         )}
       </button>
+      {/* Announced without stealing focus, so a new alert is not silent. */}
+      <span
+        aria-live="polite"
+        style={{
+          position: "absolute",
+          width: 1,
+          height: 1,
+          overflow: "hidden",
+          clip: "rect(0 0 0 0)",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {count > 0 ? t("notifications.unread", { count }) : ""}
+      </span>
 
       {open && pos && createPortal(
+        <>
+        {/* The sheet covers most of a phone screen, so it gets a real scrim -
+            without it the page behind still looks like the active surface. */}
+        {pos.sheet && (
+          <div
+            aria-hidden
+            onClick={close}
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 199,
+              background: "rgba(0,0,0,0.35)",
+            }}
+          />
+        )}
         <div
           ref={panelRef}
           role="dialog"
+          aria-modal={pos.sheet}
+          tabIndex={-1}
           aria-label={t("notifications.title")}
           style={{
             position: "fixed",
@@ -305,10 +351,11 @@ export function NotificationsBell({ compact = false }: { compact?: boolean }) {
             flexDirection: "column",
             background: "var(--bg)",
             border: "1px solid var(--line-soft)",
-            borderRadius: 10,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+            borderRadius: pos.sheet ? "var(--radius-lg)" : 12,
+            boxShadow: "0 12px 32px rgba(0,0,0,0.16)",
             zIndex: 200,
             overflow: "hidden",
+            outline: "none",
           }}
         >
           <div
@@ -317,88 +364,86 @@ export function NotificationsBell({ compact = false }: { compact?: boolean }) {
               alignItems: "center",
               justifyContent: "space-between",
               gap: 8,
-              padding: "10px 12px",
+              padding: "12px 14px",
               borderBottom: "1px solid var(--line-soft)",
               flexShrink: 0,
             }}
           >
-            <span style={{ fontSize: 13, fontWeight: 600 }}>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>
               {t("notifications.title")}
             </span>
             <button
               type="button"
-              onClick={() => void clearAll()}
-              disabled={clearing || !items || items.length === 0}
+              onClick={() => setConfirmClear(true)}
+              disabled={clearing || nothingToClear}
               style={{
-                border: "none",
-                background: "transparent",
-                padding: 0,
-                fontSize: 12,
-                color: "var(--muted)",
-                cursor:
-                  clearing || !items || items.length === 0 ? "default" : "pointer",
-                opacity: clearing || !items || items.length === 0 ? 0.45 : 1,
+                ...linkStyle,
+                cursor: clearing || nothingToClear ? "default" : "pointer",
+                opacity: clearing || nothingToClear ? 0.45 : 1,
               }}
             >
               {t("notifications.clear")}
             </button>
           </div>
-          <div style={{ overflowY: "auto", padding: 6 }}>
-          {items === null && !failed && (
-            <p style={{ padding: 12, fontSize: 13, color: "var(--muted)" }}>
-              {t("notifications.loading")}
-            </p>
-          )}
-          {failed && (
-            <p role="alert" style={{ padding: 12, fontSize: 13, color: "var(--muted)" }}>
-              {t("notifications.error")}
-            </p>
-          )}
-          {items?.length === 0 && (
-            <p style={{ padding: 12, fontSize: 13, color: "var(--muted)" }}>
-              {t("notifications.empty")}
-            </p>
-          )}
-          {items?.map((n, i) => (
-            <div
-              key={`${n.createdAt}-${i}`}
-              style={{
-                padding: "10px 12px",
-                borderBottom:
-                  i === items.length - 1 ? "none" : "1px solid var(--line-soft)",
-                display: "flex",
-                flexDirection: "column",
-                gap: 3,
-              }}
-            >
-              <span style={{ fontSize: 13, lineHeight: 1.35, wordBreak: "break-word" }}>
-                {textOf(n)}
-              </span>
-              <span
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  fontSize: 11,
-                  color: "var(--muted)",
-                }}
-              >
-                {formatWhen(n.createdAt)}
-                {n.link && (
-                  <a
-                    href={toRelative(n.link)}
-                    onClick={() => setOpen(false)}
-                    style={{ color: "var(--fg)", fontWeight: 600 }}
-                  >
-                    {t("notifications.action")}
-                  </a>
-                )}
-              </span>
-            </div>
-          ))}
+
+          <div style={{ overflowY: "auto", padding: 6, flex: 1 }}>
+            {items === null && !failed && (
+              <p style={{ padding: 12, fontSize: 13, color: "var(--muted)" }}>
+                {t("notifications.loading")}
+              </p>
+            )}
+            {failed && (
+              <p role="alert" style={{ padding: 12, fontSize: 13, color: "var(--muted)" }}>
+                {t("notifications.error")}
+              </p>
+            )}
+            {items?.length === 0 && !failed && (
+              <p style={{ padding: 12, fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
+                {t("notifications.empty")}
+              </p>
+            )}
+            {items && items.length > 0 && (
+              <NotificationGroups
+                items={items}
+                lastReadAt={lastReadAt}
+                onNavigate={() => setOpen(false)}
+                compact
+              />
+            )}
           </div>
-        </div>,
+
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              padding: "10px 14px",
+              borderTop: "1px solid var(--line-soft)",
+              flexShrink: 0,
+            }}
+          >
+            <Link
+              href="/notifications"
+              onClick={() => setOpen(false)}
+              style={{ ...linkStyle, color: "var(--fg)", fontWeight: 600 }}
+            >
+              {t("notifications.seeAll")}
+            </Link>
+          </div>
+        </div>
+        </>,
         document.body
+      )}
+
+      {confirmClear && (
+        <ConfirmDialog
+          title={t("notifications.clearConfirmTitle")}
+          body={t("notifications.clearConfirmBody")}
+          confirmLabel={t("notifications.clear")}
+          danger
+          busy={clearing}
+          onConfirm={() => void clearAll()}
+          onCancel={() => setConfirmClear(false)}
+        />
       )}
     </div>
   );

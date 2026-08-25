@@ -114,12 +114,79 @@ export class NotificationsRepository {
           content: true,
           link: true,
           createdAt: true,
+          eventKey: true,
+          eventParams: true,
         },
       }),
       this._notifications.model.notifications.count({ where }),
     ]);
 
     return {
+      notifications,
+      total,
+      page,
+      limit,
+      hasMore: skip + notifications.length < total,
+    };
+  }
+
+  /**
+   * Full paginated list for the in-app notifications page.
+   *
+   * Mirrors `getNotifications` (marks everything read, and returns the
+   * PREVIOUS read mark so the page can still flag what was new) but is not
+   * capped at 10 — the bell shows the latest few, this backs "see all".
+   * Deliberately separate from `getNotificationsPaginated`, which serves the
+   * public API where there is no session user to mark anything read for.
+   */
+  async getNotificationsPageForUser(
+    organizationId: string,
+    userId: string,
+    page: number
+  ) {
+    const limit = 25;
+    const skip = page * limit;
+    const { lastReadNotifications } = (await this.getLastReadNotification(
+      userId
+    ))!;
+
+    const where = {
+      organizationId,
+      deletedAt: null as Date | null,
+    };
+
+    const [notifications, total] = await Promise.all([
+      this._notifications.model.notifications.findMany({
+        where,
+        orderBy: {
+          createdAt: 'desc',
+        },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          createdAt: true,
+          content: true,
+          link: true,
+          eventKey: true,
+          eventParams: true,
+        },
+      }),
+      this._notifications.model.notifications.count({ where }),
+    ]);
+
+    // Only the first page marks things read. Paging deeper into the history
+    // would otherwise keep pushing the read mark forward and wipe the "new"
+    // highlight out from under the reader.
+    if (page === 0) {
+      await this._user.model.user.update({
+        where: { id: userId },
+        data: { lastReadNotifications: new Date() },
+      });
+    }
+
+    return {
+      lastReadNotifications,
       notifications,
       total,
       page,
@@ -157,6 +224,7 @@ export class NotificationsRepository {
           deletedAt: null,
         },
         select: {
+          id: true,
           createdAt: true,
           content: true,
           link: true,

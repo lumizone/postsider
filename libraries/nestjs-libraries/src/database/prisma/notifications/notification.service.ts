@@ -9,6 +9,21 @@ import { ChannelAssignmentService } from '@postsider/nestjs-libraries/database/p
 
 export type NotificationType = 'success' | 'fail' | 'info';
 
+/**
+ * Fallback destination for events whose producer passes no link.
+ *
+ * The publish-failure notifications are raised from inside a Temporal
+ * workflow, and workflow code must never be edited in place (running
+ * executions replay against it), so the link is filled in here — in activity
+ * /service code — instead. Without it the two most actionable notifications
+ * in the product ("we could not publish, the channel needs reconnecting")
+ * were the only ones with no way to act on them.
+ */
+const DEFAULT_EVENT_LINKS: Record<string, string> = {
+  postFailedReconnect: '/calendar',
+  postFailedDisabled: '/calendar',
+};
+
 @Injectable()
 export class NotificationService {
   constructor(
@@ -29,6 +44,18 @@ export class NotificationService {
   getNotificationsPaginated(organizationId: string, page: number) {
     return this._notificationRepository.getNotificationsPaginated(
       organizationId,
+      page
+    );
+  }
+
+  getNotificationsPageForUser(
+    organizationId: string,
+    userId: string,
+    page: number
+  ) {
+    return this._notificationRepository.getNotificationsPageForUser(
+      organizationId,
+      userId,
       page
     );
   }
@@ -56,10 +83,11 @@ export class NotificationService {
     // customer's language. The email still uses the English `message`.
     event?: { key: string; params?: Record<string, string> }
   ) {
+    const fallback = event?.key ? DEFAULT_EVENT_LINKS[event.key] : undefined;
     await this._notificationRepository.createNotification(
       orgId,
       message,
-      link,
+      link || (fallback ? `${process.env.FRONTEND_URL}${fallback}` : undefined),
       event
     );
     if (!sendEmail) {

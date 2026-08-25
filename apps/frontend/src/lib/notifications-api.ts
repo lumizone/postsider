@@ -12,6 +12,7 @@ import { api } from "./api";
  * period the sending domain was unverified.
  */
 export interface AppNotification {
+  id?: string;
   createdAt: string;
   /** Rendered English text — email copy, and the fallback for the dashboard. */
   content: string;
@@ -45,6 +46,39 @@ export async function getNotificationCount(): Promise<number> {
  */
 export async function getNotificationList(): Promise<NotificationList> {
   return api.get<NotificationList>("/notifications/list", undefined, {
+    silent: true,
+  });
+}
+
+/**
+ * Fired after something in the app has marked the list read server-side (the
+ * notifications page load). The bell polls its badge once a minute, so without
+ * this it kept showing "4 unread" for up to a minute after the reader had just
+ * finished reading all four.
+ */
+export const NOTIFICATIONS_READ_EVENT = "postsider:notifications-read";
+
+export function announceNotificationsRead(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(NOTIFICATIONS_READ_EVENT));
+}
+
+export interface NotificationPage extends NotificationList {
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+/**
+ * A page of the full history, for the notifications page behind the bell's
+ * "see all". Like the list, page 0 marks everything read server-side; deeper
+ * pages do not, so paging back through history keeps the "new" highlight.
+ */
+export async function getNotificationsPage(
+  page: number
+): Promise<NotificationPage> {
+  return api.get<NotificationPage>("/notifications/page", { page }, {
     silent: true,
   });
 }

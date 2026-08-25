@@ -37,6 +37,18 @@ import {
 
 type StatusFilter = "all" | PostStatus;
 
+/** Date windows offered next to the status tabs. */
+type RangePreset =
+  | "all"
+  | "next7"
+  | "next30"
+  | "last7"
+  | "last30"
+  | "thisMonth"
+  | "custom";
+
+type SortMode = "smart" | "newest" | "oldest";
+
 const STATUS_LABEL_KEYS: Record<PostStatus, string> = {
   draft: "posts.status.draft",
   pendingApproval: "posts.status.pendingApproval",
@@ -87,6 +99,46 @@ function relativeFromNow(d: Date, t: ReturnType<typeof useT>): string {
   if (diff === -1) return t("posts.yesterday");
   if (diff > 0) return t("posts.inDays", { n: diff });
   return t("posts.daysAgo", { n: Math.abs(diff) });
+}
+
+/**
+ * Inclusive local-day bounds for a date preset. `null` on either side means
+ * "unbounded in that direction", so "all" filters nothing out.
+ *
+ * Everything is compared at local midnight because a post's `date` is a plain
+ * calendar day (`YYYY-MM-DD`), not an instant.
+ */
+function rangeBounds(
+  preset: RangePreset,
+  from: string,
+  to: string,
+): { start: Date | null; end: Date | null } {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const shifted = (days: number) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() + days);
+    return d;
+  };
+  switch (preset) {
+    case "next7":
+      return { start: today, end: shifted(7) };
+    case "next30":
+      return { start: today, end: shifted(30) };
+    case "last7":
+      return { start: shifted(-7), end: today };
+    case "last30":
+      return { start: shifted(-30), end: today };
+    case "thisMonth":
+      return {
+        start: new Date(today.getFullYear(), today.getMonth(), 1),
+        end: new Date(today.getFullYear(), today.getMonth() + 1, 0),
+      };
+    case "custom":
+      return { start: from ? parseDate(from) : null, end: to ? parseDate(to) : null };
+    default:
+      return { start: null, end: null };
+  }
 }
 
 function iso(d: Date): string {
@@ -174,6 +226,11 @@ export function Posts() {
   const t = useT();
   const [filter, setFilter] = useState<StatusFilter>("all");
   const [query, setQuery] = useState("");
+  const [channelFilter, setChannelFilter] = useState<string>("all");
+  const [range, setRange] = useState<RangePreset>("all");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [sort, setSort] = useState<SortMode>("smart");
   const { channels } = useChannels();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [listTruncated, setListTruncated] = useState(false);
@@ -285,9 +342,36 @@ export function Posts() {
     return events.map((ev) => ({ ev, status: deriveStatus(ev) }));
   }, [events]);
 
+  const bounds = useMemo(() => rangeBounds(range, from, to), [range, from, to]);
+
+  /**
+   * Everything except the status tabs: search, channel and date window. Kept
+   * separate so the tab counts describe the set the tabs actually switch
+   * between - a count of "12 published" is a lie if the date filter above it
+   * only leaves 3.
+   */
+  const preStatus = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return allWithStatus.filter(({ ev }) => {
+      if (channelFilter !== "all" && ev.channelId !== channelFilter) return false;
+      if (bounds.start || bounds.end) {
+        const d = parseDate(ev.date);
+        // An undated draft cannot satisfy a date window, so it drops out of
+        // the list rather than being shown as if it matched.
+        if (!d) return false;
+        if (bounds.start && d.getTime() < bounds.start.getTime()) return false;
+        if (bounds.end && d.getTime() > bounds.end.getTime()) return false;
+      }
+      if (!q) return true;
+      const ch = channelsById.get(ev.channelId);
+      const haystack = `${ev.title} ${ev.excerpt ?? ""} ${ch?.name ?? ""} ${ch?.platform ?? ""}`.toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [allWithStatus, bounds, channelFilter, channelsById, query]);
+
   const counts = useMemo(() => {
     const c: Record<StatusFilter, number> = {
-      all: allWithStatus.length,
+      all: preStatus.length,
       draft: 0,
       pendingApproval: 0,
       scheduled: 0,
@@ -295,12 +379,11 @@ export function Posts() {
       failed: 0,
       held: 0,
     };
-    for (const { status } of allWithStatus) c[status] += 1;
+    for (const { status } of preStatus) c[status] += 1;
     return c;
-  }, [allWithStatus]);
+  }, [preStatus]);
 
   const items = useMemo(() => {
-    const q = query.trim().toLowerCase();
     const STATUS_ORDER: Record<PostStatus, number> = {
       failed: 0,
       pendingApproval: 1,
@@ -309,16 +392,22 @@ export function Posts() {
       draft: 4,
       published: 5,
     };
-    return allWithStatus
+    const byDate = (a: typeof preStatus[number], b: typeof preStatus[number]) => {
+      const aDate = parseDate(a.ev.date)?.getTime() ?? 0;
+      const bDate = parseDate(b.ev.date)?.getTime() ?? 0;
+      // Undated posts sink to the bottom whichever way the sort runs - they
+      // have no position on a timeline.
+      if (!aDate && !bDate) return 0;
+      if (!aDate) return 1;
+      if (!bDate) return -1;
+      return sort === "oldest" ? aDate - bDate : bDate - aDate;
+    };
+    return preStatus
       .filter(({ status }) => filter === "all" || status === filter)
-      .filter(({ ev }) => {
-        if (!q) return true;
-        const ch = channelsById.get(ev.channelId);
-        const haystack = `${ev.title} ${ev.excerpt ?? ""} ${ch?.name ?? ""} ${ch?.platform ?? ""}`.toLowerCase();
-        return haystack.includes(q);
-      })
       .sort((a, b) => {
-        // Sort: failed first, then scheduled (closest first), then drafts (newest id first), then published (newest first).
+        if (sort !== "smart") return byDate(a, b);
+        // Smart: failed first, then scheduled (closest first), then drafts
+        // (newest first), then published (newest first).
         const orderDelta = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
         if (orderDelta !== 0) return orderDelta;
         const aDate = parseDate(a.ev.date)?.getTime() ?? 0;
@@ -326,7 +415,22 @@ export function Posts() {
         if (a.status === "scheduled") return aDate - bDate;
         return bDate - aDate;
       });
-  }, [allWithStatus, channelsById, filter, query]);
+  }, [preStatus, filter, sort]);
+
+  const filtersActive =
+    filter !== "all" ||
+    channelFilter !== "all" ||
+    range !== "all" ||
+    query.trim() !== "";
+
+  const resetFilters = useCallback(() => {
+    setFilter("all");
+    setChannelFilter("all");
+    setRange("all");
+    setFrom("");
+    setTo("");
+    setQuery("");
+  }, []);
 
   const handleRequestApproval = useCallback(async (postId: string) => {
     try {
@@ -585,18 +689,91 @@ export function Posts() {
           )}
         </div>
 
-        <div className={styles.search}>
-          <span className={styles.searchIcon} aria-hidden>
-            <SearchIcon />
+        <div className={styles.filterRow}>
+          <div className={styles.search}>
+            <span className={styles.searchIcon} aria-hidden>
+              <SearchIcon />
+            </span>
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t("posts.search")}
+              className={styles.searchInput}
+              aria-label={t("posts.search")}
+            />
+          </div>
+
+          <select
+            className={styles.select}
+            value={channelFilter}
+            onChange={(e) => setChannelFilter(e.target.value)}
+            aria-label={t("posts.filterChannel")}
+          >
+            <option value="all">{t("posts.allChannels")}</option>
+            {channels.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} · {c.platform}
+              </option>
+            ))}
+          </select>
+
+          <select
+            className={styles.select}
+            value={range}
+            onChange={(e) => setRange(e.target.value as RangePreset)}
+            aria-label={t("posts.filterDate")}
+          >
+            <option value="all">{t("posts.dateAll")}</option>
+            <option value="next7">{t("posts.dateNext7")}</option>
+            <option value="next30">{t("posts.dateNext30")}</option>
+            <option value="last7">{t("posts.dateLast7")}</option>
+            <option value="last30">{t("posts.dateLast30")}</option>
+            <option value="thisMonth">{t("posts.dateThisMonth")}</option>
+            <option value="custom">{t("posts.dateCustom")}</option>
+          </select>
+
+          {range === "custom" && (
+            <>
+              <input
+                type="date"
+                className={styles.dateInput}
+                value={from}
+                max={to || undefined}
+                onChange={(e) => setFrom(e.target.value)}
+                aria-label={t("posts.dateFrom")}
+              />
+              <input
+                type="date"
+                className={styles.dateInput}
+                value={to}
+                min={from || undefined}
+                onChange={(e) => setTo(e.target.value)}
+                aria-label={t("posts.dateTo")}
+              />
+            </>
+          )}
+
+          <select
+            className={styles.select}
+            value={sort}
+            onChange={(e) => setSort(e.target.value as SortMode)}
+            aria-label={t("posts.sort")}
+          >
+            <option value="smart">{t("posts.sortSmart")}</option>
+            <option value="newest">{t("posts.sortNewest")}</option>
+            <option value="oldest">{t("posts.sortOldest")}</option>
+          </select>
+
+          {filtersActive && (
+            <button type="button" className={styles.resetBtn} onClick={resetFilters}>
+              {t("posts.resetFilters")}
+            </button>
+          )}
+
+          <span className={styles.resultCount} role="status">
+            {t("posts.resultCount", { n: items.length })}
           </span>
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t("posts.search")}
-            className={styles.searchInput}
-            aria-label={t("posts.search")}
-          />
         </div>
       </div>
       {listTruncated && (
@@ -614,6 +791,16 @@ export function Posts() {
             {t("calendar.retry")}
           </button>
         </div>
+      ) : items.length === 0 && events.length > 0 ? (
+        // There ARE posts, the filters just exclude all of them. Saying "no
+        // posts yet" here would read as data loss.
+        <EmptyState
+          icon="posts"
+          title={t("posts.emptyFiltered")}
+          description={t("posts.emptyFilteredDesc")}
+          actionLabel={t("posts.resetFilters")}
+          onAction={resetFilters}
+        />
       ) : items.length === 0 && channels.length === 0 ? (
         <EmptyState
           icon="channel"

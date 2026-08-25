@@ -1,4 +1,4 @@
-import { Controller, Delete, Get } from '@nestjs/common';
+import { Controller, Delete, Get, Query } from '@nestjs/common';
 import { GetUserFromRequest } from '@postsider/nestjs-libraries/user/user.from.request';
 import { Organization, User } from '@prisma/client';
 import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
@@ -36,6 +36,27 @@ export class NotificationsController {
     return this._notificationsService.getNotifications(
       organization.id,
       user.id
+    );
+  }
+
+  /**
+   * Full history behind the bell's "see all". `/list` is capped at 10, which
+   * is right for a dropdown and useless for an org that has accumulated
+   * hundreds of them.
+   */
+  @Get('/page')
+  async notificationsPage(
+    @GetUserFromRequest() user: User,
+    @GetOrgFromRequest() organization: Organization,
+    @Query('page') page?: string
+  ) {
+    const parsed = Number.parseInt(page ?? '0', 10);
+    const safePage =
+      Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 1000) : 0;
+    return this._notificationsService.getNotificationsPageForUser(
+      organization.id,
+      user.id,
+      safePage
     );
   }
 }
