@@ -13,6 +13,19 @@ blokady u źródła — złożenie audytu, materiały do review, zgodność kodu
 
 ## Status
 
+- **DECYZJA PRODUKTOWA: logo NIE zmienia się między motywami (2026-08-25, na życzenie właściciela).**
+  Cofnięte: wariant `postsider-logo-dark.png` (plik usunięty), podmiana przez
+  `content: url(...)`, jasna płytka pod logo organizacji, klasy `.brand-mark`
+  i `.org-logo`. Znak PostSidera i logo klienta renderują się **identycznie
+  w jasnym i ciemnym** — ten sam plik, `filter: none`, bez tła. Zweryfikowane
+  porównaniem obliczonych stylów w obu motywach.
+  **Skutek do świadomej akceptacji:** logo org „PostSider" to czarny rysunek
+  na przezroczystym tle, więc w przełączniku organizacji na dole ciemnego
+  sidebara jest słabo widoczne. To wybór właściciela — lekarstwem jest wgranie
+  jaśniejszego pliku w Settings → Organization, nie kombinowanie w kodzie.
+  **Zostaje** poprawka slotu marki (lockup zawsze pokazuje nasz znak, nie logo
+  org) oraz odchudzenie `postsider-logo.png` z 1,26 MB do 142 KB.
+
 - **Logo organizacji NADPISYWAŁO znak PostSidera w rogu sidebara (2026-08-25).**
   Zgłoszone jako „obrazek obok napisu PostSider jest czarny i zlewa się
   z ciemnym motywem". Diagnoza z bazy: `admin@setup.local` należy do org

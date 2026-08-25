@@ -307,7 +307,6 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             height={28}
             aria-hidden
             // Invert our own mark in dark mode only — never the org's logo.
-            className="brand-mark"
             style={{
               width: 28,
               height: 28,
@@ -386,8 +385,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                 width={32}
                 height={32}
                 aria-hidden
-                className="brand-mark"
-                style={{
+                    style={{
                   width: 32,
                   height: 32,
                   borderRadius: 10,
@@ -415,8 +413,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
               width={32}
               height={32}
               aria-hidden
-              className="brand-mark"
-              style={{
+                style={{
                 width: 32,
                 height: 32,
                 borderRadius: 10,
@@ -635,10 +632,6 @@ function OrgAvatar({
         width={size}
         height={size}
         aria-hidden
-        // Never recoloured — it is the customer's artwork. The class only
-        // gives it a light plate in dark mode so a monochrome dark logo on a
-        // transparent background cannot vanish into the sidebar.
-        className="org-logo"
         style={{
           width: size,
           height: size,
