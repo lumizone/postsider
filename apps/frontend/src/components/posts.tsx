@@ -1015,7 +1015,15 @@ function PostRow({ ev, status, channel, onOpenEdit, onDuplicate, onDuplicateTo, 
         )}
       </div>
 
-      <div className={styles.metricsCell}>
+      <div
+        className={
+          styles.metricsCell +
+          // The "-" placeholder keeps the column rhythm on the desktop table.
+          // In the phone card layout there is no column to keep, so it reads
+          // as a stray dash and is hidden.
+          (status === "published" && ev.metrics ? "" : " " + styles.metricsEmpty)
+        }
+      >
         {status === "published" && ev.metrics ? (
           <>
             <span className={styles.metricsMain}>

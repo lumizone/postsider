@@ -196,7 +196,13 @@
 .select,
 .dateInput {
   height: 32px;
-  max-width: 100%;
+  /*
+   * A select is as wide as its widest option, and an agency's channel is
+   * called something like "PostSider Kanał Testowy Bardzo Długa Nazwa Klienta
+   * 2026". Unbounded, that one name stretched the control across the row and
+   * pushed the sort control onto a line of its own.
+   */
+  max-width: 220px;
   border: 1px solid var(--line-soft);
   background: var(--bg);
   border-radius: var(--radius-pill);
@@ -326,7 +332,14 @@
   .dateInput {
     height: 36px;
     font-size: 16px;
-    flex: 1 1 140px;
+    /*
+     * One control per line on a phone: side by side they truncate to
+     * "Wszystkie ka…". Never wider than the line either, or a long channel
+     * name pushes the control's right edge off the screen.
+     */
+    flex: 1 1 100%;
+    max-width: 100%;
+    min-width: 0;
   }
 
   .filterLabel {
@@ -590,6 +603,7 @@
   .channelCell { grid-column: 1 / -1; grid-row: 3; }
   .dateCell { grid-column: 1; grid-row: 4; }
   .metricsCell { grid-column: 2; grid-row: 4; justify-self: end; }
+  .metricsEmpty { display: none; }
 }
 
 /* Toast */
