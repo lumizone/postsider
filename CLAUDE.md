@@ -13,6 +13,30 @@ blokady u źródła — złożenie audytu, materiały do review, zgodność kodu
 
 ## Status
 
+- **ConfirmDialog był NIEKLIKALNY w sidebarze — `position: sticky` (2026-08-25).**
+  Zgłoszone jako „nie da się wyczyścić powiadomień w ciemnym motywie". **To nie
+  była wina motywu** — pada identycznie w jasnym, na desktopie i mobile;
+  zweryfikowane, że mój diff w `confirm-dialog.tsx` to wyłącznie kolory.
+  **Root cause:** `<aside class="sidebar">` ma `position: sticky`, a **sticky
+  ZAWSZE otwiera kontekst stackingu — nawet przy `z-index: auto`** (inaczej niż
+  `relative`, który potrzebuje z-indeksu). Dialog renderowany wewnątrz sidebara
+  miał więc swój `z-index: 9999` zakresowany do sidebara; `<main>` leży dalej
+  w DOM na tym samym poziomie, więc kalendarz malował się NAD dialogiem.
+  Playwright: `<button class="calendar_cell__…"> intercepts pointer events`,
+  `DELETE /notifications` nigdy nie leciał. Fix: `ConfirmDialog` idzie przez
+  `createPortal` na `document.body` (ten sam zabieg, który wcześniej ratował
+  panel dzwonka) + flaga `mounted`, żeby efekt ustawiający fokus nie odpalał
+  się na drzewie, którego jeszcze nie ma. **Zasada: każdy overlay w tej apce
+  musi iść portalem na `body` — z-index nie wystarczy, dopóki sidebar jest sticky.**
+  Naprawiło to WSZYSTKIE 11 użyć `ConfirmDialog`. Zweryfikowane end-to-end
+  w obu motywach (żądanie faktycznie leci): czyszczenie powiadomień z dzwonka
+  i ze strony, usuwanie mediów, webhooka, członka zespołu. Dialogi z wpisywanym
+  słowem na `/settings/security` (DISCONNECT / DELETE) to osobne, ręcznie pisane
+  overlaye w `<main>` — działają, przycisk jest `disabled` do czasu wpisania słowa.
+  **Audyt martwych kontrolek** (22 widoki × 2 motywy, `elementFromPoint` w środku
+  każdej widocznej kontrolki): zero nieosiągalnych elementów w aktywnej warstwie,
+  zero różnic między motywami.
+
 - **Dark theme — cała aplikacja (2026-08-25, WDROŻONE 13:49).**
   Commity `38df951` (motyw) + `ad80d78` (audyt widoczności + fix hydracji).
   Backup przed-deployowy: `postsider_backups/predeploy-20260825-134910`,

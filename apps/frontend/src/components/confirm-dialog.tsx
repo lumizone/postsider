@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useT } from "@/lib/i18n";
 
 interface ConfirmDialogProps {
@@ -18,6 +19,15 @@ interface ConfirmDialogProps {
 /**
  * Shared confirmation modal used across the app for destructive or
  * irreversible actions. Keeps focus inside the dialog and closes on Escape.
+ *
+ * Rendered through a portal on <body>. Its own z-index is not enough: the
+ * dashboard sidebar is `position: sticky`, and a sticky element ALWAYS opens a
+ * stacking context — even at `z-index: auto` — so a dialog rendered inside it
+ * had its z-index scoped to the sidebar. <main> comes later in the document at
+ * the same level, so the calendar painted straight over the dialog and its
+ * buttons could not be clicked at all (the notification "Clear" confirmation
+ * was dead in every theme). The notifications panel was moved to a portal for
+ * exactly this reason; this is the same fix for every confirmation in the app.
  */
 export function ConfirmDialog({
   title,
@@ -31,8 +41,16 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   const t = useT();
   const confirmRef = useRef<HTMLButtonElement | null>(null);
+  // A portal needs a DOM target, so the first render produces nothing and the
+  // real tree lands on the second. `mounted` is therefore a dependency of the
+  // focus effect below — without it that effect would run against a tree that
+  // does not exist yet and the confirm button would never take focus.
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
+    if (!mounted) return;
     confirmRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !busy) onCancel();
@@ -44,11 +62,13 @@ export function ConfirmDialog({
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
     };
-  }, [onCancel, busy]);
+  }, [mounted, onCancel, busy]);
 
   const accent = danger ? "var(--danger-bright)" : "var(--fg)";
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -125,6 +145,7 @@ export function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
