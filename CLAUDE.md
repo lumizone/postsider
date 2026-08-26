@@ -13,6 +13,52 @@ blokady u źródła — złożenie audytu, materiały do review, zgodność kodu
 
 ## Status
 
+- **AUDYT SaaS + naprawy bezpieczeństwa (2026-08-26, WDROŻONE 08:08 UTC).**
+  Pytanie właściciela: czy to pełnoprawny SaaS i czy klienci nie widzą swoich
+  treści nawzajem. **Izolacja najemców trzyma** — każda tabela z treścią ma
+  kolumnę organizacji, kontrolery biorą org z sesji, a trasy z `:id` bez org
+  są tokenowe (`crypto.randomBytes`), superadminowe albo podpisane przez Metę.
+  Naprawione i wdrożone:
+  1. **Tokeny OAuth kanałów leżały w bazie JAWNIE** (`Integration.token`,
+     `refreshToken`) — jedyne nieszyfrowane sekrety w schemacie. Teraz
+     AES-256-GCM przez **rozszerzenie klienta Prisma**
+     (`integration-secrets.extension.ts`), świadomie NIE na granicy repozytorium:
+     integracje czyta kilkanaście ścieżek (w tym `include: { integration: true }`
+     i aktywność Temporala), a jedno przeoczenie = cicha awaria publikacji na
+     jednej platformie. `PrismaService` zwraca rozszerzonego klienta z
+     konstruktora, żeby nikt nie trzymał surowego. Migracja lazy: odszyfrowywane
+     są wyłącznie wartości z markerem `v2:`, `scripts/encrypt-integration-tokens.cjs`
+     (idempotentny, sprawdza round-trip) przepisał **34/34** kanały.
+     **Pre-flight na żywej bazie z wycofaniem zapisu złapał błąd pierwszej wersji:**
+     `select: { token: true }` nie miał `providerIdentifier`, więc wracał
+     szyfrogram — stąd rozpoznawanie po modelu kwerendy, nie tylko po kształcie wiersza.
+     Weryfikacja końcowa: token z zaszyfrowanej bazy → `graph.facebook.com/me` HTTP 200.
+  2. **Klucze plików w MinIO z `Math.random`** (`makeId`) przy anonimowym
+     `GetObject` — nieodgadywalność ścieżki była jedyną ochroną treści.
+     Teraz `randomStorageName` na `crypto.randomBytes` (`upload/storage-key.ts`).
+     **`make.is.ts` NIETKNIĘTY** — jest w grafie workflow Temporala.
+     Stare pliki zachowują nazwy (przepisanie zerwałoby linki w postach).
+  3. **`signJWT` zamiast `signSessionJWT`** w ścieżce setupu profilu =
+     token sesji bez `exp`. Poprawione.
+  4. **`API_LIMIT` sterował dwoma licznikami** (panel: godzina/IP, publiczne API:
+     minuta/org). Rozdzielone na `DASHBOARD_RATE_LIMIT` (3000/h) i
+     `PUBLIC_API_RATE_LIMIT` (60/min); `API_LIMIT` honorowany jako nazwa
+     historyczna tylko dla publicznego API. `.env.production` zaktualizowany.
+  5. **Ślad audytowy** — `AuditLog` istniał, ale pisał do niego tylko inbound.
+     Migracja `20260826080000_audit_actor` (kolumna `actorUserId`) +
+     `logSecurityEvent` na: zmiana roli, zaproszenie i usunięcie członka zespołu,
+     utworzenie/unieważnienie klucza API, rozłączenie kanału i wszystkich kanałów,
+     usunięcie konta, wejście superadmina w impersonację.
+  6. **nginx storage**: doszedł `Content-Security-Policy: default-src 'none'; sandbox`
+     (nosniff już tam był od 07.2026). Backup: `postsider.bak-2026-08-26-csp`.
+  **ZOSTAŁO (świadomie, nie w tej sesji):** tokeny lecą w argumentach workflow,
+  więc **historia Temporala trzyma je jawnie w swoim Postgresie** — naprawa to
+  przekazywanie id kanału zamiast tokena, czyli NOWA wersja workflow;
+  ciasteczko sesji wciąż na `.postsider.com` (media docelowo na osobny host);
+  audyt logowań wymaga `AuditLog.organizationId` jako opcjonalnego; brak 2FA;
+  backup offsite. Raport: artefakt „Audyt SaaS PostSidera".
+  Przed deployem zrzut bazy: `backups/manual/postsider_prod-20260826-080117.dump`.
+
 - **Polowanie na bugi po zmianach w kalendarzu (2026-08-25, WDROŻONE 2026-08-26 07:23 UTC).**
   Sweep tras (28 × 2 motywy × desktop/mobile) + **nowy sweep INTERAKCJI**
   (drag&drop posta, otwarcie kompozytora, approve, wyszukiwarka, filtry, bell,
