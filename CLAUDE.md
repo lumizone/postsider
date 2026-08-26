@@ -13,6 +13,49 @@ blokady u źródła — złożenie audytu, materiały do review, zgodność kodu
 
 ## Status
 
+- **2FA (TOTP) + WARSTWA PREZENTACJI 2FA (2026-08-26, WDROŻONE).**
+  Domknięcie ostatniego punktu audytu po stronie kodu: uwierzytelnianie
+  dwuetapowe jest na produkcji. `totp.service.ts` (RFC 6238, okno ±1),
+  `mfa.service.ts` (enrollment, potwierdzenie, kody odzyskiwania jednorazowe,
+  wyłączanie kodem), `mfa.controller.ts` (`/user/mfa/status|begin|confirm|disable`,
+  `/user/mfa/policy` dla superadmina), migracja `20260826160000_add_totp_mfa`.
+  Logowanie: pierwszy krok zwraca krótkotrwałe wyzwanie MFA, drugi krok
+  (`/auth/mfa/verify`) wydaje sesję. Globalne wymuszanie: użytkownik bez
+  authenticatora nie dostaje sesji, dopóki go nie skonfiguruje.
+  **Poprawka jakościowa tego samego dnia** — pierwsze wdrożenie 2FA wyszło z
+  przerwanej sesji i ominęło system designu na dwóch ekranach:
+  * `/login/mfa` renderował **domyślne pole przeglądarki** (Arial 13,33 px,
+    obramowanie `2px inset`, promień 0, zero klas CSS) i miał zaszyty angielski
+    tekst — a to ekran widziany przy KAŻDYM logowaniu z 2FA. Przepisany na
+    `AuthShell` (`components/auth/mfa-form.tsx`), jak `/login` i `/forgot`.
+  * `SuperAdminMfaPolicy` miał zaszyty angielski, style inline i zminifikowane
+    formatowanie → `useT()` + `settingsStyles`, jak sąsiednie karty.
+  Karta 2FA w `/settings/security` była zrobiona poprawnie i została nietknięta.
+  **i18n:** 21 kluczy `security.mfa*` istniało tylko w `en.ts`. Dodane nowe
+  `auth.mfa*` i `security.mfaPolicy*` do `en.ts` oraz **pełny zestaw polski** do
+  `pl.ts` (jedyny drugi niemal kompletny katalog, 1181 kluczy). Pozostałe
+  dziewięć katalogów jest ~300 kluczy z tyłu i dalej korzysta z fallbacku na
+  angielski (`resolve(catalog, key) ?? resolve(en, key) ?? key`).
+  **Uwaga o formatowaniu:** `prettier --write` na katalogach tłumaczeń zamienia
+  wszystkie cudzysłowy na pojedyncze i generuje ~2200 zmienionych linii na plik
+  (te pliki nigdy nie były prettier-formatowane). Nie uruchamiać go na `messages/*.ts` —
+  zabija `git blame` tłumaczeń. Commit `25d670b` cofa taki przypadkowy reformat.
+
+- **FACEBOOK: WIDEO ODBLOKOWANE PO STRONIE KODU (2026-08-26, WDROŻONE).**
+  Publikacja wideo na stronę FB zawsze kończyła się „No permission to publish
+  the video" (#100), bo `post()` wysyła przez `POST /{page_id}/videos`, które
+  wymaga `pages_video_upload` — a aplikacja **nigdy o to uprawnienie nie prosiła**.
+  Scope NIE może wejść do tablicy `scopes`: `checkScopes()` wymaga wszystkich
+  wpisów, więc każdy bez Meta Advanced Access straciłby możliwość podłączenia
+  Facebooka. Rozwiązanie: `optionalScopes = ['pages_video_upload']` dopinane
+  wyłącznie do URL-a autoryzacji w `generateAuthUrl()`.
+  Test `facebook.provider.spec.ts` (napisany PRZED poprawką, czerwony na starym
+  kodzie) pilnuje obu rzeczy: scope jest w URL-u i NIE jest wymagany.
+  **Zostaje po stronie Mety:** Business Verification → Advanced Access dla
+  `pages_video_upload`. Po przyznaniu: reconnect kanału
+  (`GET /social/facebook?refresh=<channel_id>`) — najpierw zrobić snapshot
+  zaplanowanych postów kanału, bo wpływ reconnectu na kolejkę nie jest zweryfikowany.
+
 - **Tokeny WYPROWADZONE Z HISTORII TEMPORALA (2026-08-26, WDROŻONE ~12:08 UTC).**
   Domknięcie audytu: baza aplikacji szyfruje tokeny od rana, ale workflow
   publikujący nosił CAŁY wiersz `Integration` w argumentach i wynikach
