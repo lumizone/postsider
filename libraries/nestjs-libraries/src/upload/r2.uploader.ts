@@ -13,7 +13,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Request, Response } from 'express';
 import crypto from 'crypto';
 import path from 'path';
-import { makeId } from '@postsider/nestjs-libraries/services/make.is';
+import { randomStorageName } from '@postsider/nestjs-libraries/upload/storage-key';
 import { detectFileType } from '@postsider/nestjs-libraries/upload/detect-file-type';
 
 // Keep in sync with the shared MIME allow-list (mime.types.ts): multipart
@@ -64,7 +64,7 @@ const R2 = new S3Client({
 
 // Function to generate a random string
 function generateRandomString() {
-  return makeId(20);
+  return randomStorageName(15);
 }
 
 export default async function handleR2Upload(

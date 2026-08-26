@@ -4,7 +4,7 @@ import {
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import 'multer';
-import { makeId } from '@postsider/nestjs-libraries/services/make.is';
+import { randomStorageName } from '@postsider/nestjs-libraries/upload/storage-key';
 import { IUploadProvider, UploadedFile } from './upload.interface';
 import { isSafePublicHttpsUrl } from '@postsider/nestjs-libraries/dtos/webhooks/webhook.url.validator';
 import { ssrfSafeDispatcher } from '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
@@ -52,7 +52,7 @@ class MinioStorage implements IUploadProvider {
   }
 
   private buildKey(kind: MediaKind, ext: string) {
-    return `${kind}/${makeId(10)}.${ext}`;
+    return `${kind}/${randomStorageName()}.${ext}`;
   }
 
   async uploadSimple(input: string): Promise<string> {

@@ -33,8 +33,15 @@ import { ioRedis } from '@postsider/nestjs-libraries/redis/redis.service';
     ThrottlerModule.forRoot({
       throttlers: [
         {
+          // Per IP, per hour, across the dashboard API. Deliberately NOT
+          // API_LIMIT: that name is the Public API's per-MINUTE, per-ORG budget
+          // (api-rate-limit.guard.ts), and one env var driving two limiters
+          // with different units and scopes is how you accidentally cap the
+          // dashboard at 60 requests an hour.
           ttl: 3600000,
-          limit: process.env.API_LIMIT ? Number(process.env.API_LIMIT) : 9999,
+          limit: process.env.DASHBOARD_RATE_LIMIT
+            ? Number(process.env.DASHBOARD_RATE_LIMIT)
+            : 3000,
         },
       ],
       storage: new ThrottlerStorageRedisService(ioRedis),

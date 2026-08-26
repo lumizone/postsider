@@ -10,6 +10,7 @@ import {
   Res,
 } from '@nestjs/common';
 import { GetUserFromRequest } from '@postsider/nestjs-libraries/user/user.from.request';
+import { AuditLogger } from '@postsider/nestjs-libraries/database/prisma/audit/audit.logger';
 import { Organization, User } from '@prisma/client';
 import { SubscriptionService } from '@postsider/nestjs-libraries/database/prisma/subscriptions/subscription.service';
 import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
@@ -44,7 +45,8 @@ export class UsersController {
     private _authService: AuthService,
     private _orgService: OrganizationService,
     private _userService: UsersService,
-    private _trackService: TrackService
+    private _trackService: TrackService,
+    private _audit: AuditLogger
   ) {}
   @Get('/self')
   async getSelf(
@@ -175,11 +177,13 @@ export class UsersController {
       await this._userService.setupUser(user.id, data);
     }
 
-    // Re-issue JWT with updated data.
+    // Re-issue JWT with updated data. signSessionJWT, not signJWT: this token
+    // replaces the user's session, and signJWT mints one with no `exp` at all —
+    // saving your profile must not hand out a credential that never expires.
     const updatedUser = await this._userService.getUserById(user.id);
     if (updatedUser) {
       delete (updatedUser as any).password;
-      const jwt = AuthChecker.signJWT(updatedUser);
+      const jwt = AuthChecker.signSessionJWT(updatedUser);
       response.header('auth', jwt);
     }
 
@@ -201,12 +205,20 @@ export class UsersController {
   @Post('/impersonate')
   async setImpersonate(
     @GetUserFromRequest() user: User,
+    @GetOrgFromRequest() org: Organization,
     @Body('id') id: string,
     @Res({ passthrough: true }) response: Response
   ) {
     if (!user.isSuperAdmin) {
       throw new HttpException('Unauthorized', 400);
     }
+
+    // Impersonation reads a customer's account with their own permissions.
+    // It has to leave a trail; this is the one action where the operator can
+    // see everything a customer sees.
+    await this._audit.logSecurityEvent(org.id, 'impersonate.start', user.id, {
+      targetUserId: id,
+    });
 
     response.cookie('impersonate', id, {
       domain: getCookieUrlFromDomain(process.env.FRONTEND_URL!),

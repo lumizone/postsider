@@ -6,12 +6,18 @@ import { Request } from 'express';
  * Per-organization rate limiter for the Public API.
  * Uses a sliding window counter stored in Redis.
  *
- * Default: 60 requests per minute (configurable via API_RATE_LIMIT env var).
- * OSS has no rate limiting at all — this is a PostSider-exclusive improvement.
+ * Default: 60 requests per minute, from PUBLIC_API_RATE_LIMIT. `API_LIMIT` is
+ * still honoured as the legacy name so existing deployments keep their value,
+ * but it is no longer shared with the dashboard throttler in app.module.ts —
+ * that one counts per hour, and the collision meant a single number silently
+ * set both a per-minute and a per-hour budget.
  */
 @Injectable()
 export class ApiRateLimitGuard implements CanActivate {
-  private readonly limit = parseInt(process.env.API_LIMIT || '60', 10);
+  private readonly limit = parseInt(
+    process.env.PUBLIC_API_RATE_LIMIT || process.env.API_LIMIT || '60',
+    10
+  );
   private readonly windowSec = 60;
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
