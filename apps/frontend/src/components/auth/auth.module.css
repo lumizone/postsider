@@ -93,6 +93,10 @@
   padding: 10px 12px;
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-md);
+  /* Inputs do not inherit the page font by default; every other field in the
+     app (settings-ui, composer, calendar) sets this pair, the auth forms were
+     missed and rendered in the browser default (Arial). */
+  font: inherit;
   font-size: 14px;
   background: var(--bg);
   color: var(--fg);
