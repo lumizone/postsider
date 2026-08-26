@@ -1,8 +1,11 @@
 .page {
-  min-height: 100vh;
+  /* 60vh, not 100vh: for a signed-in visitor this page renders INSIDE the
+     dashboard shell, and a full-viewport block under the header pushed the
+     document past the viewport and added a scrollbar to a 404. */
+  min-height: 60vh;
   display: grid;
   place-items: center;
-  padding: 72px 16px 32px;
+  padding: 48px 16px 32px;
   background: var(--bg);
 }
 
