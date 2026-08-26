@@ -12,6 +12,7 @@ import { ioRedis } from '@postsider/nestjs-libraries/redis/redis.service';
 import { IntegrationManager } from '@postsider/nestjs-libraries/integrations/integration.manager';
 import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
 import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
+import { AuditLogger } from '@postsider/nestjs-libraries/database/prisma/audit/audit.logger';
 import { Organization, User } from '@prisma/client';
 import { IntegrationFunctionDto } from '@postsider/nestjs-libraries/dtos/integrations/integration.function.dto';
 import { CheckPolicies } from '@postsider/backend/services/auth/permissions/permissions.ability';
@@ -46,6 +47,7 @@ export class IntegrationsController {
     private _refreshIntegrationService: RefreshIntegrationService,
     private _providerEnvHelper: ProviderEnvHelper,
     private _channelAssignments: ChannelAssignmentService,
+    private _audit: AuditLogger,
   ) {}
 
   private roleOf(org: Organization): string {
@@ -802,6 +804,7 @@ export class IntegrationsController {
   @Delete('/')
   async deleteChannel(
     @GetOrgFromRequest() org: Organization,
+    @GetUserFromRequest() user: User,
     @Body('id') id: string
   ) {
     // Was: delete every post group of the channel. That destroyed real user
@@ -809,7 +812,11 @@ export class IntegrationsController {
     // posts gone, published history with them) — awaiting the sweep, as the
     // previous fix did, only made the destruction reliable. `deleteChannel`
     // now parks the unpublished posts as drafts instead.
-    return this._integrationService.deleteChannel(org.id, id);
+    const deleted = await this._integrationService.deleteChannel(org.id, id);
+    await this._audit.logSecurityEvent(org.id, 'channel.delete', user.id, {
+      integrationId: id,
+    });
+    return deleted;
   }
 
   @Get('/plug/list')

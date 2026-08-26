@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { PrismaRepository } from '@postsider/nestjs-libraries/database/prisma/prisma.service';
 
 export interface AuditEntry {
@@ -11,6 +11,8 @@ export interface AuditEntry {
   /** Raw input params; hashed before persisting (never stored verbatim). */
   input?: unknown;
   type?: string | null;
+  /** Who performed the action. Omit for machine-driven entries. */
+  actorUserId?: string | null;
 }
 
 @Injectable()
@@ -35,6 +37,29 @@ export class AuditLogger {
    * Persist an audit entry. Best-effort: a logging failure must never break the
    * operation being audited, so errors are swallowed after being surfaced.
    */
+  /**
+   * Record a security-relevant action taken by a person: a role change, an
+   * invite, a revoked key, an impersonation. Same store as the connector
+   * entries, with the actor attached and a correlation id generated here so
+   * callers stay one line.
+   */
+  async logSecurityEvent(
+    organizationId: string,
+    operation: string,
+    actorUserId: string | null,
+    input?: unknown
+  ): Promise<void> {
+    await this.log({
+      organizationId,
+      operation,
+      actorUserId,
+      correlationId: randomUUID(),
+      status: 'ok',
+      input,
+      type: 'security',
+    });
+  }
+
   async log(entry: AuditEntry): Promise<void> {
     try {
       await this._auditLog.model.auditLog.create({
@@ -42,6 +67,7 @@ export class AuditLogger {
           organizationId: entry.organizationId,
           operation: entry.operation,
           connectorId: entry.connectorId ?? null,
+          actorUserId: entry.actorUserId ?? null,
           correlationId: entry.correlationId,
           status: entry.status,
           inputHash: AuditLogger.hashInput(entry.input),

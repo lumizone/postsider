@@ -970,6 +970,8 @@ model AuditLog {
   organizationId String
   operation      String
   connectorId    String?
+  /// Who did it. Null for machine-driven entries (inbound events, cron).
+  actorUserId    String?
   correlationId  String
   status         String // "ok" | "error" | "rate_limited" | "connector_not_authorized" | ...
   inputHash      String? // hash of input params, never raw secrets
@@ -979,6 +981,7 @@ model AuditLog {
 
   @@index([organizationId])
   @@index([connectorId])
+  @@index([actorUserId])
   @@index([correlationId])
   @@index([createdAt])
 }

@@ -16,6 +16,7 @@ import { PostCheckerService } from '@postsider/nestjs-libraries/post-checker/pos
 import { SaveCheckerConfigDto } from '@postsider/nestjs-libraries/dtos/post-checker/save.checker.config.dto';
 import { isPlatformAiEnabled } from '@postsider/nestjs-libraries/services/ai.flag';
 import { PolarService } from '@postsider/nestjs-libraries/services/polar.service';
+import { AuditLogger } from '@postsider/nestjs-libraries/database/prisma/audit/audit.logger';
 
 @ApiTags('Settings')
 @Controller('/settings')
@@ -26,6 +27,7 @@ export class SettingsController {
     private _integrationService: IntegrationService,
     private _postChecker: PostCheckerService,
     private _polarService: PolarService,
+    private _audit: AuditLogger,
   ) {}
 
   @Get('/post-checker')
@@ -72,6 +74,7 @@ export class SettingsController {
   )
   async inviteTeamMember(
     @GetOrgFromRequest() org: Organization,
+    @GetUserFromRequest() user: User,
     @Body() body: AddTeamMemberDto
   ) {
     // Only the owner can grant ADMIN — mirrors changeTeamMemberRole's SUPERADMIN
@@ -83,7 +86,11 @@ export class SettingsController {
     if (body.role === 'ADMIN' && org.users?.[0]?.role !== 'SUPERADMIN') {
       throw new HttpException('Only the owner can grant the ADMIN role', 403);
     }
-    return this._organizationService.inviteTeamMember(org.id, body);
+    const invite = await this._organizationService.inviteTeamMember(org.id, body);
+    await this._audit.logSecurityEvent(org.id, 'team.invite', user.id, {
+      role: body.role,
+    });
+    return invite;
   }
 
   @Delete('/team/:id')
@@ -91,11 +98,16 @@ export class SettingsController {
     [AuthorizationActions.Create, Sections.TEAM_MEMBERS],
     [AuthorizationActions.Create, Sections.ADMIN]
   )
-  deleteTeamMember(
+  async deleteTeamMember(
     @GetOrgFromRequest() org: Organization,
+    @GetUserFromRequest() user: User,
     @Param('id') id: string
   ) {
-    return this._organizationService.deleteTeamMember(org, id);
+    const result = await this._organizationService.deleteTeamMember(org, id);
+    await this._audit.logSecurityEvent(org.id, 'team.remove', user.id, {
+      removedUserId: id,
+    });
+    return result;
   }
 
   @Get('/organization')
@@ -157,7 +169,16 @@ export class SettingsController {
       throw new HttpException('Cannot change your own role', 400);
     }
 
-    return this._organizationService.changeTeamMemberRole(org.id, userId, role);
+    const changed = await this._organizationService.changeTeamMemberRole(
+      org.id,
+      userId,
+      role
+    );
+    await this._audit.logSecurityEvent(org.id, 'team.role_change', user.id, {
+      targetUserId: userId,
+      role,
+    });
+    return changed;
   }
 
   /**
@@ -173,12 +194,20 @@ export class SettingsController {
   @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
   async createApiKey(
     @GetOrgFromRequest() org: Organization,
+    @GetUserFromRequest() user: User,
     @Body('name') name: string
   ) {
     if (!name || name.trim().length === 0) {
       throw new HttpException('Name is required', 400);
     }
-    return this._organizationService.createApiKey(org.id, name.trim());
+    const created = await this._organizationService.createApiKey(
+      org.id,
+      name.trim()
+    );
+    await this._audit.logSecurityEvent(org.id, 'api_key.create', user.id, {
+      name: name.trim(),
+    });
+    return created;
   }
 
   @Put('/api-keys/:id')
@@ -198,9 +227,14 @@ export class SettingsController {
   @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
   async deleteApiKey(
     @GetOrgFromRequest() org: Organization,
+    @GetUserFromRequest() user: User,
     @Param('id') id: string
   ) {
-    return this._organizationService.deleteApiKey(org.id, id);
+    const deleted = await this._organizationService.deleteApiKey(org.id, id);
+    await this._audit.logSecurityEvent(org.id, 'api_key.revoke', user.id, {
+      apiKeyId: id,
+    });
+    return deleted;
   }
 
   @Get('/storage')
@@ -296,9 +330,16 @@ export class SettingsController {
   @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
   async deleteProviderCredentials(
     @GetOrgFromRequest() org: Organization,
+    @GetUserFromRequest() user: User,
     @Param('provider') provider: string,
   ) {
     await this._providerCredentialsService.deleteCredentials(org.id, provider);
+    await this._audit.logSecurityEvent(
+      org.id,
+      'provider_credentials.delete',
+      user.id,
+      { provider }
+    );
     return { success: true };
   }
 
@@ -308,7 +349,10 @@ export class SettingsController {
    */
   @Post('/disconnect-all-channels')
   @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
-  async disconnectAllChannels(@GetOrgFromRequest() org: Organization) {
+  async disconnectAllChannels(
+    @GetOrgFromRequest() org: Organization,
+    @GetUserFromRequest() user: User
+  ) {
     const integrations = await this._integrationService.getIntegrationsList(
       org.id
     );
@@ -326,6 +370,12 @@ export class SettingsController {
         failed.push(integration.id);
       }
     }
+    await this._audit.logSecurityEvent(
+      org.id,
+      'channels.disconnect_all',
+      user.id,
+      { attempted: integrations.length, failed: failed.length }
+    );
     return {
       disconnected: integrations.length - failed.length,
       ...(failed.length ? { failed } : {}),
@@ -353,6 +403,9 @@ export class SettingsController {
     // billing a customer whose org (and any way to manage or even see the
     // subscription) no longer existed.
     await this._polarService.cancelActiveSubscriptionBestEffort(org.id);
+    // Logged BEFORE the delete: the audit row references the organization, so
+    // writing it afterwards would hit a row that no longer exists.
+    await this._audit.logSecurityEvent(org.id, 'account.delete', user.id);
     return this._organizationService.deleteAccount(org.id, user.id);
   }
 }
