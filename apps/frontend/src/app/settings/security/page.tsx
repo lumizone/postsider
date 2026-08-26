@@ -29,7 +29,7 @@ export default function SecuritySettingsPage() {
       />
       <PasswordCard />
       <MfaCard />
-      {user?.admin && <SuperAdminMfaPolicy />}
+      {user?.role === 'SUPERADMIN' && <SuperAdminMfaPolicy />}
       {canManage && <DangerZone />}
     </>
   );
