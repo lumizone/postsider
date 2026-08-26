@@ -38,7 +38,13 @@ function MoonIcon() {
  * (including "follow the system") lives in Settings → General, where there is
  * room to name the options.
  */
-export function ThemeToggle({ compact = false }: { compact?: boolean }) {
+export function ThemeToggle({
+  compact = false,
+  className = "",
+}: {
+  compact?: boolean;
+  className?: string;
+}) {
   const { theme, preference, toggle } = useTheme();
   const t = useT();
   const dark = theme === "dark";
@@ -54,7 +60,7 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
       // Height lives in globals.css, not here: inline styles cannot be
       // overridden, and the copy that sits beside the language select has to
       // match that select's box while the topbar copy stays a full touch target.
-      className="theme-toggle"
+      className={"theme-toggle" + (className ? " " + className : "")}
       style={{
         display: "flex",
         alignItems: "center",

@@ -693,10 +693,33 @@
   letter-spacing: -0.005em;
   overflow: hidden;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  /* Row: media thumbnail first, then the title/meta column. */
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
   cursor: pointer;
   transition: transform 120ms var(--ease), background 140ms var(--ease);
+}
+
+.timelineEventBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/* Columns too narrow for copy (the phone week): the icon carries the card, and
+   the full "time · channel — title" stays available as the native tooltip. */
+.timelineEventIconOnly {
+  align-items: center;
+  justify-content: center;
+  padding: 6px 2px;
+}
+
+.timelineEventIconOnly .timelineEventTitle,
+.timelineEventIconOnly .timelineEventMeta {
+  display: none;
 }
 
 .timelineEvent:hover {

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./calendar.module.css";
 import { ChannelsPanel } from "./channels-panel";
 import { PlatformIcon } from "./platform-icon";
+import { PostMediaThumb } from "./post-media-thumb";
 import { ChannelDetailModal } from "./channel-detail-modal";
 import { AddChannelModal } from "./add-channel-modal";
 import { CustomFieldsModal } from "./custom-fields-modal";
@@ -45,7 +46,17 @@ import {
   type AttachedMedia,
 } from "./create-post-modal";
 import { useAuth } from "@/lib/auth-context";
-import { layoutOverlappingEvents } from "@/lib/event-lanes";
+import {
+  buildStackLayout,
+  layoutOverlappingEvents,
+  mergeExtraByHour,
+  offsetAtMinute,
+  offsetBeforeHour,
+  type EventLanePlacement,
+  type StackLayout,
+} from "@/lib/event-lanes";
+import { PHONE_QUERY, useMediaQuery } from "@/lib/use-media-query";
+import { MIN_CARD_WIDTH, useElementWidth } from "@/lib/use-element-width";
 
 /** Monday-first weekday names for the given locale (2024-01-01 is a Monday). */
 function buildWeekdayNames(
@@ -1468,6 +1479,11 @@ function MonthView({
     [cursor],
   );
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  // A month cell is ~110px next to the channels panel: a thumbnail there costs
+  // more title than it gives preview, so it appears only once a cell is wide
+  // enough to carry both. Measured, because the panel can be collapsed.
+  const [gridRef, gridWidth] = useElementWidth<HTMLDivElement>();
+  const showThumbs = gridWidth / 7 >= 150;
 
   return (
     <>
@@ -1485,7 +1501,7 @@ function MonthView({
           ))}
         </div>
 
-        <div className={styles.grid} role="grid">
+        <div className={styles.grid} role="grid" ref={gridRef}>
           {cells.map((cell, idx) => {
             const isToday = isSameDay(cell.date, today);
             const isSelected = selected ? isSameDay(cell.date, selected) : false;
@@ -1601,6 +1617,10 @@ function MonthView({
                               aria-hidden
                             >?</span>
                           )}
+                          {/* Renders nothing when the post has no media. */}
+                          {showThumbs && (
+                            <PostMediaThumb media={ev.media} size={16} />
+                          )}
                           <span className={styles.eventLabel}>{ev.title}</span>
                         </span>
                       );
@@ -1688,6 +1708,8 @@ function SummaryBar({
 /* ───────── TIMELINE (week + day) ───────── */
 
 const HOUR_HEIGHT = 56;
+/** Width of the hour-label gutter, mirroring the grid template below. */
+const HOUR_LABEL_WIDTH = 64;
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 function eventTopAndHeight(time: string, durationMinutes: number) {
@@ -1706,6 +1728,15 @@ function timeToMinutes(time: string): number {
 
 function formatHourLabel(h: number): string {
   return `${String(h).padStart(2, "0")}:00`;
+}
+
+/** Calendar events -> the minimal shape both layout helpers work on. */
+function toPositioned(events: CalendarEvent[]) {
+  return events.map((ev) => ({
+    id: ev.id,
+    startMin: timeToMinutes(ev.time),
+    endMin: timeToMinutes(ev.time) + (ev.durationMinutes ?? DEFAULT_DURATION),
+  }));
 }
 
 interface TimelineProps {
@@ -1736,9 +1767,68 @@ function Timeline({
   const gridTemplate = `64px repeat(${cols}, 1fr)`;
   const [dragOver, setDragOver] = useState<string | null>(null);
 
+  // Phones stack the posts of one hour instead of splitting the column into
+  // lanes: a lane in a 7-column phone week is ~20px wide, which shows an icon
+  // and nothing else. The hour rows grow to hold the stack, and because the
+  // hour labels and slots are in normal flow, growing them is enough to keep
+  // every column on one grid — only the absolutely-placed cards and the
+  // now-line need the offset table.
+  // How many lanes a column can hold is a measurement, not a breakpoint: the
+  // sidebar, the channels panel and the day count all eat into it. An hour
+  // whose posts would go below MIN_CARD_WIDTH stacks instead of splitting.
+  // Phones always stack, however wide the day column happens to be.
+  const isPhone = useMediaQuery(PHONE_QUERY);
+  const [bodyRef, bodyWidth] = useElementWidth<HTMLDivElement>();
+  const maxLanes = useMemo(() => {
+    if (isPhone) return 1;
+    if (!bodyWidth) return 2; // pre-measurement frame: the old default
+    const colWidth = (bodyWidth - HOUR_LABEL_WIDTH) / Math.max(1, cols);
+    return Math.max(1, Math.floor(colWidth / MIN_CARD_WIDTH));
+  }, [isPhone, bodyWidth, cols]);
+
+  // Under ~72px a column fits the platform icon and nothing legible beside it,
+  // so the phone week drops the title and time rather than printing "1…".
+  const iconOnly =
+    bodyWidth > 0 && (bodyWidth - HOUR_LABEL_WIDTH) / Math.max(1, cols) < 72;
+
+  const positionedByDay = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof toPositioned>>();
+    for (const d of days) map.set(iso(d), toPositioned(eventsByDay.get(iso(d)) ?? []));
+    return map;
+  }, [days, eventsByDay]);
+
+  const { stackByDay, extraByHour } = useMemo(() => {
+    const stacks = (count: number) => count > maxLanes;
+    // Two passes: measure every day, then lay them all out against the tallest
+    // hour so the seven columns keep one shared grid.
+    const merged = mergeExtraByHour(
+      [...positionedByDay.values()].map(
+        (evs) =>
+          buildStackLayout(evs, HOUR_HEIGHT, 26, undefined, stacks).extraByHour,
+      ),
+    );
+    const byDay = new Map<string, StackLayout>();
+    for (const [key, evs] of positionedByDay)
+      byDay.set(key, buildStackLayout(evs, HOUR_HEIGHT, 26, merged, stacks));
+    return { stackByDay: byDay, extraByHour: merged };
+  }, [maxLanes, positionedByDay]);
+
+  // Lanes are computed from the events that did NOT stack, so a stacked hour
+  // never inflates the lane count of the posts around it.
+  const lanesByDay = useMemo(() => {
+    const byDay = new Map<string, Map<string, EventLanePlacement>>();
+    for (const [key, evs] of positionedByDay) {
+      const stack = stackByDay.get(key);
+      const flat = evs.filter((ev) => !stack?.placements.get(ev.id)?.stacked);
+      byDay.set(key, layoutOverlappingEvents(flat));
+    }
+    return byDay;
+  }, [positionedByDay, stackByDay]);
+
   const todayColIdx = days.findIndex((d) => isSameDay(d, today));
   const nowMinutes = today.getHours() * 60 + today.getMinutes();
-  const nowTop = (nowMinutes / 60) * HOUR_HEIGHT;
+  const nowTop =
+    (nowMinutes / 60) * HOUR_HEIGHT + offsetAtMinute(extraByHour, nowMinutes);
 
   return (
     <div className={styles.timeline}>
@@ -1770,12 +1860,19 @@ function Timeline({
       </div>
 
       <div
+        ref={bodyRef}
         className={styles.timelineBody}
         style={{ gridTemplateColumns: gridTemplate }}
       >
         <div>
           {HOURS.map((h) => (
-            <div key={h} className={styles.timelineHourLabel}>
+            <div
+              key={h}
+              className={styles.timelineHourLabel}
+              style={
+                extraByHour[h] ? { height: HOUR_HEIGHT + extraByHour[h] } : undefined
+              }
+            >
               {h === 0 ? "" : formatHourLabel(h)}
             </div>
           ))}
@@ -1801,11 +1898,14 @@ function Timeline({
                     aria-label={t("calendar.addPostAt", {
                       time: formatHourLabel(h),
                     })}
-                    style={
-                      dragOver === slotKey
+                    style={{
+                      ...(extraByHour[h]
+                        ? { height: HOUR_HEIGHT + extraByHour[h] }
+                        : null),
+                      ...(dragOver === slotKey
                         ? { outline: "2px solid var(--fg)", outlineOffset: -2 }
-                        : undefined
-                    }
+                        : null),
+                    }}
                     onDragOver={
                       onMoveEvent
                         ? (e) => {
@@ -1850,29 +1950,31 @@ function Timeline({
               )}
 
               {(() => {
-                // Overlapping events (same or near same time) are laid out
-                // side by side instead of stacking on top of each other.
-                const placements = layoutOverlappingEvents(
-                  dayEvents.map((ev) => ({
-                    id: ev.id,
-                    startMin: timeToMinutes(ev.time),
-                    endMin:
-                      timeToMinutes(ev.time) +
-                      (ev.durationMinutes ?? DEFAULT_DURATION),
-                  })),
-                );
+                // Wide screens: overlapping events sit side by side in lanes.
+                // Phones: the hour's posts stack, full width, in the grown row.
+                const placements = lanesByDay.get(iso(d));
+                const stack = stackByDay.get(iso(d));
                 return dayEvents.map((ev) => {
-                  const { top, height } = eventTopAndHeight(
+                  const natural = eventTopAndHeight(
                     ev.time,
                     ev.durationMinutes ?? DEFAULT_DURATION,
                   );
+                  const slot = stack?.placements.get(ev.id);
+                  const top = slot ? slot.top : natural.top;
+                  const height = slot ? slot.height : natural.height;
                   const c = channelsById.get(ev.channelId);
                   const canDrag = !!onMoveEvent && isDraggableStatus(ev.status);
-                  const placement = placements.get(ev.id);
+                  // A stacked card owns the full column; only lane cards get
+                  // a horizontal slice.
+                  const placement = slot?.stacked ? undefined : placements?.get(ev.id);
                   return (
                     <div
                       key={ev.id}
-                      className={styles.timelineEvent}
+                      className={
+                        styles.timelineEvent +
+                        (iconOnly ? " " + styles.timelineEventIconOnly : "")
+                      }
+                      title={`${ev.time}${c ? " · " + c.name : ""} — ${ev.title}`}
                       draggable={canDrag}
                       onClick={() => onOpenEvent?.(ev)}
                       onDragStart={
@@ -1897,6 +1999,10 @@ function Timeline({
                           : {}),
                       }}
                     >
+                      {/* Renders nothing when the post has no media; hidden
+                          entirely in icon-only columns, where it would not fit. */}
+                      {!iconOnly && <PostMediaThumb media={ev.media} size={24} />}
+                      <div className={styles.timelineEventBody}>
                       <div className={styles.timelineEventHead}>
                         {c ? (
                           <PlatformIcon platform={c.platform} size={16} />
@@ -1914,6 +2020,7 @@ function Timeline({
                         {ev.time}
                         {c ? ` · ${c.name}` : ""}
                       </span>
+                      </div>
                     </div>
                   );
                 });

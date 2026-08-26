@@ -326,7 +326,8 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         {/* The sidebar copy lives in a drawer on mobile, so the bell needs its
             own always-visible spot here. */}
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-          <ThemeToggle compact />
+          {/* theme-toggle-topbar: same 44x44 box as the bell beside it. */}
+          <ThemeToggle compact className="theme-toggle-topbar" />
           <NotificationsBell compact />
         </div>
       </header>

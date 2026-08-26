@@ -3,9 +3,17 @@
 import { useEffect, useMemo } from "react";
 import styles from "./day-popup.module.css";
 import { PlatformIcon } from "./platform-icon";
+import { PostMediaThumb } from "./post-media-thumb";
 import { type CalendarEvent, type Channel } from "@/lib/calendar-data";
 import { useT } from "@/lib/i18n";
-import { layoutOverlappingEvents } from "@/lib/event-lanes";
+import {
+  buildStackLayout,
+  layoutOverlappingEvents,
+  offsetAtMinute,
+  offsetBeforeHour,
+} from "@/lib/event-lanes";
+import { PHONE_QUERY, useMediaQuery } from "@/lib/use-media-query";
+import { MIN_CARD_WIDTH, useElementWidth } from "@/lib/use-element-width";
 
 interface DayPopupProps {
   date: Date;
@@ -103,10 +111,57 @@ export function DayPopup({
     [events],
   );
 
+  // Phones always stack (full-width cards, one under another, the hour block
+  // grows). Wider modals keep lanes, but only as many as fit a readable card:
+  // the layer is measured, so four posts in one hour stack instead of turning
+  // into 22px slivers.
+  const isPhone = useMediaQuery(PHONE_QUERY);
+  const [layerRef, layerWidth] = useElementWidth<HTMLDivElement>();
+  const maxLanes = isPhone
+    ? 1
+    : layerWidth
+      ? Math.max(1, Math.floor(layerWidth / MIN_CARD_WIDTH))
+      : 2;
+
+  const positioned = useMemo(
+    () =>
+      sortedEvents.map((ev) => ({
+        id: ev.id,
+        startMin: timeToMinutes(ev.time),
+        endMin: timeToMinutes(ev.time) + (ev.durationMinutes ?? DEFAULT_DURATION),
+      })),
+    [sortedEvents],
+  );
+
+  const stack = useMemo(
+    () =>
+      buildStackLayout(
+        positioned,
+        HOUR_HEIGHT,
+        28,
+        undefined,
+        (count) => count > maxLanes,
+      ),
+    [positioned, maxLanes],
+  );
+  // Lanes come from the posts that did not stack, so a stacked hour cannot
+  // inflate the lane count of the rest of the day.
+  const lanes = useMemo(
+    () =>
+      layoutOverlappingEvents(
+        positioned.filter((ev) => !stack.placements.get(ev.id)?.stacked),
+      ),
+    [positioned, stack],
+  );
+
+  const extraByHour = stack.extraByHour;
+  const timelineHeight = HOUR_HEIGHT * HOURS.length + stack.totalExtra;
+
   const today = new Date();
   const showNowLine = isSameDay(date, today);
   const nowMinutes = today.getHours() * 60 + today.getMinutes();
-  const nowTop = (nowMinutes / 60) * HOUR_HEIGHT;
+  const nowTop =
+    (nowMinutes / 60) * HOUR_HEIGHT + offsetAtMinute(extraByHour, nowMinutes);
 
   return (
     <div
@@ -157,13 +212,16 @@ export function DayPopup({
         <div className={styles.body}>
           <div
             className={styles.timeline}
-            style={{ height: HOUR_HEIGHT * HOURS.length }}
+            style={{ height: timelineHeight }}
           >
             {HOURS.map((h) => (
               <div
                 key={h}
                 className={styles.hourRow}
-                style={{ top: h * HOUR_HEIGHT, height: HOUR_HEIGHT }}
+                style={{
+                  top: h * HOUR_HEIGHT + offsetBeforeHour(extraByHour, h),
+                  height: HOUR_HEIGHT + (extraByHour[h] ?? 0),
+                }}
               >
                 <span className={styles.hourLabel}>
                   {h === 0 ? "" : formatHourLabel(h)}
@@ -191,25 +249,21 @@ export function DayPopup({
               />
             )}
 
-            {(() => {
-              // Overlapping events are laid out side by side instead of
-              // stacking on top of each other.
-              const placements = layoutOverlappingEvents(
-                sortedEvents.map((ev) => ({
-                  id: ev.id,
-                  startMin: timeToMinutes(ev.time),
-                  endMin:
-                    timeToMinutes(ev.time) +
-                    (ev.durationMinutes ?? DEFAULT_DURATION),
-                })),
-              );
-              return sortedEvents.map((ev) => {
-                const { top, height } = eventTopAndHeight(
+            {/* Events live in their own layer, inset past the hour labels, so
+                lane percentages are of the card area — the old
+                `calc(50% - 72px)` on the full width went NEGATIVE at four
+                lanes and the cards vanished. */}
+            <div className={styles.eventLayer} ref={layerRef}>
+              {sortedEvents.map((ev) => {
+                const natural = eventTopAndHeight(
                   ev.time,
                   ev.durationMinutes ?? DEFAULT_DURATION,
                 );
+                const slot = stack.placements.get(ev.id);
+                const top = slot ? slot.top : natural.top;
+                const height = slot ? slot.height : natural.height;
                 const c = channelsById.get(ev.channelId);
-                const placement = placements.get(ev.id);
+                const placement = slot?.stacked ? undefined : lanes.get(ev.id);
                 return (
                   <button
                     type="button"
@@ -223,29 +277,33 @@ export function DayPopup({
                         : "3px solid var(--fg)",
                       ...(placement
                         ? {
-                            left: `calc(${placement.leftPct}% + 64px)`,
-                            width: `calc(${placement.widthPct}% - 72px)`,
+                            left: `${placement.leftPct}%`,
+                            width: `calc(${placement.widthPct}% - 6px)`,
                           }
                         : {}),
                     }}
                     onClick={() => onEditEvent?.(ev)}
                   >
-                    <div className={styles.eventHead}>
-                      {c ? (
-                        <PlatformIcon platform={c.platform} size={18} />
-                      ) : (
-                        <span className={styles.eventBadge} aria-hidden>?</span>
-                      )}
-                      <span className={styles.eventTitle}>{ev.title}</span>
+                    {/* Renders nothing when the post has no media. */}
+                    <PostMediaThumb media={ev.media} size={24} />
+                    <div className={styles.eventBody}>
+                      <div className={styles.eventHead}>
+                        {c ? (
+                          <PlatformIcon platform={c.platform} size={18} />
+                        ) : (
+                          <span className={styles.eventBadge} aria-hidden>?</span>
+                        )}
+                        <span className={styles.eventTitle}>{ev.title}</span>
+                      </div>
+                      <span className={styles.eventMeta}>
+                        {ev.time}
+                        {c ? ` · ${c.name}` : ""}
+                      </span>
                     </div>
-                    <span className={styles.eventMeta}>
-                      {ev.time}
-                      {c ? ` · ${c.name}` : ""}
-                    </span>
                   </button>
                 );
-              });
-            })()}
+              })}
+            </div>
           </div>
         </div>
       </div>

@@ -363,6 +363,24 @@ ul {
   height: 26px;
 }
 
+/*
+ * Mobile topbar: the toggle sits right next to the notifications bell, which is
+ * a 44x44 square with --radius-md. A pill of a different size beside it reads as
+ * a mistake, so the topbar copy takes the bell's exact box. !important because
+ * the component's own box is inline styles, which a class cannot otherwise win
+ * against. The sidebar-footer copy (.lang-theme-row) is untouched.
+ */
+.theme-toggle-topbar {
+  width: 44px !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  padding: 0 !important;
+  border-radius: var(--radius-md) !important;
+  justify-content: center;
+  align-self: center !important;
+  flex-shrink: 0;
+}
+
 @media (max-width: 768px) {
   .lang-theme-row .theme-toggle {
     height: 29px;
