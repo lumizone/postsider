@@ -940,7 +940,7 @@ export class PostsService {
       if (!workflow) {
         throw new Error('Temporal client is not available');
       }
-      await workflow.start('postWorkflowV106', {
+      await workflow.start('postWorkflowV107', {
         workflowId: `post_${postId}`,
         taskQueue: 'main',
         workflowIdConflictPolicy: 'TERMINATE_EXISTING',

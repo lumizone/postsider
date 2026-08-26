@@ -69,7 +69,7 @@ export class RefreshIntegrationService implements OnApplicationBootstrap {
 
     return this._temporalService.client
       .getRawClient()
-      ?.workflow.start(`refreshTokenWorkflow`, {
+      ?.workflow.start(`refreshTokenWorkflowV2`, {
         workflowId: `refresh_${id}`,
         args: [{integrationId: id, organizationId: orgId}],
         taskQueue: 'main',
@@ -135,7 +135,7 @@ export class RefreshIntegrationService implements OnApplicationBootstrap {
       let armed = 0;
       for (const integration of pending) {
         try {
-          await raw.workflow.start('refreshTokenWorkflow', {
+          await raw.workflow.start('refreshTokenWorkflowV2', {
             workflowId: `refresh_${integration.id}`,
             args: [
               {

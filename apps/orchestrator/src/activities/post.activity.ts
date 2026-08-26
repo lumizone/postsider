@@ -54,6 +54,36 @@ function slimPost(post: any) {
   return rest;
 }
 
+
+/**
+ * Strip the OAuth secrets from an integration before it crosses into workflow
+ * code.
+ *
+ * Anything a workflow receives (activity results) or passes (activity
+ * arguments) is written to Temporal's history and stays in Temporal's own
+ * Postgres for the life of the retention period. The application database
+ * encrypts these fields; carrying them through history would keep a second,
+ * plaintext copy in a database nobody is watching. The v1.0.7 workflow
+ * therefore never sees a token: it passes integration IDs, and the activities
+ * load the secrets themselves.
+ */
+function stripIntegrationSecrets<T>(row: T): T {
+  if (!row || typeof row !== 'object') return row;
+  const { token, refreshToken, customInstanceDetails, ...safe } = row as any;
+  return safe as T;
+}
+
+/** Same, for a post that carries its integration inline. */
+function stripPostSecrets<T>(post: T): T {
+  if (!post || typeof post !== 'object') return post;
+  const withIntegration = post as any;
+  if (!withIntegration.integration) return post;
+  return {
+    ...withIntegration,
+    integration: stripIntegrationSecrets(withIntegration.integration),
+  };
+}
+
 @Injectable()
 @Activity()
 export class PostActivity {
@@ -81,7 +111,7 @@ export class PostActivity {
     for (const post of list) {
       await this._temporalService.client!
         .getRawClient()!
-        .workflow.signalWithStart('postWorkflowV106', {
+        .workflow.signalWithStart('postWorkflowV107', {
           workflowId: `post_${post.id}`,
           taskQueue: 'main',
           signal: 'poke',
@@ -540,5 +570,119 @@ export class PostActivity {
         }
       },
     );
+  }
+
+  /* ───────── token-free variants, used by post.workflow.v1.0.7 ─────────
+   *
+   * Same behaviour as the methods above, except the workflow hands over an
+   * integration ID and these load the row. The older workflow versions keep
+   * calling the object-taking methods: their histories replay against the
+   * signature they were started with, so those cannot change.
+   */
+
+  @ActivityMethod()
+  async getIntegrationSafeById(orgId: string, id: string) {
+    const integration = await this._integrationService.getIntegrationById(
+      orgId,
+      id
+    );
+    return integration ? stripIntegrationSecrets(integration) : integration;
+  }
+
+  @ActivityMethod()
+  async getPostForPublish(orgId: string, postId: string) {
+    const post = await this.getPost(orgId, postId);
+    return post ? stripPostSecrets(post) : post;
+  }
+
+  @ActivityMethod()
+  async getPostsListForPublish(orgId: string, postId: string) {
+    const posts = await this.getPostsList(orgId, postId);
+    return posts.map(stripPostSecrets);
+  }
+
+  private async _loadIntegration(orgId: string, integrationId: string) {
+    const integration = await this._integrationService.getIntegrationById(
+      orgId,
+      integrationId
+    );
+    if (!integration) {
+      throw new Error(`Integration ${integrationId} not found`);
+    }
+    return integration as Integration;
+  }
+
+  @ActivityMethod()
+  async isCommentableById(orgId: string, integrationId: string) {
+    return this.isCommentable(await this._loadIntegration(orgId, integrationId));
+  }
+
+  @ActivityMethod()
+  async postSocialById(orgId: string, integrationId: string, posts: Post[]) {
+    return this.postSocial(
+      await this._loadIntegration(orgId, integrationId),
+      posts
+    );
+  }
+
+  @ActivityMethod()
+  async postCommentById(
+    orgId: string,
+    integrationId: string,
+    id: string,
+    postId: string | undefined,
+    posts: Post[]
+  ) {
+    return this.postComment(
+      id,
+      postId,
+      await this._loadIntegration(orgId, integrationId),
+      posts
+    );
+  }
+
+  @ActivityMethod()
+  async globalPlugsById(orgId: string, integrationId: string) {
+    return this.globalPlugs(await this._loadIntegration(orgId, integrationId));
+  }
+
+  @ActivityMethod()
+  async internalPlugsById(
+    orgId: string,
+    integrationId: string,
+    settings: any
+  ) {
+    return this.internalPlugs(
+      await this._loadIntegration(orgId, integrationId),
+      settings
+    );
+  }
+
+  /**
+   * Refresh and persist, returning only whether it worked. The refreshed token
+   * is written to the database by `RefreshIntegrationService.refresh`, so the
+   * next activity reads it from there — the workflow neither needs nor should
+   * ever see the value.
+   */
+  /** Scheduled refresh by id; returns only whether it worked. */
+  @ActivityMethod()
+  async refreshTokenById(orgId: string, integrationId: string): Promise<boolean> {
+    const refreshed = await this.refreshToken(
+      await this._loadIntegration(orgId, integrationId)
+    );
+    return !!refreshed && !!refreshed.accessToken;
+  }
+
+  @ActivityMethod()
+  async refreshTokenWithCauseById(
+    orgId: string,
+    integrationId: string,
+    cause: string
+  ): Promise<boolean> {
+    const refreshed = await this.refreshTokenWithCause(
+      await this._loadIntegration(orgId, integrationId),
+      cause
+    );
+    return !!refreshed && !!refreshed.accessToken;
   }
 }

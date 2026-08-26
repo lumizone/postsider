@@ -12,6 +12,26 @@ export class IntegrationsActivity {
     return this._integrationService.getIntegrationById(orgId, id);
   }
 
+  /**
+   * Same lookup without the OAuth secrets, for workflow code.
+   *
+   * `refreshTokenWorkflowV2` only needs the scheduling fields
+   * (tokenExpiration, refreshNeeded, deletedAt, inBetweenSteps); handing it the
+   * token would write a plaintext copy into Temporal's event history on every
+   * loop, which is exactly what the v2 workflow exists to stop.
+   */
+  @ActivityMethod()
+  async getIntegrationsSafeById(id: string, orgId: string) {
+    const integration = await this._integrationService.getIntegrationById(
+      orgId,
+      id
+    );
+    if (!integration) return integration;
+    const { token, refreshToken, customInstanceDetails, ...safe } =
+      integration as any;
+    return safe;
+  }
+
   // NOTE: this class used to declare an UNDECORATED `refreshToken(integration)`
   // that was never registered as an activity — refreshTokenWorkflow's
   // `refreshToken` call has always resolved, by name, to
