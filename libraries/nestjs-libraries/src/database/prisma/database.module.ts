@@ -18,8 +18,6 @@ import { NotificationsRepository } from '@postsider/nestjs-libraries/database/pr
 import { EmailService } from '@postsider/nestjs-libraries/services/email.service';
 import { ExtractContentService } from '@postsider/nestjs-libraries/openai/extract.content.service';
 import { OpenaiService } from '@postsider/nestjs-libraries/openai/openai.service';
-import { AgenciesService } from '@postsider/nestjs-libraries/database/prisma/agencies/agencies.service';
-import { AgenciesRepository } from '@postsider/nestjs-libraries/database/prisma/agencies/agencies.repository';
 import { TrackService } from '@postsider/nestjs-libraries/track/track.service';
 import { ShortLinkService } from '@postsider/nestjs-libraries/short-linking/short.link.service';
 import { WebhooksRepository } from '@postsider/nestjs-libraries/database/prisma/webhooks/webhooks.repository';
@@ -86,8 +84,6 @@ import { PostAnalyticsService } from '@postsider/nestjs-libraries/database/prism
     SignatureService,
     MediaService,
     MediaRepository,
-    AgenciesService,
-    AgenciesRepository,
     IntegrationManager,
     RefreshIntegrationService,
     ExtractContentService,

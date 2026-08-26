@@ -4,22 +4,37 @@ import { AuthService } from '@postsider/helpers/auth/auth.service';
 import { User } from '@prisma/client';
 import { OrganizationService } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.service';
 import { UsersService } from '@postsider/nestjs-libraries/database/prisma/users/users.service';
-import { getCookieUrlFromDomain } from '@postsider/helpers/subdomain/subdomain.management';
+import {
+  getCookieUrlFromDomain,
+  legacyCookieDomain,
+} from '@postsider/helpers/subdomain/subdomain.management';
 import { HttpForbiddenException } from '@postsider/nestjs-libraries/services/exception.filter';
 
 export const removeAuth = (res: Response) => {
-  res.cookie('auth', '', {
-    domain: getCookieUrlFromDomain(process.env.FRONTEND_URL!),
+  const flags = {
     ...(!process.env.NOT_SECURED
       ? {
           secure: true,
           httpOnly: true,
-          sameSite: 'none',
+          sameSite: 'none' as const,
         }
       : {}),
     expires: new Date(0),
     maxAge: -1,
+  };
+
+  // Clear the cookie in BOTH scopes. Sessions issued before the host-only
+  // switch carry `domain=.<registrable>`, and a host-only clear does not touch
+  // them — logging out would leave the old cookie alive and the user signed in.
+  res.cookie('auth', '', {
+    ...flags,
+    domain: getCookieUrlFromDomain(process.env.FRONTEND_URL!),
   });
+  const legacyDomain = legacyCookieDomain(process.env.FRONTEND_URL!);
+  if (legacyDomain) {
+    res.cookie('auth', '', { ...flags, domain: legacyDomain });
+  }
+
   res.header('logout', 'true');
 };
 

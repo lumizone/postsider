@@ -122,13 +122,11 @@ model User {
   ip                    String?
   agent                 String?
   comments              Comments[]
-  items                 ItemUser[]
   groupBuyer            MessagesGroup[]      @relation("groupBuyer")
   groupSeller           MessagesGroup[]      @relation("groupSeller")
   orderBuyer            Orders[]             @relation("orderBuyer")
   orderSeller           Orders[]             @relation("orderSeller")
   payoutProblems        PayoutProblems[]
-  agencies              SocialMediaAgency?
   picture               Media?               @relation(fields: [pictureId], references: [id])
   organizations         UserOrganization[]
   sendSuccessEmails     Boolean              @default(true)
@@ -188,48 +186,9 @@ model GitHub {
   @@index([organizationId])
 }
 
-model Trending {
-  id           String   @id @default(uuid())
-  trendingList String
-  language     String?  @unique
-  hash         String
-  date         DateTime
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
 
-  @@index([hash])
-}
 
-model TrendingLog {
-  id       String   @id @default(uuid())
-  language String?
-  date     DateTime
-}
 
-model ItemUser {
-  id     String @id @default(uuid())
-  userId String
-  key    String
-  user   User   @relation(fields: [userId], references: [id])
-
-  @@unique([userId, key])
-  @@index([userId])
-  @@index([key])
-}
-
-model Star {
-  id         String   @id @default(uuid())
-  stars      Int
-  totalStars Int
-  forks      Int
-  totalForks Int
-  login      String
-  date       DateTime @default(now()) @db.Date
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@unique([login, date])
-}
 
 model Media {
   id                 String              @id @default(uuid())
@@ -248,7 +207,6 @@ model Media {
   alt                String?
   thumbnailTimestamp Int?
   organization       Organization        @relation(fields: [organizationId], references: [id])
-  agencies           SocialMediaAgency[]
   userPicture        User[]
   oauthApps          OAuthApp[]
 
@@ -257,42 +215,7 @@ model Media {
   @@index([type])
 }
 
-model SocialMediaAgency {
-  id               String                   @id @default(uuid())
-  userId           String                   @unique
-  name             String
-  logoId           String?
-  website          String?
-  slug             String?
-  facebook         String?
-  instagram        String?
-  twitter          String?
-  linkedIn         String?
-  youtube          String?
-  tiktok           String?
-  otherSocialMedia String?
-  shortDescription String
-  description      String
-  approved         Boolean                  @default(false)
-  createdAt        DateTime                 @default(now())
-  updatedAt        DateTime                 @updatedAt
-  deletedAt        DateTime?
-  logo             Media?                   @relation(fields: [logoId], references: [id])
-  user             User                     @relation(fields: [userId], references: [id])
-  niches           SocialMediaAgencyNiche[]
 
-  @@index([userId])
-  @@index([deletedAt])
-  @@index([id])
-}
-
-model SocialMediaAgencyNiche {
-  agencyId String
-  niche    String
-  agency   SocialMediaAgency @relation(fields: [agencyId], references: [id])
-
-  @@id([agencyId, niche])
-}
 
 model Credits {
   id             String       @id @default(uuid())
@@ -967,7 +890,8 @@ enum Capability {
 /// (Requirements 15.3, 18, 23).
 model AuditLog {
   id             String       @id @default(uuid())
-  organizationId String
+  /// Null for authentication events: a failed sign-in has no organization.
+  organizationId String?
   operation      String
   connectorId    String?
   /// Who did it. Null for machine-driven entries (inbound events, cron).
@@ -977,7 +901,7 @@ model AuditLog {
   inputHash      String? // hash of input params, never raw secrets
   type           String? // "rate_limited" | "connector_revoked" | ...
   createdAt      DateTime     @default(now())
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  organization   Organization? @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId])
   @@index([connectorId])

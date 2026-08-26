@@ -250,7 +250,7 @@ export default function ApiSettingsPage() {
       <Card title={t("settingsApi.usageTitle")}>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 13, color: "var(--muted)" }}>
           <span>{t("settingsApi.usageIntroPrefix")} <code style={{ background: "rgb(var(--tint) / 0.04)", padding: "2px 5px", borderRadius: 4 }}>Authorization</code> {t("settingsApi.usageIntroSuffix")}</span>
-          <pre className={s.codeBlock} style={{ fontSize: 12, lineHeight: 1.7, padding: "14px 16px", borderRadius: 10 }}>{`curl ${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000"}/public/v1/posts \\
+          <pre className={s.codeBlock} style={{ fontSize: 12, lineHeight: 1.7, padding: "14px 16px", borderRadius: 10 }}>{`curl ${process.env.NEXT_PUBLIC_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000"}/public/v1/posts \\
   -H "Authorization: ps_your_key_here" \\
   -H "Content-Type: application/json"`}</pre>
         </div>

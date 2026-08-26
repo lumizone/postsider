@@ -16,7 +16,12 @@ import {
 import styles from "./api-request-generator.module.css";
 
 const rid = () => Math.random().toString(36).slice(2, 12);
-const BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3000";
+// The dashboard calls its own origin ("/api"), but a request the customer is
+// meant to copy into curl needs the public, absolute API URL.
+const BASE =
+  process.env.NEXT_PUBLIC_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  "http://localhost:3000";
 
 function nowLocal(): string {
   const d = new Date();

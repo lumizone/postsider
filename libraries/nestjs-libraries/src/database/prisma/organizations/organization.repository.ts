@@ -905,8 +905,9 @@ export class OrganizationRepository {
     if (remaining > 0) {
       return false;
     }
+    // ItemUser was a Postiz marketplace table with no writer in this fork; it
+    // was dropped in 20260826150000, so the delete has nothing left to clean.
     await prisma.$transaction(async (tx) => {
-      await tx.itemUser.deleteMany({ where: { userId } });
       await tx.user.delete({ where: { id: userId } });
     });
     return true;

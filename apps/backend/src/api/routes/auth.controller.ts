@@ -23,6 +23,7 @@ import { EmailService } from '@postsider/nestjs-libraries/services/email.service
 import { RealIP } from 'nestjs-real-ip';
 import { UserAgent } from '@postsider/nestjs-libraries/user/user.agent';
 import { Provider } from '@prisma/client';
+import { AuditLogger } from '@postsider/nestjs-libraries/database/prisma/audit/audit.logger';
 import * as Sentry from '@sentry/nestjs';
 import { AuthRateLimitGuard } from '@postsider/nestjs-libraries/services/auth-rate-limit.guard';
 
@@ -31,7 +32,8 @@ import { AuthRateLimitGuard } from '@postsider/nestjs-libraries/services/auth-ra
 export class AuthController {
   constructor(
     private _authService: AuthService,
-    private _emailService: EmailService
+    private _emailService: EmailService,
+    private _audit: AuditLogger
   ) {}
 
   @Get('/can-register')
@@ -65,6 +67,12 @@ export class AuthController {
         userAgent,
         getOrgFromCookie
       );
+
+      await this._audit.logAuthEvent('auth.register', {
+        email: body.email,
+        ip,
+        provider: body.provider,
+      });
 
       const activationRequired =
         body.provider === 'LOCAL' &&
@@ -143,6 +151,12 @@ export class AuthController {
         getOrgFromCookie
       );
 
+      await this._audit.logAuthEvent('auth.login', {
+        email: body.email,
+        ip,
+        provider: body.provider,
+      });
+
       response.cookie('auth', jwt, {
         domain: getCookieUrlFromDomain(process.env.FRONTEND_URL!),
         ...(!process.env.NOT_SECURED
@@ -182,14 +196,26 @@ export class AuthController {
         login: true,
       });
     } catch (e: any) {
+      // Wrong password, unknown account, unactivated account — all land here.
+      // The trail records the attempt, never the reason, so it cannot be used
+      // to enumerate accounts.
+      await this._audit.logAuthEvent('auth.login_failed', {
+        email: body.email,
+        ip,
+        provider: body.provider,
+      });
       response.status(400).send(e.message);
     }
   }
 
   @Post('/forgot')
   @UseGuards(AuthRateLimitGuard)
-  async forgot(@Body() body: ForgotPasswordDto) {
+  async forgot(@Body() body: ForgotPasswordDto, @RealIP() ip: string) {
     try {
+      await this._audit.logAuthEvent('auth.password_reset_requested', {
+        email: body.email,
+        ip,
+      });
       await this._authService.forgot(body.email);
       return {
         forgot: true,
@@ -203,8 +229,16 @@ export class AuthController {
 
   @Post('/forgot-return')
   @UseGuards(AuthRateLimitGuard)
-  async forgotReturn(@Body() body: ForgotReturnPasswordDto) {
+  async forgotReturn(
+    @Body() body: ForgotReturnPasswordDto,
+    @RealIP() ip: string
+  ) {
     const reset = await this._authService.forgotReturn(body);
+    if (reset) {
+      // A completed reset changes who can sign in — the single most useful
+      // line in the trail when an account is disputed.
+      await this._audit.logAuthEvent('auth.password_reset', { ip });
+    }
     return {
       reset: !!reset,
     };

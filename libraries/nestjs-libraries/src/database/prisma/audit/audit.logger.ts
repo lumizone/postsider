@@ -3,7 +3,8 @@ import { createHash, randomUUID } from 'crypto';
 import { PrismaRepository } from '@postsider/nestjs-libraries/database/prisma/prisma.service';
 
 export interface AuditEntry {
-  organizationId: string;
+  /** Null for authentication events, which happen outside any organization. */
+  organizationId: string | null;
   operation: string;
   connectorId?: string | null;
   correlationId: string;
@@ -44,7 +45,7 @@ export class AuditLogger {
    * callers stay one line.
    */
   async logSecurityEvent(
-    organizationId: string,
+    organizationId: string | null,
     operation: string,
     actorUserId: string | null,
     input?: unknown
@@ -56,6 +57,31 @@ export class AuditLogger {
       correlationId: randomUUID(),
       status: 'ok',
       input,
+      type: 'security',
+    });
+  }
+
+  /**
+   * Record a sign-in attempt. Deliberately organization-free: the point of this
+   * entry is the attempt itself, and a failed one names an account that may not
+   * exist. The email is hashed like every other audit input — the trail answers
+   * "was this account attacked", not "who typed what".
+   */
+  async logAuthEvent(
+    operation: 'auth.login' | 'auth.login_failed' | 'auth.register' | 'auth.password_reset_requested' | 'auth.password_reset',
+    details: { userId?: string | null; email?: string | null; ip?: string | null; provider?: string | null }
+  ): Promise<void> {
+    await this.log({
+      organizationId: null,
+      operation,
+      actorUserId: details.userId ?? null,
+      correlationId: randomUUID(),
+      status: operation === 'auth.login_failed' ? 'error' : 'ok',
+      input: {
+        email: details.email ?? null,
+        ip: details.ip ?? null,
+        provider: details.provider ?? null,
+      },
       type: 'security',
     });
   }
