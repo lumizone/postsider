@@ -32,6 +32,9 @@ Konsola: developers.facebook.com > App settings > Basic.
       (`facebook.provider.ts` + `instagram.provider.ts`):
       `pages_show_list`, `business_management`, `pages_manage_posts`,
       `pages_manage_engagement`, `pages_read_engagement`, `read_insights`,
+      `pages_video_upload` (OPCJONALNY w kodzie — tylko w URL-u autoryzacji,
+      nie w `scopes`; bez Advanced Access wideo na FB nie ruszy, ale kanal
+      podlaczy sie i opublikuje zdjecia/tekst),
       `instagram_basic`, `instagram_content_publish`,
       `instagram_manage_comments`, `instagram_manage_insights`
       — do każdego: uzasadnienie + screencast (connect flow → publikacja → analityka).

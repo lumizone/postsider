@@ -33,6 +33,12 @@ export class FacebookProvider extends SocialAbstract implements SocialProvider {
     'pages_read_engagement',
     'read_insights',
   ];
+  // Requested in the OAuth URL only — NOT part of `scopes`, because
+  // checkScopes() requires every entry of `scopes` to be granted, and Meta
+  // grants pages_video_upload only with Advanced Access. Keeping it optional
+  // means video works for accounts that have it, while everyone else still
+  // connects and publishes photos/text.
+  optionalScopes = ['pages_video_upload'];
   override maxConcurrentJob = 500; // Facebook has reasonable rate limits
   editor = 'normal' as const;
   maxLength() {
@@ -264,7 +270,7 @@ export class FacebookProvider extends SocialAbstract implements SocialProvider {
           `${process.env.FRONTEND_URL}/integrations/social/facebook`
         )}` +
         `&state=${state}` +
-        `&scope=${this.scopes.join(',')}`,
+        `&scope=${[...this.scopes, ...this.optionalScopes].join(',')}`,
       codeVerifier: makeId(10),
       state,
     };

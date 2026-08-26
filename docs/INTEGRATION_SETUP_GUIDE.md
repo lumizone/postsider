@@ -100,6 +100,13 @@ Dodatkowy redirect URL:
 ### Wymagane scopes:
 `pages_show_list`, `business_management`, `pages_manage_posts`, `pages_read_engagement`, `pages_manage_engagement`
 
+### Opcjonalne scopes (tylko w URL-u autoryzacji):
+`pages_video_upload` — wymagane przez `POST /{page_id}/videos`, czyli publikacje
+wideo. Meta przyznaje je dopiero z Advanced Access, dlatego NIE jest w tablicy
+`scopes` (`checkScopes()` wymaga wszystkich z tej listy i zablokowalby
+podlaczenie Facebooka kazdemu bez Advanced Access). Po przyznaniu uprawnienia
+kanal trzeba przelaczyc na nowy token: `GET /social/facebook?refresh=<channel_id>`.
+
 ### Uwagi:
 - Posty mogą być tekstem, zdjęciami lub video
 - Stories wymagają min. 1 załącznika
