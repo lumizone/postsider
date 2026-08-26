@@ -13,6 +13,40 @@ blokady u źródła — złożenie audytu, materiały do review, zgodność kodu
 
 ## Status
 
+- **Tokeny WYPROWADZONE Z HISTORII TEMPORALA (2026-08-26, WDROŻONE ~12:08 UTC).**
+  Domknięcie audytu: baza aplikacji szyfruje tokeny od rana, ale workflow
+  publikujący nosił CAŁY wiersz `Integration` w argumentach i wynikach
+  aktywności, a wszystko, co workflow wysyła lub dostaje, ląduje w historii
+  zdarzeń Temporala (własny Postgres). Pętla odświeżania robiła to w KAŻDEJ
+  iteracji, przez całe życie kanału. **Zmierzone przed zmianą**: payloady
+  historii `refresh_*` zawierały `"token"`, `"refreshToken"` i
+  `"customInstanceDetails"`.
+  Dwie NOWE wersje (starych nie wolno edytować w miejscu — 24.08):
+  * `post.workflow.v1.0.7` — workflow dostaje ID kanału, aktywności `*ById`
+    (`getPostForPublish`, `postSocialById`, `postCommentById`,
+    `isCommentableById`, `globalPlugsById`, `internalPlugsById`,
+    `refreshTokenWithCauseById`) same wczytują wiersz. Odświeżanie zwraca
+    `boolean` — nowe poświadczenia zapisuje aktywność, kolejna czyta je z bazy,
+    więc zniknęło `post.integration.token = refresh.accessToken`.
+  * `refresh.token.workflow.v2` — `getIntegrationsSafeById` (wiersz bez
+    sekretów) + `refreshTokenById`.
+  Wersje v1.0.1–v1.0.6 i v1 refresh NIETKNIĘTE i dalej eksportowane.
+  Nowe posty startują na V107, boot re-arm i reconnect startują refresh na V2.
+  **Cutover:** boot re-arm ma `USE_EXISTING`, więc sam deploy nie wymieniłby
+  starych pętli — zterminowane ręcznie (10 szt.) + restart kontenera; po
+  restarcie 10× V2, 0× v1.
+  **Pre-flight, którego zabrakło przy incydencie z `crypto` 22.07:** bundle
+  workflow zbudowany OFFLINE tym samym `bundleWorkflowCode`, którego używa
+  worker przy starcie — kompiluje się, zawiera V107 i V2, nadal zawiera V106.
+  Weryfikacja po wdrożeniu: 32/32 workerów, historia V2 tego samego kanału
+  **bez markerów sekretów** (v1 miała trzy), a testowy start V107 na
+  nieistniejącym poście pokazał w historii `getPostForPublish` i zero sekretów
+  (workflow zterminowany, zero wierszy w bazie).
+  **Zostaje z natury rzeczy:** 19 workflowów V106 zaplanowanych przed deployem
+  dokończy się na starym kodzie i zapisze tokeny w swojej historii —
+  `WorkflowExecutionRetentionTtl` namespace'u to **24h**, więc te kopie
+  wygasają same. Nowych V106 już nie przybywa.
+
 - **AUDYT SaaS + naprawy bezpieczeństwa (2026-08-26, WDROŻONE 08:08 UTC).**
   Pytanie właściciela: czy to pełnoprawny SaaS i czy klienci nie widzą swoich
   treści nawzajem. **Izolacja najemców trzyma** — każda tabela z treścią ma
