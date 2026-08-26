@@ -45,7 +45,8 @@ export class AuthService {
     body: CreateOrgUserDto | LoginUserDto,
     ip: string,
     userAgent: string,
-    addToOrg?: boolean | { orgId: string; role: 'USER' | 'ADMIN'; id: string }
+    addToOrg?: boolean | { orgId: string; role: 'USER' | 'ADMIN'; id: string },
+    issueSession = true
   ) {
     // Detect registration vs login by checking for the `company` field
     // (present only on CreateOrgUserDto). The `instanceof` check is unreliable
@@ -88,7 +89,7 @@ export class AuthService {
               )
             : false;
 
-        const obj = { addedOrg, jwt: await this.jwt(create.users[0].user) };
+        const obj = { addedOrg, user: create.users[0].user, jwt: issueSession ? await this.jwt(create.users[0].user) : undefined };
         // The account is already committed at this point; a mail failure must not
         // fail the whole registration (the client could never retry — the email
         // would already be taken).
@@ -96,7 +97,7 @@ export class AuthService {
           .sendEmail(
             body.email,
             'Activate your account',
-            activateAccountEmail(`${process.env.FRONTEND_URL}/auth/activate/${obj.jwt}`),
+            activateAccountEmail(`${process.env.FRONTEND_URL}/auth/activate/${obj.jwt!}`),
             'top'
           )
           .catch(() => {});
@@ -111,7 +112,7 @@ export class AuthService {
         throw new Error('User is not activated');
       }
 
-      return { addedOrg: false, jwt: await this.jwt(user) };
+      return { addedOrg: false, user, jwt: issueSession ? await this.jwt(user) : undefined };
     }
 
     const user = await this.loginOrRegisterProvider(
@@ -131,7 +132,15 @@ export class AuthService {
             addToOrg.role
           )
         : false;
-    return { addedOrg, jwt: await this.jwt(user) };
+    return { addedOrg, user, jwt: issueSession ? await this.jwt(user) : undefined };
+  }
+
+  getUserById(id: string) {
+    return this._userService.getUserById(id);
+  }
+
+  issueSession(user: User) {
+    return this.jwt(user);
   }
 
   public getOrgFromCookie(cookie?: string) {
@@ -318,7 +327,7 @@ export class AuthService {
     return providerInstance.generateLink(query);
   }
 
-  async checkExists(provider: string, code: string, redirectUri?: string) {
+  async checkExists(provider: string, code: string, redirectUri?: string, issueSession = true) {
     const providerInstance = this._providerManager.getProvider(provider);
     const token = await providerInstance.getToken(code, redirectUri);
     const user = await providerInstance.getUser(token);
@@ -330,7 +339,7 @@ export class AuthService {
       provider as Provider
     );
     if (checkExists) {
-      return { jwt: await this.jwt(checkExists) };
+      return { user: checkExists, jwt: issueSession ? await this.jwt(checkExists) : undefined };
     }
 
     return { token };
@@ -340,6 +349,11 @@ export class AuthService {
     if (user.password) {
       delete (user as any).password;
     }
+    // MFA material must never enter a session payload.
+    delete (user as any).mfaSecret;
+    delete (user as any).mfaPendingSecret;
+    delete (user as any).mfaEnabledAt;
+    delete (user as any).mfaRecoveryCodes;
     return AuthChecker.signSessionJWT(user);
   }
 }

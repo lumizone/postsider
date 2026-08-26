@@ -68,7 +68,7 @@ export class AuditLogger {
    * "was this account attacked", not "who typed what".
    */
   async logAuthEvent(
-    operation: 'auth.login' | 'auth.login_failed' | 'auth.register' | 'auth.password_reset_requested' | 'auth.password_reset',
+    operation: 'auth.login' | 'auth.login_failed' | 'auth.register' | 'auth.password_reset_requested' | 'auth.password_reset' | 'auth.mfa_setup_started' | 'auth.mfa_enabled' | 'auth.mfa_disabled' | 'auth.mfa_verified' | 'auth.mfa_failed',
     details: { userId?: string | null; email?: string | null; ip?: string | null; provider?: string | null }
   ): Promise<void> {
     await this.log({

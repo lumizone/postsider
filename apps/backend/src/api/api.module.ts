@@ -1,6 +1,9 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { AuthController } from '@postsider/backend/api/routes/auth.controller';
 import { AuthService } from '@postsider/backend/services/auth/auth.service';
+import { MfaService } from '@postsider/backend/services/auth/mfa.service';
+import { TotpService } from '@postsider/backend/services/auth/totp.service';
+import { MfaController } from '@postsider/backend/api/routes/mfa.controller';
 import { UsersController } from '@postsider/backend/api/routes/users.controller';
 import { AuthMiddleware } from '@postsider/backend/services/auth/auth.middleware';
 import { PolarController } from '@postsider/backend/api/routes/polar.controller';
@@ -54,6 +57,7 @@ import { CsrfMiddleware } from '@postsider/backend/services/auth/csrf.middleware
 
 const authenticatedController = [
   UsersController,
+  MfaController,
   AnalyticsController,
   IntegrationsController,
   SettingsController,
@@ -92,6 +96,8 @@ const authenticatedController = [
   ],
   providers: [
     AuthService,
+    MfaService,
+    TotpService,
     PolarService,
     OpenaiService,
     ExtractContentService,

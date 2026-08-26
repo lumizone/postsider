@@ -42,10 +42,14 @@ export function LoginForm() {
     if (inviteToken) body.org = inviteToken;
 
     try {
-      await api.post("/auth/login", body, {
+      const result = await api.post<{ mfaRequired?: boolean }>("/auth/login", body, {
         anonymous: true,
         silent: true,
       });
+      if (result?.mfaRequired) {
+        router.replace("/login/mfa");
+        return;
+      }
       await refresh();
 
       // If joining via invite, bind to the org.

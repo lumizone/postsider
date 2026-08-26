@@ -22,10 +22,12 @@ import { getCookieUrlFromDomain } from '@postsider/helpers/subdomain/subdomain.m
 import { EmailService } from '@postsider/nestjs-libraries/services/email.service';
 import { RealIP } from 'nestjs-real-ip';
 import { UserAgent } from '@postsider/nestjs-libraries/user/user.agent';
-import { Provider } from '@prisma/client';
+import { Provider, User } from '@prisma/client';
 import { AuditLogger } from '@postsider/nestjs-libraries/database/prisma/audit/audit.logger';
 import * as Sentry from '@sentry/nestjs';
 import { AuthRateLimitGuard } from '@postsider/nestjs-libraries/services/auth-rate-limit.guard';
+import { MfaService } from '@postsider/backend/services/auth/mfa.service';
+import { AuthService as AuthChecker } from '@postsider/helpers/auth/auth.service';
 
 @ApiTags('Auth')
 @Controller('/auth')
@@ -33,7 +35,8 @@ export class AuthController {
   constructor(
     private _authService: AuthService,
     private _emailService: EmailService,
-    private _audit: AuditLogger
+    private _audit: AuditLogger,
+    private _mfa: MfaService
   ) {}
 
   @Get('/can-register')
@@ -67,6 +70,8 @@ export class AuthController {
         userAgent,
         getOrgFromCookie
       );
+
+      if (!jwt) throw new Error('Unable to create session');
 
       await this._audit.logAuthEvent('auth.register', {
         email: body.email,
@@ -143,13 +148,24 @@ export class AuthController {
         body?.org || req?.cookies?.org
       );
 
-      const { jwt, addedOrg } = await this._authService.routeAuth(
+      const { addedOrg, user } = await this._authService.routeAuth(
         body.provider,
         body,
         ip,
         userAgent,
-        getOrgFromCookie
+        getOrgFromCookie,
+        false
       );
+
+      if (await this._mfa.requiresEnrollment(user)) {
+        return response.status(403).json({ mfaEnrollmentRequired: true });
+      }
+
+      if (user.mfaEnabledAt) {
+        return this.requireMfa(response, user.id);
+      }
+
+      const jwt = await this._authService.issueSession(user);
 
       await this._audit.logAuthEvent('auth.login', {
         email: body.email,
@@ -244,6 +260,67 @@ export class AuthController {
     };
   }
 
+  @Post('/mfa/verify')
+  @UseGuards(AuthRateLimitGuard)
+  async verifyMfa(
+    @Req() req: Request,
+    @Body('code') code: string,
+    @Res({ passthrough: false }) response: Response
+  ) {
+    try {
+      const challenge = AuthChecker.verifyJWT(req.cookies?.mfa) as {
+        purpose?: string;
+        userId?: string;
+      };
+      if (challenge?.purpose !== 'mfa' || !challenge.userId)
+        throw new Error('Invalid challenge');
+      const valid =
+        (await this._mfa.verifySecondFactor(challenge.userId, code)) ||
+        (await this._mfa.useRecoveryCode(challenge.userId, code));
+      if (!valid) throw new Error('Invalid code');
+      const user = await this._authService.getUserById(challenge.userId);
+      if (!user) throw new Error('Unknown user');
+      this.setAuthCookie(response, await this._authService.issueSession(user));
+      response.cookie('mfa', '', {
+        ...this.cookieFlags(),
+        maxAge: -1,
+        expires: new Date(0),
+      });
+      await this._audit.logAuthEvent('auth.mfa_verified', { userId: user.id });
+      return response.status(200).json({ login: true });
+    } catch {
+      await this._audit.logAuthEvent('auth.mfa_failed', {});
+      return response
+        .status(400)
+        .send('Invalid authenticator or recovery code');
+    }
+  }
+
+  private requireMfa(response: Response, userId: string) {
+    response.cookie(
+      'mfa',
+      AuthChecker.signSessionJWT({ purpose: 'mfa', userId }, 5 * 60),
+      { ...this.cookieFlags(), maxAge: 5 * 60 * 1000 }
+    );
+    return response.status(202).json({ mfaRequired: true });
+  }
+
+  private cookieFlags() {
+    return {
+      domain: getCookieUrlFromDomain(process.env.FRONTEND_URL!),
+      ...(!process.env.NOT_SECURED
+        ? { secure: true, httpOnly: true, sameSite: 'none' as const }
+        : {}),
+    };
+  }
+
+  private setAuthCookie(response: Response, jwt: string) {
+    response.cookie('auth', jwt, {
+      ...this.cookieFlags(),
+      expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14),
+    });
+  }
+
   @Get('/oauth-mobile-callback')
   mobileCallback(
     @Query('code') code: string,
@@ -321,13 +398,14 @@ export class AuthController {
     @Param('provider') provider: string,
     @Res({ passthrough: false }) response: Response
   ) {
-    let jwt: string | undefined;
     let token: string | undefined;
+    let user: User | undefined;
     try {
-      ({ jwt, token } = await this._authService.checkExists(
+      ({ token, user } = await this._authService.checkExists(
         provider,
         code,
-        redirect_uri
+        redirect_uri,
+        false
       ));
     } catch (e) {
       console.error('OAuth exists check failed', e);
@@ -338,9 +416,19 @@ export class AuthController {
       return response.json({ token });
     }
 
-    if (!jwt) {
+    if (!user) {
       return response.status(400).send('OAuth verification failed');
     }
+
+    if (await this._mfa.requiresEnrollment(user)) {
+      return response.status(403).json({ mfaEnrollmentRequired: true });
+    }
+
+    if (user.mfaEnabledAt) {
+      return this.requireMfa(response, user.id);
+    }
+
+    const jwt = await this._authService.issueSession(user);
 
     response.cookie('auth', jwt, {
       domain: getCookieUrlFromDomain(process.env.FRONTEND_URL!),

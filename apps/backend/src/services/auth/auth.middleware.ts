@@ -99,6 +99,10 @@ export class AuthMiddleware implements NestMiddleware {
       }
 
       delete (user as any).password;
+      delete (user as any).mfaSecret;
+      delete (user as any).mfaPendingSecret;
+      delete (user as any).mfaEnabledAt;
+      delete (user as any).mfaRecoveryCodes;
       const organization = (
         await this._organizationService.getOrgsByUserId(user.id)
       ).filter((f) => !f.users[0].disabled);

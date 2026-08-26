@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   PageHeader,
   Card,
+  StatusChip,
   settingsStyles as s,
 } from "@/components/settings-ui";
 import { useAuth } from "@/lib/auth-context";
 import { useT } from "@/lib/i18n";
 import { disconnectAllChannels, deleteAccount } from "@/lib/danger-api";
-import { setAuthToken, setOrgId } from "@/lib/api";
+import { api, ApiError, setAuthToken, setOrgId } from "@/lib/api";
 
 export default function SecuritySettingsPage() {
   const t = useT();
@@ -25,6 +26,7 @@ export default function SecuritySettingsPage() {
         subtitle={canManage ? t("security.subtitleFull") : t("security.subtitle")}
       />
       <PasswordCard />
+      <MfaCard />
       {canManage && <DangerZone />}
     </>
   );
@@ -408,6 +410,278 @@ function DangerModal({
             {busy ? t("common.working") : confirmLabel}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function MfaCard() {
+  const t = useT();
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
+  const [code, setCode] = useState('');
+  const [disableCode, setDisableCode] = useState('');
+  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
+  const [busy, setBusy] = useState<'begin' | 'confirm' | 'disable' | null>(
+    null
+  );
+  const [error, setError] = useState<string | null>(null);
+
+  const loadStatus = async () => {
+    try {
+      const status = await api.get<MfaStatus>('/user/mfa/status', undefined, {
+        silent: true,
+      });
+      setEnabled(status.enabled);
+    } catch (err) {
+      setError(errorMessage(err, t('security.mfaStatusError')));
+      setEnabled(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadStatus();
+  }, []);
+
+  const begin = async () => {
+    setBusy('begin');
+    setError(null);
+    setRecoveryCodes(null);
+    try {
+      setEnrollment(
+        await api.post<Enrollment>('/user/mfa/begin', {}, { silent: true })
+      );
+      setCode('');
+    } catch (err) {
+      setError(errorMessage(err, t('security.mfaStartError')));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const confirm = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setBusy('confirm');
+    setError(null);
+    try {
+      const result = await api.post<{ recoveryCodes: string[] }>(
+        '/user/mfa/confirm',
+        { code },
+        { silent: true }
+      );
+      setRecoveryCodes(result.recoveryCodes);
+      setEnrollment(null);
+      setCode('');
+      setEnabled(true);
+    } catch (err) {
+      setError(errorMessage(err, t('security.mfaConfirmError')));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const disable = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setBusy('disable');
+    setError(null);
+    try {
+      await api.post(
+        '/user/mfa/disable',
+        { code: disableCode },
+        { silent: true }
+      );
+      setDisableCode('');
+      setRecoveryCodes(null);
+      setEnabled(false);
+    } catch (err) {
+      setError(errorMessage(err, t('security.mfaDisableError')));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Card title={t('security.mfaTitle')} subtitle={t('security.mfaSubtitle')}>
+      {error && (
+        <div
+          role="alert"
+          style={{ marginBottom: 12, fontSize: 13, color: 'var(--danger)' }}
+        >
+          {error}
+        </div>
+      )}
+      {enabled === null ? (
+        <div className={s.hint}>{t('common.loading')}</div>
+      ) : enabled ? (
+        <>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 12,
+              marginBottom: 16,
+            }}
+          >
+            <div>
+              <strong>{t('security.mfaEnabled')}</strong>
+              <div className={s.hint}>{t('security.mfaEnabledHint')}</div>
+            </div>
+            <StatusChip variant="filled">{t('security.mfaEnabled')}</StatusChip>
+          </div>
+          {recoveryCodes && <RecoveryCodes codes={recoveryCodes} />}
+          <form onSubmit={disable} className={s.fieldGrid}>
+            <div className={s.field}>
+              <label className={s.label} htmlFor="mfa-disable-code">
+                {t('security.mfaDisableCode')}
+              </label>
+              <input
+                id="mfa-disable-code"
+                className={s.input}
+                value={disableCode}
+                onChange={(event) => setDisableCode(event.target.value)}
+                autoComplete="one-time-code"
+                required
+              />
+            </div>
+            <div className={s.cardActions}>
+              <button
+                type="submit"
+                className={s.btnPrimary}
+                disabled={busy === 'disable'}
+              >
+                {busy === 'disable'
+                  ? t('security.mfaDisabling')
+                  : t('security.mfaDisable')}
+              </button>
+            </div>
+          </form>
+        </>
+      ) : enrollment ? (
+        <>
+          <p className={s.hint} style={{ marginTop: 0 }}>
+            {t('security.mfaScanHint')}
+          </p>
+          <div
+            style={{
+              display: 'flex',
+              gap: 20,
+              alignItems: 'flex-start',
+              flexWrap: 'wrap',
+              marginBottom: 16,
+            }}
+          >
+            {/* The server returns an otpauth QR data URL; the secret never persists in the browser. */}
+            <img
+              src={enrollment.qrCodeDataUrl}
+              alt={t('security.mfaQrAlt')}
+              width={180}
+              height={180}
+              style={{ borderRadius: 8, background: 'white', padding: 8 }}
+            />
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <span className={s.label}>{t('security.mfaManualKey')}</span>
+              <code
+                style={{
+                  display: 'block',
+                  marginTop: 6,
+                  overflowWrap: 'anywhere',
+                  padding: '10px 12px',
+                  borderRadius: 8,
+                  background: 'rgb(var(--tint) / 0.06)',
+                }}
+              >
+                {enrollment.manualKey}
+              </code>
+            </div>
+          </div>
+          <form onSubmit={confirm} className={s.fieldGrid}>
+            <div className={s.field}>
+              <label className={s.label} htmlFor="mfa-confirm-code">
+                {t('security.mfaConfirmCode')}
+              </label>
+              <input
+                id="mfa-confirm-code"
+                className={s.input}
+                value={code}
+                onChange={(event) => setCode(event.target.value)}
+                autoComplete="one-time-code"
+                inputMode="numeric"
+                required
+                autoFocus
+              />
+            </div>
+            <div className={s.cardActions}>
+              <button
+                type="submit"
+                className={s.btnPrimary}
+                disabled={busy === 'confirm'}
+              >
+                {busy === 'confirm'
+                  ? t('common.working')
+                  : t('security.mfaConfirm')}
+              </button>
+            </div>
+          </form>
+        </>
+      ) : (
+        <div className={s.row}>
+          <div className={s.rowMain}>
+            <span className={s.rowTitle}>{t('security.mfaDisabled')}</span>
+            <span className={s.rowSub}>{t('security.mfaDisabledHint')}</span>
+          </div>
+          <button
+            type="button"
+            className={s.btnPrimary}
+            onClick={begin}
+            disabled={busy === 'begin'}
+          >
+            {busy === 'begin' ? t('common.working') : t('security.mfaStart')}
+          </button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+type MfaStatus = { enabled: boolean };
+type Enrollment = { qrCodeDataUrl: string; manualKey: string };
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof ApiError ? error.message : fallback;
+}
+function RecoveryCodes({ codes }: { codes: string[] }) {
+  const t = useT();
+  return (
+    <div
+      role="status"
+      style={{
+        margin: '0 0 16px',
+        padding: 14,
+        borderRadius: 8,
+        background: 'rgb(var(--tint) / 0.06)',
+      }}
+    >
+      <strong>{t('security.mfaRecoveryTitle')}</strong>
+      <p className={s.hint}>{t('security.mfaRecoveryHint')}</p>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+          gap: 6,
+        }}
+      >
+        {codes.map((recoveryCode) => (
+          <code
+            key={recoveryCode}
+            style={{
+              padding: '6px 8px',
+              borderRadius: 5,
+              background: 'var(--bg)',
+            }}
+          >
+            {recoveryCode}
+          </code>
+        ))}
       </div>
     </div>
   );

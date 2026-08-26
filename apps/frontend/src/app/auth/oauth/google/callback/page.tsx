@@ -25,7 +25,11 @@ function GoogleCallbackInner() {
 
     (async () => {
       try {
-        const res = await api.post<{ login?: boolean; token?: string }>(
+        const res = await api.post<{
+          login?: boolean;
+          token?: string;
+          mfaRequired?: boolean;
+        }>(
           '/auth/oauth/GOOGLE/exists',
           {
             code,
@@ -33,6 +37,11 @@ function GoogleCallbackInner() {
           },
           { anonymous: true, silent: true }
         );
+
+        if (res?.mfaRequired) {
+          router.replace('/login/mfa');
+          return;
+        }
 
         const isNewUser = !!res?.token;
         if (isNewUser) {

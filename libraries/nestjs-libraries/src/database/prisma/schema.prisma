@@ -121,6 +121,11 @@ model User {
   lastOnline            DateTime             @default(now())
   ip                    String?
   agent                 String?
+  /// Encrypted TOTP seed; set only after the user confirms a valid code.
+  mfaSecret             String?
+  mfaPendingSecret      String?
+  mfaEnabledAt          DateTime?
+  mfaRecoveryCodes      MfaRecoveryCode[]
   comments              Comments[]
   groupBuyer            MessagesGroup[]      @relation("groupBuyer")
   groupSeller           MessagesGroup[]      @relation("groupSeller")
@@ -154,6 +159,24 @@ model UsedCodes {
   organization Organization @relation(fields: [orgId], references: [id])
 
   @@index([code])
+}
+
+model MfaRecoveryCode {
+  id        String    @id @default(uuid())
+  userId    String
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model MfaPolicy {
+  /// The sole row uses the stable "global" id so every installation has one policy.
+  id            String   @id @default("global")
+  enforceForAll Boolean  @default(false)
+  updatedAt     DateTime @updatedAt
 }
 
 model UserOrganization {
