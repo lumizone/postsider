@@ -1,29 +1,31 @@
-"use client";
+'use client';
 
-import { useEffect, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   PageHeader,
   Card,
   StatusChip,
   settingsStyles as s,
-} from "@/components/settings-ui";
-import { useAuth } from "@/lib/auth-context";
-import { useT } from "@/lib/i18n";
-import { disconnectAllChannels, deleteAccount } from "@/lib/danger-api";
-import { api, ApiError, setAuthToken, setOrgId } from "@/lib/api";
+} from '@/components/settings-ui';
+import { useAuth } from '@/lib/auth-context';
+import { useT } from '@/lib/i18n';
+import { disconnectAllChannels, deleteAccount } from '@/lib/danger-api';
+import { api, ApiError, setAuthToken, setOrgId } from '@/lib/api';
 
 export default function SecuritySettingsPage() {
   const t = useT();
   const { user } = useAuth();
-  const canManage = user?.role === "ADMIN" || user?.role === "SUPERADMIN";
+  const canManage = user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
 
   return (
     <>
       <PageHeader
-        eyebrow={t("settings.eyebrow")}
-        title={t("security.title")}
-        subtitle={canManage ? t("security.subtitleFull") : t("security.subtitle")}
+        eyebrow={t('settings.eyebrow')}
+        title={t('security.title')}
+        subtitle={
+          canManage ? t('security.subtitleFull') : t('security.subtitle')
+        }
       />
       <PasswordCard />
       <MfaCard />
@@ -35,9 +37,9 @@ export default function SecuritySettingsPage() {
 
 function PasswordCard() {
   const t = useT();
-  const [current, setCurrent] = useState("");
-  const [next, setNext] = useState("");
-  const [confirm, setConfirm] = useState("");
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -46,34 +48,37 @@ function PasswordCard() {
     setMsg(null);
     setErr(null);
     if (next !== confirm) {
-      setErr(t("security.noMatch"));
+      setErr(t('security.noMatch'));
       return;
     }
     if (next.length < 3) {
-      setErr(t("security.minLength"));
+      setErr(t('security.minLength'));
       return;
     }
     setSaving(true);
     try {
-      const { changePassword } = await import("@/lib/password-api");
+      const { changePassword } = await import('@/lib/password-api');
       await changePassword(current, next);
-      setMsg(t("security.passwordChanged"));
-      setCurrent("");
-      setNext("");
-      setConfirm("");
+      setMsg(t('security.passwordChanged'));
+      setCurrent('');
+      setNext('');
+      setConfirm('');
     } catch (e: any) {
-      setErr(e?.message || "Failed");
+      setErr(e?.message || 'Failed');
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Card title={t("security.passwordTitle")} subtitle={t("security.passwordSubtitle")}>
+    <Card
+      title={t('security.passwordTitle')}
+      subtitle={t('security.passwordSubtitle')}
+    >
       <div className={s.fieldGrid}>
         <div className={s.field}>
           <label className={s.label} htmlFor="pwd-current">
-            {t("security.currentPassword")}
+            {t('security.currentPassword')}
           </label>
           <input
             id="pwd-current"
@@ -86,7 +91,7 @@ function PasswordCard() {
         </div>
         <div className={s.field}>
           <label className={s.label} htmlFor="pwd-new">
-            {t("security.newPassword")}
+            {t('security.newPassword')}
           </label>
           <input
             id="pwd-new"
@@ -100,7 +105,7 @@ function PasswordCard() {
         </div>
         <div className={s.field}>
           <label className={s.label} htmlFor="pwd-confirm">
-            {t("security.confirmPassword")}
+            {t('security.confirmPassword')}
           </label>
           <input
             id="pwd-confirm"
@@ -114,12 +119,18 @@ function PasswordCard() {
         </div>
       </div>
       {err && (
-        <div role="alert" style={{ marginTop: 8, fontSize: 13, color: "var(--danger)" }}>
+        <div
+          role="alert"
+          style={{ marginTop: 8, fontSize: 13, color: 'var(--danger)' }}
+        >
           {err}
         </div>
       )}
       {msg && (
-        <div role="status" style={{ marginTop: 8, fontSize: 13, color: "var(--success)" }}>
+        <div
+          role="status"
+          style={{ marginTop: 8, fontSize: 13, color: 'var(--success)' }}
+        >
           {msg}
         </div>
       )}
@@ -130,14 +141,14 @@ function PasswordCard() {
           onClick={onSubmit}
           disabled={saving}
         >
-          {saving ? t("security.changing") : t("security.changePassword")}
+          {saving ? t('security.changing') : t('security.changePassword')}
         </button>
       </div>
     </Card>
   );
 }
 
-type DangerAction = "channels" | "account" | null;
+type DangerAction = 'channels' | 'account' | null;
 
 function DangerZone() {
   const t = useT();
@@ -148,43 +159,56 @@ function DangerZone() {
     <>
       <section
         style={{
-          borderRadius: "var(--radius-lg)",
-          border: "1px solid color-mix(in srgb, var(--danger) 45%, transparent)",
-          background: "var(--danger-soft)",
-          padding: "22px 24px",
-          display: "flex",
-          flexDirection: "column",
+          borderRadius: 'var(--radius-lg)',
+          border:
+            '1px solid color-mix(in srgb, var(--danger) 45%, transparent)',
+          background: 'var(--danger-soft)',
+          padding: '22px 24px',
+          display: 'flex',
+          flexDirection: 'column',
           gap: 4,
         }}
       >
-        <div style={{ fontSize: 16, fontWeight: 600, color: "var(--danger-bright)" }}>
-          {t("security.dangerZone")}
+        <div
+          style={{
+            fontSize: 16,
+            fontWeight: 600,
+            color: 'var(--danger-bright)',
+          }}
+        >
+          {t('security.dangerZone')}
         </div>
-        <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 8 }}>
-          {t("security.dangerSubtitle")}
+        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 8 }}>
+          {t('security.dangerSubtitle')}
         </div>
 
         <DangerRow
-          title={t("security.disconnectTitle")}
-          description={t("security.disconnectDesc")}
-          buttonLabel={t("security.disconnectBtn")}
-          onClick={() => setAction("channels")}
+          title={t('security.disconnectTitle')}
+          description={t('security.disconnectDesc')}
+          buttonLabel={t('security.disconnectBtn')}
+          onClick={() => setAction('channels')}
         />
-        <div style={{ height: 1, background: "color-mix(in srgb, var(--danger) 24%, transparent)", margin: "4px 0" }} />
+        <div
+          style={{
+            height: 1,
+            background: 'color-mix(in srgb, var(--danger) 24%, transparent)',
+            margin: '4px 0',
+          }}
+        />
         <DangerRow
-          title={t("security.deleteTitle")}
-          description={t("security.deleteDesc")}
-          buttonLabel={t("security.deleteBtn")}
-          onClick={() => setAction("account")}
+          title={t('security.deleteTitle')}
+          description={t('security.deleteDesc')}
+          buttonLabel={t('security.deleteBtn')}
+          onClick={() => setAction('account')}
         />
       </section>
 
-      {action === "channels" && (
+      {action === 'channels' && (
         <DangerModal
-          title={t("security.disconnectConfirmTitle")}
-          body={t("security.disconnectConfirmBody")}
+          title={t('security.disconnectConfirmTitle')}
+          body={t('security.disconnectConfirmBody')}
           confirmWord="DISCONNECT"
-          confirmLabel={t("security.disconnectBtn")}
+          confirmLabel={t('security.disconnectBtn')}
           onClose={() => setAction(null)}
           onConfirm={async () => {
             await disconnectAllChannels();
@@ -194,18 +218,18 @@ function DangerZone() {
         />
       )}
 
-      {action === "account" && (
+      {action === 'account' && (
         <DangerModal
-          title={t("security.deleteConfirmTitle")}
-          body={t("security.deleteConfirmBody")}
+          title={t('security.deleteConfirmTitle')}
+          body={t('security.deleteConfirmBody')}
           confirmWord="DELETE"
-          confirmLabel={t("security.deleteBtn")}
+          confirmLabel={t('security.deleteBtn')}
           onClose={() => setAction(null)}
           onConfirm={async () => {
             await deleteAccount();
             setAuthToken(null);
             setOrgId(null);
-            router.replace("/login");
+            router.replace('/login');
           }}
         />
       )}
@@ -227,41 +251,51 @@ function DangerRow({
   return (
     <div
       style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
         gap: 16,
-        padding: "10px 0",
-        flexWrap: "wrap",
+        padding: '10px 0',
+        flexWrap: 'wrap',
       }}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
+          minWidth: 0,
+        }}
+      >
         <span style={{ fontSize: 14, fontWeight: 600 }}>{title}</span>
-        <span style={{ fontSize: 12, color: "var(--muted)" }}>{description}</span>
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+          {description}
+        </span>
       </div>
       <button
         type="button"
         onClick={onClick}
         style={{
           height: 36,
-          padding: "0 16px",
-          borderRadius: "var(--radius-pill)",
-          border: "1px solid color-mix(in srgb, var(--danger) 55%, transparent)",
-          background: "var(--bg)",
-          color: "var(--danger-bright)",
+          padding: '0 16px',
+          borderRadius: 'var(--radius-pill)',
+          border:
+            '1px solid color-mix(in srgb, var(--danger) 55%, transparent)',
+          background: 'var(--bg)',
+          color: 'var(--danger-bright)',
           fontSize: 13,
           fontWeight: 600,
-          cursor: "pointer",
-          whiteSpace: "nowrap",
-          transition: "background 140ms var(--ease), color 140ms var(--ease)",
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+          transition: 'background 140ms var(--ease), color 140ms var(--ease)',
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.background = "var(--danger-bright)";
-          e.currentTarget.style.color = "var(--on-fg)";
+          e.currentTarget.style.background = 'var(--danger-bright)';
+          e.currentTarget.style.color = 'var(--on-fg)';
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.background = "var(--bg)";
-          e.currentTarget.style.color = "var(--danger-bright)";
+          e.currentTarget.style.background = 'var(--bg)';
+          e.currentTarget.style.color = 'var(--danger-bright)';
         }}
       >
         {buttonLabel}
@@ -286,7 +320,7 @@ function DangerModal({
   onConfirm: () => Promise<void>;
 }) {
   const t = useT();
-  const [typed, setTyped] = useState("");
+  const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const ready = typed.trim().toUpperCase() === confirmWord;
@@ -294,10 +328,10 @@ function DangerModal({
   // Close on Escape (unless a destructive call is in flight).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !busy) onClose();
+      if (e.key === 'Escape' && !busy) onClose();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [busy, onClose]);
 
   const run = async () => {
@@ -307,7 +341,7 @@ function DangerModal({
     try {
       await onConfirm();
     } catch (e: any) {
-      setErr(e?.message || "Something went wrong");
+      setErr(e?.message || 'Something went wrong');
       setBusy(false);
     }
   };
@@ -318,13 +352,13 @@ function DangerModal({
       aria-modal="true"
       aria-label={title}
       style={{
-        position: "fixed",
+        position: 'fixed',
         inset: 0,
         zIndex: 9999,
-        display: "grid",
-        placeItems: "center",
-        background: "var(--scrim)",
-        backdropFilter: "blur(4px)",
+        display: 'grid',
+        placeItems: 'center',
+        background: 'var(--scrim)',
+        backdropFilter: 'blur(4px)',
         padding: 16,
       }}
       onClick={() => !busy && onClose()}
@@ -332,29 +366,44 @@ function DangerModal({
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: "100%",
+          width: '100%',
           maxWidth: 440,
-          background: "var(--bg)",
+          background: 'var(--bg)',
           borderRadius: 16,
-          padding: "26px 24px 22px",
-          boxShadow: "0 24px 64px rgb(var(--shadow) / calc(0.18 * var(--shadow-boost)))",
-          display: "flex",
-          flexDirection: "column",
+          padding: '26px 24px 22px',
+          boxShadow:
+            '0 24px 64px rgb(var(--shadow) / calc(0.18 * var(--shadow-boost)))',
+          display: 'flex',
+          flexDirection: 'column',
           gap: 16,
         }}
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--danger-bright)" }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <h2
+            style={{
+              fontSize: 18,
+              fontWeight: 700,
+              margin: 0,
+              color: 'var(--danger-bright)',
+            }}
+          >
             {title}
           </h2>
-          <p style={{ margin: 0, fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
+          <p
+            style={{
+              margin: 0,
+              fontSize: 13,
+              color: 'var(--muted)',
+              lineHeight: 1.5,
+            }}
+          >
             {body}
           </p>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <label style={{ fontSize: 12, fontWeight: 600 }}>
-            {t("security.typeToConfirm", { word: confirmWord })}
+            {t('security.typeToConfirm', { word: confirmWord })}
           </label>
           <input
             type="text"
@@ -362,53 +411,57 @@ function DangerModal({
             onChange={(e) => setTyped(e.target.value)}
             autoFocus
             style={{
-              padding: "10px 12px",
+              padding: '10px 12px',
               borderRadius: 8,
-              border: "1px solid var(--line-soft)",
+              border: '1px solid var(--line-soft)',
               fontSize: 14,
-              background: "var(--bg)",
-              color: "var(--fg)",
+              background: 'var(--bg)',
+              color: 'var(--fg)',
             }}
           />
         </div>
 
         {err && (
-          <div role="alert" style={{ fontSize: 13, color: "var(--danger)" }}>{err}</div>
+          <div role="alert" style={{ fontSize: 13, color: 'var(--danger)' }}>
+            {err}
+          </div>
         )}
 
-        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button
             type="button"
             onClick={onClose}
             disabled={busy}
             style={{
-              padding: "10px 18px",
+              padding: '10px 18px',
               borderRadius: 10,
-              border: "1px solid var(--line-soft)",
-              background: "var(--bg)",
+              border: '1px solid var(--line-soft)',
+              background: 'var(--bg)',
               fontSize: 14,
               fontWeight: 500,
-              cursor: "pointer",
+              cursor: 'pointer',
             }}
           >
-            {t("common.cancel")}
+            {t('common.cancel')}
           </button>
           <button
             type="button"
             onClick={run}
             disabled={!ready || busy}
             style={{
-              padding: "10px 18px",
+              padding: '10px 18px',
               borderRadius: 10,
-              border: "none",
-              background: ready ? "var(--danger-bright)" : "rgb(var(--tint) / 0.1)",
-              color: ready ? "var(--on-fg)" : "rgb(var(--tint) / 0.38)",
+              border: 'none',
+              background: ready
+                ? 'var(--danger-bright)'
+                : 'rgb(var(--tint) / 0.1)',
+              color: ready ? 'var(--on-fg)' : 'rgb(var(--tint) / 0.38)',
               fontSize: 14,
               fontWeight: 600,
-              cursor: ready && !busy ? "pointer" : "not-allowed",
+              cursor: ready && !busy ? 'pointer' : 'not-allowed',
             }}
           >
-            {busy ? t("common.working") : confirmLabel}
+            {busy ? t('common.working') : confirmLabel}
           </button>
         </div>
       </div>
@@ -689,11 +742,77 @@ function RecoveryCodes({ codes }: { codes: string[] }) {
 }
 
 function SuperAdminMfaPolicy() {
+  const t = useT();
   const [enforced, setEnforced] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { api.get<{ enforceForAll: boolean }>("/user/mfa/policy", undefined, { silent: true }).then((p) => setEnforced(!!p.enforceForAll)).catch(() => setError("Could not load the global MFA policy.")).finally(() => setLoading(false)); }, []);
-  const save = async () => { setSaving(true); setError(null); try { const policy = await api.put<{ enforceForAll: boolean }>("/user/mfa/policy", { enforceForAll: !enforced }); setEnforced(policy.enforceForAll); } catch (e) { setError(e instanceof ApiError ? e.message : "Could not update the global MFA policy."); } finally { setSaving(false); } };
-  return <Card title="Global two-factor policy" subtitle="SuperAdmin only. Two-factor authentication is optional by default."><div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "center", flexWrap: "wrap" }}><div><strong>{enforced ? "Required for all users" : "Optional for all users"}</strong><div style={{ color: "var(--muted)", fontSize: 13, marginTop: 4 }}>{enforced ? "Users without an authenticator must set it up before they can receive a session." : "Each user may enable an authenticator from this page."}</div></div><button type="button" className={s.btnPrimary} onClick={save} disabled={loading || saving}>{saving ? "Saving…" : enforced ? "Make optional" : "Require for everyone"}</button></div>{error && <p role="alert" style={{ color: "var(--danger)", marginTop: 10 }}>{error}</p>}</Card>;
+
+  useEffect(() => {
+    api
+      .get<{ enforceForAll: boolean }>('/user/mfa/policy', undefined, {
+        silent: true,
+      })
+      .then((policy) => setEnforced(!!policy.enforceForAll))
+      .catch(() => setError(t('security.mfaPolicyLoadError')))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const policy = await api.put<{ enforceForAll: boolean }>(
+        '/user/mfa/policy',
+        { enforceForAll: !enforced }
+      );
+      setEnforced(policy.enforceForAll);
+    } catch (err) {
+      setError(errorMessage(err, t('security.mfaPolicySaveError')));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card
+      title={t('security.mfaPolicyTitle')}
+      subtitle={t('security.mfaPolicySubtitle')}
+    >
+      {error && (
+        <div
+          role="alert"
+          style={{ marginBottom: 12, fontSize: 13, color: 'var(--danger)' }}
+        >
+          {error}
+        </div>
+      )}
+      <div className={s.row}>
+        <div className={s.rowMain}>
+          <div className={s.rowTitle}>
+            {enforced ? t('security.mfaPolicyOn') : t('security.mfaPolicyOff')}
+          </div>
+          <div className={s.rowSub}>
+            {enforced
+              ? t('security.mfaPolicyOnHint')
+              : t('security.mfaPolicyOffHint')}
+          </div>
+        </div>
+        <div className={s.cardActions}>
+          <button
+            type="button"
+            className={s.btnPrimary}
+            onClick={save}
+            disabled={loading || saving}
+          >
+            {saving
+              ? t('security.mfaPolicySaving')
+              : enforced
+              ? t('security.mfaPolicyMakeOptional')
+              : t('security.mfaPolicyRequire')}
+          </button>
+        </div>
+      </div>
+    </Card>
+  );
 }
