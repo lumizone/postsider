@@ -13,7 +13,7 @@ blokady u źródła — złożenie audytu, materiały do review, zgodność kodu
 
 ## Status
 
-- **Polowanie na bugi po zmianach w kalendarzu (2026-08-25, NIEZACOMMITOWANE).**
+- **Polowanie na bugi po zmianach w kalendarzu (2026-08-25, WDROŻONE 2026-08-26 07:23 UTC).**
   Sweep tras (28 × 2 motywy × desktop/mobile) + **nowy sweep INTERAKCJI**
   (drag&drop posta, otwarcie kompozytora, approve, wyszukiwarka, filtry, bell,
   drawer mobilny). Trzy realne wady, wszystkie naprawione:
@@ -43,7 +43,15 @@ blokady u źródła — złożenie audytu, materiały do review, zgodność kodu
   stronie), timeout kliknięcia w dzwonek (selektor łapał ukrytą kopię z paska
   mobilnego). Po poprawkach sweep tras: **zero problemów**.
 
-- **Kalendarz: nakładające się posty + przycisk motywu na mobile (2026-08-25, NIEZACOMMITOWANE, NIEZDEPLOYOWANE).**
+- **Kalendarz: nakładające się posty + przycisk motywu na mobile (2026-08-25, WDROŻONE 2026-08-26 07:23 UTC).**
+  Commity `d9697b4` (kalendarz), `3ffa789` (bugi z polowania), `9650287` (docs)
+  na `fix/publish-pipeline-and-report-bugs` = `main`. Po deployu zweryfikowane
+  W OBRAZIE (nie sam kod wyjścia): `timelineEventBody`/`eventLayer` w chunku
+  `app/calendar/page-*.js`, `theme-toggle-topbar` w `static/css/*` i
+  `app/layout-*.js`. 12/12 kontenerów (0 unhealthy), pm2 3/3 online 0 restartów,
+  `/api/health` redis+database+temporal ok, 32/32 workerów RUNNING, backlog
+  kolejki `main` = 0, storage 200, zaległych postów 0 (19 w QUEUE po terminie to
+  wyłącznie soft-skasowane, `deletedAt` not null).
   Zgłoszone jako „miniaturki postów są za małe, gdy są 2 obok siebie".
   Pomiar potwierdził i odsłonił dwie wady poza samym rozmiarem:
   1. **`layoutOverlappingEvents` liczyło pasy dla CAŁEGO dnia**, nie dla grupy
