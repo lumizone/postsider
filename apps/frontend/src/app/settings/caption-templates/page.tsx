@@ -29,7 +29,8 @@ export default function CaptionTemplatesPage() {
 
   const refresh = async () => {
     try {
-      setItems((await getCaptionTemplates()) || []);
+      const res = await getCaptionTemplates();
+      setItems(Array.isArray(res) ? res : []);
     } catch (e) {
       setError(e instanceof Error ? e.message : t("settingsCaptionTemplates.loadError"));
     } finally {

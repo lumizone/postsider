@@ -104,7 +104,8 @@ export default function ApprovalPage() {
 
   const refresh = async () => {
     try {
-      setItems((await getPendingApprovals()) || []);
+      const res = await getPendingApprovals();
+      setItems(Array.isArray(res) ? res : []);
     } catch (e) {
       setError(e instanceof Error ? e.message : t("approval.loadError"));
     } finally {

@@ -48,7 +48,7 @@ export default function WebhooksSettingsPage() {
   const refresh = async () => {
     try {
       const res = await api.get<Webhook[]>("/webhooks");
-      setHooks(res || []);
+      setHooks(Array.isArray(res) ? res : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("settingsWebhooks.loadError"));
     } finally {

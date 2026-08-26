@@ -147,13 +147,18 @@ export function Media() {
     try {
       // Fetch a few pages so the gallery feels populated. The backend caps
       // each page at 18.
-      const collected: BackendMedia[] = [];
+      // Paging is offset-based, so an upload landing between two requests
+      // shifts every later page and can hand the same asset back twice. Keep
+      // the first copy of each id: duplicate React keys otherwise make the
+      // gallery drop and re-mount tiles at random.
+      const byId = new Map<string, BackendMedia>();
       for (let page = 1; page <= 6; page++) {
         const res = await fetchMedia(page);
-        collected.push(...res.results);
+        for (const item of res.results ?? [])
+          if (!byId.has(item.id)) byId.set(item.id, item);
         if (page >= (res.pages ?? 1)) break;
       }
-      setRaw(collected);
+      setRaw([...byId.values()]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load media");
     } finally {

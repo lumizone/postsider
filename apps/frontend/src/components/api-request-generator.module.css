@@ -19,7 +19,11 @@
   align-items: start;
 }
 @media (max-width: 860px) {
-  .grid { grid-template-columns: 1fr; }
+  /* minmax(0, 1fr), not 1fr: a bare `1fr` track keeps an automatic minimum of
+     its content's min-content width, so the panel pushed the column (and the
+     page) 83px past a 390px screen. The two-column rule above already guards
+     this the same way. */
+  .grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 .panel {
@@ -40,8 +44,16 @@
   color: var(--muted);
 }
 
-.row2 { display: grid; grid-template-columns: 1fr 150px; gap: 10px; }
-.rowEnd { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }
+/* minmax(0, ...) on every flexible track: a bare `1fr` cannot shrink past its
+   content's min-content width, which is what pushed a select off a 390px
+   screen. On a phone the pair stacks instead of squeezing. */
+.row2 { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 10px; }
+.rowEnd { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+
+@media (max-width: 520px) {
+  .row2,
+  .rowEnd { grid-template-columns: minmax(0, 1fr); }
+}
 
 /* Channel multi-select — same chip-with-avatar strip as the calendar composer,
    including the white + dark "halo" ring on the selected avatar. */

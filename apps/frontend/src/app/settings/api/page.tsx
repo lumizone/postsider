@@ -48,7 +48,9 @@ export default function ApiSettingsPage() {
   const refresh = async () => {
     try {
       const res = await api.get<ApiKeyRow[]>("/settings/api-keys");
-      setKeys(res || []);
+      // A 200 that is not an array (a proxy page, a changed payload) used to
+      // white-screen the route on `keys.map`.
+      setKeys(Array.isArray(res) ? res : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load keys");
     } finally {

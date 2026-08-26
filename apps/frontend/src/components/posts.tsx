@@ -58,6 +58,17 @@ const STATUS_LABEL_KEYS: Record<PostStatus, string> = {
   held: "posts.status.held",
 };
 
+/**
+ * Keep the first copy of each post id. The list is stitched together from one
+ * offset-paged query per state, so a post published (or scheduled) while those
+ * requests are in flight can come back on two pages, or under two states, and
+ * duplicate React keys make rows re-mount at random.
+ */
+function dedupeById<T extends { id: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  return items.filter((i) => (seen.has(i.id) ? false : (seen.add(i.id), true)));
+}
+
 function deriveStatus(ev: CalendarEvent): PostStatus {
   if (ev.status) return ev.status;
   if (ev.published) return "published";
@@ -322,7 +333,7 @@ export function Posts() {
           }
         }
         if (!cancelled) {
-          setEvents(collected.map(backendPostToEvent));
+          setEvents(dedupeById(collected).map(backendPostToEvent));
           setListTruncated(truncated);
         }
       } catch (err) {
@@ -484,7 +495,7 @@ export function Posts() {
             page += 1;
           }
         }
-        setEvents(collected.map(backendPostToEvent));
+        setEvents(dedupeById(collected).map(backendPostToEvent));
         setListTruncated(truncated);
       } catch (err) {
         setToast(t("posts.toastDuplicateFailed"));
@@ -624,7 +635,7 @@ export function Posts() {
           page += 1;
         }
       }
-      setEvents(collected.map(backendPostToEvent));
+      setEvents(dedupeById(collected).map(backendPostToEvent));
       setListTruncated(truncated);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load posts");

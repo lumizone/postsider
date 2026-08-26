@@ -124,6 +124,25 @@ export interface AttachedMedia {
 
 const GLOBAL_KEY = "__global__";
 
+/**
+ * Serialize per-channel settings so two objects with the same content compare
+ * equal whatever order their keys were written in (defaults are spread before
+ * existing values in one place and after them in another).
+ */
+function stableSettings(
+  settings: Record<string, Record<string, unknown>>,
+): string {
+  const channels = Object.keys(settings).sort();
+  return JSON.stringify(
+    channels.map((id) => [
+      id,
+      Object.keys(settings[id] ?? {})
+        .sort()
+        .map((k) => [k, settings[id][k]]),
+    ]),
+  );
+}
+
 function CloseIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden>
@@ -357,6 +376,18 @@ export function CreatePostModal({
   const [channelSettings, setChannelSettings] = useState<
     Record<string, Record<string, unknown>>
   >(initialValue?.perChannelSettings ?? {});
+  /**
+   * What the settings look like with nothing the USER changed.
+   *
+   * Provider defaults (Instagram `post_type`, TikTok `privacy_level`, ...) are
+   * seeded by an effect AFTER mount, so a snapshot taken at mount would differ
+   * from the state one tick later and every close of an untouched post would
+   * ask "discard your changes?". The seeding effects fold their machine-made
+   * edits in here as well; user edits never touch it.
+   */
+  const settingsBaselineRef = useRef<Record<string, Record<string, unknown>>>(
+    initialValue?.perChannelSettings ?? {},
+  );
   // Fetched selectable options for remote-select fields, keyed by
   // `integrationId::remoteFn` (e.g. Discord channels, Pinterest boards).
   const [remoteOptions, setRemoteOptions] = useState<
@@ -429,7 +460,6 @@ export function CreatePostModal({
       date: initialValue?.date ?? date,
       time: initialValue?.time ?? time,
       channels: [...(initialValue?.channelIds ?? [])].sort().join(","),
-      settings: JSON.stringify(initialValue?.perChannelSettings ?? {}),
     }),
     // initialValue is stable for the modal's lifetime (it never changes while
     // open) and date/time are the props passed at mount.
@@ -460,7 +490,8 @@ export function CreatePostModal({
       const channelsDirty =
         Array.from(selectedIds).sort().join(",") !== initialSnapshot.channels;
       const settingsDirty =
-        JSON.stringify(channelSettings) !== initialSnapshot.settings;
+        stableSettings(channelSettings) !==
+        stableSettings(settingsBaselineRef.current);
       const commentDirty = firstComment.trim().length > 0;
       return (
         bodyDirty ||
@@ -796,9 +827,9 @@ export function CreatePostModal({
   // prefilled as public for an account that has since gone private), so it can
   // never be submitted just because it was set earlier.
   useEffect(() => {
-    setChannelSettings((prev) => {
+    const prune = (source: Record<string, Record<string, unknown>>) => {
       let changed = false;
-      const next = { ...prev };
+      const next = { ...source };
       for (const [id, info] of Object.entries(tiktokCreators)) {
         const current = next[id]?.privacy_level as string | undefined;
         if (!info || !current) continue;
@@ -808,17 +839,19 @@ export function CreatePostModal({
           changed = true;
         }
       }
-      return changed ? next : prev;
-    });
+      return changed ? next : source;
+    };
+    settingsBaselineRef.current = prune(settingsBaselineRef.current);
+    setChannelSettings(prune);
   }, [tiktokCreators]);
 
   // Seed default provider settings for selected channels so required DTO
   // fields (e.g. TikTok privacy_level, Instagram post_type) are always present
   // and the post passes server-side validation.
   useEffect(() => {
-    setChannelSettings((prev) => {
+    const seed = (source: Record<string, Record<string, unknown>>) => {
       let changed = false;
-      const next = { ...prev };
+      const next = { ...source };
       for (const c of selectedChannels) {
         const defaults = defaultSettingsFor(channelIdentifier(c));
         if (Object.keys(defaults).length === 0) continue;
@@ -829,8 +862,10 @@ export function CreatePostModal({
           changed = true;
         }
       }
-      return changed ? next : prev;
-    });
+      return changed ? next : source;
+    };
+    settingsBaselineRef.current = seed(settingsBaselineRef.current);
+    setChannelSettings(seed);
   }, [selectedChannels]);
 
   const setChannelSetting = (

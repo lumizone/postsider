@@ -38,7 +38,8 @@ export default function HashtagGroupsPage() {
 
   const refresh = async () => {
     try {
-      setItems((await getHashtagGroups()) || []);
+      const res = await getHashtagGroups();
+      setItems(Array.isArray(res) ? res : []);
     } catch (e) {
       setError(e instanceof Error ? e.message : t("settingsHashtagGroups.loadError"));
     } finally {
