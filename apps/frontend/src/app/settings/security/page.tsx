@@ -27,6 +27,7 @@ export default function SecuritySettingsPage() {
       />
       <PasswordCard />
       <MfaCard />
+      {user?.admin && <SuperAdminMfaPolicy />}
       {canManage && <DangerZone />}
     </>
   );
@@ -685,4 +686,14 @@ function RecoveryCodes({ codes }: { codes: string[] }) {
       </div>
     </div>
   );
+}
+
+function SuperAdminMfaPolicy() {
+  const [enforced, setEnforced] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => { api.get<{ enforceForAll: boolean }>("/user/mfa/policy", undefined, { silent: true }).then((p) => setEnforced(!!p.enforceForAll)).catch(() => setError("Could not load the global MFA policy.")).finally(() => setLoading(false)); }, []);
+  const save = async () => { setSaving(true); setError(null); try { const policy = await api.put<{ enforceForAll: boolean }>("/user/mfa/policy", { enforceForAll: !enforced }); setEnforced(policy.enforceForAll); } catch (e) { setError(e instanceof ApiError ? e.message : "Could not update the global MFA policy."); } finally { setSaving(false); } };
+  return <Card title="Global two-factor policy" subtitle="SuperAdmin only. Two-factor authentication is optional by default."><div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "center", flexWrap: "wrap" }}><div><strong>{enforced ? "Required for all users" : "Optional for all users"}</strong><div style={{ color: "var(--muted)", fontSize: 13, marginTop: 4 }}>{enforced ? "Users without an authenticator must set it up before they can receive a session." : "Each user may enable an authenticator from this page."}</div></div><button type="button" className={s.btnPrimary} onClick={save} disabled={loading || saving}>{saving ? "Saving…" : enforced ? "Make optional" : "Require for everyone"}</button></div>{error && <p role="alert" style={{ color: "var(--danger)", marginTop: 10 }}>{error}</p>}</Card>;
 }
