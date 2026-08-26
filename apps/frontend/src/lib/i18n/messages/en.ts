@@ -430,6 +430,13 @@ const en = {
     noDataYet: "No analytics data yet",
     noDataYetDesc: "This account is connected, but there's no analytics data for the selected range yet.",
   },
+  notFound: {
+    title: "We could not find that page",
+    subtitle:
+      "The link may be out of date, or the page may have been moved or removed.",
+    backToCalendar: "Back to the calendar",
+    signIn: "Sign in",
+  },
   auth: {
     mfaTitle: "Two-factor authentication",
     mfaSubtitle:

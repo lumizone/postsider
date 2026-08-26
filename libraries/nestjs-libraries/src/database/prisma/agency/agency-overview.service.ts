@@ -58,24 +58,26 @@ export class AgencyOverviewService {
       }),
       this.prisma.post.groupBy({
         by: ['state'],
-        where: { organizationId, deletedAt: null, parentPostId: null, ...reportWindow },
+        where: { organizationId, deletedAt: null, parentPostId: null, integration: { deletedAt: null }, ...reportWindow },
         _count: { _all: true },
       }),
-      this.prisma.postApproval.count({ where: { organizationId, status: 'PENDING' } }),
+      this.prisma.postApproval.count({
+        where: { organizationId, status: 'PENDING', post: { deletedAt: null, integration: { deletedAt: null } } },
+      }),
       this.prisma.post.count({
-        where: { organizationId, state: State.ERROR, deletedAt: null, parentPostId: null, updatedAt: { gte: since } },
+        where: { organizationId, state: State.ERROR, deletedAt: null, parentPostId: null, integration: { deletedAt: null }, updatedAt: { gte: since } },
       }),
       // Stuck posts: scheduled, past their time, never attempted (no error) —
       // the silent-failure signature. Grouped by channel so we can roll it up
       // per client.
       this.prisma.post.groupBy({
         by: ['integrationId'],
-        where: { organizationId, state: State.QUEUE, publishDate: { lt: now }, error: null, deletedAt: null, parentPostId: null },
+        where: { organizationId, state: State.QUEUE, publishDate: { lt: now }, error: null, deletedAt: null, parentPostId: null, integration: { deletedAt: null } },
         _count: { _all: true },
       }),
       this.prisma.post.groupBy({
         by: ['integrationId'],
-        where: { organizationId, state: State.ERROR, deletedAt: null, parentPostId: null, updatedAt: { gte: since } },
+        where: { organizationId, state: State.ERROR, deletedAt: null, parentPostId: null, integration: { deletedAt: null }, updatedAt: { gte: since } },
         _count: { _all: true },
       }),
     ]);

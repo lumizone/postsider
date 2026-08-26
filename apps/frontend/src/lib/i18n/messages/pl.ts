@@ -377,6 +377,13 @@ const pl = {
     snapshotNote: "Suma za cały okres. Ta platforma nie udostępnia podziału dziennego.",
     unsupportedProvider: "Analityka dla platformy {platform} nie jest jeszcze dostępna. To nie jest awaria kanału, po prostu integracja tej platformy tego nie obsługuje.",
   },
+  notFound: {
+    title: "Nie znaleźliśmy tej strony",
+    subtitle:
+      "Link może być nieaktualny, a strona mogła zostać przeniesiona albo usunięta.",
+    backToCalendar: "Wróć do kalendarza",
+    signIn: "Zaloguj się",
+  },
   auth: {
     mfaTitle: "Uwierzytelnianie dwuetapowe",
     mfaSubtitle:

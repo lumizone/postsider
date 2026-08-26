@@ -29,14 +29,14 @@ export class CustomerReportService {
       }),
       this.prisma.post.groupBy({
         by: ['state'],
-        where: { organizationId, deletedAt: null, parentPostId: null, integration: { customerId }, ...reportWindow },
+        where: { organizationId, deletedAt: null, parentPostId: null, integration: { customerId, deletedAt: null }, ...reportWindow },
         _count: { _all: true },
       }),
       this.prisma.postApproval.count({
-        where: { organizationId, status: 'PENDING', post: { integration: { customerId } } },
+        where: { organizationId, status: 'PENDING', post: { deletedAt: null, integration: { customerId, deletedAt: null } } },
       }),
       this.prisma.post.count({
-        where: { organizationId, state: State.ERROR, deletedAt: null, parentPostId: null, updatedAt: { gte: since }, integration: { customerId } },
+        where: { organizationId, state: State.ERROR, deletedAt: null, parentPostId: null, updatedAt: { gte: since }, integration: { customerId, deletedAt: null } },
       }),
     ]);
 
