@@ -13,6 +13,69 @@ blokady u źródła — złożenie audytu, materiały do review, zgodność kodu
 
 ## Status
 
+- **Polowanie na bugi po zmianach w kalendarzu (2026-08-25, NIEZACOMMITOWANE).**
+  Sweep tras (28 × 2 motywy × desktop/mobile) + **nowy sweep INTERAKCJI**
+  (drag&drop posta, otwarcie kompozytora, approve, wyszukiwarka, filtry, bell,
+  drawer mobilny). Trzy realne wady, wszystkie naprawione:
+  1. **Kompozytor nie dawał się zamknąć bez pytania „Discard your changes?"** —
+     przy otwarciu ISTNIEJĄCEGO posta. Efekt seeduje domyślne ustawienia
+     providera (`post_type` dla IG, `privacy_level` dla TikToka) TICK PO
+     montażu, a snapshot „czystego stanu" powstawał przed tym, więc
+     `settingsDirty` był prawdziwy od startu. Zmierzone na żywo:
+     snapshot `{"c1":{}}` vs stan `{"c1":{"post_type":"post","is_trial_reel":false}}`.
+     Fix: `settingsBaselineRef` — efekty maszynowe dokładają się do baseline'u,
+     edycje użytkownika nie; porównanie przez `stableSettings` (odporne na
+     kolejność kluczy). **To blokowało całą stronę** (modal zostawał na wierzchu).
+  2. **`/settings/api`: 83 px poziomego overflow na 390 px.** Mobilna reguła
+     `grid-template-columns: 1fr` — goły `1fr` ma minimum = min-content
+     zawartości. Teraz `minmax(0, 1fr)` + stackowanie `.row2`/`.rowEnd` ≤520 px.
+     Ta strona wcześniej BIAŁO padała w mocku (`keys.map is not a function`),
+     więc overflow nigdy nie był zmierzony.
+  3. **Duplikaty kluczy React w Media i Posts** — obie listy sklejają wyniki
+     z paginacji offsetowej, więc upload/publikacja w trakcie pobierania
+     potrafi zwrócić ten sam rekord dwa razy. Dodane `dedupeById`.
+  Przy okazji utwardzone `Array.isArray` na 5 payloadach (api keys, webhooks,
+  approvals, hashtag groups, caption templates) — ta sama klasa co dwa
+  białe ekrany naprawione 25.08.
+  **Fałszywe alarmy (nie ruszać):** „drag produced no write request" (Playwright
+  nie symuluje HTML5 DnD myszą — dispatch `DragEvent` daje poprawne
+  `PUT /posts/:id/date`), duplikaty kluczy w mocku (ten sam payload na każdej
+  stronie), timeout kliknięcia w dzwonek (selektor łapał ukrytą kopię z paska
+  mobilnego). Po poprawkach sweep tras: **zero problemów**.
+
+- **Kalendarz: nakładające się posty + przycisk motywu na mobile (2026-08-25, NIEZACOMMITOWANE, NIEZDEPLOYOWANE).**
+  Zgłoszone jako „miniaturki postów są za małe, gdy są 2 obok siebie".
+  Pomiar potwierdził i odsłonił dwie wady poza samym rozmiarem:
+  1. **`layoutOverlappingEvents` liczyło pasy dla CAŁEGO dnia**, nie dla grupy
+     kolizji — jedna kolizja o 10:00 zwężała każdy post tego dnia do 50%.
+     Teraz klastrowanie po nakładaniu (`clusterByOverlap`).
+  2. **`day-popup.tsx` liczyło szerokość jako `calc(N% - 72px)` od pełnej
+     szerokości osi czasu** — przy 4 pasach wynik jest UJEMNY i karty znikały.
+     Karty siedzą teraz w `.eventLayer` (`left:64px`), więc gutter odejmuje się
+     raz, w layoucie, a procenty są liczone od pola kart.
+  Nowy layout: `buildStackLayout` (`lib/event-lanes.ts`) — posty grupowane po
+  **godzinie startu**, karty 52 px jedna pod drugą, a wiersz godziny rośnie
+  (`extraByHour`, `offsetBeforeHour`; `mergeExtraByHour` scala 7 dni tygodnia
+  w jedną siatkę). Przełącznik pas/stack to **pomiar, nie breakpoint**:
+  `useElementWidth` + `MIN_CARD_WIDTH=132`, telefon zawsze `maxLanes=1`.
+  Skutek: desktop day view dalej ma pasy obok siebie, desktop week (kolumna
+  ~100 px) i cały mobile stackują. Kolumny <72 px (tydzień na telefonie)
+  pokazują samą ikonę platformy + tooltip z „czas · kanał — tytuł".
+  **Miniaturki mediów: docs twierdziły, że są w kalendarzu od 17.08 — NIE BYŁY.**
+  `PostMediaThumb` renderował się wyłącznie na liście Posts, mimo że
+  `CalendarEvent.media` jest wypełniane (`use-calendar-data.ts:62`). Dodane do
+  kart tygodnia/dnia i DayPopup (24 px; karta przebudowana na układ rzędowy:
+  miniatura + kolumna tytuł/meta) oraz do komórki miesiąca (16 px), ale tam
+  **tylko gdy komórka ≥150 px** — zmierzone: przy 1440 px komórka ma 112 px
+  i miniatura ścinała tytuł do „N…", przy 2100 px ma 206 px i tytuł 115 px.
+  W kolumnach icon-only miniatura się nie pokazuje.
+  Przy okazji: przycisk motywu w pasku mobilnym ma teraz box **44×44** jak
+  dzwonek obok (`.theme-toggle-topbar` w `globals.css`; stopka sidebara bez zmian).
+  Weryfikacja: 8 nowych testów `event-lanes.spec.ts`, **176/176 root jest**,
+  `tsc --noEmit` czysty, `next build` czysty, Playwright 390 px + 1440 px ×
+  jasny/ciemny — zero nakładek kart, zero błędów konsoli, `scrollWidth=390`.
+  **Tylko `apps/frontend/` — zero zmian w backendzie, orchestratorze, Prismie.**
+
 - **KONIEC SESJI 2026-08-25: wszystko wdrożone, wypchnięte i zmergowane.**
   `main`, `fix/publish-pipeline-and-report-bugs` oraz obie referencje na
   `origin` wskazują ten sam commit **`f738d4b`** — zero rozjazdu.

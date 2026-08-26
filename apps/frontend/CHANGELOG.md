@@ -40,9 +40,29 @@ All notable changes to the PostSider dashboard.
 - **The UTM builder could white-screen** on a payload that was not an array.
 - **Storage settings overflowed 10 px** on a 390 px screen; the stats row now
   wraps.
+- **The theme toggle in the mobile topbar is the same 44 x 44 box as the
+  notifications bell beside it.** It was a shorter pill, which read as a
+  mistake next to the bell. The sidebar-footer copy still matches the language
+  select it sits with.
 - Channel colours, colour swatches and platform tiles carry a hairline, so the
   dark end of the palette (and a near-black brand tile) stays visible on either
   surface.
+- **Closing an untouched post asked "discard your changes?" every time.** The
+  composer seeds provider defaults (Instagram `post_type`, TikTok
+  `privacy_level`) one tick after mount, and the clean-state snapshot was taken
+  before that, so the guard fired on a post nobody had edited — and dismissing
+  it left the editor stuck open over the page. Machine-seeded defaults now fold
+  into the baseline; a real edit still warns.
+- **The API request generator pushed `/settings/api` 83 px off a 390 px
+  screen.** Its single-column mobile rule used a bare `1fr`, which keeps its
+  content's min-content width as a floor; the field/select row now stacks on a
+  phone.
+- Media and Posts de-duplicate by id. Both stitch a list from offset-paged
+  requests, so an upload or a publish between two pages could return the same
+  row twice and duplicate React keys re-mounted tiles at random.
+- API keys, webhooks, approvals, hashtag groups and caption templates all check
+  that the payload is an array before rendering it, the same guard the Overview
+  and UTM builder pages already carry.
 
 ### Branding
 
@@ -66,6 +86,26 @@ All notable changes to the PostSider dashboard.
   its natural page scroll and 52 px touch targets without horizontal overflow.
 - The bounded-height behavior is scoped to `/calendar`; all other dashboard
   pages retain their existing layout and scrolling.
+- **Posts scheduled for the same hour stack instead of shrinking.** Side-by-side
+  lanes are kept only while a card stays at least 132 px wide; below that the
+  hour's posts sit one under another at full width and that hour's row grows to
+  hold them, on a phone as well as in a desktop week column. Two 10:00 posts on
+  a 390 px screen used to be two unreadable slivers.
+- **A collision at one hour no longer shrinks the whole day.** Lane count is
+  computed per group of overlapping posts, so a lone post at 20:00 keeps the
+  full column even when 10:00 has two.
+- **Four posts in one hour could vanish from the day popup.** Its lane width was
+  a percentage of the full timeline minus a fixed 72 px gutter, which turns
+  negative at four lanes; cards are now positioned inside their own layer, so
+  the gutter is subtracted once, by the layout.
+- Week columns too narrow for copy (a phone's seven columns) show the platform
+  icon alone, with the time, channel and title in the tooltip, instead of a
+  clipped "1…".
+- **Posts with media show a thumbnail on the calendar itself** — in the week and
+  day timeline, in the day popup, and in a month cell once the cell is wide
+  enough to carry one without eating the title (measured, so a collapsed
+  channels panel earns it). Until now the thumbnail existed only in the Posts
+  list.
 
 ## 1.1.0 — Production deployment readiness
 
