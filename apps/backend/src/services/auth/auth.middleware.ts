@@ -9,6 +9,7 @@ import {
   legacyCookieDomain,
 } from '@postsider/helpers/subdomain/subdomain.management';
 import { HttpForbiddenException } from '@postsider/nestjs-libraries/services/exception.filter';
+import { MfaService } from './mfa.service';
 
 export const removeAuth = (res: Response) => {
   const flags = {
@@ -42,7 +43,8 @@ export const removeAuth = (res: Response) => {
 export class AuthMiddleware implements NestMiddleware {
   constructor(
     private _organizationService: OrganizationService,
-    private _userService: UsersService
+    private _userService: UsersService,
+    private _mfaService: MfaService
   ) {}
   async use(req: Request, res: Response, next: NextFunction) {
     const auth = req.headers.auth || req.cookies.auth;
@@ -67,6 +69,16 @@ export class AuthMiddleware implements NestMiddleware {
       }
 
       if (!user.activated) {
+        throw new HttpForbiddenException();
+      }
+
+      // MFA policy changes must take effect for already-issued sessions too.
+      // The only unauthenticated enrollment path is AuthController's two
+      // challenge-validated /auth/mfa/enroll/* endpoints; this middleware
+      // applies solely to authenticated controllers and therefore must not
+      // leave their full session usable while enrollment is required.
+      if (await this._mfaService.requiresEnrollment(user)) {
+        removeAuth(res);
         throw new HttpForbiddenException();
       }
 

@@ -42,10 +42,17 @@ export function LoginForm() {
     if (inviteToken) body.org = inviteToken;
 
     try {
-      const result = await api.post<{ mfaRequired?: boolean }>("/auth/login", body, {
+      const result = await api.post<{
+        mfaRequired?: boolean;
+        mfaEnrollmentRequired?: boolean;
+      }>("/auth/login", body, {
         anonymous: true,
         silent: true,
       });
+      if (result?.mfaEnrollmentRequired) {
+        router.replace("/login/mfa/enroll");
+        return;
+      }
       if (result?.mfaRequired) {
         router.replace("/login/mfa");
         return;

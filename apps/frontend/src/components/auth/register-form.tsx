@@ -47,7 +47,11 @@ export function RegisterForm() {
     setLoading(true);
 
     try {
-      const res = await api.post<{ register?: boolean; activate?: boolean }>(
+      const res = await api.post<{
+        register?: boolean;
+        activate?: boolean;
+        mfaEnrollmentRequired?: boolean;
+      }>(
         "/auth/register",
         {
           email,
@@ -57,6 +61,11 @@ export function RegisterForm() {
         },
         { anonymous: true, silent: true },
       );
+
+      if (res?.mfaEnrollmentRequired) {
+        router.replace("/login/mfa/enroll");
+        return;
+      }
 
       if (res?.activate) {
         setActivationRequired(true);

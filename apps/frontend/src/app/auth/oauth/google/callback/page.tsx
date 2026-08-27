@@ -29,6 +29,7 @@ function GoogleCallbackInner() {
           login?: boolean;
           token?: string;
           mfaRequired?: boolean;
+          mfaEnrollmentRequired?: boolean;
         }>(
           '/auth/oauth/GOOGLE/exists',
           {
@@ -38,6 +39,11 @@ function GoogleCallbackInner() {
           { anonymous: true, silent: true }
         );
 
+        if (res?.mfaEnrollmentRequired) {
+          router.replace('/login/mfa/enroll');
+          return;
+        }
+
         if (res?.mfaRequired) {
           router.replace('/login/mfa');
           return;
@@ -46,7 +52,7 @@ function GoogleCallbackInner() {
         const isNewUser = !!res?.token;
         if (isNewUser) {
           // New user — register with the token
-          await api.post(
+          const registration = await api.post<{ mfaEnrollmentRequired?: boolean }>(
             '/auth/register',
             {
               provider: 'GOOGLE',
@@ -55,6 +61,10 @@ function GoogleCallbackInner() {
             },
             { anonymous: true, silent: true }
           );
+          if (registration?.mfaEnrollmentRequired) {
+            router.replace('/login/mfa/enroll');
+            return;
+          }
         }
 
         await refresh();

@@ -63,7 +63,7 @@ export class AuthController {
         body?.org || req?.cookies?.org
       );
 
-      const { jwt, addedOrg } = await this._authService.routeAuth(
+      const { jwt, addedOrg, user } = await this._authService.routeAuth(
         body.provider,
         body,
         ip,
@@ -88,6 +88,10 @@ export class AuthController {
         response.header('activate', 'true');
         response.status(200).json({ activate: true });
         return;
+      }
+
+      if (await this._mfa.requiresEnrollment(user)) {
+        return this.requireMfaEnrollment(response, user.id);
       }
 
       response.cookie('auth', jwt, {
@@ -158,7 +162,7 @@ export class AuthController {
       );
 
       if (await this._mfa.requiresEnrollment(user)) {
-        return response.status(403).json({ mfaEnrollmentRequired: true });
+        return this.requireMfaEnrollment(response, user.id);
       }
 
       if (user.mfaEnabledAt) {
@@ -296,6 +300,56 @@ export class AuthController {
     }
   }
 
+  @Post('/mfa/enroll/begin')
+  @UseGuards(AuthRateLimitGuard)
+  async beginMfaEnrollment(
+    @Req() req: Request,
+    @Res({ passthrough: false }) response: Response
+  ) {
+    if (!this.hasValidEnrollmentOrigin(req)) {
+      return response.status(403).send('Invalid enrollment origin');
+    }
+    try {
+      const user = await this.getEnrollmentChallengeUser(req);
+      if (!(await this._mfa.requiresEnrollment(user))) {
+        throw new Error('Enrollment is no longer required');
+      }
+      const enrollment = await this._mfa.beginEnrollment(user.id, user.email);
+      await this._audit.logAuthEvent('auth.mfa_setup_started', { userId: user.id });
+      return response.status(200).json(enrollment);
+    } catch {
+      return response.status(400).send('Invalid enrollment challenge');
+    }
+  }
+
+  @Post('/mfa/enroll/confirm')
+  @UseGuards(AuthRateLimitGuard)
+  async confirmMfaEnrollment(
+    @Req() req: Request,
+    @Body('code') code: string,
+    @Res({ passthrough: false }) response: Response
+  ) {
+    if (!this.hasValidEnrollmentOrigin(req)) {
+      return response.status(403).send('Invalid enrollment origin');
+    }
+    try {
+      const user = await this.getEnrollmentChallengeUser(req);
+      if (!(await this._mfa.requiresEnrollment(user))) {
+        throw new Error('Enrollment is no longer required');
+      }
+      const result = await this._mfa.confirmEnrollment(user.id, code);
+      this.clearMfaEnrollmentChallenge(response);
+      this.setAuthCookie(response, await this._authService.issueSession(user));
+      await this._audit.logAuthEvent('auth.mfa_enabled', { userId: user.id });
+      return response.status(200).json(result);
+    } catch {
+      await this._audit.logAuthEvent('auth.mfa_failed', {});
+      return response
+        .status(400)
+        .send('Invalid enrollment challenge or authenticator code');
+    }
+  }
+
   private requireMfa(response: Response, userId: string) {
     response.cookie(
       'mfa',
@@ -303,6 +357,51 @@ export class AuthController {
       { ...this.cookieFlags(), maxAge: 5 * 60 * 1000 }
     );
     return response.status(202).json({ mfaRequired: true });
+  }
+
+  private requireMfaEnrollment(response: Response, userId: string) {
+    response.cookie(
+      'mfa_enroll',
+      AuthChecker.signSessionJWT({ purpose: 'mfa_enrollment', userId }, 5 * 60),
+      { ...this.cookieFlags(), httpOnly: true, maxAge: 5 * 60 * 1000 }
+    );
+    return response.status(202).json({ mfaEnrollmentRequired: true });
+  }
+
+  private async getEnrollmentChallengeUser(req: Request) {
+    const challenge = AuthChecker.verifyJWT(req.cookies?.mfa_enroll) as {
+      purpose?: string;
+      userId?: string;
+    };
+    if (challenge?.purpose !== 'mfa_enrollment' || !challenge.userId) {
+      throw new Error('Invalid enrollment challenge');
+    }
+    const user = await this._authService.getUserById(challenge.userId);
+    if (!user) throw new Error('Unknown user');
+    return user;
+  }
+
+  // The enrollment challenge is an HttpOnly SameSite=None cookie so the app
+  // can use it across its API subdomain. Require the browser's exact frontend
+  // origin before acting on that cookie, rather than trusting a host header.
+  private hasValidEnrollmentOrigin(req: Request) {
+    const origin = req.headers.origin;
+    const frontendUrl = process.env.FRONTEND_URL;
+    if (typeof origin !== 'string' || !frontendUrl) return false;
+    try {
+      return new URL(origin).origin === new URL(frontendUrl).origin;
+    } catch {
+      return false;
+    }
+  }
+
+  private clearMfaEnrollmentChallenge(response: Response) {
+    response.cookie('mfa_enroll', '', {
+      ...this.cookieFlags(),
+      httpOnly: true,
+      maxAge: -1,
+      expires: new Date(0),
+    });
   }
 
   private cookieFlags() {
@@ -352,6 +451,14 @@ export class AuthController {
     );
     if (!activate) {
       return response.status(200).json({ can: false });
+    }
+
+    const activatedUser = AuthChecker.verifyJWT(activate) as { id?: string };
+    const user = activatedUser.id
+      ? await this._authService.getUserById(activatedUser.id)
+      : null;
+    if (user && (await this._mfa.requiresEnrollment(user))) {
+      return this.requireMfaEnrollment(response, user.id);
     }
 
     response.cookie('auth', activate, {
@@ -421,7 +528,7 @@ export class AuthController {
     }
 
     if (await this._mfa.requiresEnrollment(user)) {
-      return response.status(403).json({ mfaEnrollmentRequired: true });
+      return this.requireMfaEnrollment(response, user.id);
     }
 
     if (user.mfaEnabledAt) {

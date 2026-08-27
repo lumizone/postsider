@@ -64,7 +64,10 @@ export class MfaService {
     await this.prisma.$transaction(async (tx) => {
       await tx.mfaRecoveryCode.deleteMany({ where: { userId } });
       await tx.mfaRecoveryCode.createMany({
-        data: recoveryCodes.map((codeHash) => ({ userId, codeHash: AuthCrypto.hashPassword(codeHash) })),
+        data: recoveryCodes.map((code) => ({
+          userId,
+          codeHash: AuthCrypto.hashPassword(this.normalizeRecoveryCode(code)),
+        })),
       });
       await tx.user.update({
         where: { id: userId },
@@ -84,7 +87,7 @@ export class MfaService {
   }
 
   async useRecoveryCode(userId: string, code: string) {
-    const normalized = code.replace(/-/g, '').toUpperCase();
+    const normalized = this.normalizeRecoveryCode(code);
     const candidates = await this.prisma.mfaRecoveryCode.findMany({
       where: { userId, usedAt: null },
       select: { id: true, codeHash: true },
@@ -98,6 +101,10 @@ export class MfaService {
       return result.count === 1;
     }
     return false;
+  }
+
+  private normalizeRecoveryCode(code: string) {
+    return code.trim().toUpperCase();
   }
 
   async disable(userId: string, code: string) {

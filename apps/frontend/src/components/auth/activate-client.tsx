@@ -22,11 +22,18 @@ export function ActivateClient({ token }: { token: string }) {
 
     (async () => {
       try {
-        const res = await api.post<{ can: boolean }>(
+        const res = await api.post<{
+          can: boolean;
+          mfaEnrollmentRequired?: boolean;
+        }>(
           "/auth/activate",
           { code: token },
           { anonymous: true, silent: true },
         );
+        if (res?.mfaEnrollmentRequired) {
+          router.replace("/login/mfa/enroll");
+          return;
+        }
         if (!res?.can) {
           setError(true);
           return;
