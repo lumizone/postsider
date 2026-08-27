@@ -12,6 +12,10 @@ import { useAuth } from '@/lib/auth-context';
 import { useT } from '@/lib/i18n';
 import { disconnectAllChannels, deleteAccount } from '@/lib/danger-api';
 import { api, ApiError, setAuthToken, setOrgId } from '@/lib/api';
+import {
+  downloadRecoveryCodes,
+  printRecoveryCodes,
+} from '@/lib/mfa-recovery-export';
 
 export default function SecuritySettingsPage() {
   const t = useT();
@@ -583,7 +587,9 @@ function MfaCard() {
             </div>
             <StatusChip variant="filled">{t('security.mfaEnabled')}</StatusChip>
           </div>
-          {recoveryCodes && <RecoveryCodes codes={recoveryCodes} />}
+          {recoveryCodes && (
+            <RecoveryCodes codes={recoveryCodes} onError={setError} />
+          )}
           <form onSubmit={disable} className={s.fieldGrid}>
             <div className={s.field}>
               <label className={s.label} htmlFor="mfa-disable-code">
@@ -703,8 +709,22 @@ type Enrollment = { qrCodeDataUrl: string; manualKey: string };
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof ApiError ? error.message : fallback;
 }
-function RecoveryCodes({ codes }: { codes: string[] }) {
+function RecoveryCodes({
+  codes,
+  onError,
+}: {
+  codes: string[];
+  onError: (message: string) => void;
+}) {
   const t = useT();
+  const exportCodes = (action: () => void) => {
+    try {
+      action();
+    } catch {
+      onError(t('security.mfaRecoveryExportError'));
+    }
+  };
+
   return (
     <div
       role="status"
@@ -736,6 +756,22 @@ function RecoveryCodes({ codes }: { codes: string[] }) {
             {recoveryCode}
           </code>
         ))}
+      </div>
+      <div className={s.cardActions} style={{ marginTop: 14 }}>
+        <button
+          type="button"
+          className={s.btnSecondary}
+          onClick={() => exportCodes(() => printRecoveryCodes(codes))}
+        >
+          {t('security.mfaRecoveryPrint')}
+        </button>
+        <button
+          type="button"
+          className={s.btnSecondary}
+          onClick={() => exportCodes(() => downloadRecoveryCodes(codes))}
+        >
+          {t('security.mfaRecoveryDownload')}
+        </button>
       </div>
     </div>
   );

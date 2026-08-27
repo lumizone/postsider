@@ -541,6 +541,9 @@ const pl = {
     mfaRecoveryTitle: "Zapisz teraz kody odzyskiwania",
     mfaRecoveryHint:
       "Każdy kod działa jednorazowo. Trzymaj je w bezpiecznym miejscu — nie pokażemy ich ponownie.",
+    mfaRecoveryPrint: "Drukuj lub zapisz jako PDF",
+    mfaRecoveryDownload: "Pobierz .txt",
+    mfaRecoveryExportError: "Nie udało się przygotować eksportu kodów odzyskiwania.",
     mfaDisableCode: "Kod z aplikacji lub kod odzyskiwania",
     mfaDisable: "Wyłącz uwierzytelnianie dwuetapowe",
     mfaDisabling: "Wyłączanie…",
