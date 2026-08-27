@@ -15,15 +15,23 @@ const makeResponse = () => ({
 describe('AuthController MFA policy login gate', () => {
   const originalFrontendUrl = process.env.FRONTEND_URL;
   const originalNotSecured = process.env.NOT_SECURED;
+  const originalJwtSecret = process.env.JWT_SECRET;
 
   beforeEach(() => {
     process.env.FRONTEND_URL = 'https://app.example.com';
+    // The enrollment challenge signs a real JWT, so the secret has to be set
+    // here rather than inherited. Without this the suite passes only on a
+    // machine whose repo-root .env happens to define JWT_SECRET (a dev box)
+    // and fails on the production host and any clean CI runner with
+    // "secretOrPrivateKey must have a value".
+    process.env.JWT_SECRET = 'test-jwt-secret-for-enrollment-challenge';
     delete process.env.NOT_SECURED;
   });
 
   afterAll(() => {
     process.env.FRONTEND_URL = originalFrontendUrl;
     process.env.NOT_SECURED = originalNotSecured;
+    process.env.JWT_SECRET = originalJwtSecret;
   });
 
   it('issues only a five-minute httpOnly enrollment challenge after a valid first factor', async () => {
