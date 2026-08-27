@@ -13,6 +13,68 @@ blokady u źródła — złożenie audytu, materiały do review, zgodność kodu
 
 ## Status
 
+- **2FA: WYMUSZANIE, WYJŚCIE I KODY ODZYSKIWANIA (2026-08-27, WDROŻONE ~08:37 UTC, commit `cce4541`).**
+  Globalna polityka MFA wyszła 26.08 z trzema defektami, które razem czyniły jej
+  włączenie niebezpiecznym. Każdy naprawiony z testem czerwonym na starym kodzie.
+  1. **Wymuszanie zamykało użytkownika na zewnątrz.** Logowanie zwracało
+     `403 mfaEnrollmentRequired`, a front nie miał dla tego gałęzi — użytkownik bez
+     authenticatora nie mógł dojść do `/settings/security`, bo te endpointy wymagają
+     sesji, której brama właśnie odmawiała. Teraz pierwszy czynnik daje wyłącznie
+     **pięciominutowe wyzwanie `mfa_enroll`** (httpOnly), a `/login/mfa/enroll`
+     prowadzi przez QR, potwierdzenie i kody odzyskiwania. Sesja powstaje dopiero po
+     poprawnym TOTP. Ta sama brama objęła rejestrację lokalną, aktywację i Google
+     OAuth — wcześniej **omijały politykę** i wydawały pełną sesję.
+  2. **Kody odzyskiwania nigdy nie działały.** Hash liczony był z formy z myślnikami
+     (`ABCD-EFGH`), a weryfikacja normalizowała wejście do `ABCDEFGH` — bcrypt nie
+     mógł się zgodzić, więc wydrukowany kod nie odblokowywał ani logowania, ani
+     wyłączenia 2FA. Normalizacja jest teraz identyczna po obu stronach. Uwaga:
+     10 kodów wygenerowanych przed poprawką **zaczyna działać** po tym wdrożeniu.
+  3. **Istniejące sesje ignorowały politykę.** `AuthMiddleware` przyjmował każdy
+     ważny JWT, więc sesja z przed włączenia polityki miała pełny dostęp bezterminowo.
+     Teraz middleware sprawdza politykę i czyści cookie. Publiczne API zostaje na
+     własnym `PublicAuthMiddleware` — **klucze API, MCP i skrypty agentów są celowo
+     nieobjęte** wymuszaniem.
+  Dwa anonimowe endpointy enrollment walidują `Origin` względem `FRONTEND_URL`
+  **przed** dotknięciem cookie i przed włączeniem MFA (cookie jest `SameSite=None`
+  i leży poza CSRF-middleware, więc bez tego cross-site POST mógł nadpisać
+  oczekujący sekret TOTP). Zweryfikowane na żywej produkcji: brak/obcy `Origin`
+  → `403 Invalid enrollment origin`, właściwy `Origin` bez cookie
+  → `400 Invalid enrollment challenge`.
+  **Kody odzyskiwania można wreszcie zachować:** druk/PDF i pobranie `.txt`
+  (`lib/mfa-recovery-export.ts`, kody escapowane przed renderem, okno z `opener=null`).
+  Ekran enrollment przepisany na system designu (`.codeBlock/.codeGrid/.code/.btnRow/
+  .submitSecondary` w `auth.module.css`, wszystko na tokenach) + footer „Back to sign in",
+  bo wygasłe wyzwanie dawało kartę bez wyjścia. Zmierzone w przeglądarce na buildzie
+  produkcyjnym, świeże ładowanie per motyw: kontrast tekstu **21:1 w light, 16.45:1 w dark**,
+  każdy przycisk z widoczną obwódką, zero przepełnień, QR z białą strefą ciszy w obu
+  motywach, input identyczny jak `/login` (Inter 14px, 1px solid, radius 12px).
+  **Pułapka testowa złapana dopiero na VPS:** test podpisujący realny JWT przechodził
+  lokalnie, bo import wciąga `.env` z cwd (dev-box ma tam `JWT_SECRET`), a produkcyjny
+  root `.env` ma tylko `COMPOSE_FILE` — na VPS ten sam commit padał na
+  `secretOrPrivateKey must have a value` (logowanie zwracało 400 zamiast 202). Test
+  ustawia teraz sekret sam. Produkt był bez winy: kontener ma `JWT_SECRET`.
+  **Stan po wdrożeniu:** 208/208 testów na VPS, kontener healthy, `MfaPolicy.enforceForAll = false`
+  (nikt nie został wylogowany), kolejka nietknięta (58 opublikowanych, 26 w kolejce,
+  1 błąd Instagrama z 07.08 — sprzed zmiany).
+  **Zostaje:** decyzja, czy włączyć globalne wymuszanie; 1 z 7 użytkowników ma 2FA.
+
+- **BACKUP OFFSITE — GOTOWY, NIEAKTYWNY (2026-08-27, commit `c85f533`).**
+  `ops/backups/` zawiera zadanie backupu (Restic + Backblaze B2), unit i timer systemd,
+  runbook i test skryptu. **Nic nie działa do momentu utworzenia `/etc/postsider-backup.env`** —
+  czeka na bucket i klucz ograniczony do niego. Restic szyfruje po stronie klienta,
+  więc bucket nie widzi jawnych danych. Skrypt odmawia startu bez roota, configu,
+  restica, zmiennych B2 i czytelnych ścieżek; **inspekcja wszystkich kontenerów do
+  quiesce odbywa się PRZED zatrzymaniem czegokolwiek** i błąd inspekcji przerywa
+  backup (żeby literówka nie zostawiła pisarza w ruchu i nie dała porwanego
+  snapshotu); kontenery baz są odrzucane z tej listy (idą przez `pg_dump`); retencja
+  grupuje po `host,tags`, nie po ścieżce, więc katalog dumpu z datą nie rozsypuje
+  30/12/12 na osobne grupy; każdy przebieg weryfikuje 5% danych.
+  Domyślne wartości zweryfikowane wobec żywego hosta: baza to **`postsider_prod`**
+  (nie `postsider` z compose), a kontener n8n to **`root-n8n-1`** (nie `n8n`).
+  **Do decyzji przed włączeniem:** quiesce `postsider-app` + `postsider-temporal` daje
+  spójny snapshot, ale kosztuje kilka minut nocnego przestoju, a post zaplanowany w tym
+  okienku czeka na restart.
+
 - **2FA (TOTP) + WARSTWA PREZENTACJI 2FA (2026-08-26, WDROŻONE).**
   Domknięcie ostatniego punktu audytu po stronie kodu: uwierzytelnianie
   dwuetapowe jest na produkcji. `totp.service.ts` (RFC 6238, okno ±1),
