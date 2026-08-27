@@ -27,6 +27,12 @@ PostSider is built with the following protections:
 - **Secrets at rest** — provider credentials and reversible secrets are
   encrypted (AES-256-GCM when `ENCRYPTION_KEY` is set, legacy AES-256-CBC
   otherwise). Passwords are hashed with bcrypt.
+- **Two-factor authentication** — TOTP enrollment through an authenticator app,
+  a short-lived enrollment challenge, and one-time recovery codes for account
+  recovery. Operators can optionally enforce enrollment for every dashboard user.
+- **Security audit trail** — sensitive account and organization actions, including
+  role changes, invitations, API-key changes, channel disconnects, account
+  deletion, and superadmin impersonation are recorded.
 - **Startup guard** — the app refuses to boot without `JWT_SECRET` and aborts if
   `NOT_SECURED` is enabled in production.
 - **HTTP hardening** — strict CORS allow-list, security headers (CSP,

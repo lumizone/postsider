@@ -19,6 +19,7 @@ import {
   type PlanDescriptor,
 } from '@/lib/billing-api';
 import { ApiError } from '@/lib/api';
+import { BILLING_TRUST_FEATURES } from '@/lib/billing-trust-features';
 import styles from './billing.module.css';
 
 const TIER_ORDER: Record<string, number> = {
@@ -519,6 +520,23 @@ function BillingInner() {
               </div>
             </Card>
           )}
+
+          <Card
+            title={t('billing.trust.title')}
+            subtitle={t('billing.trust.subtitle')}
+          >
+            <div className={styles.trustGrid}>
+              {BILLING_TRUST_FEATURES.map((feature) => (
+                <div key={feature.id} className={styles.trustFeature}>
+                  <Check />
+                  <div>
+                    <h3>{t(feature.titleKey)}</h3>
+                    <p>{t(feature.bodyKey)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
 
           {/* FAQ — each item is its own card */}
           {FAQ_KEYS.map((item, i) => {

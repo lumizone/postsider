@@ -38,6 +38,15 @@
 - **Bulk CSV import** to schedule many posts at once
 - **Approval workflow** so posts can be reviewed before they go out
 
+**Security and account protection**
+
+- **Optional TOTP two-factor authentication** with an authenticator app, a dedicated enrollment flow, and one-time recovery codes; superadmins can require it for the whole workspace
+- **Encrypted channel credentials** — OAuth tokens for connected social accounts are encrypted at rest
+- **Security activity trail** for sensitive account and organization actions
+- **Hardened sessions and API** — httpOnly secure cookies, CORS and CSP controls, rate limiting, and server-side plan enforcement
+
+---
+
 **Optional AI** (off unless you provide a key)
 
 - **Post Checker** flags issues before publishing

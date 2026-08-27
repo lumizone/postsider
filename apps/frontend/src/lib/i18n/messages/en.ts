@@ -173,6 +173,26 @@ const en = {
       ULTIMATE: { label: "Ultimate", tagline: "Best for agencies" },
       SAMURAI: { label: "Internal plan", tagline: "Internal plan" },
     },
+    trust: {
+      title: "Security tools, built in",
+      subtitle: "Practical controls to protect your accounts and content, available from your workspace.",
+      mfa: {
+        title: "Optional two-factor authentication",
+        body: "Set up an authenticator app and recovery codes. Superadmins can require it across the workspace.",
+      },
+      encryptedCredentials: {
+        title: "Encrypted connected accounts",
+        body: "OAuth credentials for connected channels are encrypted at rest.",
+      },
+      recoveryCodes: {
+        title: "Recovery codes",
+        body: "Keep one-time recovery codes so you can regain access if you lose your device.",
+      },
+      securityAuditLog: {
+        title: "Security activity trail",
+        body: "Sensitive account and organization actions are recorded for traceability.",
+      },
+    },
     features: {
       channels: "{count} channels",
       posts: "{count} posts per month",

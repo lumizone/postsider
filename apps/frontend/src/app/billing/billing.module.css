@@ -290,6 +290,54 @@
   cursor: default;
 }
 
+/* Security and reliability summary */
+.trustGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.trustFeature {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: rgb(var(--tint) / 0.025);
+}
+
+.trustFeature > svg {
+  margin-top: 2px;
+}
+
+.trustFeature > div {
+  min-width: 0;
+}
+
+.trustFeature h3 {
+  margin: 0;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.trustFeature p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .trustGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Banners */
 .banner {
   padding: 12px 14px;

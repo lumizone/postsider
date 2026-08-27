@@ -119,6 +119,26 @@ const pl = {
         tagline: "Plan wewnętrzny",
       },
     },
+    trust: {
+      title: "Narzędzia bezpieczeństwa w standardzie",
+      subtitle: "Praktyczne mechanizmy ochrony kont i treści dostępne z poziomu workspace'u.",
+      mfa: {
+        title: "Opcjonalne uwierzytelnianie dwuskładnikowe",
+        body: "Skonfiguruj aplikację uwierzytelniającą i kody odzyskiwania. Superadmin może wymagać go w całym workspace'ie.",
+      },
+      encryptedCredentials: {
+        title: "Szyfrowane podłączone konta",
+        body: "Dane OAuth podłączonych kanałów są szyfrowane podczas przechowywania.",
+      },
+      recoveryCodes: {
+        title: "Kody odzyskiwania",
+        body: "Zachowaj jednorazowe kody odzyskiwania, aby odzyskać dostęp po utracie urządzenia.",
+      },
+      securityAuditLog: {
+        title: "Ślad aktywności bezpieczeństwa",
+        body: "Wrażliwe działania na koncie i w organizacji są rejestrowane dla pełnej identyfikowalności.",
+      },
+    },
     features: {
       channels: "{count} kanałów",
       posts: "{count} postów miesięcznie",
