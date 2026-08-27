@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AuthShell } from './auth-shell';
 import styles from './auth.module.css';
@@ -73,40 +74,39 @@ export function MfaEnrollmentForm() {
     <AuthShell
       title={t('security.mfaTitle')}
       subtitle={t('security.mfaSubtitle')}
+      footer={<Link href="/login">{t('auth.backToSignIn')}</Link>}
     >
       {error && <div className={styles.error} role="alert">{error}</div>}
       {loading ? (
-        <p>{t('common.loading')}</p>
+        <p className={styles.notice}>{t('common.loading')}</p>
       ) : recoveryCodes ? (
         <div className={styles.form}>
-          <strong>{t('security.mfaRecoveryTitle')}</strong>
-          <p>{t('security.mfaRecoveryHint')}</p>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-              gap: 8,
-            }}
-          >
-            {recoveryCodes.map((recoveryCode) => (
-              <code key={recoveryCode}>{recoveryCode}</code>
-            ))}
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            <button
-              type="button"
-              className={styles.submit}
-              onClick={() => exportCodes(() => printRecoveryCodes(recoveryCodes))}
-            >
-              {t('security.mfaRecoveryPrint')}
-            </button>
-            <button
-              type="button"
-              className={styles.submit}
-              onClick={() => exportCodes(() => downloadRecoveryCodes(recoveryCodes))}
-            >
-              {t('security.mfaRecoveryDownload')}
-            </button>
+          <div className={styles.codeBlock}>
+            <strong>{t('security.mfaRecoveryTitle')}</strong>
+            <p className={styles.notice}>{t('security.mfaRecoveryHint')}</p>
+            <div className={styles.codeGrid}>
+              {recoveryCodes.map((recoveryCode) => (
+                <code key={recoveryCode} className={styles.code}>
+                  {recoveryCode}
+                </code>
+              ))}
+            </div>
+            <div className={styles.btnRow}>
+              <button
+                type="button"
+                className={styles.submitSecondary}
+                onClick={() => exportCodes(() => printRecoveryCodes(recoveryCodes))}
+              >
+                {t('security.mfaRecoveryPrint')}
+              </button>
+              <button
+                type="button"
+                className={styles.submitSecondary}
+                onClick={() => exportCodes(() => downloadRecoveryCodes(recoveryCodes))}
+              >
+                {t('security.mfaRecoveryDownload')}
+              </button>
+            </div>
           </div>
           <button type="button" className={styles.submit} onClick={continueToCalendar}>
             {t('auth.mfaContinue')}
@@ -114,17 +114,17 @@ export function MfaEnrollmentForm() {
         </div>
       ) : enrollment ? (
         <>
-          <p>{t('security.mfaScanHint')}</p>
+          <p className={styles.notice}>{t('security.mfaScanHint')}</p>
           <img
             src={enrollment.qrCodeDataUrl}
             alt={t('security.mfaQrAlt')}
             width={180}
             height={180}
-            style={{ display: 'block', margin: '0 auto 20px', borderRadius: 8, background: 'white', padding: 8 }}
+            style={{ display: 'block', margin: '16px auto 20px', borderRadius: 8, background: '#ffffff', padding: 8 }}
           />
           <div className={styles.field}>
             <span className={styles.label}>{t('security.mfaManualKey')}</span>
-            <code style={{ overflowWrap: 'anywhere' }}>{enrollment.manualKey}</code>
+            <code className={styles.code}>{enrollment.manualKey}</code>
           </div>
           <form className={styles.form} onSubmit={confirm}>
             <div className={styles.field}>

@@ -183,6 +183,58 @@
   color: var(--muted);
 }
 
+/*
+ * Two-factor enrollment: the recovery codes and their export actions.
+ * Everything below is token-only (no literal colors), so light and dark come
+ * out of the same rules — the QR image is the single deliberate exception,
+ * because a scanner needs a white quiet zone in either theme.
+ */
+.codeBlock {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  background: rgb(var(--tint) / 0.04);
+}
+
+.codeGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.code {
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-soft);
+  background: var(--bg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.btnRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* Same metrics as .submit, outlined — a secondary action beside a primary. */
+.submitSecondary {
+  composes: submit;
+  flex: 1 1 auto;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--line);
+}
+
+.submitSecondary:hover {
+  background: var(--fg);
+  color: var(--bg);
+}
+
 .divider {
   display: flex;
   align-items: center;
