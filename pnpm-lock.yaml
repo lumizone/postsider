@@ -295,8 +295,8 @@ importers:
         specifier: ^3.2.0
         version: 3.2.0
       subtitle:
-        specifier: 4.2.2-alpha.0
-        version: 4.2.2-alpha.0
+        specifier: 4.2.2
+        version: 4.2.2
       tldts:
         specifier: ^6.1.47
         version: 6.1.86
@@ -3339,9 +3339,6 @@ packages:
   '@types/react@19.0.7':
     resolution: {integrity: sha512-MoFsEJKkAtZCrC1r6CM8U22GzhG7u2Wir8ons/aCKH6MBdD1ibV24zOSSkdZVUKqN5i396zG5VKLYZ3yaUZdLA==}
 
-  '@types/readable-stream@4.0.23':
-    resolution: {integrity: sha512-wwXrtQvbMHxCbBgjHaMGEmImFTQxxpfMOR/ZoQnXxB1woqkUbdLGFDgauo00Py9IudiaqSeiBiulSV9i6XIPig==}
-
   '@types/redis@2.8.32':
     resolution: {integrity: sha512-7jkMKxcGq9p242exlbsVzuJb57KqHRhNl4dHoQu2Y5v9bCAbtIXXH0R3HleSQW4CTOqpHIYUW3t6tpUj4BVQ+w==}
 
@@ -4194,6 +4191,7 @@ packages:
 
   crypto-js@4.2.0:
     resolution: {integrity: sha512-KALDyEYgpY+Rlob/iriUtjV6d5Eq+Y191A5g4UqLAi8CyGP9N1+FdVbkc1SxKc2r4YAYqG8JzO2KGL+AizD70Q==}
+    deprecated: Active development of CryptoJS has been discontinued. This library is no longer maintained.
 
   css-tree@3.2.1:
     resolution: {integrity: sha512-X7sjQzceUhu1u7Y/ylrRZFU2FS6LRiFVp6rKLPg23y3x3c3DOKAwuXGDp+PAGjh6CSnCjYeAul8pcT8bAl+lSA==}
@@ -7058,8 +7056,8 @@ packages:
       babel-plugin-macros:
         optional: true
 
-  subtitle@4.2.2-alpha.0:
-    resolution: {integrity: sha512-IMS+L8lXjOLveg5BC/bVZy+36/x2NqMIQmVDhbquDpxLnXugzmz7/yHHFZ7b9YLfqNaBdXwh1lsnAds3g1FnCQ==}
+  subtitle@4.2.2:
+    resolution: {integrity: sha512-vCyKEcCFNXJJ3TE7iP6uqyTG/9xlhhWvJ/LGzmt2YGkEG+PUeIaU0443TMSRbs8yQean2gqGMW8O5CtgJKIlWg==}
     engines: {node: '>=10'}
 
   sucrase@3.35.1:
@@ -10778,7 +10776,7 @@ snapshots:
     dependencies:
       '@types/http-cache-semantics': 4.2.0
       '@types/keyv': 3.1.4
-      '@types/node': 22.20.0
+      '@types/node': 18.16.9
       '@types/responselike': 1.0.3
 
   '@types/caseless@0.12.5': {}
@@ -10926,10 +10924,6 @@ snapshots:
     dependencies:
       csstype: 3.2.3
 
-  '@types/readable-stream@4.0.23':
-    dependencies:
-      '@types/node': 22.20.0
-
   '@types/redis@2.8.32':
     dependencies:
       '@types/node': 22.20.0
@@ -10945,7 +10939,7 @@ snapshots:
 
   '@types/responselike@1.0.3':
     dependencies:
-      '@types/node': 22.20.0
+      '@types/node': 18.16.9
 
   '@types/send@1.2.1':
     dependencies:
@@ -13533,7 +13527,7 @@ snapshots:
     dependencies:
       '@jest/types': 29.6.3
       '@types/graceful-fs': 4.1.9
-      '@types/node': 22.20.0
+      '@types/node': 18.16.9
       anymatch: 3.1.3
       fb-watchman: 2.0.2
       graceful-fs: 4.2.11
@@ -15348,12 +15342,10 @@ snapshots:
       '@babel/core': 7.29.7
       babel-plugin-macros: 3.1.0
 
-  subtitle@4.2.2-alpha.0:
+  subtitle@4.2.2:
     dependencies:
       '@types/multipipe': 3.0.5
-      '@types/readable-stream': 4.0.23
       multipipe: 4.0.0
-      readable-stream: 4.7.0
       split2: 3.2.2
       strip-bom: 4.0.0
 
