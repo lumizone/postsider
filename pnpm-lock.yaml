@@ -319,8 +319,8 @@ importers:
         specifier: ^5.0.10
         version: 5.0.10
       uuid:
-        specifier: ^11.1.1
-        version: 11.1.1
+        specifier: ^14.0.2
+        version: 14.0.2
       ws:
         specifier: '>=8.21.0 <9'
         version: 8.21.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
@@ -7571,6 +7571,10 @@ packages:
 
   uuid@11.1.1:
     resolution: {integrity: sha512-vIYxrBCC/N/K+Js3qSN88go7kIfNPssr/hHCesKCQNAjmgvYS2oqr69kIufEG+O4+PfezOH4EbIeHCfFov8ZgQ==}
+    hasBin: true
+
+  uuid@14.0.2:
+    resolution: {integrity: sha512-xZe/16rV4aa+HGSOCiY2YeLT1OybRLrrkL/Rqaq7p7GMVXjFh+6wN4oMYgjFmnSnhY8t6Xpdl2l9qmnHYuMHwQ==}
     hasBin: true
 
   uuid@3.4.0:
@@ -15904,6 +15908,8 @@ snapshots:
   util-deprecate@1.0.2: {}
 
   uuid@11.1.1: {}
+
+  uuid@14.0.2: {}
 
   uuid@3.4.0: {}
 
