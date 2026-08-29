@@ -17,6 +17,7 @@
   <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.5-black?logo=typescript&logoColor=white" alt="TypeScript" /></a>
   <a href="#self-hosting"><img src="https://img.shields.io/badge/self--hosted-Docker-black?logo=docker&logoColor=white" alt="Self-hosted with Docker" /></a>
   <a href="apps/mcp/README.md"><img src="https://img.shields.io/badge/MCP-ready-black" alt="MCP ready" /></a>
+  <a href="https://docs.postsider.com"><img src="https://img.shields.io/badge/docs-postsider.com-black" alt="Documentation" /></a>
 </p>
 
 <p align="center">
@@ -208,7 +209,10 @@ postsider/
 
 ## Configuration
 
-All configuration lives in environment variables. See [`.env.example`](.env.example) for the full reference.
+All configuration lives in environment variables. See [`.env.example`](.env.example)
+for the full reference, and
+[docs.postsider.com/configuration/environment](https://docs.postsider.com/configuration/environment)
+for the annotated version.
 
 ### Required variables
 
@@ -235,11 +239,18 @@ CLOUDFLARE_BUCKET_URL=...
 
 ### Social platform API keys
 
-Each platform requires its own OAuth credentials. Refer to `.env.example` for the full list. You only need to configure the platforms you plan to use.
+Each platform requires its own OAuth credentials, registered in that provider's
+developer portal. `.env.example` lists every variable, and
+[docs.postsider.com/channels/overview](https://docs.postsider.com/channels/overview)
+walks through the per-platform setup. You only need to configure the platforms
+you plan to use.
 
 ---
 
 ## Self-Hosting
+
+Operational guide with domain, TLS and backup notes:
+[docs.postsider.com/self-hosting](https://docs.postsider.com/self-hosting).
 
 ### Docker Compose (production)
 
@@ -394,7 +405,9 @@ pnpm --filter @postsider/mcp build
 Then point your agent at `apps/mcp/dist/index.js` with `POSTSIDER_API_KEY` (and
 `POSTSIDER_API_URL` for a self-hosted instance). See
 [`apps/mcp/README.md`](apps/mcp/README.md) for client config snippets and the
-full tool list.
+full tool list, or
+[docs.postsider.com/agent/mcp/overview](https://docs.postsider.com/agent/mcp/overview)
+for the hosted walkthrough.
 
 ---
 
