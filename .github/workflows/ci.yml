@@ -32,17 +32,17 @@ jobs:
           --health-cmd "redis-cli ping"
           --health-interval 10s --health-timeout 5s --health-retries 5
     env:
-      DATABASE_URL: postgresql://postsider:postsider@localhost:5432/postsider_test
+      DATABASE_URL: postgresql://postsider:***@localhost:5432/postsider_test
       REDIS_URL: redis://localhost:6379
       JWT_SECRET: ci-test-secret-not-for-production
       NEXT_PUBLIC_BACKEND_URL: http://localhost:3000
       NEXT_PUBLIC_SELF_HOSTED: "true"
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 10.6.1
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "20"
           cache: pnpm
@@ -59,8 +59,10 @@ jobs:
       - name: Build frontend
         run: pnpm --filter ./apps/frontend run build
       - name: Tests
+        timeout-minutes: 15
         run: pnpm test
       - name: MCP server tests
+        timeout-minutes: 10
         run: NODE_OPTIONS=--experimental-vm-modules pnpm exec jest -c apps/mcp/jest.config.cjs
       - name: SDK build
         run: pnpm run build:sdk
@@ -75,11 +77,11 @@ jobs:
     # transitive items are tracked in SECURITY.md and pinned in pnpm-workspace).
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 10.6.1
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "20"
           cache: pnpm

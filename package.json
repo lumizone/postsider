@@ -1,10 +1,25 @@
 {
   "name": "postsider",
-  "version": "1.0.0",
-  "description": "PostSider - open-source social media scheduler for 40+ platforms (backend monorepo)",
+  "version": "1.1.0",
+  "description": "PostSider - open-source social media scheduler for 30+ platforms (backend monorepo)",
   "main": "index.js",
   "license": "AGPL-3.0",
-  "keywords": [],
+  "homepage": "https://postsider.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lumizone/postsider.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lumizone/postsider/issues"
+  },
+  "keywords": [
+    "social-media",
+    "scheduler",
+    "self-hosted",
+    "mcp",
+    "nestjs",
+    "nextjs"
+  ],
   "author": "Lumi Zone Łukasz Blania <lukasz@postsider.com>",
   "engines": {
     "node": ">=20.17.0 <23.0.0"
@@ -36,7 +51,8 @@
     "prisma-migrate-status": "pnpm dlx prisma@6.5.0 migrate status --schema ./libraries/nestjs-libraries/src/database/prisma/schema.prisma",
     "prisma-reset": "cd ./libraries/nestjs-libraries/src/database/prisma && pnpm dlx prisma@6.5.0 db push --force-reset && pnpx prisma@6.5.0 db push",
     "postinstall": "pnpm run prisma-generate",
-    "test": "jest --coverage --detectOpenHandles --reporters=default --reporters=jest-junit"
+    "test": "jest --coverage --reporters=default --reporters=jest-junit --forceExit",
+    "test:handles": "jest --runInBand --detectOpenHandles"
   },
   "dependencies": {
     "@atproto/api": "^0.15.15",
