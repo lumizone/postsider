@@ -162,7 +162,7 @@
     "@nestjs/testing": "^11.1.21",
     "@swc-node/register": "1.9.2",
     "@swc/cli": "0.3.14",
-    "@swc/core": "1.5.7",
+    "@swc/core": "1.16.1",
     "@types/cache-manager-redis-store": "^2.0.4",
     "@types/compression": "^1.8.1",
     "@types/cookie-parser": "^1.4.6",
