@@ -136,9 +136,6 @@ COPY --chown=postsider:postsider var/docker/nginx.conf /etc/nginx/nginx.conf
 # Prisma migrations (for prisma migrate deploy)
 COPY --from=builder --chown=postsider:postsider /build/libraries/nestjs-libraries/src/database/prisma/migrations ./libraries/nestjs-libraries/src/database/prisma/migrations
 
-# Scripts
-COPY --from=builder --chown=postsider:postsider /build/scripts ./scripts
-
 # pm2 process definitions (starts each app as `node` directly — see the file)
 COPY --from=builder --chown=postsider:postsider /build/ecosystem.config.js ./ecosystem.config.js
 
