@@ -5,14 +5,24 @@
 <h1 align="center">PostSider</h1>
 
 <p align="center">
-  Open-source social media scheduling for 40+ platforms.<br/>
+  Open-source social media scheduling for 30+ platforms.<br/>
   Plan, compose, and publish from one calendar, with a public API and SDK for automation
   and an optional AI assist for checking and rewriting captions.
 </p>
 
 <p align="center">
+  <a href="https://github.com/lumizone/postsider/actions/workflows/ci.yml"><img src="https://github.com/lumizone/postsider/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/lumizone/postsider/releases"><img src="https://img.shields.io/github/v/release/lumizone/postsider?color=black" alt="Latest release" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-black" alt="License: AGPL-3.0" /></a>
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.5-black?logo=typescript&logoColor=white" alt="TypeScript" /></a>
+  <a href="#self-hosting"><img src="https://img.shields.io/badge/self--hosted-Docker-black?logo=docker&logoColor=white" alt="Self-hosted with Docker" /></a>
+  <a href="apps/mcp/README.md"><img src="https://img.shields.io/badge/MCP-ready-black" alt="MCP ready" /></a>
+</p>
+
+<p align="center">
   <a href="#quick-start">Quick Start</a> &middot;
   <a href="#features">Features</a> &middot;
+  <a href="#supported-platforms">Platforms</a> &middot;
   <a href="#architecture">Architecture</a> &middot;
   <a href="#self-hosting">Self-Hosting</a> &middot;
   <a href="#contributing">Contributing</a> &middot;
@@ -30,7 +40,7 @@
 - **Evergreen** recycling for content you want to repost on a cadence
 - **Per-platform preview** and per-platform validation before you publish
 - **First comment** posted automatically for platforms that support it
-- **40+ connectors**: X, LinkedIn, Facebook, Instagram, YouTube, TikTok, Threads, Bluesky, Mastodon, Reddit, Discord, Slack, Telegram, Pinterest, and many more
+- **33 built-in connectors** across social, chat and blogging platforms, all in one calendar ([full list](#supported-platforms))
 
 **Composer**
 
@@ -66,6 +76,28 @@
 
 ---
 
+## Supported platforms
+
+33 connectors ship in the box. Each one is a self-contained provider class in
+[`libraries/nestjs-libraries/src/integrations/social/`](libraries/nestjs-libraries/src/integrations/social/),
+so the list below is exactly what the code registers, nothing aspirational.
+
+| Category | Platforms |
+|----------|-----------|
+| **Social** | X, LinkedIn (profiles), LinkedIn (pages), Facebook, Instagram (via Facebook), Instagram (standalone login), Threads, YouTube, TikTok, Pinterest, Bluesky, Mastodon, Nostr, Farcaster, Lemmy, Twitch, Dribbble, Google Business Profile, Whop, Moltbook |
+| **Chat** | Discord, Slack, Telegram |
+| **Blogs and newsletters** | Dev.to, Hashnode, Medium, WordPress, Ghost, Blogger, Mataroa, Write.as, Notion, Listmonk |
+
+You only configure OAuth credentials for the platforms you actually use, see
+[`.env.example`](.env.example). Mastodon supports custom instances through the
+standard Mastodon connector.
+
+Adding a platform means adding one provider class that extends `SocialAbstract`
+and implements `SocialProvider`, then registering it in `integration.manager.ts`.
+New connectors are the most welcome kind of pull request.
+
+---
+
 ## Quick Start
 
 ### Prerequisites
@@ -84,7 +116,18 @@ cd postsider
 docker compose up -d
 ```
 
-Open the app in your browser. On first launch, create your admin account through the bootstrap flow.
+This pulls the published image `ghcr.io/lumizone/postsider-app:latest`, brings up
+Postgres, Redis and Temporal alongside it, and applies database migrations on
+startup. The app is served on **http://localhost:4007**.
+
+Create the first admin account, then sign in (see [First login](#first-login)):
+
+```bash
+docker exec -it postsider pnpm bootstrap
+```
+
+To build the image from source instead of pulling it, replace the `image:` line
+for the `postsider` service in `docker-compose.yaml` with `build: .`.
 
 ### Option B: Local development
 
@@ -384,9 +427,9 @@ Contributions are welcome. Here is how to get started:
 
 ## Roadmap
 
+- [x] GitHub Actions CI (build, tests and dependency audit on every push and PR)
 - [ ] Broaden test coverage for core flows (auth, posts, integrations)
 - [ ] Enable `strictNullChecks` across the codebase
-- [ ] GitHub Actions CI (lint + typecheck + build)
 - [ ] Mobile app (React Native)
 - [ ] Plugin system for custom integrations
 - [ ] Advanced analytics dashboard
