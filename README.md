@@ -21,6 +21,10 @@
 </p>
 
 <p align="center">
+  <img src=".github/assets/social-preview.png" alt="PostSider — social media scheduling you can self-host, and agents can drive" width="720" />
+</p>
+
+<p align="center">
   <a href="#quick-start">Quick Start</a> &middot;
   <a href="#features">Features</a> &middot;
   <a href="#supported-platforms">Platforms</a> &middot;
