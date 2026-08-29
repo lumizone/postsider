@@ -12,6 +12,9 @@ const config: Config = {
   testEnvironment: 'node',
   rootDir: '.',
   roots: ['<rootDir>/apps', '<rootDir>/libraries'],
+  // Runs before the modules under test are imported: pins the unit run to the
+  // in-memory MockRedis regardless of a REDIS_URL in the environment.
+  setupFiles: ['<rootDir>/jest.setup.unit.ts'],
   testMatch: ['**/*.spec.ts'],
   // apps/mcp ships ESM tests run via apps/mcp/jest.config.cjs (and the CI
   // "MCP server tests" step); exclude them from this CommonJS root run.
