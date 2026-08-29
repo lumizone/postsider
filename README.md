@@ -428,6 +428,7 @@ Contributions are welcome. Here is how to get started:
 ## Roadmap
 
 - [x] GitHub Actions CI (build, tests and dependency audit on every push and PR)
+- [x] Runtime image published to GHCR on every tagged release
 - [ ] Broaden test coverage for core flows (auth, posts, integrations)
 - [ ] Enable `strictNullChecks` across the codebase
 - [ ] Mobile app (React Native)

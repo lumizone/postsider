@@ -1,6 +1,6 @@
 services:
   postsider:
-    image: ghcr.io/postsider/postsider-app:latest
+    image: ghcr.io/lumizone/postsider-app:latest
     container_name: postsider
     restart: always
     environment:
