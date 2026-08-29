@@ -142,7 +142,7 @@
     "sharp": "^0.35.4",
     "slugify": "^1.6.6",
     "striptags": "^3.2.0",
-    "subtitle": "4.2.2-alpha.0",
+    "subtitle": "4.2.2",
     "tldts": "^6.1.47",
     "transloadit": "^3.0.2",
     "tslib": "^2.3.0",
