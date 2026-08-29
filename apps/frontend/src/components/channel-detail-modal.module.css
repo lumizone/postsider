@@ -1,0 +1,301 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--scrim);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: fadeIn 160ms var(--ease);
+}
+
+.modal {
+  width: min(440px, 100%);
+  background: var(--bg);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--line-soft);
+  padding: 22px 22px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: 0 30px 80px rgb(var(--shadow) / calc(0.18 * var(--shadow-boost)));
+  animation: scaleIn 180ms var(--ease);
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.identityText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.name {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.platform {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+
+.closeBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-soft);
+  background: var(--bg);
+  color: var(--fg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 140ms var(--ease), transform 120ms var(--ease);
+}
+
+.closeBtn:hover {
+  background: rgb(var(--tint) / 0.05);
+}
+
+.closeBtn:active {
+  transform: scale(0.94);
+}
+
+.closeBtn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.meta {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.metaRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.metaRow:last-child {
+  border-bottom: none;
+}
+
+.metaLabel {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  margin: 0;
+}
+
+.metaValue {
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  background: rgb(var(--tint) / 0.04);
+  padding: 3px 8px;
+  border-radius: 6px;
+  letter-spacing: 0;
+}
+
+.iconBtn {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  transition: background 140ms var(--ease), transform 120ms var(--ease);
+}
+
+.iconBtn:hover {
+  background: rgb(var(--tint) / 0.06);
+}
+
+.iconBtn:active {
+  transform: scale(0.94);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sectionLabel {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.swatch {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-pill);
+  padding: 0;
+  border: 2px solid transparent;
+  /* Palette entries are fixed colours (they get stored on the channel), so the
+   * near-black "Ink" swatch would be invisible against the dark modal and the
+   * light end would be invisible in light mode. The hairline edges them all. */
+  box-shadow: inset 0 0 0 1px rgb(var(--tint) / 0.22);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  position: relative;
+  transition: transform 140ms var(--ease), border-color 140ms var(--ease);
+}
+
+.swatch:hover {
+  transform: scale(1.08);
+}
+
+.swatch:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+}
+
+.swatchActive {
+  border-color: var(--fg);
+}
+
+.swatchCheck svg {
+  width: 14px;
+  height: 14px;
+  stroke: #fff;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 14px;
+}
+
+.btnPrimary {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--fg);
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: opacity 140ms var(--ease), transform 120ms var(--ease);
+}
+
+.btnPrimary:hover {
+  opacity: 0.86;
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.btnPrimary:active {
+  transform: scale(0.97);
+}
+
+.btnDanger {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: background 140ms var(--ease), color 140ms var(--ease),
+    transform 120ms var(--ease);
+}
+
+.btnDanger:hover {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.btnDanger:active {
+  transform: scale(0.97);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}

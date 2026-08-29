@@ -1,0 +1,388 @@
+/* PostSider UI — strict black & white, Apple-inspired premium feel */
+
+/*
+ * Theming
+ * ───────
+ * Two surfaces, one tint channel.
+ *
+ *   --page     the page ground (only <body> paints it)
+ *   --bg       every panel, card, input, modal — one step above the page
+ *   --tint     the RGB channel of every translucent overlay in the app,
+ *              written as rgb(var(--tint) / α). Light mode tints with black,
+ *              dark mode with white, so one α keeps the same relative weight
+ *              in both themes. Never write a literal rgba(0, 0, 0, α) again.
+ *   --shadow   shadows stay black in both themes (light does not fall upward);
+ *              dark multiplies their alpha by --shadow-boost, because a soft
+ *              black blur is nearly invisible on a dark ground.
+ *   --scrim    modal backdrops: black in both themes, by design.
+ *
+ * In light mode --page and --bg are the same white, so the token split is
+ * invisible; in dark mode it is what separates a card from the page.
+ *
+ * The active theme is an explicit data-theme="light|dark" on <html>, written
+ * before first paint by the inline script in layout.tsx. "System" is resolved
+ * to one of those two by that script (and kept in sync with the OS), so no
+ * rule here needs prefers-color-scheme.
+ */
+
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+
+  --page: #ffffff;
+  --bg: #ffffff;
+  --fg: #000000;
+  --line: #000000;
+  --tint: 0 0 0;
+  --shadow: 0 0 0;
+  --shadow-boost: 1;
+  --scrim: rgb(0 0 0 / 0.5);
+  /* Foreground of anything painted in --fg (inverted pills, active rows).
+   * --on-fg-rgb is the same ink as a tint channel, for the translucent
+   * secondary text that sits on those inverted surfaces. */
+  --on-fg: #ffffff;
+  --on-fg-rgb: 255 255 255;
+
+  /* The one non-neutral accent in the UI (primary analytics card). */
+  --accent: #8b5cf6;
+
+  /* Hover elevation. The design lifts cards with a soft black shadow, which
+   * simply does not exist on a dark ground — and several of those rules also
+   * drop the border, so hovering in dark would make an element LESS defined.
+   * Light keeps the shadow alone (this ring is transparent, so nothing
+   * changes); dark adds the ring that carries the affordance instead. */
+  --lift-ring: transparent;
+
+  /* Status colors. *-soft is the tinted background behind them. */
+  --danger: #c0392b;
+  --danger-strong: #b91c1c;
+  --danger-bright: #dc2626;
+  --danger-soft: rgb(192 57 43 / 0.08);
+  --warning: #b45309;
+  --warning-bright: #d97706;
+  --warning-soft: rgb(245 158 11 / 0.1);
+  --success: #15803d;
+  --success-soft: rgb(21 128 61 / 0.1);
+  --info: #2563eb;
+  --info-soft: rgb(37 99 235 / 0.08);
+
+  --line-soft: rgb(var(--tint) / 0.08);
+  --muted: rgb(var(--tint) / 0.55);
+  --hover: rgb(var(--tint) / 0.04);
+  --hover-strong: rgb(var(--tint) / 0.08);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 28px;
+  --radius-pill: 999px;
+
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --page: #08080a;
+  --bg: #141416;
+  --fg: #f2f2f3;
+  /* Not pure --fg: a hairline at full white reads as a glowing edge. */
+  --line: rgb(255 255 255 / 0.82);
+  --tint: 255 255 255;
+  --shadow: 0 0 0;
+  --shadow-boost: 2.2;
+  --scrim: rgb(0 0 0 / 0.66);
+  --on-fg: #08080a;
+  --on-fg-rgb: 8 8 10;
+
+  --accent: #a78bfa;
+  --lift-ring: rgb(255 255 255 / 0.16);
+
+  /* Lifted for legibility on a dark ground — the light-mode inks fail
+   * contrast at these sizes. */
+  --danger: #ff7a6b;
+  --danger-strong: #ff9c90;
+  --danger-bright: #ff6b5e;
+  --danger-soft: rgb(255 122 107 / 0.14);
+  --warning: #f5b544;
+  --warning-bright: #fbbf24;
+  --warning-soft: rgb(245 181 68 / 0.14);
+  --success: #4ade80;
+  --success-soft: rgb(74 222 128 / 0.14);
+  --info: #7aa2ff;
+  --info-soft: rgb(122 162 255 / 0.14);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* ── Native form controls, branded ───────────────────────────────────────────
+ * Everything the browser would otherwise render in its own (blue/gray) theme:
+ * check/radio ticks, text selection, carets, placeholders, autofill, native
+ * search/number/date chrome. Keeps the strict B&W look without per-module
+ * repetition; modules may still override locally. */
+
+:root {
+  accent-color: var(--fg);
+}
+
+::selection {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+input,
+textarea,
+select {
+  caret-color: var(--fg);
+}
+
+::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+/* Chrome/Safari autofill paints a yellow/blue fill — repaint it ours. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--bg) inset;
+  -webkit-text-fill-color: var(--fg);
+  caret-color: var(--fg);
+}
+
+/* Search fields: drop the native WebKit decorations and cancel button. */
+input[type="search"]::-webkit-search-decoration,
+input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+
+/* Number fields: plain textfield, no native spinners. */
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Date/time fields: mute the native picker glyph into the B&W scale. */
+::-webkit-calendar-picker-indicator {
+  filter: grayscale(1);
+  opacity: 0.55;
+  cursor: pointer;
+}
+::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+/* The glyph is a dark bitmap the browser supplies; grayscale alone leaves it
+ * black-on-black in dark mode, so invert it back to light. */
+[data-theme="dark"] ::-webkit-calendar-picker-indicator {
+  filter: grayscale(1) invert(1);
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  /* The page ground; panels paint --bg on top of it (see the theming note). */
+  background: var(--page);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/*
+ * Default styling for plain <button> elements that aren't styled by a CSS
+ * module. Components are responsible for their own button look — anything
+ * with a class attribute opts out of these defaults.
+ */
+button:not([class]) {
+  font: inherit;
+  letter-spacing: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background 160ms var(--ease), color 160ms var(--ease),
+    transform 120ms var(--ease);
+}
+
+button:not([class]):hover {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+button:not([class]):active {
+  transform: scale(0.97);
+}
+
+button:not([class]):disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+button:not([class]):disabled:hover {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+button:not([class]):focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+}
+
+/* Bare reset for any <button> with classes, so component styles win without
+ * fighting global hover/transition rules. */
+button[class] {
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+/* Brand keyboard-focus ring for classed buttons too (modules rarely define
+ * their own); :focus-visible keeps mouse clicks ring-free. */
+button[class]:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.brand {
+  font-family: var(--font-brand);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+/*
+ * Logos are theme-independent by product decision: the PostSider mark and an
+ * organisation's uploaded logo render exactly the same in light and dark. No
+ * inversion, no swapped dark asset, no plate — what you upload is what shows,
+ * everywhere. (A dark monochrome logo on a transparent background will be hard
+ * to see on the dark sidebar; that is the owner's call to make in
+ * Settings → Organization, not something the app second-guesses.)
+ */
+
+/*
+ * iOS Safari zooms the whole viewport when a focused field renders under 16px,
+ * and the zoom does not spring back. Individual components had been fixing
+ * this one control at a time (posts search, auth forms), leaving the calendar
+ * search, CSV import, agency range, organization, team role, queue plan and
+ * evergreen fields still zooming. Scoped to phones on purpose: an earlier
+ * unconditional bump changed desktop typography.
+ */
+@media (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/*
+ * Phone touch targets. The segmented controls across the app (calendar
+ * day/week/month/year, media type, analytics range, posts status, composer
+ * write modes) are 28-30px tall, which is fine for a mouse and below the
+ * comfortable target size on a phone. Raised here rather than in each of the
+ * six modules, keyed on the role they already carry.
+ */
+@media (max-width: 768px) {
+  [role="tab"] {
+    min-height: 36px;
+  }
+}
+
+/* Native checkboxes render ~13px, well under a comfortable thumb target. */
+@media (max-width: 768px) {
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 18px;
+    min-width: 18px;
+    height: 18px;
+  }
+}
+
+/* Language switcher: small on desktop, 16px on phones (see the rule above). */
+.lang-select {
+  font-size: 12px;
+}
+
+@media (max-width: 768px) {
+  .lang-select {
+    font-size: 16px;
+  }
+}
+
+/*
+ * Theme toggle. On its own (the mobile topbar) it stays a comfortable touch
+ * target. Beside the language select in the sidebar footer it must read as
+ * that select's twin, so it takes the select's exact height instead of its
+ * own: 26px from 12px type plus 5px padding and a 1px border, and 29px on
+ * phones where .lang-select above bumps to 16px. Measured, not guessed.
+ */
+.theme-toggle {
+  min-height: 32px;
+}
+
+.lang-theme-row .theme-toggle {
+  min-height: 0;
+  height: 26px;
+}
+
+/*
+ * Mobile topbar: the toggle sits right next to the notifications bell, which is
+ * a 44x44 square with --radius-md. A pill of a different size beside it reads as
+ * a mistake, so the topbar copy takes the bell's exact box. !important because
+ * the component's own box is inline styles, which a class cannot otherwise win
+ * against. The sidebar-footer copy (.lang-theme-row) is untouched.
+ */
+.theme-toggle-topbar {
+  width: 44px !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  padding: 0 !important;
+  border-radius: var(--radius-md) !important;
+  justify-content: center;
+  align-self: center !important;
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .lang-theme-row .theme-toggle {
+    height: 29px;
+  }
+}

@@ -1,0 +1,304 @@
+import {
+  AuthTokenDetails,
+  PostDetails,
+  PostResponse,
+  SocialProvider,
+} from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import { makeId } from '@postsider/nestjs-libraries/services/make.is';
+import { SocialAbstract } from '@postsider/nestjs-libraries/integrations/social.abstract';
+import { ssrfSafeDispatcher } from '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
+import dayjs from 'dayjs';
+import { Integration } from '@prisma/client';
+import { number, string } from 'yup';
+
+export class MastodonProvider extends SocialAbstract implements SocialProvider {
+  override maxConcurrentJob = 5; // Mastodon instances typically have generous limits
+  identifier = 'mastodon';
+  name = 'Mastodon';
+  isBetweenSteps = false;
+  scopes = ['write:statuses', 'profile', 'write:media'];
+  editor = 'normal' as const;
+  maxLength() {
+    return 500;
+  }
+
+  override handleErrors(
+    body: string,
+    status: number
+  ):
+    | { type: 'refresh-token' | 'bad-body' | 'retry'; value: string }
+    | undefined {
+    if (body.includes('Your login is currently disabled')) {
+      return {
+        type: 'refresh-token',
+        value: 'Your login is currently disabled',
+      };
+    }
+
+    return undefined;
+  }
+
+  async refreshToken(refreshToken: string): Promise<AuthTokenDetails> {
+    return {
+      refreshToken: '',
+      expiresIn: 0,
+      accessToken: '',
+      id: '',
+      name: '',
+      picture: '',
+      username: '',
+    };
+  }
+  protected generateUrlDynamic(
+    customUrl: string,
+    state: string,
+    clientId: string,
+    url: string
+  ) {
+    return `${customUrl}/oauth/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(
+      `${url}/integrations/social/mastodon`
+    )}&scope=${this.scopes.join('+')}&state=${state}`;
+  }
+
+  protected instanceRequestOptions(): RequestInit {
+    return {};
+  }
+
+  async generateAuthUrl() {
+    const state = makeId(6);
+    const url = this.generateUrlDynamic(
+      process.env.MASTODON_URL || 'https://mastodon.social',
+      state,
+      process.env.MASTODON_CLIENT_ID!,
+      process.env.FRONTEND_URL!
+    );
+    return {
+      url,
+      codeVerifier: makeId(10),
+      state,
+    };
+  }
+
+  protected async dynamicAuthenticate(
+    clientId: string,
+    clientSecret: string,
+    url: string,
+    code: string
+  ) {
+    const form = new FormData();
+    form.append('client_id', clientId);
+    form.append('client_secret', clientSecret);
+    form.append('code', code);
+    form.append('grant_type', 'authorization_code');
+    form.append(
+      'redirect_uri',
+      `${process.env.FRONTEND_URL}/integrations/social/mastodon`
+    );
+    form.append('scope', this.scopes.join(' '));
+
+    const tokenInformation = await (
+      await this.fetch(`${url}/oauth/token`, {
+        method: 'POST',
+        body: form,
+        ...this.instanceRequestOptions(),
+      })
+    ).json();
+
+    const personalInformation = await (
+      await this.fetch(`${url}/api/v1/accounts/verify_credentials`, {
+        headers: {
+          Authorization: `Bearer ${tokenInformation.access_token}`,
+        },
+        ...this.instanceRequestOptions(),
+      })
+    ).json();
+
+    return {
+      id: personalInformation.id,
+      name: personalInformation.display_name || personalInformation.acct,
+      accessToken: tokenInformation.access_token,
+      refreshToken: 'null',
+      expiresIn: dayjs().add(100, 'years').unix() - dayjs().unix(),
+      picture: personalInformation?.avatar || '',
+      username: personalInformation.username,
+    };
+  }
+
+  async authenticate(params: {
+    code: string;
+    codeVerifier: string;
+    refresh?: string;
+  }) {
+    return this.dynamicAuthenticate(
+      process.env.MASTODON_CLIENT_ID!,
+      process.env.MASTODON_CLIENT_SECRET!,
+      process.env.MASTODON_URL || 'https://mastodon.social',
+      params.code
+    );
+  }
+
+  async uploadFile(
+    instanceUrl: string,
+    fileUrl: string,
+    accessToken: string,
+    alt?: string
+  ) {
+    const form = new FormData();
+    // The media source is attacker-controllable (MediaDto.path reaches this via
+    // the public API) — fetch it through the same DNS-pinned SSRF guard used
+    // for custom-instance calls so it can never resolve to internal/loopback.
+    const mediaFetch = await fetch(fileUrl, {
+      // @ts-ignore -- undici dispatcher is not in the DOM RequestInit type.
+      dispatcher: ssrfSafeDispatcher,
+    });
+    if (!mediaFetch.ok) {
+      throw new Error(
+        `Mastodon media fetch failed (${mediaFetch.status}) for ${fileUrl}`
+      );
+    }
+    form.append('file', await mediaFetch.blob());
+    if (alt) {
+      form.append('description', alt);
+    }
+    const media = await (
+      await this.fetch(`${instanceUrl}/api/v1/media`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: form,
+        ...this.instanceRequestOptions(),
+      })
+    ).json();
+    if (!media?.id) {
+      throw new Error(
+        `Mastodon media upload failed: ${JSON.stringify(media)}`
+      );
+    }
+    return media.id;
+  }
+
+  async dynamicPost(
+    id: string,
+    accessToken: string,
+    url: string,
+    postDetails: PostDetails[]
+  ): Promise<PostResponse[]> {
+    const [firstPost] = postDetails;
+
+    const uploadFiles = await Promise.all(
+      firstPost?.media?.map((media) =>
+        this.uploadFile(url, media.path, accessToken, media.alt)
+      ) || []
+    );
+
+    const form = new FormData();
+    form.append('status', firstPost.message);
+    form.append('visibility', 'public');
+    if (uploadFiles.length) {
+      for (const file of uploadFiles) {
+        form.append('media_ids[]', file);
+      }
+    }
+
+    const post = await (
+      await this.fetch(`${url}/api/v1/statuses`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: form,
+        ...this.instanceRequestOptions(),
+      })
+    ).json();
+
+    return [
+      {
+        id: firstPost.id,
+        postId: post.id,
+        releaseURL: post.url || `${url}/statuses/${post.id}`,
+        status: 'completed',
+      },
+    ];
+  }
+
+  async dynamicComment(
+    id: string,
+    postId: string,
+    lastCommentId: string | undefined,
+    accessToken: string,
+    url: string,
+    postDetails: PostDetails[]
+  ): Promise<PostResponse[]> {
+    const [commentPost] = postDetails;
+    const replyToId = lastCommentId || postId;
+
+    const uploadFiles = await Promise.all(
+      commentPost?.media?.map((media) =>
+        this.uploadFile(url, media.path, accessToken, media.alt)
+      ) || []
+    );
+
+    const form = new FormData();
+    form.append('status', commentPost.message);
+    form.append('visibility', 'public');
+    form.append('in_reply_to_id', replyToId);
+    if (uploadFiles.length) {
+      for (const file of uploadFiles) {
+        form.append('media_ids[]', file);
+      }
+    }
+
+    const post = await (
+      await this.fetch(`${url}/api/v1/statuses`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: form,
+        ...this.instanceRequestOptions(),
+      })
+    ).json();
+
+    return [
+      {
+        id: commentPost.id,
+        postId: post.id,
+        releaseURL: post.url || `${url}/statuses/${post.id}`,
+        status: 'completed',
+      },
+    ];
+  }
+
+  async post(
+    id: string,
+    accessToken: string,
+    postDetails: PostDetails[],
+    integration?: Integration
+  ): Promise<PostResponse[]> {
+    return this.dynamicPost(
+      id,
+      accessToken,
+      process.env.MASTODON_URL || 'https://mastodon.social',
+      postDetails
+    );
+  }
+
+  async comment(
+    id: string,
+    postId: string,
+    lastCommentId: string | undefined,
+    accessToken: string,
+    postDetails: PostDetails[],
+    integration: Integration
+  ): Promise<PostResponse[]> {
+    return this.dynamicComment(
+      id,
+      postId,
+      lastCommentId,
+      accessToken,
+      process.env.MASTODON_URL || 'https://mastodon.social',
+      postDetails
+    );
+  }
+}

@@ -1,0 +1,32 @@
+packages:
+  - apps/*
+  - libraries/*
+
+overrides:
+  # Security: force patched versions within the current major (CVE fixes).
+  # Upper-bounded (<nextMajor) to avoid unintended major upgrades. See SECURITY.md.
+  undici: ">=7.29.0 <8"
+  "@hono/node-server": ">=1.19.15 <2"
+  body-parser: ">=2.3.0 <3"
+  "brace-expansion@1": ">=1.1.18 <2"
+  "brace-expansion@2": ">=2.1.4 <3"
+  "brace-expansion@5": ">=5.0.9 <6"
+  dompurify: ">=3.4.13 <4"
+  fast-uri: ">=3.1.5 <4"
+  hono: ">=4.12.34 <5"
+  ip-address: ">=10.3.1 <11"
+  "js-yaml@3": ">=3.15.1 <4"
+  "js-yaml@4": ">=4.3.1 <5"
+  form-data: ">=4.0.6 <5"
+  piscina: ">=4.9.3 <5"
+  ws: ">=8.21.0 <9"
+  multer: ">=2.2.0 <3"
+  nodemailer: ">=9.0.1 <10"
+  protobufjs: ">=7.6.5 <8"
+  cross-spawn: ">=7.0.6 <8"
+  postcss: ">=8.5.3 <9"
+  "@opentelemetry/core": ">=2.8.0 <3"
+  qs: ">=6.15.2 <7"
+
+onlyBuiltDependencies:
+  - bcrypt

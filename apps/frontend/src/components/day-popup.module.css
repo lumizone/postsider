@@ -1,0 +1,315 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--scrim);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: fadeIn 160ms var(--ease);
+}
+
+.modal {
+  width: min(640px, 100%);
+  max-height: calc(100vh - 48px);
+  background: var(--bg);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 30px 80px rgb(var(--shadow) / calc(0.18 * var(--shadow-boost)));
+  animation: scaleIn 180ms var(--ease);
+  overflow: hidden;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 22px 22px 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.headLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.headRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.newBtn {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--fg);
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: opacity 140ms var(--ease), transform 120ms var(--ease);
+}
+
+.newBtn:hover {
+  opacity: 0.86;
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.newBtn:active {
+  transform: scale(0.97);
+}
+
+.closeBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-soft);
+  background: var(--bg);
+  color: var(--fg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 140ms var(--ease), transform 120ms var(--ease);
+}
+
+.closeBtn:hover {
+  background: rgb(var(--tint) / 0.05);
+}
+
+.closeBtn:active {
+  transform: scale(0.94);
+}
+
+.closeBtn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.body {
+  overflow-y: auto;
+  padding: 12px 22px 22px;
+}
+
+.timeline {
+  position: relative;
+  width: 100%;
+}
+
+.hourRow {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  align-items: stretch;
+}
+
+.hourLabel {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 4px 10px 0 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.hourSlot {
+  position: relative;
+  border-top: 1px solid var(--line-soft);
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 140ms var(--ease);
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  border-radius: 0;
+}
+
+.hourSlot:hover {
+  background: rgb(var(--tint) / 0.025);
+}
+
+.plusBubble {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--fg);
+  color: var(--bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 140ms var(--ease), transform 140ms var(--ease);
+  pointer-events: none;
+}
+
+.plusBubble svg {
+  width: 14px;
+  height: 14px;
+}
+
+.hourSlot:hover .plusBubble {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Card area: everything right of the hour labels. Lane percentages are taken
+   from THIS box, so they stay positive however many lanes there are. */
+.eventLayer {
+  position: absolute;
+  left: 64px;
+  right: 8px;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.eventLayer > * {
+  pointer-events: auto;
+}
+
+.event {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font: inherit;
+  text-align: left;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  display: flex;
+  /* Row: media thumbnail first, then the title/meta column. */
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+  transition: transform 120ms var(--ease), background 140ms var(--ease);
+}
+
+.event:hover {
+  background: rgb(var(--tint) / 0.025);
+}
+
+.event:active {
+  transform: scale(0.99);
+}
+
+.eventBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.eventHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.eventBadge {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  background: var(--fg);
+  color: var(--bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.eventTitle {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.eventMeta {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nowLine {
+  position: absolute;
+  left: 64px;
+  right: 0;
+  height: 0;
+  border-top: 1px solid var(--fg);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.nowLine::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--fg);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}

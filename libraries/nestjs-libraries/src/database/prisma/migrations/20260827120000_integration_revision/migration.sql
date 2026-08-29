@@ -1,0 +1,1 @@
+ALTER TABLE "Integration" ADD COLUMN "revision" INTEGER NOT NULL DEFAULT 0;

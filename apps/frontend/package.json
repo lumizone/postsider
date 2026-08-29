@@ -1,0 +1,26 @@
+{
+  "name": "postsider-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PostSider dashboard UI",
+  "scripts": {
+    "predev": "node ./scripts/dedupe-react.cjs",
+    "prebuild": "node ./scripts/dedupe-react.cjs",
+    "dev": "dotenv -e ../../.env -- next dev -p 4200",
+    "build": "next build",
+    "start": "dotenv -e ../../.env -- next start -p 4200",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "15.5.24",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "simple-icons": "^16.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "18.16.9",
+    "@types/react": "19.0.7",
+    "@types/react-dom": "19.0.3",
+    "typescript": "5.5.4"
+  }
+}

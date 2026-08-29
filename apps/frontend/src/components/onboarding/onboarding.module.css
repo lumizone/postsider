@@ -1,0 +1,239 @@
+.page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 16px;
+  background: var(--bg);
+}
+
+.container {
+  width: 100%;
+  max-width: 560px;
+  padding: 40px 32px;
+}
+
+.progress {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 32px;
+}
+
+.progressDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line-soft);
+  transition: background 200ms var(--ease);
+}
+
+.progressDotActive {
+  background: var(--fg);
+}
+
+.stepContent {
+  text-align: center;
+}
+
+/* Welcome step — two-column layout */
+
+.welcomeLayout {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+}
+
+.welcomeLeft {
+  flex: 1;
+  text-align: left;
+}
+
+.welcomeRight {
+  flex-shrink: 0;
+}
+
+.welcomeImage {
+  width: 200px;
+  height: 200px;
+  max-width: 100%;
+  object-fit: contain;
+  border-radius: 20px;
+}
+
+@media (max-width: 560px) {
+  .welcomeLayout {
+    flex-direction: column-reverse;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .welcomeImage {
+    width: 140px;
+    height: 140px;
+  }
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0 0 10px;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--muted);
+  margin: 0 0 28px;
+  line-height: 1.5;
+}
+
+.trialBadge {
+  display: inline-block;
+  margin: -16px 0 20px;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-soft);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.valueProps {
+  list-style: none;
+  margin: 0 0 28px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.valueProps li {
+  padding-left: 16px;
+  border-left: 2px solid var(--line-soft);
+}
+
+.valuePropTitle {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.valuePropDesc {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+/* Buttons */
+
+.primaryButton {
+  display: block;
+  width: 100%;
+  padding: 13px 20px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 120ms var(--ease);
+}
+
+.primaryButton:hover {
+  opacity: 0.9;
+}
+
+.primaryButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.skipButton {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 120ms var(--ease);
+}
+
+.skipButton:hover {
+  color: var(--fg);
+}
+
+/* Attribution step — single-select option list */
+
+.optionList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.optionButton {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-soft);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms var(--ease), background 120ms var(--ease);
+}
+
+.optionButton:hover {
+  border-color: var(--fg);
+}
+
+.optionButtonActive {
+  border-color: var(--fg);
+  background: var(--fg);
+  color: var(--bg);
+}
+
+/* Instructions step — two ways to publish */
+
+.instructionCards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.instructionCard {
+  padding: 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-soft);
+  text-align: left;
+}
+
+.instructionCardTitle {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.instructionCardDesc {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.instructionCardLink {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  text-decoration: underline;
+}

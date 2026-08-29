@@ -1,0 +1,92 @@
+import { api } from "./api";
+
+/**
+ * In-app notifications.
+ *
+ * The backend has been writing these all along (publish succeeded/failed,
+ * "reconnect this channel", approval requests) — `NotificationService.
+ * inAppNotification` stores every one of them — but the dashboard never had a
+ * place to show them, so 102 of them had accumulated unseen in production
+ * before this was wired up. The channel-reconnect alerts in particular were
+ * only ever reachable by email, which meant they were invisible for the whole
+ * period the sending domain was unverified.
+ */
+export interface AppNotification {
+  id?: string;
+  createdAt: string;
+  /** Rendered English text — email copy, and the fallback for the dashboard. */
+  content: string;
+  /** Where the customer should go to act on it (e.g. reconnect a channel). */
+  link?: string | null;
+  /** Event identifier used to pick a translated message. */
+  eventKey?: string | null;
+  /** JSON object of placeholder values for that message. */
+  eventParams?: string | null;
+}
+
+export interface NotificationList {
+  lastReadNotifications: string;
+  notifications: AppNotification[];
+}
+
+/** Unread count only — cheap enough to poll. */
+export async function getNotificationCount(): Promise<number> {
+  const res = await api.get<{ total: number }>("/notifications", undefined, {
+    silent: true,
+  });
+  return res?.total ?? 0;
+}
+
+/**
+ * The 10 most recent notifications.
+ *
+ * NOTE: reading the list MARKS EVERYTHING READ server-side (it bumps the
+ * user's `lastReadNotifications`), so only call it when the user actually
+ * opens the panel — never on a poll, or the badge would clear itself.
+ */
+export async function getNotificationList(): Promise<NotificationList> {
+  return api.get<NotificationList>("/notifications/list", undefined, {
+    silent: true,
+  });
+}
+
+/**
+ * Fired after something in the app has marked the list read server-side (the
+ * notifications page load). The bell polls its badge once a minute, so without
+ * this it kept showing "4 unread" for up to a minute after the reader had just
+ * finished reading all four.
+ */
+export const NOTIFICATIONS_READ_EVENT = "postsider:notifications-read";
+
+export function announceNotificationsRead(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(NOTIFICATIONS_READ_EVENT));
+}
+
+export interface NotificationPage extends NotificationList {
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+/**
+ * A page of the full history, for the notifications page behind the bell's
+ * "see all". Like the list, page 0 marks everything read server-side; deeper
+ * pages do not, so paging back through history keeps the "new" highlight.
+ */
+export async function getNotificationsPage(
+  page: number
+): Promise<NotificationPage> {
+  return api.get<NotificationPage>("/notifications/page", { page }, {
+    silent: true,
+  });
+}
+
+/**
+ * Empty the list. Soft delete server-side, and org-wide — the list is shared by
+ * every member of the organization, so clearing clears it for all of them.
+ */
+export async function clearNotifications(): Promise<{ cleared: number }> {
+  return api.del<{ cleared: number }>("/notifications");
+}

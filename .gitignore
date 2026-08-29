@@ -1,0 +1,88 @@
+# See http://help.github.com/ignore-files/ for more about ignoring files.
+
+# compiled output
+dist
+tmp
+/out-tsc
+.env
+# environment files with real secrets — never commit (keep .env.example only)
+.env.*
+!.env.example
+# Production config TEMPLATE (placeholders only, no real secrets) — must be
+# tracked so it reaches the VPS on clone. The real .env.production stays ignored.
+!.env.production.example
+# dependencies
+node_modules
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+.vscode/*
+
+# IDE - VSCode
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# misc
+/.sass-cache
+/connect.lock
+/coverage
+/libpeerconnection.log
+npm-debug.log
+yarn-error.log
+testem.log
+/typings
+
+# System Files
+.DS_Store
+Thumbs.db
+
+.nx/cache
+.nx/workspace-data
+
+# Next.js
+.next
+
+# Vim files
+**/*.swp
+**/*.swo
+
+# Temporary files
+*.orig
+*.~*~
+*.tsbuildinfo
+
+# ignore Secrets folder
+.secrets/
+i18n.cache
+
+# Local uploads (user-generated media) — keep .gitkeep only
+/uploads/*
+!/uploads/.gitkeep
+
+# test/build artifacts
+reports/
+coverage/
+graphify-out/
+CLAUDE.md
+.superpowers/
+
+# Internal ops/deploy tooling - never publish in the OSS repo
+deploy.sh
+/deploy/
+/ops/
+/var/deploy/
+/var/docker/docker-*.sh
+scripts/create-test-user.cjs
+scripts/encrypt-integration-tokens.cjs
+scripts/set-subscription.cjs
+scripts/temporal-refresh-v3-cutover.cjs
+.rebrand-allowlist

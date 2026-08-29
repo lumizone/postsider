@@ -1,0 +1,84 @@
+.shell {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 28px;
+  align-items: start;
+}
+
+.subnav {
+  position: sticky;
+  top: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 4px;
+}
+
+.subnavTitle {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  padding: 0 12px;
+}
+
+.subnavList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.subnavLink {
+  display: block;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+  letter-spacing: -0.005em;
+  transition: background 140ms var(--ease), color 140ms var(--ease);
+}
+
+.subnavLink:hover {
+  background: rgb(var(--tint) / 0.04);
+  text-decoration: none;
+}
+
+.subnavLinkActive,
+.subnavLinkActive:hover {
+  background: var(--fg);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+.content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+@media (max-width: 900px) {
+  .shell {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .subnav {
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 0;
+    gap: 4px;
+  }
+  .subnavTitle {
+    display: none;
+  }
+  .subnavList {
+    flex-direction: row;
+    flex-wrap: nowrap;
+  }
+  .subnavLink {
+    white-space: nowrap;
+  }
+}

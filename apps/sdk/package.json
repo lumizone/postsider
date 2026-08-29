@@ -1,0 +1,25 @@
+{
+  "name": "@postsider/node",
+  "version": "2.0.0",
+  "description": "The ultimate social media scheduling tool",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsup",
+    "test": "jest --runInBand",
+    "publish": "tsup && pnpm publish --access public"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "social media",
+    "scheduling tool",
+    "social media scheduling tool"
+  ],
+  "author": "Nevo David",
+  "license": "AGPL-3.0",
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  }
+}

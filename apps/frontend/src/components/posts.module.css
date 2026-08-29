@@ -1,0 +1,793 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.title {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+
+.h1 {
+  font-size: 38px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: var(--muted);
+  max-width: 720px;
+  margin: 0;
+}
+
+.headerControls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.newBtn {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--fg);
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: opacity 140ms var(--ease), transform 120ms var(--ease);
+}
+
+.newBtn:hover {
+  opacity: 0.86;
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.newBtn:active {
+  transform: scale(0.97);
+}
+
+/* Ghost sibling of .newBtn: same pill geometry, outlined instead of filled. */
+.importBtn {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-soft);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: border-color 140ms var(--ease), transform 120ms var(--ease);
+}
+
+.importBtn:hover {
+  border-color: var(--fg);
+}
+
+.importBtn:active {
+  transform: scale(0.97);
+}
+
+/* Filter row */
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* The status strip scrolls inside itself; nothing here may push the page
+     sideways on a phone. */
+  min-width: 0;
+}
+
+.filterRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+/*
+ * Seven status pills with counts do not fit a phone. As an `inline-flex` row
+ * with no wrap and no bounds they simply ran off the right edge and dragged
+ * the whole page into horizontal scroll. It stays one strip (wrapping would
+ * break the pill background into ragged rows) and scrolls inside its own box.
+ */
+.tabs {
+  display: flex;
+  align-items: center;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: rgb(var(--tint) / 0.04);
+  gap: 2px;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  height: 30px;
+  padding: 0 14px;
+  white-space: nowrap;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  transition: background 140ms var(--ease), color 140ms var(--ease),
+    transform 120ms var(--ease);
+}
+
+.tab:hover {
+  background: rgb(var(--tint) / 0.06);
+}
+
+.tab:active {
+  transform: scale(0.97);
+}
+
+.tabActive,
+.tabActive:hover {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.tabCount {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: rgb(var(--tint) / 0.06);
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.tabActive .tabCount {
+  background: rgb(var(--on-fg-rgb) / 0.2);
+  color: var(--bg);
+}
+
+.search {
+  position: relative;
+  flex: 1 1 200px;
+  max-width: 320px;
+  min-width: 0;
+}
+
+/* Filter controls (channel, date range, sort) */
+.select,
+.dateInput {
+  height: 32px;
+  /*
+   * A select is as wide as its widest option, and an agency's channel is
+   * called something like "PostSider Kanał Testowy Bardzo Długa Nazwa Klienta
+   * 2026". Unbounded, that one name stretched the control across the row and
+   * pushed the sort control onto a line of its own.
+   */
+  max-width: 220px;
+  border: 1px solid var(--line-soft);
+  background: var(--bg);
+  border-radius: var(--radius-pill);
+  padding: 0 12px;
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: -0.005em;
+  color: var(--fg);
+  cursor: pointer;
+  transition: border-color 140ms var(--ease);
+}
+
+.select:focus,
+.dateInput:focus {
+  outline: none;
+  border-color: var(--fg);
+}
+
+.dateInput {
+  padding: 0 10px;
+}
+
+.filterLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 0;
+}
+
+.resetBtn {
+  height: 32px;
+  padding: 0 12px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+}
+
+.resetBtn:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+.resultCount {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.searchInput {
+  width: 100%;
+  height: 32px;
+  border: 1px solid var(--line-soft);
+  background: var(--bg);
+  border-radius: var(--radius-pill);
+  padding: 0 14px 0 34px;
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: -0.005em;
+  color: var(--fg);
+  transition: border-color 140ms var(--ease);
+}
+
+/* iOS Safari auto-zooms focused fields under 16px. */
+@media (max-width: 768px) {
+  .searchInput {
+    font-size: 16px;
+  }
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: var(--fg);
+}
+
+.searchInput::placeholder {
+  color: var(--muted);
+}
+
+.searchIcon {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.searchIcon svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+/*
+ * Phone layout for the toolbar. Controls get 16px text (iOS Safari zooms the
+ * whole viewport on a focused field under that) and 36px targets, the search
+ * takes its own full-width line, and the title stops eating half the screen.
+ */
+@media (max-width: 640px) {
+  .h1 {
+    font-size: 28px;
+  }
+
+  .tab {
+    height: 34px;
+    padding: 0 12px;
+  }
+
+  /* Fade the right edge so the strip reads as scrollable rather than cut. */
+  .tabs {
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  }
+
+  .search {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+
+  .select,
+  .dateInput {
+    height: 36px;
+    font-size: 16px;
+    /*
+     * One control per line on a phone: side by side they truncate to
+     * "Wszystkie ka…". Never wider than the line either, or a long channel
+     * name pushes the control's right edge off the screen.
+     */
+    flex: 1 1 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .filterLabel {
+    flex: 1 1 140px;
+  }
+
+  .filterRow {
+    gap: 8px;
+  }
+}
+
+/* List */
+.list {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line-soft);
+  background: var(--bg);
+  /* overflow is NOT hidden here — the post-row dropdown (position: absolute,
+     top: 100%) must be able to overflow the row. Rounded corners are kept by
+     rounding the first/last rows instead (see .row:first-child/last-child). */
+
+  /*
+   * The list itself owns the columns so every row shares one set of track
+   * widths (see .row's `subgrid`). Sizing the status column per row instead
+   * left each row's title starting at a different x.
+   */
+  display: grid;
+  grid-template-columns: minmax(110px, max-content) minmax(0, 2fr) minmax(0, 1.3fr) 130px 130px 40px;
+}
+
+.row {
+  display: grid;
+  /*
+   * Fallback for browsers without `subgrid` (declared again below): the status
+   * column is sized to its own pill rather than a guessed 110px. At a fixed
+   * width "Pending approval" / "Held (paused)" - and every longer translation,
+   * e.g. PL "Oczekuje na akceptację" - spilled out of the column and printed
+   * on top of the post title.
+   */
+  grid-template-columns: minmax(110px, max-content) minmax(0, 2fr) minmax(0, 1.3fr) 130px 130px 40px;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line-soft);
+  cursor: pointer;
+  transition: background 140ms var(--ease);
+}
+
+.row:first-child {
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+}
+
+.row:last-child {
+  border-bottom: none;
+  border-bottom-left-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-lg);
+}
+
+.row:hover {
+  background: rgb(var(--tint) / 0.02);
+}
+
+.statusCell {
+  display: flex;
+}
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 4px 10px 4px 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-soft);
+  color: var(--fg);
+  white-space: nowrap;
+}
+
+.statusDot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--fg);
+  flex-shrink: 0;
+}
+
+.statusPillDraft .statusDot {
+  background: rgb(var(--tint) / 0.25);
+}
+
+.statusPillScheduled .statusDot {
+  background: rgb(var(--tint) / 0.55);
+}
+
+.statusPillPublished {
+  background: var(--fg);
+  color: var(--bg);
+  border-color: var(--fg);
+}
+
+.statusPillPublished .statusDot {
+  background: var(--bg);
+}
+
+.statusPillFailed {
+  border-style: dashed;
+}
+
+.statusPillFailed .statusDot {
+  background: var(--fg);
+  position: relative;
+}
+
+.titleCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.postTitle {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+
+.excerpt {
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.channelCell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.channelDot {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--fg);
+  color: var(--bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.channelMain {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.channelName {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.channelPlatform {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.dateCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.dateMain {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.dateSub {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.metricsCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-align: right;
+}
+
+.metricsMain {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.metricsSub {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.empty {
+  font-size: 13px;
+  color: var(--muted);
+  padding: 32px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line-soft);
+  text-align: center;
+}
+
+/*
+ * Narrow layout: the row becomes a card. The status pill gets the top line to
+ * itself instead of sharing it with the title - squeezed next to a title it
+ * either overflowed the card (long labels) or crushed the title to three
+ * characters. The actions button moves up beside it, which also stops its
+ * dropdown from opening off the bottom of the card.
+ */
+@media (max-width: 1100px) {
+  /* Cards, not a table: the list stops owning shared columns. */
+  .list {
+    display: block;
+  }
+  .row {
+    grid-column: auto;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 12px;
+  }
+  .statusCell { grid-column: 1; grid-row: 1; justify-self: start; min-width: 0; }
+  .actionsCell { grid-column: 2; grid-row: 1; justify-self: end; }
+  .titleCell { grid-column: 1 / -1; grid-row: 2; }
+  .channelCell { grid-column: 1 / -1; grid-row: 3; }
+  .dateCell { grid-column: 1; grid-row: 4; }
+  .metricsCell { grid-column: 2; grid-row: 4; justify-self: end; }
+  .metricsEmpty { display: none; }
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--fg);
+  color: var(--bg);
+  padding: 10px 20px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 600;
+  z-index: 100;
+  animation: slideUp 200ms var(--ease);
+}
+
+/* Post row actions */
+.actionsCell {
+  position: relative;
+  flex-shrink: 0;
+  width: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.moreBtn {
+  all: unset;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  letter-spacing: 1px;
+  color: var(--muted);
+  transition: background 140ms var(--ease), color 140ms var(--ease);
+}
+.moreBtn:hover {
+  background: var(--hover-strong);
+  color: var(--fg);
+}
+
+.menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 20;
+  background: var(--bg);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgb(var(--shadow) / calc(0.12 * var(--shadow-boost)));
+  padding: 4px;
+  min-width: 180px;
+  animation: scaleIn 120ms var(--ease);
+}
+
+.menuItem {
+  all: unset;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  border-radius: calc(var(--radius-md) - 4px);
+  transition: background 100ms var(--ease);
+}
+.menuItem:hover {
+  background: var(--hover);
+}
+
+/* Duplicate channel picker modal */
+.pickerBackdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--scrim);
+  backdrop-filter: blur(8px);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: fadeIn 160ms var(--ease);
+}
+
+.pickerModal {
+  width: min(380px, 100%);
+  max-height: calc(100vh - 48px);
+  background: var(--bg);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 30px 80px rgb(var(--shadow) / calc(0.18 * var(--shadow-boost)));
+  animation: scaleIn 180ms var(--ease);
+  overflow: hidden;
+}
+
+.pickerHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.pickerTitle {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.pickerClose {
+  all: unset;
+  cursor: pointer;
+  font-size: 20px;
+  color: var(--muted);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+}
+.pickerClose:hover { background: var(--hover); }
+
+.pickerList {
+  padding: 10px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pickerItem {
+  all: unset;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  transition: background 100ms var(--ease);
+}
+.pickerItem:hover { background: var(--hover); }
+
+.pickerItemText {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.pickerItemName {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pickerItemPlatform {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Phone touch target for the row actions button. */
+@media (max-width: 640px) {
+  .moreBtn {
+    width: 36px;
+    height: 36px;
+  }
+}

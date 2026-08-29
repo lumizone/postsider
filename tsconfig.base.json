@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "rootDir": ".",
+    "sourceMap": true,
+    "declaration": false,
+    "moduleResolution": "node",
+    "emitDecoratorMetadata": true,
+    "strictPropertyInitialization": false,
+    "experimentalDecorators": true,
+    "noPropertyAccessFromIndexSignature": false,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "importHelpers": true,
+    "target": "es2015",
+    "module": "esnext",
+    "lib": ["es2020", "dom"],
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    "baseUrl": ".",
+    "incremental": true,
+    "strictNullChecks": true,
+    "noImplicitAny": true,
+    "strictBindCallApply": false,
+    "noFallthroughCasesInSwitch": true,
+    "strict": true,
+    "paths": {
+      "@polar-sh/sdk/webhooks": ["node_modules/@polar-sh/sdk/dist/commonjs/webhooks.d.ts"],
+      "@postsider/backend/*": ["apps/backend/src/*"],
+      "@postsider/frontend/*": ["apps/frontend/src/*"],
+      "@postsider/helpers/*": ["libraries/helpers/src/*"],
+      "@postsider/nestjs-libraries/*": ["libraries/nestjs-libraries/src/*"],
+      "@postsider/orchestrator/*": ["apps/orchestrator/src/*"]
+    }
+  },
+  "exclude": ["node_modules", "tmp"]
+}

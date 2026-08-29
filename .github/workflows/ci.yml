@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build & test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postsider
+          POSTGRES_PASSWORD: postsider
+          POSTGRES_DB: postsider_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postsider"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postsider:postsider@localhost:5432/postsider_test
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-test-secret-not-for-production
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:3000
+      NEXT_PUBLIC_SELF_HOSTED: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Apply migrations
+        run: pnpm run prisma-migrate-deploy
+      - name: Build backend
+        run: pnpm run build:backend
+      - name: Build orchestrator
+        run: pnpm run build:orchestrator
+      - name: Build MCP server
+        run: pnpm --filter @postsider/mcp build
+      - name: Build frontend
+        run: pnpm --filter ./apps/frontend run build
+      - name: Tests
+        run: pnpm test
+      - name: MCP server tests
+        run: NODE_OPTIONS=--experimental-vm-modules pnpm exec jest -c apps/mcp/jest.config.cjs
+      - name: SDK build
+        run: pnpm run build:sdk
+      - name: SDK tests
+        run: pnpm --filter @postsider/node test
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Informational: surfaces advisories without blocking merges (known
+    # transitive items are tracked in SECURITY.md and pinned in pnpm-workspace).
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Audit (high and above)
+        run: pnpm audit --prod --audit-level high
