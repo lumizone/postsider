@@ -26,6 +26,7 @@
     "strict": true,
     "paths": {
       "@polar-sh/sdk/webhooks": ["node_modules/@polar-sh/sdk/dist/commonjs/webhooks.d.ts"],
+      "file-type": ["node_modules/file-type/source/index.d.ts", "node_modules/file-type/index.d.ts"],
       "@postsider/backend/*": ["apps/backend/src/*"],
       "@postsider/frontend/*": ["apps/frontend/src/*"],
       "@postsider/helpers/*": ["libraries/helpers/src/*"],

@@ -24,8 +24,12 @@ const config: Config = {
   // only. Allow ts-jest/babel to transform them instead of ignoring them. The
   // pattern matches the package name at ANY depth (nostr-tools vendors its own
   // copy of @noble/curves under nostr-tools/node_modules).
+  //
+  // uuid (v14+), mime (v4+) and file-type (v22+) are also ESM-only in their
+  // current majors; keeping them on the allowlist lets the dependabot bumps
+  // land without "Jest encountered an unexpected token" suite-load failures.
   transformIgnorePatterns: [
-    'node_modules/(?!(?:.*[/\\\\])?(?:nostr-tools|@noble|@scure)[/\\\\])',
+    'node_modules/(?!(?:.*[/\\\\])?(?:nostr-tools|@noble|@scure|uuid|mime|file-type)[/\\\\])',
   ],
   moduleNameMapper: {
     '^@postsider/backend/(.*)$': '<rootDir>/apps/backend/src/$1',
