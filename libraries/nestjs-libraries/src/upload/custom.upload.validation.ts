@@ -3,34 +3,6 @@ import { ALLOWED_MIME } from '@postsider/nestjs-libraries/upload/mime.types';
 import { detectFileType } from '@postsider/nestjs-libraries/upload/detect-file-type';
 import { maxUploadBytesForMime } from '@postsider/nestjs-libraries/upload/upload.limits';
 
-/**
- * Dangerous byte sequences that could indicate an embedded script or polyglot.
- * We scan the first 4KB of the file for these patterns — if found, reject the
- * upload even if magic bytes say it's a valid image/video.
- */
-const DANGEROUS_PATTERNS = [
-  Buffer.from('<script', 'utf8'),
-  Buffer.from('<?php', 'utf8'),
-  Buffer.from('<%', 'utf8'),
-  Buffer.from('<html', 'utf8'),
-  Buffer.from('<svg', 'utf8'),
-  Buffer.from('javascript:', 'utf8'),
-  Buffer.from('onload=', 'utf8'),
-  Buffer.from('onerror=', 'utf8'),
-];
-
-function containsDangerousContent(buffer: Buffer): boolean {
-  // Check only first 4KB — polyglot attacks hide payloads near the start
-  const slice = buffer.subarray(0, 4096);
-  const lower = slice.toString('latin1').toLowerCase();
-  for (const pattern of DANGEROUS_PATTERNS) {
-    if (lower.includes(pattern.toString('latin1').toLowerCase())) {
-      return true;
-    }
-  }
-  return false;
-}
-
 @Injectable()
 export class CustomFileValidationPipe implements PipeTransform {
   async transform(value: any) {
@@ -66,14 +38,7 @@ export class CustomFileValidationPipe implements PipeTransform {
       );
     }
 
-    // 3. Scan for embedded scripts/polyglot payloads
-    if (containsDangerousContent(value.buffer)) {
-      throw new BadRequestException(
-        'File contains potentially dangerous content.'
-      );
-    }
-
-    // 4. Check file size limits
+    // 3. Check file size limits
     const maxSize = this.getMaxSize(detected.mime);
     if (value.size > maxSize) {
       throw new BadRequestException(
@@ -83,7 +48,7 @@ export class CustomFileValidationPipe implements PipeTransform {
       );
     }
 
-    // 5. Sanitize filename — use random name, never original
+    // 4. Sanitize filename — use random name, never original
     value.mimetype = detected.mime;
     const safeBase =
       (value.originalname || 'upload')

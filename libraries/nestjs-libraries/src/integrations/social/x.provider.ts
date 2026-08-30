@@ -94,7 +94,7 @@ export class XProvider extends SocialAbstract implements SocialProvider {
       return {
         type: 'bad-body',
         value: 'You are not allowed to create a post with duplicate content',
-      }
+      };
     }
 
     if (body.includes('usage-capped')) {
@@ -335,7 +335,10 @@ export class XProvider extends SocialAbstract implements SocialProvider {
         state: oauth_token,
       };
     } catch (err: any) {
-      console.error('[X-AUTH] generateAuthUrl failed:', err?.data || err?.message || err);
+      console.error(
+        '[X-AUTH] generateAuthUrl failed:',
+        err?.data || err?.message || err
+      );
       throw err;
     }
   }
@@ -766,20 +769,31 @@ export class XProvider extends SocialAbstract implements SocialProvider {
         return [];
       }
 
-      const data = await client.v2.tweets(
-        tweets.map((p) => p.id),
-        {
-          'tweet.fields': ['public_metrics'],
-        }
+      // X accepts at most 100 ids per lookup. `loadAllTweets` can return more
+      // than that for an active account, so one oversized request used to make
+      // the entire analytics panel fall back to an empty result.
+      const responses = await Promise.all(
+        Array.from({ length: Math.ceil(tweets.length / 100) }, (_, index) =>
+          client.v2.tweets(
+            tweets
+              .slice(index * 100, (index + 1) * 100)
+              .map((tweet) => tweet.id),
+            {
+              'tweet.fields': ['public_metrics'],
+            }
+          )
+        )
       );
+      const data = responses.flatMap((response) => response.data || []);
 
-      const metrics = data.data.reduce(
+      const metrics = data.reduce(
         (all, current) => {
           all.impression_count =
             (all.impression_count || 0) +
             +current.public_metrics!.impression_count;
           all.bookmark_count =
-            (all.bookmark_count || 0) + +current.public_metrics!.bookmark_count!;
+            (all.bookmark_count || 0) +
+            +current.public_metrics!.bookmark_count!;
           all.like_count =
             (all.like_count || 0) + +current.public_metrics!.like_count;
           all.quote_count =

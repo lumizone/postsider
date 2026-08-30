@@ -26,7 +26,14 @@ import { Tool } from '@postsider/nestjs-libraries/integrations/tool.decorator';
  */
 const TIKTOK_VIDEO_EXTENSIONS = ['mp4', 'webm', 'mov'] as const;
 /** Known non-photo containers that TikTok does NOT support. */
-const OTHER_VIDEO_EXTENSIONS = ['mkv', 'avi', 'm4v', 'mpeg', 'wmv', 'flv'] as const;
+const OTHER_VIDEO_EXTENSIONS = [
+  'mkv',
+  'avi',
+  'm4v',
+  'mpeg',
+  'wmv',
+  'flv',
+] as const;
 
 const isTikTokVideoPath = (path?: string | null): boolean =>
   TIKTOK_VIDEO_EXTENSIONS.some((ext) => hasExtension(path, ext));
@@ -516,10 +523,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     }
     // TikTok restricts only "Branded content" (third-party promotion) to
     // public/friends visibility; promoting your own brand privately is allowed.
-    if (
-      Boolean(settings?.brand_content_toggle) &&
-      privacy === 'SELF_ONLY'
-    ) {
+    if (Boolean(settings?.brand_content_toggle) && privacy === 'SELF_ONLY') {
       issues.push(
         "Branded content can't be published with Self only visibility"
       );
@@ -632,11 +636,17 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
         privacy_level: firstPost.settings.privacy_level || 'PUBLIC_TO_EVERYONE',
         ...(isPhoto ? {} : { disable_duet: !firstPost.settings.duet || false }),
         disable_comment: !firstPost.settings.comment || false,
-        ...(isPhoto ? {} : { disable_stitch: !firstPost.settings.stitch || false }),
-        ...(isPhoto ? {} : { is_aigc: firstPost.settings.video_made_with_ai || false }),
+        ...(isPhoto
+          ? {}
+          : { disable_stitch: !firstPost.settings.stitch || false }),
+        ...(isPhoto
+          ? {}
+          : { is_aigc: firstPost.settings.video_made_with_ai || false }),
         brand_content_toggle: firstPost.settings.brand_content_toggle || false,
         brand_organic_toggle: firstPost.settings.brand_organic_toggle || false,
-        ...(isPhoto ? { auto_add_music: firstPost.settings.autoAddMusic === 'yes' } : {}),
+        ...(isPhoto
+          ? { auto_add_music: firstPost.settings.autoAddMusic === 'yes' }
+          : {}),
       },
     };
   }
@@ -722,6 +732,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     date: number
   ): Promise<AnalyticsData[]> {
     const today = dayjs().format('YYYY-MM-DD');
+    const result: AnalyticsData[] = [];
 
     try {
       // Get user stats (follower_count, following_count, likes_count, video_count)
@@ -737,8 +748,6 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
 
       const userStatsData = await userStatsResponse.json();
       const userStats = userStatsData?.data?.user;
-
-      const result: AnalyticsData[] = [];
 
       if (userStats) {
         if (userStats.follower_count !== undefined) {
@@ -777,8 +786,13 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
           });
         }
       }
+    } catch (err) {
+      console.error('Error fetching TikTok account analytics:', err);
+    }
 
-      // Get recent videos and aggregate their stats
+    try {
+      // Get recent videos and aggregate their stats. This needs `video.list`,
+      // which older integrations may not have; keep account statistics above.
       const videoListResponse = await this.fetch(
         'https://open.tiktokapis.com/v2/video/list/?fields=id',
         {
@@ -829,7 +843,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
           }
 
           result.push({
-            label: 'Views',
+            label: 'Recent Views',
             percentageChange: 0,
             isSnapshot: true,
             data: [{ total: String(totalViews), date: today }],
@@ -857,12 +871,11 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
           });
         }
       }
-
-      return result;
     } catch (err) {
-      console.error('Error fetching TikTok analytics:', err);
-      return [];
+      console.error('Error fetching TikTok video analytics:', err);
     }
+
+    return result;
   }
 
   async missing(

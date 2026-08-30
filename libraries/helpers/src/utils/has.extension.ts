@@ -6,5 +6,6 @@ export const hasExtension = (
     return false;
   }
   const ext = extension.startsWith('.') ? extension : `.${extension}`;
-  return path.toLowerCase().indexOf(ext.toLowerCase()) > -1;
+  const pathname = path.split(/[?#]/, 1)[0] || '';
+  return pathname.toLowerCase().endsWith(ext.toLowerCase());
 };

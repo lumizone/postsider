@@ -33,12 +33,6 @@ export class FacebookProvider extends SocialAbstract implements SocialProvider {
     'pages_read_engagement',
     'read_insights',
   ];
-  // Requested in the OAuth URL only — NOT part of `scopes`, because
-  // checkScopes() requires every entry of `scopes` to be granted, and Meta
-  // grants pages_video_upload only with Advanced Access. Keeping it optional
-  // means video works for accounts that have it, while everyone else still
-  // connects and publishes photos/text.
-  optionalScopes = ['pages_video_upload'];
   override maxConcurrentJob = 500; // Facebook has reasonable rate limits
   editor = 'normal' as const;
   maxLength() {
@@ -116,7 +110,7 @@ export class FacebookProvider extends SocialAbstract implements SocialProvider {
       return {
         type: 'bad-body' as const,
         value: 'Invalid file',
-      }
+      };
     }
 
     if (body.indexOf('1404102') > -1) {
@@ -245,7 +239,9 @@ export class FacebookProvider extends SocialAbstract implements SocialProvider {
     ).json();
 
     if (!access_token) {
-      throw new Error('Facebook token refresh failed: no access_token returned');
+      throw new Error(
+        'Facebook token refresh failed: no access_token returned'
+      );
     }
 
     return {
@@ -253,8 +249,7 @@ export class FacebookProvider extends SocialAbstract implements SocialProvider {
       name: '',
       accessToken: access_token,
       refreshToken: access_token,
-      expiresIn:
-        expires_in || dayjs().add(59, 'days').unix() - dayjs().unix(),
+      expiresIn: expires_in || dayjs().add(59, 'days').unix() - dayjs().unix(),
       picture: '',
       username: '',
     };
@@ -270,7 +265,7 @@ export class FacebookProvider extends SocialAbstract implements SocialProvider {
           `${process.env.FRONTEND_URL}/integrations/social/facebook`
         )}` +
         `&state=${state}` +
-        `&scope=${[...this.scopes, ...this.optionalScopes].join(',')}`,
+        `&scope=${this.scopes.join(',')}`,
       codeVerifier: makeId(10),
       state,
     };
@@ -739,6 +734,56 @@ export class FacebookProvider extends SocialAbstract implements SocialProvider {
     ];
   }
 
+  // Page-level metrics verified against the live Graph API on 2026-08-30.
+  // `page_impressions_unique` and `page_posts_impressions_unique` were retired
+  // by Meta (a batch containing one of them fails with "(#100) The value must
+  // be a valid insights metric"), which zeroed the whole Facebook analytics
+  // panel — the same retirement class as the 2026-08-22 post-insights fix.
+  // Keep the per-metric fallback below so the next retirement degrades the
+  // numbers instead of wiping them.
+  private static readonly PAGE_INSIGHT_METRICS = [
+    'page_post_engagements',
+    'page_daily_follows',
+    'page_video_views',
+    'page_views_total',
+    'page_total_actions',
+  ];
+
+  private async fetchPageInsights(
+    pageId: string,
+    accessToken: string,
+    since: number,
+    until: number
+  ): Promise<any[]> {
+    const url = (metrics: string) =>
+      `https://graph.facebook.com/v20.0/${pageId}/insights?metric=${metrics}&access_token=${accessToken}&period=day&since=${since}&until=${until}`;
+
+    try {
+      const { data } = await (
+        await this.fetch(url(FacebookProvider.PAGE_INSIGHT_METRICS.join(',')))
+      ).json();
+      return data ?? [];
+    } catch (err) {
+      console.error(
+        '[facebook-analytics] batch page-insights call failed, retrying per metric',
+        err
+      );
+    }
+
+    const collected: any[] = [];
+    for (const metric of FacebookProvider.PAGE_INSIGHT_METRICS) {
+      try {
+        const { data } = await (await this.fetch(url(metric))).json();
+        if (data?.length) {
+          collected.push(...data);
+        }
+      } catch {
+        // Retired/unavailable metric — keep the rest rather than losing the page.
+      }
+    }
+    return collected;
+  }
+
   async analytics(
     id: string,
     accessToken: string,
@@ -747,33 +792,27 @@ export class FacebookProvider extends SocialAbstract implements SocialProvider {
     const until = dayjs().endOf('day').unix();
     const since = dayjs().subtract(date, 'day').unix();
 
-    const { data } = await (
-      await fetch(
-        `https://graph.facebook.com/v20.0/${id}/insights?metric=page_impressions_unique,page_posts_impressions_unique,page_post_engagements,page_daily_follows,page_video_views&access_token=${accessToken}&period=day&since=${since}&until=${until}`
-      )
-    ).json();
+    const data = await this.fetchPageInsights(id, accessToken, since, until);
 
-    return (
-      data?.map((d: any) => ({
-        label:
-          d.name === 'page_impressions_unique'
-            ? 'Page Impressions'
-            : d.name === 'page_post_engagements'
-            ? 'Posts Engagement'
-            : d.name === 'page_daily_follows'
-            ? 'Page followers'
-            : d.name === 'page_video_views'
-            ? 'Videos views'
-            : 'Posts Impressions',
-        // No percentage change: the platform API returns a point-in-time value
-        // and nothing is persisted to compare against, so any number here is
-        // invented. The frontend hides the badge when this is absent.
-        data: d?.values?.map((v: any) => ({
-          total: v.value,
-          date: dayjs(v.end_time).format('YYYY-MM-DD'),
-        })),
-      })) || []
-    );
+    return data.map((d: any) => ({
+      label:
+        d.name === 'page_post_engagements'
+          ? 'Posts Engagement'
+          : d.name === 'page_daily_follows'
+          ? 'Page followers'
+          : d.name === 'page_video_views'
+          ? 'Videos views'
+          : d.name === 'page_views_total'
+          ? 'Page views'
+          : 'Total actions',
+      // No percentage change: the platform API returns a point-in-time value
+      // and nothing is persisted to compare against, so any number here is
+      // invented. The frontend hides the badge when this is absent.
+      data: d?.values?.map((v: any) => ({
+        total: v.value,
+        date: dayjs(v.end_time).format('YYYY-MM-DD'),
+      })),
+    }));
   }
 
   // Metrics verified against the live Graph API on 2026-08-22. Keep this list

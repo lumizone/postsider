@@ -88,13 +88,15 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
     return [
       {
         key: 'botToken',
-        label: 'Bot Token (Discord Developer Portal → your app → Bot → Reset Token)',
+        label:
+          'Bot Token (Discord Developer Portal → your app → Bot → Reset Token)',
         validation: `/.+/`,
         type: 'password' as const,
       },
       {
         key: 'guildId',
-        label: 'Server ID (enable Developer Mode in Discord, right-click your server icon → Copy Server ID)',
+        label:
+          'Server ID (enable Developer Mode in Discord, right-click your server icon → Copy Server ID)',
         validation: `/^\\d+$/`,
         type: 'text' as const,
       },
@@ -122,9 +124,7 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
     // dedicated params field — Discord is the only provider offering BOTH
     // an OAuth and a customFields path for the same connect action.
     try {
-      const decoded = JSON.parse(
-        Buffer.from(params.code, 'base64').toString()
-      );
+      const decoded = JSON.parse(Buffer.from(params.code, 'base64').toString());
       if (decoded?.botToken && decoded?.guildId) {
         return this.authenticateWithOwnBot(decoded.botToken, decoded.guildId);
       }
@@ -311,6 +311,11 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
     let index = 0;
     for (const media of firstPost.media || []) {
       const loadMedia = await fetch(media.path);
+      if (!loadMedia.ok) {
+        throw new Error(
+          `Could not fetch Discord attachment (${loadMedia.status})`
+        );
+      }
 
       form.append(
         `files[${index}]`,
@@ -386,9 +391,12 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
     form.append(
       'payload_json',
       JSON.stringify({
-        content: commentPost.message.replace(/\[\[\[(@.*?)]]]/g, (match, p1) => {
+        content: commentPost.message.replace(
+          /\[\[\[(@.*?)]]]/g,
+          (match, p1) => {
             return `<${p1}>`;
-        }),
+          }
+        ),
         attachments: commentPost.media?.map((p, index) => ({
           id: index,
           description: `Picture ${index}`,
@@ -400,6 +408,11 @@ export class DiscordProvider extends SocialAbstract implements SocialProvider {
     let index = 0;
     for (const media of commentPost.media || []) {
       const loadMedia = await fetch(media.path);
+      if (!loadMedia.ok) {
+        throw new Error(
+          `Could not fetch Discord attachment (${loadMedia.status})`
+        );
+      }
 
       form.append(
         `files[${index}]`,

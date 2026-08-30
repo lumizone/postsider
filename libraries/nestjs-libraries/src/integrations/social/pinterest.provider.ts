@@ -44,34 +44,32 @@ export class PinterestProvider
 
   dto = PinterestSettingsDto;
 
-  override async checkValidity(
-    [firstItem]: Array<ValidityMedia[]>
-  ): Promise<string | true> {
-    const isMp4 = firstItem?.find(
-      (item) => (item?.path?.indexOf?.('mp4') ?? -1) > -1
-    );
-    const isPicture = firstItem?.find(
-      (item) => (item?.path?.indexOf?.('mp4') ?? -1) === -1
-    );
-    if ((firstItem?.length ?? 0) === 0) {
+  override async checkValidity([firstItem]: Array<ValidityMedia[]>): Promise<
+    string | true
+  > {
+    const media = firstItem ?? [];
+    const videos = media.filter((item) => hasExtension(item.path, 'mp4'));
+    const covers = media.filter((item) => !hasExtension(item.path, 'mp4'));
+
+    if (media.length === 0) {
       return 'Requires at least one media';
     }
-    if ((firstItem?.length ?? 0) > 5) {
+    if (media.length > 5) {
       return 'You can only have up to 5 media items';
     }
-    if (isMp4 && firstItem?.length !== 2 && !isPicture) {
-      return 'If posting a video you have to also include a cover image as second media';
-    }
-    if (isMp4 && (firstItem?.length ?? 0) > 2) {
-      return 'If posting a video you can only have two media items';
+    if (
+      videos.length > 0 &&
+      (videos.length !== 1 || covers.length !== 1 || media.length !== 2)
+    ) {
+      return 'Pinterest video posts require exactly one MP4 video and one cover image';
     }
 
     if (
-      (firstItem?.length ?? 0) > 1 &&
-      firstItem?.every((p) => (p?.path?.indexOf?.('mp4') ?? -1) === -1)
+      media.length > 1 &&
+      media.every((item) => !hasExtension(item.path, 'mp4'))
     ) {
       const loadAll = await Promise.all(
-        firstItem?.map((p) => this.getImageDimensions(p?.path)) ?? []
+        media.map((item) => this.getImageDimensions(item.path))
       );
       const checkAllTheSameWidthHeight = loadAll?.every((p, i, arr) => {
         return p?.width === arr?.[0]?.width && p?.height === arr?.[0]?.height;
@@ -100,14 +98,15 @@ export class PinterestProvider
     if (body.indexOf('Unable to reach the URL') > -1) {
       return {
         type: 'retry' as const,
-        value: 'Pinterest was unable to reach the URL provided. Please check the link and try again.',
-      }
+        value:
+          'Pinterest was unable to reach the URL provided. Please check the link and try again.',
+      };
     }
     if (body.indexOf('Board not found') > -1) {
       return {
         type: 'bad-body' as const,
         value: 'The specified board was not found. Please check the board ID.',
-      }
+      };
     }
     if (body.indexOf('cover_image_url or cover_image_content_type') > -1) {
       return {
@@ -264,12 +263,9 @@ export class PinterestProvider
         })
       ).json();
 
-      const { data, status } = await axios.get(
-        postDetails?.[0]?.media?.[0]?.path!,
-        {
-          responseType: 'stream',
-        }
-      );
+      const { data } = await axios.get(findMp4.path, {
+        responseType: 'stream',
+      });
 
       const formData = Object.keys(upload_parameters)
         .filter((f) => f)

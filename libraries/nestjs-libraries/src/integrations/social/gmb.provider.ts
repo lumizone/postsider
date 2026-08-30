@@ -16,6 +16,7 @@ import * as process from 'node:process';
 import dayjs from 'dayjs';
 import { Rules } from '@postsider/nestjs-libraries/chat/rules.description.decorator';
 import { GmbSettingsDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/gmb.settings.dto';
+import { hasExtension } from '@postsider/helpers/utils/has.extension';
 
 const clientAndGmb = () => {
   const client = new google.auth.OAuth2({
@@ -63,11 +64,15 @@ export class GmbProvider extends SocialAbstract implements SocialProvider {
       return 'Google My Business posts can only have one image';
     }
 
-    // Check for video - GMB doesn't support video in local posts
+    // GMB local posts support a single photo, never video or audio.
     if ((items?.length ?? 0) > 0 && (items?.[0]?.length ?? 0) > 0) {
       const media = items?.[0]?.[0];
-      if ((media?.path?.indexOf?.('mp4') ?? -1) > -1) {
-        return 'Google My Business posts do not support video attachments';
+      if (
+        ['mp4', 'webm', 'mov', 'mkv', 'mp3', 'm4a', 'wav', 'ogg'].some((ext) =>
+          hasExtension(media?.path, ext)
+        )
+      ) {
+        return 'Google My Business posts only support image attachments';
       }
     }
 
@@ -215,7 +220,9 @@ export class GmbProvider extends SocialAbstract implements SocialProvider {
       if (accountsPageToken) {
         params.set('pageToken', accountsPageToken);
       }
-      const url = `https://mybusinessaccountmanagement.googleapis.com/v1/accounts${params.toString() ? `?${params}` : ''}`;
+      const url = `https://mybusinessaccountmanagement.googleapis.com/v1/accounts${
+        params.toString() ? `?${params}` : ''
+      }`;
 
       const accountsResponse = await fetch(url, {
         headers: {
@@ -461,9 +468,14 @@ export class GmbProvider extends SocialAbstract implements SocialProvider {
     // Add media if provided
     if (firstPost.media && firstPost.media.length > 0) {
       const mediaItem = firstPost.media[0];
+      if (mediaItem.type === 'video') {
+        throw new Error(
+          'Google My Business posts only support image attachments'
+        );
+      }
       postBody.media = [
         {
-          mediaFormat: mediaItem.type === 'video' ? 'VIDEO' : 'PHOTO',
+          mediaFormat: 'PHOTO',
           sourceUrl: mediaItem.path,
         },
       ];

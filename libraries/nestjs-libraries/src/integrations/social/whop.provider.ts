@@ -17,7 +17,14 @@ export class WhopProvider extends SocialAbstract implements SocialProvider {
   identifier = 'whop';
   name = 'Whop';
   isBetweenSteps = false;
-  scopes = ['openid', 'profile', 'email', 'forum:post:create', 'forum:read', 'company:basic:read'];
+  scopes = [
+    'openid',
+    'profile',
+    'email',
+    'forum:post:create',
+    'forum:read',
+    'company:basic:read',
+  ];
   refreshCron = false;
   editor = 'markdown' as const;
   dto = WhopDto;
@@ -33,9 +40,7 @@ export class WhopProvider extends SocialAbstract implements SocialProvider {
 
   override handleErrors(
     body: string
-  ):
-    | { type: 'refresh-token' | 'bad-body'; value: string }
-    | undefined {
+  ): { type: 'refresh-token' | 'bad-body'; value: string } | undefined {
     if (body.includes('invalid_grant')) {
       return {
         type: 'refresh-token' as const,
@@ -235,7 +240,9 @@ export class WhopProvider extends SocialAbstract implements SocialProvider {
         signal: AbortSignal.timeout(15000),
       });
       if (!fileResponse.ok) {
-        throw new Error(`Failed to fetch media for Whop (${fileResponse.status})`);
+        throw new Error(
+          `Failed to fetch media for Whop (${fileResponse.status})`
+        );
       }
       const fileBuffer = await fileResponse.arrayBuffer();
       const fileName = item.path.split('/').pop() || 'file';
@@ -294,9 +301,6 @@ export class WhopProvider extends SocialAbstract implements SocialProvider {
         }
         if (uploadStatus !== 'ready') {
           await timer(5000);
-        }
-        if (uploadStatus !== 'ready') {
-          throw new Error('Whop file upload timed out');
         }
       }
 

@@ -79,6 +79,40 @@ describe('TiktokProvider Direct Post', () => {
     ).rejects.toThrow('instead of publishing it directly');
   });
 
+  it('keeps account analytics when video.list is unavailable', async () => {
+    const provider = new TiktokProvider();
+    const logError = jest.spyOn(console, 'error').mockImplementation();
+    provider.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        json: async () => ({
+          data: {
+            user: {
+              follower_count: 12,
+              following_count: 3,
+              likes_count: 45,
+              video_count: 6,
+            },
+          },
+        }),
+      })
+      .mockRejectedValueOnce(new Error('video.list scope not granted'));
+
+    const analytics = await provider.analytics('creator', 'token', 30);
+
+    expect(analytics.map((entry) => entry.label)).toEqual([
+      'Followers',
+      'Following',
+      'Total Likes',
+      'Videos',
+    ]);
+    expect(logError).toHaveBeenCalledWith(
+      'Error fetching TikTok video analytics:',
+      expect.any(Error)
+    );
+    logError.mockRestore();
+  });
+
   it('defaults a legacy post without stored privacy_level to PUBLIC_TO_EVERYONE', async () => {
     const provider = new TiktokProvider();
     const fetch = jest
@@ -125,18 +159,14 @@ describe('TiktokProvider Direct Post', () => {
     it('accepts a single .mov video', async () => {
       const provider = new TiktokProvider();
       await expect(
-        provider.checkValidity([
-          [{ path: 'https://cdn.example/clip.mov' }],
-        ])
+        provider.checkValidity([[{ path: 'https://cdn.example/clip.mov' }]])
       ).resolves.toBe(true);
     });
 
     it('accepts a single .webm video', async () => {
       const provider = new TiktokProvider();
       await expect(
-        provider.checkValidity([
-          [{ path: 'https://cdn.example/clip.webm' }],
-        ])
+        provider.checkValidity([[{ path: 'https://cdn.example/clip.webm' }]])
       ).resolves.toBe(true);
     });
 
@@ -155,14 +185,10 @@ describe('TiktokProvider Direct Post', () => {
     it('explicitly rejects known unsupported video containers', async () => {
       const provider = new TiktokProvider();
       await expect(
-        provider.checkValidity([
-          [{ path: 'https://cdn.example/clip.mkv' }],
-        ])
+        provider.checkValidity([[{ path: 'https://cdn.example/clip.mkv' }]])
       ).resolves.toContain('MP4, WebM or MOV');
       await expect(
-        provider.checkValidity([
-          [{ path: 'https://cdn.example/clip.avi' }],
-        ])
+        provider.checkValidity([[{ path: 'https://cdn.example/clip.avi' }]])
       ).resolves.toContain('MP4, WebM or MOV');
     });
 
@@ -285,7 +311,7 @@ describe('TiktokProvider Direct Post', () => {
       ).toEqual(
         expect.arrayContaining([
           expect.stringContaining(
-            "Branded content can't be published with Self only visibility",
+            "Branded content can't be published with Self only visibility"
           ),
         ])
       );
@@ -306,7 +332,7 @@ describe('TiktokProvider Direct Post', () => {
       ).not.toEqual(
         expect.arrayContaining([
           expect.stringContaining(
-            "Branded content can't be published with Self only visibility",
+            "Branded content can't be published with Self only visibility"
           ),
         ])
       );
