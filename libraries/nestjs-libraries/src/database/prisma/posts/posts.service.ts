@@ -90,7 +90,7 @@ export class PostsService {
     private _postAnalyticsService: PostAnalyticsService,
     private _subscriptionService: SubscriptionService,
     private _organizationRepository: OrganizationRepository,
-    private _notificationService: NotificationService,
+    private _notificationService: NotificationService
   ) {}
 
   searchForMissingThreeHoursPosts() {
@@ -174,7 +174,10 @@ export class PostsService {
       false,
       'info',
       undefined,
-      { key: 'publishingResumed', params: { count: String(heldPostsProcessed) } }
+      {
+        key: 'publishingResumed',
+        params: { count: String(heldPostsProcessed) },
+      }
     );
     return { state, heldPostsProcessed };
   }
@@ -185,8 +188,9 @@ export class PostsService {
   }
 
   private async assertOrgNotPausedForSchedule(orgId: string): Promise<void> {
-    const orgState =
-      await this._organizationRepository.getPublishingState(orgId);
+    const orgState = await this._organizationRepository.getPublishingState(
+      orgId
+    );
     if (orgState?.publishingState === 'PAUSED') {
       throw new PublishingPausedException(orgState.publishingPauseReason);
     }
@@ -345,7 +349,7 @@ export class PostsService {
         this._logger.warn(
           `Could not persist analytics for post ${post.id}: ${
             error instanceof Error ? error.message : String(error)
-          }`,
+          }`
         );
       }
       await ioRedis.set(
@@ -360,7 +364,13 @@ export class PostsService {
     } catch (e) {
       console.log(e);
       if (e instanceof RefreshToken && _retryCount < 3) {
-        return this.checkPostAnalytics(orgId, postId, date, true, _retryCount + 1);
+        return this.checkPostAnalytics(
+          orgId,
+          postId,
+          date,
+          true,
+          _retryCount + 1
+        );
       }
     }
 
@@ -696,7 +706,11 @@ export class PostsService {
     };
   }
 
-  arrangePostsByGroup(all: any, parent?: string, _visited = new Set<string>()): PostWithConditionals[] {
+  arrangePostsByGroup(
+    all: any,
+    parent?: string,
+    _visited = new Set<string>()
+  ): PostWithConditionals[] {
     const findAll = all
       .filter((p: any) =>
         !parent ? !p.parentPostId : p.parentPostId === parent
@@ -714,7 +728,9 @@ export class PostsService {
     return [
       ...findAll,
       ...(findAll.length
-        ? findAll.flatMap((p: any) => this.arrangePostsByGroup(all, p.id, _visited))
+        ? findAll.flatMap((p: any) =>
+            this.arrangePostsByGroup(all, p.id, _visited)
+          )
         : []),
     ];
   }
@@ -942,7 +958,7 @@ export class PostsService {
       if (!workflow) {
         throw new Error('Temporal client is not available');
       }
-      await workflow.start('postWorkflowV107', {
+      await workflow.start('postWorkflowV108', {
         workflowId: `post_${postId}`,
         taskQueue: 'main',
         workflowIdConflictPolicy: 'TERMINATE_EXISTING',
@@ -1172,7 +1188,11 @@ export class PostsService {
           };
         })
       );
-      return provider.validateCreatorRules(creator, settings, mediaWithDuration);
+      return provider.validateCreatorRules(
+        creator,
+        settings,
+        mediaWithDuration
+      );
     } catch (err: any) {
       // Best effort by design: a failing creator-info call must not block
       // scheduling. TikTok still re-validates at publish time.
@@ -1186,6 +1206,13 @@ export class PostsService {
     body: CreatePostDto,
     creationMethod: CreationMethod
   ): Promise<any[]> {
+    if (
+      body.type === 'schedule' &&
+      dayjs(body.date).isBefore(dayjs().subtract(1, 'minute'))
+    ) {
+      throw new BadRequestException('Scheduled date cannot be in the past');
+    }
+
     // Emergency Pause gate — a paused org cannot create `now`/`schedule`
     // posts (deterministic 423, nothing persisted). Drafts stay fully
     // editable; only queueing for publish is blocked.
@@ -1193,23 +1220,30 @@ export class PostsService {
       await this.assertOrgNotPausedForSchedule(orgId);
     }
 
-    const monthlyPostSlots = body.type === 'draft'
-      ? 0
-      : body.posts.reduce(
-          (total, post) => total + (body.type === 'update'
-            ? post.value.filter((value) => !value.id).length
-            : (post.value?.length || 0)),
-          0,
-        );
+    const monthlyPostSlots =
+      body.type === 'draft'
+        ? 0
+        : body.posts.reduce(
+            (total, post) =>
+              total +
+              (body.type === 'update'
+                ? post.value.filter((value) => !value.id).length
+                : post.value?.length || 0),
+            0
+          );
     let monthlyReservation: string | null = null;
     try {
-      monthlyReservation = await this._subscriptionService.reserveMonthlyPostSlots(
-        orgId,
-        monthlyPostSlots,
-      );
+      monthlyReservation =
+        await this._subscriptionService.reserveMonthlyPostSlots(
+          orgId,
+          monthlyPostSlots
+        );
     } catch (error) {
       if (error instanceof MonthlyPostQuotaExceededError) {
-        throw new HttpException('Monthly post limit reached. Choose a plan to continue.', HttpStatus.PAYMENT_REQUIRED);
+        throw new HttpException(
+          'Monthly post limit reached. Choose a plan to continue.',
+          HttpStatus.PAYMENT_REQUIRED
+        );
       }
       throw error;
     }
@@ -1218,16 +1252,21 @@ export class PostsService {
     try {
       // Apply the private trial safety cap centrally so dashboard, API, CSV,
       // duplicate, and evergreen creation all follow the same rule.
-      const newXIntegrationIds = body.type === 'update'
-        ? []
-        : body.posts.map((post) => post.integration?.id).filter(Boolean);
+      const newXIntegrationIds =
+        body.type === 'update'
+          ? []
+          : body.posts.map((post) => post.integration?.id).filter(Boolean);
       const xTargets = await Promise.all(
-        newXIntegrationIds.map((id) => this._integrationService.getIntegrationById(orgId, id))
+        newXIntegrationIds.map((id) =>
+          this._integrationService.getIntegrationById(orgId, id)
+        )
       );
       try {
         trialReservation = await this._subscriptionService.reserveTrialXPosts(
           orgId,
-          xTargets.filter((integration) => integration?.providerIdentifier === 'x').length
+          xTargets.filter(
+            (integration) => integration?.providerIdentifier === 'x'
+          ).length
         );
       } catch (error) {
         if (error instanceof TrialUsageLimitError) {
@@ -1239,79 +1278,91 @@ export class PostsService {
         throw error;
       }
 
-    const postList: any[] = [];
-    for (const post of body.posts) {
-      const provider = this._integrationManager.getSocialIntegration(
-        (post.settings as any)?.__type
-      );
-      const removeLinks = !!provider?.stripLinks?.();
-
-      const messages = (post.value || []).map((p) => p.content);
-      // No point shortlinking links on platforms that strip them out anyway
-      const updateContent =
-        !body.shortLink || removeLinks
-          ? messages
-          : await this._shortLinkService.convertTextToShortLinks(
-              orgId,
-              messages
-            );
-
-      post.value = (post.value || []).map((p, i) => ({
-        ...p,
-        content: removeLinks ? stripLinks(updateContent[i]) : updateContent[i],
-      }));
-
-      const { posts } = await this._postRepository.createOrUpdatePost(
-        body.type,
-        orgId,
-        body.type === 'now'
-          ? dayjs().format('YYYY-MM-DDTHH:mm:00')
-          : body.date ?? dayjs().format('YYYY-MM-DDTHH:mm:00'),
-        post,
-        body.tags,
-        creationMethod,
-        body.inter
-      );
-
-      if (!posts?.length) {
-        // This channel produced no posts (e.g. nothing to persist) — skip it
-        // and keep processing the remaining channels instead of aborting the
-        // whole batch and silently discarding posts already created.
-        continue;
-      }
-
-      if (body.type !== 'update') {
-        // Deliberately not awaited (don't hold the HTTP response for Temporal),
-        // but never silent: on failure startWorkflow has already marked the
-        // post ERROR, so the calendar shows it — this log is for the operator.
-        this.startWorkflow(
-          post.settings.__type.split('-')[0].toLowerCase(),
-          posts[0].id,
-          orgId,
-          posts[0].state
-        ).catch((err) =>
-          this._logger.error(
-            `createPost: scheduling failed for post ${posts[0].id}: ${err}`
-          )
+      const postList: any[] = [];
+      for (const post of body.posts) {
+        const provider = this._integrationManager.getSocialIntegration(
+          (post.settings as any)?.__type
         );
-      }
+        const removeLinks = !!provider?.stripLinks?.();
 
-      Sentry.metrics.count('post_created', 1);
-      postList.push({
-        postId: posts[0].id,
-        integration: post.integration.id,
-      });
-    }
+        const messages = (post.value || []).map((p) => p.content);
+        // No point shortlinking links on platforms that strip them out anyway
+        const updateContent =
+          !body.shortLink || removeLinks
+            ? messages
+            : await this._shortLinkService.convertTextToShortLinks(
+                orgId,
+                messages
+              );
+
+        post.value = (post.value || []).map((p, i) => ({
+          ...p,
+          content: removeLinks
+            ? stripLinks(updateContent[i])
+            : updateContent[i],
+        }));
+
+        const { posts } = await this._postRepository.createOrUpdatePost(
+          body.type,
+          orgId,
+          body.type === 'now'
+            ? dayjs().format('YYYY-MM-DDTHH:mm:00')
+            : body.date ?? dayjs().format('YYYY-MM-DDTHH:mm:00'),
+          post,
+          body.tags,
+          creationMethod,
+          body.inter
+        );
+
+        if (!posts?.length) {
+          // This channel produced no posts (e.g. nothing to persist) — skip it
+          // and keep processing the remaining channels instead of aborting the
+          // whole batch and silently discarding posts already created.
+          continue;
+        }
+
+        // Arm a publish workflow for any created/updated post that ended up in
+        // QUEUE. The old `body.type !== 'update'` gate skipped this for edits,
+        // which left a freshly created QUEUE replacement row with NO workflow —
+        // the edited post then only went out after the hourly missing-post sweep
+        // (up to an hour late) or never. In-place updates (value.id present)
+        // keep the same row and re-arm via TERMINATE_EXISTING. DRAFT/HELD posts
+        // are never armed (startWorkflow returns early for those states).
+        if (posts[0]?.state === 'QUEUE') {
+          // Deliberately not awaited (don't hold the HTTP response for Temporal),
+          // but never silent: on failure startWorkflow has already marked the
+          // post ERROR, so the calendar shows it — this log is for the operator.
+          this.startWorkflow(
+            post.settings.__type.split('-')[0].toLowerCase(),
+            posts[0].id,
+            orgId,
+            posts[0].state
+          ).catch((err) =>
+            this._logger.error(
+              `createPost: scheduling failed for post ${posts[0].id}: ${err}`
+            )
+          );
+        }
+
+        Sentry.metrics.count('post_created', 1);
+        postList.push({
+          postId: posts[0].id,
+          integration: post.integration.id,
+        });
+      }
 
       return postList;
     } finally {
       // Created posts become the durable count. The short-lived reservation
       // only closes races while concurrent requests are still being created.
-      await this._subscriptionService.releaseTrialXReservation(trialReservation);
-      await this._subscriptionService.releaseMonthlyPostReservation(monthlyReservation);
+      await this._subscriptionService.releaseTrialXReservation(
+        trialReservation
+      );
+      await this._subscriptionService.releaseMonthlyPostReservation(
+        monthlyReservation
+      );
     }
   }
-
 
   /**
    * Duplicate a post group as a new draft.
@@ -1321,7 +1372,7 @@ export class PostsService {
     orgId: string,
     group: string,
     targetIntegrationId?: string,
-    date?: string,
+    date?: string
   ) {
     const loadAll = await this._postRepository.getPostsByGroup(orgId, group);
     if (!loadAll?.length) {
@@ -1335,7 +1386,7 @@ export class PostsService {
     const integrationId = targetIntegrationId || firstPost.integrationId;
     const integration = await this._integrationService.getIntegrationById(
       orgId,
-      integrationId,
+      integrationId
     );
     if (!integration) {
       throw new BadRequestException('Target channel not found');
@@ -1402,7 +1453,13 @@ export class PostsService {
     };
   }
 
-  async changeState(id: string, state: State, err?: any, body?: any, orgId?: string) {
+  async changeState(
+    id: string,
+    state: State,
+    err?: any,
+    body?: any,
+    orgId?: string
+  ) {
     return this._postRepository.changeState(id, state, err, body, orgId);
   }
 
@@ -1420,7 +1477,9 @@ export class PostsService {
   private assertMutable(post: { state: string }): void {
     if (post.state === 'PUBLISHED' || post.state === 'APPROVAL') {
       throw new BadRequestException(
-        `Cannot change a post that is ${post.state === 'APPROVAL' ? 'pending approval' : 'already published'}`
+        `Cannot change a post that is ${
+          post.state === 'APPROVAL' ? 'pending approval' : 'already published'
+        }`
       );
     }
   }
@@ -1451,16 +1510,26 @@ export class PostsService {
     let monthlyReservation: string | null = null;
     if (state === 'QUEUE' && getPostById.state !== 'QUEUE') {
       try {
-        monthlyReservation = await this._subscriptionService.reserveMonthlyPostSlots(orgId, 1);
+        monthlyReservation =
+          await this._subscriptionService.reserveMonthlyPostSlots(orgId, 1);
       } catch (error) {
         if (error instanceof MonthlyPostQuotaExceededError) {
-          throw new HttpException('Monthly post limit reached. Choose a plan to continue.', HttpStatus.PAYMENT_REQUIRED);
+          throw new HttpException(
+            'Monthly post limit reached. Choose a plan to continue.',
+            HttpStatus.PAYMENT_REQUIRED
+          );
         }
         throw error;
       }
     }
     try {
-      await this._postRepository.changeState(id, state, undefined, undefined, orgId);
+      await this._postRepository.changeState(
+        id,
+        state,
+        undefined,
+        undefined,
+        orgId
+      );
 
       // No swallow: if the workflow cannot be scheduled the post is already
       // marked ERROR (inside startWorkflow) and the user must see the failure
@@ -1473,7 +1542,9 @@ export class PostsService {
         state
       );
     } finally {
-      await this._subscriptionService.releaseMonthlyPostReservation(monthlyReservation);
+      await this._subscriptionService.releaseMonthlyPostReservation(
+        monthlyReservation
+      );
     }
 
     return { id, state };
@@ -1483,7 +1554,13 @@ export class PostsService {
   async setPostState(orgId: string, postId: string, state: State) {
     const post = await this._postRepository.getPostById(postId, orgId);
     if (!post) throw new BadRequestException('Post not found');
-    await this._postRepository.changeState(postId, state, undefined, undefined, orgId);
+    await this._postRepository.changeState(
+      postId,
+      state,
+      undefined,
+      undefined,
+      orgId
+    );
     return { id: postId, state };
   }
 
@@ -1522,9 +1599,7 @@ export class PostsService {
       // silently failed to move the workflow leaves the DB date and the actual
       // publish time out of sync forever.
       await this.startWorkflow(
-        getPostById.integration.providerIdentifier
-          .split('-')[0]
-          .toLowerCase(),
+        getPostById.integration.providerIdentifier.split('-')[0].toLowerCase(),
         getPostById.id,
         orgId,
         getPostById.state === 'DRAFT' ? 'DRAFT' : 'QUEUE'

@@ -1,35 +1,35 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import styles from "./calendar.module.css";
-import { ChannelsPanel } from "./channels-panel";
-import { PlatformIcon } from "./platform-icon";
-import { PostMediaThumb } from "./post-media-thumb";
-import { ChannelDetailModal } from "./channel-detail-modal";
-import { AddChannelModal } from "./add-channel-modal";
-import { CustomFieldsModal } from "./custom-fields-modal";
-import { TelegramConnectModal } from "./telegram-connect-modal";
-import { FarcasterConnectModal } from "./farcaster-connect-modal";
-import { DiscordBotChoiceModal } from "./discord-bot-choice-modal";
-import { DayPopup } from "./day-popup";
-import { ConfirmDialog } from "./confirm-dialog";
-import { EmptyState } from "./empty-state";
-import { SetupChecklist } from "./setup-checklist";
-import { useI18n, useT } from "@/lib/i18n";
+import { useEffect, useMemo, useRef, useState } from 'react';
+import styles from './calendar.module.css';
+import { ChannelsPanel } from './channels-panel';
+import { PlatformIcon } from './platform-icon';
+import { PostMediaThumb } from './post-media-thumb';
+import { ChannelDetailModal } from './channel-detail-modal';
+import { AddChannelModal } from './add-channel-modal';
+import { CustomFieldsModal } from './custom-fields-modal';
+import { TelegramConnectModal } from './telegram-connect-modal';
+import { FarcasterConnectModal } from './farcaster-connect-modal';
+import { DiscordBotChoiceModal } from './discord-bot-choice-modal';
+import { DayPopup } from './day-popup';
+import { ConfirmDialog } from './confirm-dialog';
+import { EmptyState } from './empty-state';
+import { SetupChecklist } from './setup-checklist';
+import { useI18n, useT } from '@/lib/i18n';
 import {
   type CalendarEvent,
   type Channel,
   type PostStatus,
-} from "@/lib/calendar-data";
-import { useChannels } from "@/lib/use-channels";
-import { useCalendarData } from "@/lib/use-calendar-data";
+} from '@/lib/calendar-data';
+import { useChannels } from '@/lib/use-channels';
+import { useCalendarData } from '@/lib/use-calendar-data';
 import {
   deleteChannel as deleteChannelApi,
   getOauthUrl,
   connectIntegration,
   setChannelColor as persistChannelColor,
   type CustomFieldDef,
-} from "@/lib/integrations";
+} from '@/lib/integrations';
 import {
   createPost,
   fetchPostDetail,
@@ -37,15 +37,15 @@ import {
   uploadMedia,
   changePostDate,
   type CreatePostInput,
-} from "@/lib/posts";
-import { requestApproval, getApprovalByPost } from "@/lib/approval-api";
+} from '@/lib/posts';
+import { requestApproval, getApprovalByPost } from '@/lib/approval-api';
 import {
   CreatePostModal,
   type NewPostInput,
   type InitialPostValue,
   type AttachedMedia,
-} from "./create-post-modal";
-import { useAuth } from "@/lib/auth-context";
+} from './create-post-modal';
+import { useAuth } from '@/lib/auth-context';
 import {
   buildStackLayout,
   layoutOverlappingEvents,
@@ -54,29 +54,27 @@ import {
   offsetBeforeHour,
   type EventLanePlacement,
   type StackLayout,
-} from "@/lib/event-lanes";
-import { PHONE_QUERY, useMediaQuery } from "@/lib/use-media-query";
-import { MIN_CARD_WIDTH, useElementWidth } from "@/lib/use-element-width";
+} from '@/lib/event-lanes';
+import { PHONE_QUERY, useMediaQuery } from '@/lib/use-media-query';
+import { MIN_CARD_WIDTH, useElementWidth } from '@/lib/use-element-width';
 
 /** Monday-first weekday names for the given locale (2024-01-01 is a Monday). */
 function buildWeekdayNames(
   locale: string,
-  format: "short" | "narrow",
+  format: 'short' | 'narrow'
 ): string[] {
   const fmt = new Intl.DateTimeFormat(locale, { weekday: format });
   return Array.from({ length: 7 }, (_, i) =>
-    fmt.format(new Date(2024, 0, 1 + i)),
+    fmt.format(new Date(2024, 0, 1 + i))
   );
 }
 
 function buildMonthNames(locale: string): string[] {
-  const fmt = new Intl.DateTimeFormat(locale, { month: "long" });
-  return Array.from({ length: 12 }, (_, i) =>
-    fmt.format(new Date(2024, i, 1)),
-  );
+  const fmt = new Intl.DateTimeFormat(locale, { month: 'long' });
+  return Array.from({ length: 12 }, (_, i) => fmt.format(new Date(2024, i, 1)));
 }
 
-type ViewMode = "day" | "week" | "month" | "year";
+type ViewMode = 'day' | 'week' | 'month' | 'year';
 
 interface CalendarProps {
   year: number;
@@ -91,14 +89,15 @@ interface DayCell {
 const DEFAULT_DURATION = 45;
 
 function iso(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate(),
-  ).padStart(2, "0")}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+    2,
+    '0'
+  )}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /** Remove the backend-only `__type` discriminator from a settings object. */
 function stripDiscriminator(
-  settings: Record<string, unknown>,
+  settings: Record<string, unknown>
 ): Record<string, unknown> {
   const { __type, ...rest } = settings ?? {};
   void __type;
@@ -121,11 +120,11 @@ function stripDiscriminator(
 function isDraggableStatus(status: PostStatus | undefined): boolean {
   return (
     !!status &&
-    status !== "published" &&
-    status !== "pendingApproval" &&
+    status !== 'published' &&
+    status !== 'pendingApproval' &&
     // A HELD post is parked by the Emergency Pause: dragging it would try to
     // reschedule to QUEUE, which the backend rejects with 423 while paused.
-    status !== "held"
+    status !== 'held'
   );
 }
 
@@ -165,7 +164,7 @@ function buildMonthGrid(year: number, month: number): DayCell[] {
 
 function channelInitial(c: Channel): string {
   const parts = c.name.trim().split(/\s+/);
-  return (parts[0]?.[0] ?? "?").toUpperCase();
+  return (parts[0]?.[0] ?? '?').toUpperCase();
 }
 
 function ChevronLeft() {
@@ -197,19 +196,22 @@ function ChevronRight() {
 }
 
 const VIEW_LABELS: Record<ViewMode, string> = {
-  day: "calendar.viewDay",
-  week: "calendar.viewWeek",
-  month: "calendar.viewMonth",
-  year: "calendar.viewYear",
+  day: 'calendar.viewDay',
+  week: 'calendar.viewWeek',
+  month: 'calendar.viewMonth',
+  year: 'calendar.viewYear',
 };
 
 export function Calendar({ year, month }: CalendarProps) {
   const { t, locale } = useI18n();
-  const [view, setView] = useState<ViewMode>("month");
+  const [view, setView] = useState<ViewMode>('month');
   const [cursor, setCursor] = useState<Date>(new Date(year, month, 1));
   const [selected, setSelected] = useState<Date | null>(null);
   const [openDay, setOpenDay] = useState<Date | null>(null);
-  const [composer, setComposer] = useState<{ date: string; time: string } | null>(null);
+  const [composer, setComposer] = useState<{
+    date: string;
+    time: string;
+  } | null>(null);
   // TikTok Direct Posts are processed asynchronously on TikTok's side and can
   // take minutes to appear — surface a visible notice after scheduling so the
   // user doesn't think the post failed. Non-blocking, auto-dismissed.
@@ -222,17 +224,19 @@ export function Calendar({ year, month }: CalendarProps) {
   const [editPost, setEditPost] = useState<{
     group: string;
     initial: InitialPostValue;
-    approvalStatus?: "pending" | "approved" | "rejected" | "none";
+    approvalStatus?: 'pending' | 'approved' | 'rejected' | 'none';
     rejectionNote?: string;
   } | null>(null);
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
-  const [editRetryEvent, setEditRetryEvent] = useState<CalendarEvent | null>(null);
+  const [editRetryEvent, setEditRetryEvent] = useState<CalendarEvent | null>(
+    null
+  );
 
   // Toolbar: search + status filter. Lightweight, non-destructive — the grid
   // stays mounted and just re-filters what's shown.
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | PostStatus>("all");
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | PostStatus>('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement | null>(null);
 
@@ -246,18 +250,18 @@ export function Calendar({ year, month }: CalendarProps) {
       }
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setFiltersOpen(false);
+      if (e.key === 'Escape') setFiltersOpen(false);
     };
-    document.addEventListener("mousedown", onDown);
-    window.addEventListener("keydown", onKey);
+    document.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
     return () => {
-      document.removeEventListener("mousedown", onDown);
-      window.removeEventListener("keydown", onKey);
+      document.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
     };
   }, [filtersOpen]);
 
   const { user } = useAuth();
-  const isMember = user?.role === "USER";
+  const isMember = user?.role === 'USER';
 
   const {
     channels,
@@ -287,15 +291,11 @@ export function Calendar({ year, month }: CalendarProps) {
   useEffect(() => {
     if (!channelsLoading && !eventsLoading) setBootstrapped(true);
   }, [channelsLoading, eventsLoading]);
-  const initialLoading =
-    !bootstrapped && (channelsLoading || eventsLoading);
+  const initialLoading = !bootstrapped && (channelsLoading || eventsLoading);
 
   // All channels are always visible in the calendar — the dot in the panel is a
   // colour identifier only, not a toggle.
-  const enabled = useMemo(
-    () => new Set(channels.map((c) => c.id)),
-    [channels],
-  );
+  const enabled = useMemo(() => new Set(channels.map((c) => c.id)), [channels]);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [openChannelId, setOpenChannelId] = useState<string | null>(null);
   const [addChannelOpen, setAddChannelOpen] = useState(false);
@@ -303,15 +303,15 @@ export function Calendar({ year, month }: CalendarProps) {
   // per-provider connect branching. Strip the param once consumed so a later
   // refresh or back-navigation doesn't reopen the picker.
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === 'undefined') return;
     const url = new URL(window.location.href);
-    if (url.searchParams.get("connect") !== "1") return;
+    if (url.searchParams.get('connect') !== '1') return;
     // Matches the panel's own "Add channel" button (member-gated below) —
     // without this, a member landing on the link saw a modal the rest of
     // the UI otherwise hides from that role.
     if (!isMember) setAddChannelOpen(true);
-    url.searchParams.delete("connect");
-    window.history.replaceState({}, "", url.pathname + url.search);
+    url.searchParams.delete('connect');
+    window.history.replaceState({}, '', url.pathname + url.search);
   }, [isMember]);
   const [customFieldsState, setCustomFieldsState] = useState<{
     provider: string;
@@ -320,7 +320,9 @@ export function Calendar({ year, month }: CalendarProps) {
     state: string;
   } | null>(null);
   const [customFieldsSubmitting, setCustomFieldsSubmitting] = useState(false);
-  const [customFieldsError, setCustomFieldsError] = useState<string | null>(null);
+  const [customFieldsError, setCustomFieldsError] = useState<string | null>(
+    null
+  );
   // Telegram uses a dedicated "/connect <code>" flow instead of a manual field.
   const [telegramConnect, setTelegramConnect] = useState<{
     state: string;
@@ -347,8 +349,8 @@ export function Calendar({ year, month }: CalendarProps) {
   const [channelErrorIsPlanLimit, setChannelErrorIsPlanLimit] = useState(false);
   // Pending destructive action awaiting confirmation.
   const [confirm, setConfirm] = useState<
-    | { kind: "channel"; id: string; name: string }
-    | { kind: "post"; group: string }
+    | { kind: 'channel'; id: string; name: string }
+    | { kind: 'post'; group: string }
     | null
   >(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
@@ -365,16 +367,16 @@ export function Calendar({ year, month }: CalendarProps) {
     () =>
       events.filter((e) => {
         if (!enabled.has(e.channelId)) return false;
-        if (statusFilter !== "all" && e.status !== statusFilter) return false;
+        if (statusFilter !== 'all' && e.status !== statusFilter) return false;
         if (search.trim()) {
           const q = search.trim().toLowerCase();
-          if (!(e.title + " " + (e.excerpt ?? "")).toLowerCase().includes(q)) {
+          if (!(e.title + ' ' + (e.excerpt ?? '')).toLowerCase().includes(q)) {
             return false;
           }
         }
         return true;
       }),
-    [enabled, events, statusFilter, search],
+    [enabled, events, statusFilter, search]
   );
 
   const eventsByDay = useMemo(() => {
@@ -396,9 +398,7 @@ export function Calendar({ year, month }: CalendarProps) {
 
   const updateChannelColor = (id: string, color: string) => {
     persistChannelColor(id, color);
-    setChannels(
-      channels.map((c) => (c.id === id ? { ...c, color } : c)),
-    );
+    setChannels(channels.map((c) => (c.id === id ? { ...c, color } : c)));
   };
 
   const deleteChannel = async (id: string) => {
@@ -410,9 +410,9 @@ export function Calendar({ year, month }: CalendarProps) {
       await deleteChannelApi(id);
       await refreshEvents();
     } catch (err) {
-      console.error("[delete-channel]", err);
+      console.error('[delete-channel]', err);
       setChannels(prev);
-      setChannelError(t("errors.channelDelete"));
+      setChannelError(t('errors.channelDelete'));
       setChannelErrorIsPlanLimit(false);
       void refreshChannels();
     }
@@ -431,10 +431,7 @@ export function Calendar({ year, month }: CalendarProps) {
     // from the display label only for legacy/demo channels without it.
     const slug =
       target.identifier ||
-      target.platform
-        .toLowerCase()
-        .replace(/\s+/g, "-")
-        .replace("&", "and");
+      target.platform.toLowerCase().replace(/\s+/g, '-').replace('&', 'and');
     try {
       const res = await getOauthUrl(slug, { refresh: id });
       // `res.url` is an opaque state token (used by widget-based flows like
@@ -443,41 +440,46 @@ export function Calendar({ year, month }: CalendarProps) {
       // nonsensical relative path (the bare token string) and landed on a
       // 404. If oauthUrl is missing, OAuth just isn't configured for this
       // provider — surface that instead of silently doing nothing.
-      if (res?.oauthUrl && typeof window !== "undefined") {
+      if (res?.oauthUrl && typeof window !== 'undefined') {
         window.location.href = res.oauthUrl;
       } else {
-        setChannelError(t("errors.channelConnect"));
+        setChannelError(t('errors.channelConnect'));
         setChannelErrorIsPlanLimit(false);
       }
     } catch (err) {
-      console.error("[reconnect-channel]", err);
+      console.error('[reconnect-channel]', err);
       const status = (err as { status?: number })?.status;
       if (status === 402) {
-        setChannelError(t("limits.channels"));
+        setChannelError(t('limits.channels'));
         setChannelErrorIsPlanLimit(true);
       } else {
-        setChannelError(t("errors.channelConnect"));
+        setChannelError(t('errors.channelConnect'));
         setChannelErrorIsPlanLimit(false);
       }
     }
   };
 
-  const addChannelForPlatform = async (platformId: string, platformLabel?: string) => {
+  const addChannelForPlatform = async (
+    platformId: string,
+    platformLabel?: string
+  ) => {
     setChannelError(null);
     setChannelErrorIsPlanLimit(false);
     try {
       const res = await getOauthUrl(platformId);
 
       const hasOAuth = !!res?.oauthUrl;
-      const hasCustomFields = !!(res?.customFields && res.customFields.length > 0);
+      const hasCustomFields = !!(
+        res?.customFields && res.customFields.length > 0
+      );
 
       // Discord uniquely offers both — let the user pick instead of
       // silently always redirecting to the shared-bot OAuth flow.
-      if (platformId === "discord" && hasOAuth && hasCustomFields) {
+      if (platformId === 'discord' && hasOAuth && hasCustomFields) {
         setDiscordChoice({
           oauthUrl: res.oauthUrl!,
           customFields: res.customFields!,
-          state: res.url || "",
+          state: res.url || '',
         });
         return;
       }
@@ -490,15 +492,18 @@ export function Calendar({ year, month }: CalendarProps) {
 
       // Telegram — dedicated "/connect <code>" flow (auto-detects the chat via
       // the shared bot) instead of the manual chat-ID field.
-      if (platformId === "telegram") {
-        setTelegramConnect({ state: res.url || "" });
+      if (platformId === 'telegram') {
+        setTelegramConnect({ state: res.url || '' });
         return;
       }
 
       // Farcaster — Sign In With Neynar widget (auto-creates the signer) instead
       // of the manual signer-UUID field.
-      if (platformId === "wrapcast" && res.neynarClientId) {
-        setFarcasterConnect({ clientId: res.neynarClientId, state: res.url || "" });
+      if (platformId === 'wrapcast' && res.neynarClientId) {
+        setFarcasterConnect({
+          clientId: res.neynarClientId,
+          state: res.url || '',
+        });
         return;
       }
 
@@ -508,7 +513,7 @@ export function Calendar({ year, month }: CalendarProps) {
           provider: platformId,
           label: platformLabel || platformId,
           fields: res.customFields!,
-          state: res.url || "",
+          state: res.url || '',
         });
         setCustomFieldsError(null);
         return;
@@ -518,17 +523,18 @@ export function Calendar({ year, month }: CalendarProps) {
       // The backend returned no oauthUrl and no customFields.
       // Show a user-friendly message.
       setCustomFieldsError(
-        `${platformLabel || platformId} is not available yet. Please contact support.`,
+        `${
+          platformLabel || platformId
+        } is not available yet. Please contact support.`
       );
-
     } catch (err) {
-      console.error("[add-channel]", err);
+      console.error('[add-channel]', err);
       const status = (err as { status?: number })?.status;
       if (status === 402) {
-        setChannelError(t("limits.channels"));
+        setChannelError(t('limits.channels'));
         setChannelErrorIsPlanLimit(true);
       } else {
-        setChannelError(t("errors.channelConnect"));
+        setChannelError(t('errors.channelConnect'));
         setChannelErrorIsPlanLimit(false);
       }
     }
@@ -554,7 +560,9 @@ export function Calendar({ year, month }: CalendarProps) {
       await refreshChannels();
     } catch (err) {
       setCustomFieldsError(
-        err instanceof Error ? err.message : "Connection failed. Please check your credentials.",
+        err instanceof Error
+          ? err.message
+          : 'Connection failed. Please check your credentials.'
       );
       setCustomFieldsSubmitting(false);
     }
@@ -566,10 +574,10 @@ export function Calendar({ year, month }: CalendarProps) {
   const goPrev = () => {
     setCursor((c) => {
       const d = new Date(c);
-      if (view === "day") d.setDate(d.getDate() - 1);
-      else if (view === "week") d.setDate(d.getDate() - 7);
-      else if (view === "month") d.setMonth(d.getMonth() - 1);
-      else if (view === "year") d.setFullYear(d.getFullYear() - 1);
+      if (view === 'day') d.setDate(d.getDate() - 1);
+      else if (view === 'week') d.setDate(d.getDate() - 7);
+      else if (view === 'month') d.setMonth(d.getMonth() - 1);
+      else if (view === 'year') d.setFullYear(d.getFullYear() - 1);
       return d;
     });
   };
@@ -577,10 +585,10 @@ export function Calendar({ year, month }: CalendarProps) {
   const goNext = () => {
     setCursor((c) => {
       const d = new Date(c);
-      if (view === "day") d.setDate(d.getDate() + 1);
-      else if (view === "week") d.setDate(d.getDate() + 7);
-      else if (view === "month") d.setMonth(d.getMonth() + 1);
-      else if (view === "year") d.setFullYear(d.getFullYear() + 1);
+      if (view === 'day') d.setDate(d.getDate() + 1);
+      else if (view === 'week') d.setDate(d.getDate() + 7);
+      else if (view === 'month') d.setMonth(d.getMonth() + 1);
+      else if (view === 'year') d.setFullYear(d.getFullYear() + 1);
       return d;
     });
   };
@@ -595,7 +603,7 @@ export function Calendar({ year, month }: CalendarProps) {
   // to the start of the month. Month/Year keep the cursor (their period is
   // derived from it).
   const changeView = (m: ViewMode) => {
-    if (m === "day" || m === "week") {
+    if (m === 'day' || m === 'week') {
       const anchor = selected ?? new Date();
       setCursor(anchor);
       setSelected(anchor);
@@ -606,35 +614,35 @@ export function Calendar({ year, month }: CalendarProps) {
   const monthNames = useMemo(() => buildMonthNames(locale), [locale]);
 
   const headerTitle = useMemo(() => {
-    if (view === "day") {
+    if (view === 'day') {
       return cursor.toLocaleDateString(locale, {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
       });
     }
-    if (view === "week") {
+    if (view === 'week') {
       const start = startOfWeek(cursor);
       const end = addDays(start, 6);
       const sameMonth = start.getMonth() === end.getMonth();
       const startStr = start.toLocaleDateString(locale, {
-        day: "numeric",
-        month: sameMonth ? undefined : "short",
+        day: 'numeric',
+        month: sameMonth ? undefined : 'short',
       });
       const endStr = end.toLocaleDateString(locale, {
-        day: "numeric",
-        month: "short",
+        day: 'numeric',
+        month: 'short',
       });
       return `${startStr} - ${endStr}`;
     }
-    if (view === "month") {
+    if (view === 'month') {
       return monthNames[cursor.getMonth()];
     }
     return String(cursor.getFullYear());
   }, [view, cursor, locale, monthNames]);
 
   const headerSub = useMemo(() => {
-    if (view === "year") return t("calendar.twelveMonths");
+    if (view === 'year') return t('calendar.twelveMonths');
     return String(cursor.getFullYear());
   }, [view, cursor, t]);
 
@@ -642,10 +650,13 @@ export function Calendar({ year, month }: CalendarProps) {
   // context cue in the toolbar, not a setting.
   const timezoneLabel = useMemo(() => {
     const offset = -new Date().getTimezoneOffset() / 60;
-    const sign = offset >= 0 ? "+" : "-";
+    const sign = offset >= 0 ? '+' : '-';
     const abs = Math.abs(offset);
-    const hh = String(Math.floor(abs)).padStart(2, "0");
-    const mm = String(Math.round((abs - Math.floor(abs)) * 60)).padStart(2, "0");
+    const hh = String(Math.floor(abs)).padStart(2, '0');
+    const mm = String(Math.round((abs - Math.floor(abs)) * 60)).padStart(
+      2,
+      '0'
+    );
     return `GMT${sign}${hh}:${mm}`;
   }, []);
 
@@ -654,9 +665,9 @@ export function Calendar({ year, month }: CalendarProps) {
     let awaiting = 0;
     let drafts = 0;
     for (const ev of events) {
-      if (ev.status === "scheduled") scheduled += 1;
-      else if (ev.status === "pendingApproval") awaiting += 1;
-      else if (ev.status === "draft") drafts += 1;
+      if (ev.status === 'scheduled') scheduled += 1;
+      else if (ev.status === 'pendingApproval') awaiting += 1;
+      else if (ev.status === 'draft') drafts += 1;
     }
     return {
       scheduled,
@@ -674,8 +685,8 @@ export function Calendar({ year, month }: CalendarProps) {
    */
   const submitPost = async (
     post: NewPostInput,
-    type: "draft" | "schedule" | "now" | "update",
-    group?: string,
+    type: 'draft' | 'schedule' | 'now' | 'update',
+    group?: string
   ) => {
     await submitPostReturning(post, type, group);
   };
@@ -684,8 +695,8 @@ export function Calendar({ year, month }: CalendarProps) {
    * caller can chain follow-up actions (e.g. submit each to approval). */
   const submitPostReturning = async (
     post: NewPostInput,
-    type: "draft" | "schedule" | "now" | "update",
-    group?: string,
+    type: 'draft' | 'schedule' | 'now' | 'update',
+    group?: string
   ): Promise<Array<{ postId: string; integration: string }>> => {
     const isoDate = (() => {
       if (post.date && post.time) {
@@ -712,9 +723,9 @@ export function Calendar({ year, month }: CalendarProps) {
         const result = await uploadMedia(blob, m.name);
         uploadedMedia.push(result);
       } catch (err) {
-        console.error("[upload-media]", err);
+        console.error('[upload-media]', err);
         throw new Error(
-          `We couldn't upload "${m.name}". Please check the file and try again.`,
+          `We couldn't upload "${m.name}". Please check the file and try again.`
         );
       }
     }
@@ -727,7 +738,7 @@ export function Calendar({ year, month }: CalendarProps) {
       perChannelBody: post.perChannelBody,
       threadParts: post.threadParts,
       firstComment: post.firstComment,
-      media: uploadedMedia.map((m) => ({ id: m.id ?? "", path: m.path })),
+      media: uploadedMedia.map((m) => ({ id: m.id ?? '', path: m.path })),
       shortLink: false,
       tags: [],
       perChannelSettings: post.perChannelSettings,
@@ -738,10 +749,10 @@ export function Calendar({ year, month }: CalendarProps) {
       // TikTok Direct Post is processed asynchronously on TikTok's side and can
       // take minutes to appear — flag it so the user doesn't read the calendar
       // as "still processing = failed". Non-blocking, auto-dismissed.
-      if (type === "schedule" || type === "now") {
+      if (type === 'schedule' || type === 'now') {
         const targetsTiktok = post.channelIds.some((id) => {
           const c = channels.find((ch) => ch.id === id);
-          return !!c && (c.identifier === "tiktok" || c.platform === "TikTok");
+          return !!c && (c.identifier === 'tiktok' || c.platform === 'TikTok');
         });
         if (targetsTiktok) {
           setTiktokProcessingNotice(true);
@@ -750,7 +761,7 @@ export function Calendar({ year, month }: CalendarProps) {
       }
       return created;
     } catch (err) {
-      console.error("[create-post]", err);
+      console.error('[create-post]', err);
       throw err;
     }
   };
@@ -771,14 +782,14 @@ export function Calendar({ year, month }: CalendarProps) {
       const channelId = detail.integration || ev.channelId;
       const when = detail.publishDate
         ? new Date(detail.publishDate)
-        : new Date(`${ev.date}T${ev.time || "09:00"}:00`);
+        : new Date(`${ev.date}T${ev.time || '09:00'}:00`);
       const initial: InitialPostValue = {
         channelIds: channelId ? [channelId] : [],
         date: iso(when),
-        time: `${String(when.getHours()).padStart(2, "0")}:${String(
-          when.getMinutes(),
-        ).padStart(2, "0")}`,
-        body: main?.content ?? "",
+        time: `${String(when.getHours()).padStart(2, '0')}:${String(
+          when.getMinutes()
+        ).padStart(2, '0')}`,
+        body: main?.content ?? '',
         threadParts: rest.map((p) => p.content),
         perChannelSettings:
           channelId && detail.settings
@@ -790,24 +801,24 @@ export function Calendar({ year, month }: CalendarProps) {
           (m, idx): AttachedMedia => ({
             id: m.id ?? `existing-${idx}-${ev.id}`,
             backendId: m.id,
-            name: m.url.split("/").pop()?.split("?")[0] || "attachment",
+            name: m.url.split('/').pop()?.split('?')[0] || 'attachment',
             kind: m.kind,
             size: 0,
             url: m.url,
-          }),
+          })
         ),
       };
       // Fetch approval status for the post so the composer can show a
       // rejection banner and offer a re-submit button.
-      let approvalStatus: "pending" | "approved" | "rejected" | "none" = "none";
+      let approvalStatus: 'pending' | 'approved' | 'rejected' | 'none' = 'none';
       let rejectionNote: string | undefined;
       try {
         const approval = await getApprovalByPost(ev.id);
-        if (approval?.status === "REJECTED") {
-          approvalStatus = "rejected";
+        if (approval?.status === 'REJECTED') {
+          approvalStatus = 'rejected';
           rejectionNote = approval.note ?? undefined;
-        } else if (approval?.status === "PENDING") {
-          approvalStatus = "pending";
+        } else if (approval?.status === 'PENDING') {
+          approvalStatus = 'pending';
         }
       } catch {
         // No approval record → not an approval-tracked post, fine.
@@ -819,8 +830,8 @@ export function Calendar({ year, month }: CalendarProps) {
         rejectionNote,
       });
     } catch (err) {
-      console.error("[edit-post]", err);
-      setEditError(t("errors.postEdit"));
+      console.error('[edit-post]', err);
+      setEditError(t('errors.postEdit'));
       setEditRetryEvent(ev);
     } finally {
       setEditLoading(false);
@@ -832,8 +843,8 @@ export function Calendar({ year, month }: CalendarProps) {
       await deletePostGroup(group);
       await refreshEvents();
     } catch (err) {
-      console.error("[delete-post]", err);
-      setChannelError(t("errors.postDelete"));
+      console.error('[delete-post]', err);
+      setChannelError(t('errors.postDelete'));
       setChannelErrorIsPlanLimit(false);
     }
   };
@@ -849,11 +860,11 @@ export function Calendar({ year, month }: CalendarProps) {
     const ev = events.find((e) => e.id === eventId);
     if (!ev || !isDraggableStatus(ev.status)) return;
 
-    const time = newTime || ev.time || "09:00";
+    const time = newTime || ev.time || '09:00';
     const newDate = iso(target);
     if (newDate === ev.date && time === ev.time) return;
 
-    const [hh, mm] = time.split(":").map(Number);
+    const [hh, mm] = time.split(':').map(Number);
     const dt = new Date(
       target.getFullYear(),
       target.getMonth(),
@@ -861,23 +872,21 @@ export function Calendar({ year, month }: CalendarProps) {
       hh || 0,
       mm || 0,
       0,
-      0,
+      0
     );
 
     // Optimistic update so the post jumps to its new slot instantly.
     const prev = events;
     setEvents(
-      events.map((e) =>
-        e.id === eventId ? { ...e, date: newDate, time } : e,
-      ),
+      events.map((e) => (e.id === eventId ? { ...e, date: newDate, time } : e))
     );
     try {
-      await changePostDate(eventId, dt.toISOString(), "schedule");
+      await changePostDate(eventId, dt.toISOString(), 'schedule');
       void refreshEvents();
     } catch (err) {
-      console.error("[reschedule]", err);
+      console.error('[reschedule]', err);
       setEvents(prev);
-      setChannelError(t("errors.postReschedule"));
+      setChannelError(t('errors.postReschedule'));
       setChannelErrorIsPlanLimit(false);
     }
   };
@@ -887,7 +896,7 @@ export function Calendar({ year, month }: CalendarProps) {
     if (!confirm) return;
     setConfirmBusy(true);
     try {
-      if (confirm.kind === "channel") {
+      if (confirm.kind === 'channel') {
         await deleteChannel(confirm.id);
       } else {
         await deletePost(confirm.group);
@@ -900,7 +909,6 @@ export function Calendar({ year, month }: CalendarProps) {
 
   return (
     <div className={styles.shell}>
-
       <ChannelsPanel
         channels={channels}
         enabled={enabled}
@@ -915,9 +923,11 @@ export function Calendar({ year, month }: CalendarProps) {
             ? undefined
             : () => {
                 const now = new Date();
-                const pad = (n: number) => String(n).padStart(2, "0");
+                const pad = (n: number) => String(n).padStart(2, '0');
                 setComposer({
-                  date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+                  date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(
+                    now.getDate()
+                  )}`,
                   time: `${pad(now.getHours())}:${pad(now.getMinutes())}`,
                 });
               }
@@ -929,13 +939,13 @@ export function Calendar({ year, month }: CalendarProps) {
           <div
             role="alert"
             style={{
-              display: "flex",
-              alignItems: "center",
+              display: 'flex',
+              alignItems: 'center',
               gap: 10,
-              padding: "12px 14px",
-              borderRadius: "var(--radius-md)",
-              background: "var(--danger-soft)",
-              color: "var(--danger)",
+              padding: '12px 14px',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--danger-soft)',
+              color: 'var(--danger)',
               fontSize: 13,
               marginBottom: 16,
             }}
@@ -946,23 +956,23 @@ export function Calendar({ year, month }: CalendarProps) {
                 href="/billing"
                 style={{
                   fontWeight: 600,
-                  color: "var(--danger)",
-                  textDecoration: "underline",
-                  whiteSpace: "nowrap",
+                  color: 'var(--danger)',
+                  textDecoration: 'underline',
+                  whiteSpace: 'nowrap',
                 }}
               >
-                {t("common.viewPlans")}
+                {t('common.viewPlans')}
               </a>
             )}
             <button
               type="button"
               onClick={() => setChannelError(null)}
-              aria-label={t("common.dismiss")}
+              aria-label={t('common.dismiss')}
               style={{
-                border: "none",
-                background: "transparent",
-                color: "var(--danger)",
-                cursor: "pointer",
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--danger)',
+                cursor: 'pointer',
                 fontSize: 16,
                 lineHeight: 1,
                 padding: 0,
@@ -976,27 +986,27 @@ export function Calendar({ year, month }: CalendarProps) {
           <div
             role="status"
             style={{
-              display: "flex",
-              alignItems: "center",
+              display: 'flex',
+              alignItems: 'center',
               gap: 10,
-              padding: "12px 14px",
-              borderRadius: "var(--radius-md)",
-              background: "var(--info-soft)",
-              color: "var(--info)",
+              padding: '12px 14px',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--info-soft)',
+              color: 'var(--info)',
               fontSize: 13,
               marginBottom: 16,
             }}
           >
-            <span style={{ flex: 1 }}>{t("calendar.tiktokProcessing")}</span>
+            <span style={{ flex: 1 }}>{t('calendar.tiktokProcessing')}</span>
             <button
               type="button"
               onClick={() => setTiktokProcessingNotice(false)}
-              aria-label={t("common.dismiss")}
+              aria-label={t('common.dismiss')}
               style={{
-                border: "none",
-                background: "transparent",
-                color: "var(--info)",
-                cursor: "pointer",
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--info)',
+                cursor: 'pointer',
                 fontSize: 16,
                 lineHeight: 1,
                 padding: 0,
@@ -1010,18 +1020,18 @@ export function Calendar({ year, month }: CalendarProps) {
           <div
             role="alert"
             style={{
-              display: "flex",
-              alignItems: "center",
+              display: 'flex',
+              alignItems: 'center',
               gap: 10,
-              padding: "12px 14px",
-              borderRadius: "var(--radius-md)",
-              background: "var(--danger-soft)",
-              color: "var(--danger)",
+              padding: '12px 14px',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--danger-soft)',
+              color: 'var(--danger)',
               fontSize: 13,
               marginBottom: 16,
             }}
           >
-            <span style={{ flex: 1 }}>{t("calendar.loadError")}</span>
+            <span style={{ flex: 1 }}>{t('calendar.loadError')}</span>
             <button
               type="button"
               onClick={() => {
@@ -1029,18 +1039,18 @@ export function Calendar({ year, month }: CalendarProps) {
                 if (eventsError) void refreshEvents();
               }}
               style={{
-                border: "none",
-                background: "transparent",
+                border: 'none',
+                background: 'transparent',
                 fontWeight: 600,
-                color: "var(--danger)",
-                textDecoration: "underline",
-                whiteSpace: "nowrap",
-                cursor: "pointer",
+                color: 'var(--danger)',
+                textDecoration: 'underline',
+                whiteSpace: 'nowrap',
+                cursor: 'pointer',
                 fontSize: 13,
                 padding: 0,
               }}
             >
-              {t("calendar.retry")}
+              {t('calendar.retry')}
             </button>
           </div>
         )}
@@ -1048,13 +1058,13 @@ export function Calendar({ year, month }: CalendarProps) {
           <div
             role="alert"
             style={{
-              display: "flex",
-              alignItems: "center",
+              display: 'flex',
+              alignItems: 'center',
               gap: 10,
-              padding: "12px 14px",
-              borderRadius: "var(--radius-md)",
-              background: "var(--danger-soft)",
-              color: "var(--danger)",
+              padding: '12px 14px',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--danger-soft)',
+              color: 'var(--danger)',
               fontSize: 13,
               marginBottom: 16,
             }}
@@ -1066,18 +1076,18 @@ export function Calendar({ year, month }: CalendarProps) {
                 onClick={() => void openEventForEdit(editRetryEvent)}
                 disabled={editLoading}
                 style={{
-                  border: "none",
-                  background: "transparent",
+                  border: 'none',
+                  background: 'transparent',
                   fontWeight: 600,
-                  color: "var(--danger)",
-                  textDecoration: "underline",
-                  whiteSpace: "nowrap",
-                  cursor: editLoading ? "default" : "pointer",
+                  color: 'var(--danger)',
+                  textDecoration: 'underline',
+                  whiteSpace: 'nowrap',
+                  cursor: editLoading ? 'default' : 'pointer',
                   fontSize: 13,
                   padding: 0,
                 }}
               >
-                {t("calendar.retry")}
+                {t('calendar.retry')}
               </button>
             )}
           </div>
@@ -1091,9 +1101,11 @@ export function Calendar({ year, month }: CalendarProps) {
             onConnect={() => setAddChannelOpen(true)}
             onCompose={() => {
               const now = new Date();
-              const pad = (n: number) => String(n).padStart(2, "0");
+              const pad = (n: number) => String(n).padStart(2, '0');
               setComposer({
-                date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+                date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(
+                  now.getDate()
+                )}`,
                 time: `${pad(now.getHours())}:${pad(now.getMinutes())}`,
               });
             }}
@@ -1108,17 +1120,33 @@ export function Calendar({ year, month }: CalendarProps) {
 
           <div className={styles.headerRight}>
             <div className={styles.searchWrap}>
-              <svg viewBox="0 0 16 16" fill="none" aria-hidden className={styles.searchIcon}>
-                <circle cx="7" cy="7" r="4.25" stroke="currentColor" strokeWidth="1.5" />
-                <path d="m10.25 10.25 3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              <svg
+                viewBox="0 0 16 16"
+                fill="none"
+                aria-hidden
+                className={styles.searchIcon}
+              >
+                <circle
+                  cx="7"
+                  cy="7"
+                  r="4.25"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                />
+                <path
+                  d="m10.25 10.25 3 3"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
               </svg>
               <input
                 type="text"
                 className={styles.searchInput}
-                placeholder={t("calendar.searchPlaceholder")}
+                placeholder={t('calendar.searchPlaceholder')}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                aria-label={t("calendar.searchPlaceholder")}
+                aria-label={t('calendar.searchPlaceholder')}
               />
               <kbd className={styles.searchKbd}>⌘K</kbd>
             </div>
@@ -1126,25 +1154,39 @@ export function Calendar({ year, month }: CalendarProps) {
             <div className={styles.filterWrap} ref={filterRef}>
               <button
                 type="button"
-                className={styles.filterBtn + (statusFilter !== "all" ? " " + styles.filterBtnActive : "")}
+                className={
+                  styles.filterBtn +
+                  (statusFilter !== 'all' ? ' ' + styles.filterBtnActive : '')
+                }
                 onClick={() => setFiltersOpen((v) => !v)}
                 aria-expanded={filtersOpen}
               >
-                {t("calendar.filters")}
-                <svg viewBox="0 0 16 16" fill="none" aria-hidden className={styles.filterIcon}>
-                  <path d="M4 6.5 8 10.5 12 6.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                {t('calendar.filters')}
+                <svg
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  aria-hidden
+                  className={styles.filterIcon}
+                >
+                  <path
+                    d="M4 6.5 8 10.5 12 6.5"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
                 </svg>
               </button>
               {filtersOpen && (
                 <div className={styles.filterMenu} role="listbox">
                   {(
                     [
-                      ["all", "posts.all"],
-                      ["scheduled", "posts.status.scheduled"],
-                      ["draft", "posts.status.draft"],
-                      ["pendingApproval", "posts.status.pendingApproval"],
-                      ["failed", "posts.status.error"],
-                      ["held", "posts.status.held"],
+                      ['all', 'posts.all'],
+                      ['scheduled', 'posts.status.scheduled'],
+                      ['draft', 'posts.status.draft'],
+                      ['pendingApproval', 'posts.status.pendingApproval'],
+                      ['failed', 'posts.status.error'],
+                      ['held', 'posts.status.held'],
                     ] as const
                   ).map(([value, labelKey]) => (
                     <button
@@ -1152,7 +1194,12 @@ export function Calendar({ year, month }: CalendarProps) {
                       type="button"
                       role="option"
                       aria-selected={statusFilter === value}
-                      className={styles.filterOption + (statusFilter === value ? " " + styles.filterOptionActive : "")}
+                      className={
+                        styles.filterOption +
+                        (statusFilter === value
+                          ? ' ' + styles.filterOptionActive
+                          : '')
+                      }
                       onClick={() => {
                         setStatusFilter(value);
                         setFiltersOpen(false);
@@ -1177,7 +1224,7 @@ export function Calendar({ year, month }: CalendarProps) {
                   aria-selected={view === m}
                   className={
                     styles.segment +
-                    (view === m ? " " + styles.segmentActive : "")
+                    (view === m ? ' ' + styles.segmentActive : '')
                   }
                   onClick={() => changeView(m)}
                 >
@@ -1191,7 +1238,7 @@ export function Calendar({ year, month }: CalendarProps) {
                 type="button"
                 className={styles.iconBtn}
                 onClick={goPrev}
-                aria-label={t("calendar.previous")}
+                aria-label={t('calendar.previous')}
               >
                 <ChevronLeft />
               </button>
@@ -1200,13 +1247,13 @@ export function Calendar({ year, month }: CalendarProps) {
                 className={styles.todayBtn}
                 onClick={goToday}
               >
-                {t("calendar.today")}
+                {t('calendar.today')}
               </button>
               <button
                 type="button"
                 className={styles.iconBtn}
                 onClick={goNext}
-                aria-label={t("calendar.next")}
+                aria-label={t('calendar.next')}
               >
                 <ChevronRight />
               </button>
@@ -1217,86 +1264,84 @@ export function Calendar({ year, month }: CalendarProps) {
         {initialLoading && !loadError ? (
           <div className={styles.loadingState} role="status">
             <span className={styles.loadingDot} aria-hidden />
-            {t("calendar.loading")}
+            {t('calendar.loading')}
           </div>
         ) : channels.length === 0 ? (
           <EmptyState
             icon="channel"
-            title={t("calendar.emptyTitle")}
+            title={t('calendar.emptyTitle')}
             description={
               isMember
-                ? t("calendar.emptyDescMember")
-                : t("calendar.emptyDescAdmin")
+                ? t('calendar.emptyDescMember')
+                : t('calendar.emptyDescAdmin')
             }
             {...(!isMember
               ? {
-                  actionLabel: t("calendar.addChannel"),
+                  actionLabel: t('calendar.addChannel'),
                   onAction: () => setAddChannelOpen(true),
                 }
               : {})}
           />
         ) : (
           <>
-        {view === "month" && (
-          <MonthView
-            cursor={cursor}
-            today={today}
-            selected={selected}
-            onSelect={(d) => {
-              setSelected(d);
-              setOpenDay(d);
-            }}
-            eventsByDay={eventsByDay}
-            channelsById={channelsById}
-            onMoveEvent={isMember ? undefined : moveEvent}
-          />
-        )}
+            {view === 'month' && (
+              <MonthView
+                cursor={cursor}
+                today={today}
+                selected={selected}
+                onSelect={(d) => {
+                  setSelected(d);
+                  setOpenDay(d);
+                }}
+                eventsByDay={eventsByDay}
+                channelsById={channelsById}
+                onMoveEvent={isMember ? undefined : moveEvent}
+              />
+            )}
 
-        {view === "week" && (
-          <WeekView
-            cursor={cursor}
-            today={today}
-            eventsByDay={eventsByDay}
-            channelsById={channelsById}
-            onCreate={(d, time) =>
-              setComposer({ date: iso(d), time })
-            }
-            onMoveEvent={isMember ? undefined : moveEvent}
-            onOpenEvent={isMember ? undefined : (ev) => void openEventForEdit(ev)}
-          />
-        )}
+            {view === 'week' && (
+              <WeekView
+                cursor={cursor}
+                today={today}
+                eventsByDay={eventsByDay}
+                channelsById={channelsById}
+                onCreate={(d, time) => setComposer({ date: iso(d), time })}
+                onMoveEvent={isMember ? undefined : moveEvent}
+                onOpenEvent={
+                  isMember ? undefined : (ev) => void openEventForEdit(ev)
+                }
+              />
+            )}
 
-        {view === "day" && (
-          <DayView
-            cursor={cursor}
-            today={today}
-            eventsByDay={eventsByDay}
-            channelsById={channelsById}
-            onCreate={(d, time) =>
-              setComposer({ date: iso(d), time })
-            }
-            onMoveEvent={isMember ? undefined : moveEvent}
-            onOpenEvent={isMember ? undefined : (ev) => void openEventForEdit(ev)}
-          />
-        )}
+            {view === 'day' && (
+              <DayView
+                cursor={cursor}
+                today={today}
+                eventsByDay={eventsByDay}
+                channelsById={channelsById}
+                onCreate={(d, time) => setComposer({ date: iso(d), time })}
+                onMoveEvent={isMember ? undefined : moveEvent}
+                onOpenEvent={
+                  isMember ? undefined : (ev) => void openEventForEdit(ev)
+                }
+              />
+            )}
 
-        {view === "year" && (
-          <YearView
-            cursor={cursor}
-            today={today}
-            eventsByDay={eventsByDay}
-            onPickMonth={(m) => {
-              setCursor(new Date(cursor.getFullYear(), m, 1));
-              setView("month");
-            }}
-          />
-        )}
+            {view === 'year' && (
+              <YearView
+                cursor={cursor}
+                today={today}
+                eventsByDay={eventsByDay}
+                onPickMonth={(m) => {
+                  setCursor(new Date(cursor.getFullYear(), m, 1));
+                  setView('month');
+                }}
+              />
+            )}
           </>
         )}
 
-        {channels.length > 0 && (
-          <SummaryBar metrics={summaryMetrics} />
-        )}
+        {channels.length > 0 && <SummaryBar metrics={summaryMetrics} />}
       </div>
 
       {openChannel && (
@@ -1307,7 +1352,7 @@ export function Calendar({ year, month }: CalendarProps) {
           onReconnect={() => reconnectChannel(openChannel.id)}
           onDelete={() =>
             setConfirm({
-              kind: "channel",
+              kind: 'channel',
               id: openChannel.id,
               name: openChannel.name,
             })
@@ -1373,8 +1418,8 @@ export function Calendar({ year, month }: CalendarProps) {
           }}
           onChooseOwn={() => {
             setCustomFieldsState({
-              provider: "discord",
-              label: "Discord",
+              provider: 'discord',
+              label: 'Discord',
               fields: discordChoice.customFields,
               state: discordChoice.state,
             });
@@ -1403,7 +1448,7 @@ export function Calendar({ year, month }: CalendarProps) {
           time={composer.time}
           onClose={() => setComposer(null)}
           onSaveDraft={async (post) => {
-            await submitPost(post, "draft");
+            await submitPost(post, 'draft');
             setComposer(null);
             void refreshEvents();
             setPostCreatedTick((n) => n + 1);
@@ -1411,7 +1456,7 @@ export function Calendar({ year, month }: CalendarProps) {
           onSendToApproval={async (post) => {
             // Create as a DRAFT, then submit each created post for approval.
             // Approval itself needs the post to already be a draft.
-            const created = await submitPostReturning(post, "draft");
+            const created = await submitPostReturning(post, 'draft');
             for (const c of created ?? []) {
               await requestApproval(c.postId);
             }
@@ -1420,13 +1465,13 @@ export function Calendar({ year, month }: CalendarProps) {
             setPostCreatedTick((n) => n + 1);
           }}
           onSchedule={async (post) => {
-            await submitPost(post, "schedule");
+            await submitPost(post, 'schedule');
             setComposer(null);
             void refreshEvents();
             setPostCreatedTick((n) => n + 1);
           }}
           onPublishNow={async (post) => {
-            await submitPost(post, "now");
+            await submitPost(post, 'now');
             setComposer(null);
             void refreshEvents();
             setPostCreatedTick((n) => n + 1);
@@ -1443,21 +1488,26 @@ export function Calendar({ year, month }: CalendarProps) {
           onClose={() => setEditPost(null)}
           onSaveDraft={() => setEditPost(null)}
           onSchedule={async (post) => {
-            await submitPost(post, "update", editPost.group);
+            await submitPost(post, 'update', editPost.group);
             setEditPost(null);
             void refreshEvents();
           }}
           onPublishNow={async (post) => {
-            await submitPost(post, "now", editPost.group);
+            await submitPost(post, 'now', editPost.group);
             setEditPost(null);
             void refreshEvents();
           }}
           onSendToApproval={
-            editPost.approvalStatus === "rejected"
+            editPost.approvalStatus === 'rejected'
               ? async (post) => {
-                  await submitPost(post, "update", editPost.group);
-                  // Re-submit: the post is already a draft, just re-request approval
-                  for (const c of (await submitPostReturning(post, "draft", editPost.group)) ?? []) {
+                  // Re-submit exactly once as a draft, then re-request approval.
+                  // (A second "update" submission would create a QUEUE copy that
+                  // the backend now arms — publishing without review.)
+                  for (const c of (await submitPostReturning(
+                    post,
+                    'draft',
+                    editPost.group
+                  )) ?? []) {
                     await requestApproval(c.postId);
                   }
                   setEditPost(null);
@@ -1468,7 +1518,7 @@ export function Calendar({ year, month }: CalendarProps) {
           onDelete={async () => {
             const group = editPost.group;
             setEditPost(null);
-            setConfirm({ kind: "post", group });
+            setConfirm({ kind: 'post', group });
           }}
           approvalStatus={editPost.approvalStatus}
           rejectionNote={editPost.rejectionNote}
@@ -1480,19 +1530,19 @@ export function Calendar({ year, month }: CalendarProps) {
           danger
           busy={confirmBusy}
           title={
-            confirm.kind === "channel"
-              ? t("channels.deleteConfirmTitle")
-              : t("posts.deleteConfirmTitle")
+            confirm.kind === 'channel'
+              ? t('channels.deleteConfirmTitle')
+              : t('posts.deleteConfirmTitle')
           }
           body={
-            confirm.kind === "channel"
-              ? t("channels.deleteConfirmBody", { name: confirm.name })
-              : t("posts.deleteConfirmBody")
+            confirm.kind === 'channel'
+              ? t('channels.deleteConfirmBody', { name: confirm.name })
+              : t('posts.deleteConfirmBody')
           }
           confirmLabel={
-            confirm.kind === "channel"
-              ? t("channels.disconnect")
-              : t("posts.deleteBtn")
+            confirm.kind === 'channel'
+              ? t('channels.disconnect')
+              : t('posts.deleteBtn')
           }
           onConfirm={() => void runConfirm()}
           onCancel={() => setConfirm(null)}
@@ -1525,10 +1575,10 @@ function MonthView({
 }: MonthViewProps) {
   const t = useT();
   const { locale } = useI18n();
-  const weekdays = useMemo(() => buildWeekdayNames(locale, "short"), [locale]);
+  const weekdays = useMemo(() => buildWeekdayNames(locale, 'short'), [locale]);
   const cells = useMemo(
     () => buildMonthGrid(cursor.getFullYear(), cursor.getMonth()),
-    [cursor],
+    [cursor]
   );
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   // A month cell is ~110px next to the channels panel: a thumbnail there costs
@@ -1545,7 +1595,7 @@ function MonthView({
             <div
               key={idx}
               className={
-                styles.weekday + (idx >= 5 ? " " + styles.weekendLabel : "")
+                styles.weekday + (idx >= 5 ? ' ' + styles.weekendLabel : '')
               }
             >
               {d}
@@ -1556,7 +1606,9 @@ function MonthView({
         <div className={styles.grid} role="grid" ref={gridRef}>
           {cells.map((cell, idx) => {
             const isToday = isSameDay(cell.date, today);
-            const isSelected = selected ? isSameDay(cell.date, selected) : false;
+            const isSelected = selected
+              ? isSameDay(cell.date, selected)
+              : false;
             const isWeekend = idx % 7 >= 5;
             const dayEvents = eventsByDay.get(iso(cell.date)) ?? [];
 
@@ -1566,7 +1618,7 @@ function MonthView({
               isSelected && styles.cellSelected,
             ]
               .filter(Boolean)
-              .join(" ");
+              .join(' ');
 
             const isDropTarget = onMoveEvent && cell.inCurrentMonth;
 
@@ -1576,12 +1628,12 @@ function MonthView({
                 key={idx}
                 role="gridcell"
                 aria-selected={isSelected}
-                aria-current={isToday ? "date" : undefined}
+                aria-current={isToday ? 'date' : undefined}
                 className={cellClassNames}
                 onClick={() => onSelect(cell.date)}
                 style={
                   dragOverIdx === idx
-                    ? { outline: "2px solid var(--fg)", outlineOffset: -2 }
+                    ? { outline: '2px solid var(--fg)', outlineOffset: -2 }
                     : undefined
                 }
                 onDragOver={
@@ -1602,7 +1654,7 @@ function MonthView({
                     ? (e) => {
                         e.preventDefault();
                         setDragOverIdx(null);
-                        const id = e.dataTransfer.getData("text/plain");
+                        const id = e.dataTransfer.getData('text/plain');
                         if (id) onMoveEvent!(id, cell.date);
                       }
                     : undefined
@@ -1612,8 +1664,8 @@ function MonthView({
                   <span
                     className={
                       styles.dayNumber +
-                      (isToday ? " " + styles.dayNumberToday : "") +
-                      (isWeekend && !isToday ? " " + styles.dayWeekend : "")
+                      (isToday ? ' ' + styles.dayNumberToday : '') +
+                      (isWeekend && !isToday ? ' ' + styles.dayWeekend : '')
                     }
                   >
                     {cell.date.getDate()}
@@ -1629,7 +1681,8 @@ function MonthView({
                   <div className={styles.events}>
                     {dayEvents.slice(0, 2).map((ev) => {
                       const c = channelsById.get(ev.channelId);
-                      const canDrag = !!onMoveEvent && isDraggableStatus(ev.status);
+                      const canDrag =
+                        !!onMoveEvent && isDraggableStatus(ev.status);
                       return (
                         <span
                           key={ev.id}
@@ -1639,8 +1692,8 @@ function MonthView({
                             canDrag
                               ? (e) => {
                                   e.stopPropagation();
-                                  e.dataTransfer.setData("text/plain", ev.id);
-                                  e.dataTransfer.effectAllowed = "move";
+                                  e.dataTransfer.setData('text/plain', ev.id);
+                                  e.dataTransfer.effectAllowed = 'move';
                                 }
                               : undefined
                           }
@@ -1648,26 +1701,22 @@ function MonthView({
                             c
                               ? {
                                   borderLeft: `3px solid ${c.color}`,
-                                  ...(canDrag ? { cursor: "grab" } : {}),
+                                  ...(canDrag ? { cursor: 'grab' } : {}),
                                 }
                               : canDrag
-                                ? { cursor: "grab" }
-                                : undefined
+                              ? { cursor: 'grab' }
+                              : undefined
                           }
                           title={`${ev.time} · ${ev.title}${
-                            c ? ` · ${c.name} (${c.platform})` : ""
+                            c ? ` · ${c.name} (${c.platform})` : ''
                           }`}
                         >
                           {c ? (
-                            <PlatformIcon
-                              platform={c.platform}
-                              size={16}
-                            />
+                            <PlatformIcon platform={c.platform} size={16} />
                           ) : (
-                            <span
-                              className={styles.eventDot}
-                              aria-hidden
-                            >?</span>
+                            <span className={styles.eventDot} aria-hidden>
+                              ?
+                            </span>
                           )}
                           {/* Renders nothing when the post has no media. */}
                           {showThumbs && (
@@ -1679,7 +1728,7 @@ function MonthView({
                     })}
                     {dayEvents.length > 2 && (
                       <span className={styles.eventMore}>
-                        {t("calendar.moreCount", {
+                        {t('calendar.moreCount', {
                           count: dayEvents.length - 2,
                         })}
                       </span>
@@ -1713,41 +1762,105 @@ function SummaryBar({
 }) {
   const t = useT();
   const items = [
-    { label: t("calendar.summaryScheduled"), value: metrics.scheduled, accent: false },
-    { label: t("calendar.summaryChannels"), value: metrics.channels, accent: false },
-    { label: t("calendar.summaryAwaiting"), value: metrics.awaiting, accent: true },
-    { label: t("calendar.summaryDrafts"), value: metrics.drafts, accent: false },
+    {
+      label: t('calendar.summaryScheduled'),
+      value: metrics.scheduled,
+      accent: false,
+    },
+    {
+      label: t('calendar.summaryChannels'),
+      value: metrics.channels,
+      accent: false,
+    },
+    {
+      label: t('calendar.summaryAwaiting'),
+      value: metrics.awaiting,
+      accent: true,
+    },
+    {
+      label: t('calendar.summaryDrafts'),
+      value: metrics.drafts,
+      accent: false,
+    },
   ];
   return (
     <div className={styles.summaryBar}>
       {items.map((it, i) => (
         <div
           key={it.label}
-          className={styles.summaryItem + (i > 0 ? " " + styles.summaryItemBorder : "")}
+          className={
+            styles.summaryItem + (i > 0 ? ' ' + styles.summaryItemBorder : '')
+          }
         >
           <span className={styles.summaryIcon} aria-hidden>
-            {it.label === t("calendar.summaryScheduled") ? (
+            {it.label === t('calendar.summaryScheduled') ? (
               <svg viewBox="0 0 16 16" fill="none" width="16" height="16">
-                <rect x="2.5" y="3" width="11" height="10" rx="2" stroke="currentColor" strokeWidth="1.4" />
-                <path d="M2.5 6h11M5 1.5v3M11 1.5v3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                <rect
+                  x="2.5"
+                  y="3"
+                  width="11"
+                  height="10"
+                  rx="2"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                />
+                <path
+                  d="M2.5 6h11M5 1.5v3M11 1.5v3"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                />
               </svg>
-            ) : it.label === t("calendar.summaryChannels") ? (
+            ) : it.label === t('calendar.summaryChannels') ? (
               <svg viewBox="0 0 16 16" fill="none" width="16" height="16">
-                <circle cx="5.5" cy="5.5" r="3" stroke="currentColor" strokeWidth="1.4" />
-                <circle cx="10.5" cy="5.5" r="3" stroke="currentColor" strokeWidth="1.4" />
-                <path d="M2.5 12c.8-1.6 2-2.5 3-2.5s2.2.9 3 2.5M7.5 12c.8-1.6 2-2.5 3-2.5s2.2.9 3 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                <circle
+                  cx="5.5"
+                  cy="5.5"
+                  r="3"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                />
+                <circle
+                  cx="10.5"
+                  cy="5.5"
+                  r="3"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                />
+                <path
+                  d="M2.5 12c.8-1.6 2-2.5 3-2.5s2.2.9 3 2.5M7.5 12c.8-1.6 2-2.5 3-2.5s2.2.9 3 2.5"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                />
               </svg>
-            ) : it.label === t("calendar.summaryAwaiting") ? (
+            ) : it.label === t('calendar.summaryAwaiting') ? (
               <svg viewBox="0 0 16 16" fill="none" width="16" height="16">
-                <path d="M3.5 9.5l2.5 2.5 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                <path
+                  d="M3.5 9.5l2.5 2.5 6-6"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
             ) : (
               <svg viewBox="0 0 16 16" fill="none" width="16" height="16">
-                <path d="M3.5 4.5h9M3.5 8h9M3.5 11.5h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                <path
+                  d="M3.5 4.5h9M3.5 8h9M3.5 11.5h5"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                />
               </svg>
             )}
           </span>
-          <span className={styles.summaryValue + (it.accent ? " " + styles.summaryValueAccent : "")}>
+          <span
+            className={
+              styles.summaryValue +
+              (it.accent ? ' ' + styles.summaryValueAccent : '')
+            }
+          >
             {it.value}
           </span>
           <span className={styles.summaryLabel}>{it.label}</span>
@@ -1765,7 +1878,7 @@ const HOUR_LABEL_WIDTH = 64;
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 function eventTopAndHeight(time: string, durationMinutes: number) {
-  const [h, m] = time.split(":").map(Number);
+  const [h, m] = time.split(':').map(Number);
   const minutes = h * 60 + m;
   const top = (minutes / 60) * HOUR_HEIGHT;
   const height = Math.max((durationMinutes / 60) * HOUR_HEIGHT, 26);
@@ -1774,12 +1887,12 @@ function eventTopAndHeight(time: string, durationMinutes: number) {
 
 /** "HH:mm" → minutes from midnight (for overlap layout). */
 function timeToMinutes(time: string): number {
-  const [h, m] = time.split(":").map(Number);
+  const [h, m] = time.split(':').map(Number);
   return (h || 0) * 60 + (m || 0);
 }
 
 function formatHourLabel(h: number): string {
-  return `${String(h).padStart(2, "0")}:00`;
+  return `${String(h).padStart(2, '0')}:00`;
 }
 
 /** Calendar events -> the minimal shape both layout helpers work on. */
@@ -1814,7 +1927,7 @@ function Timeline({
 }: TimelineProps) {
   const t = useT();
   const { locale } = useI18n();
-  const weekdays = useMemo(() => buildWeekdayNames(locale, "short"), [locale]);
+  const weekdays = useMemo(() => buildWeekdayNames(locale, 'short'), [locale]);
   const cols = days.length;
   const gridTemplate = `64px repeat(${cols}, 1fr)`;
   const [dragOver, setDragOver] = useState<string | null>(null);
@@ -1845,7 +1958,8 @@ function Timeline({
 
   const positionedByDay = useMemo(() => {
     const map = new Map<string, ReturnType<typeof toPositioned>>();
-    for (const d of days) map.set(iso(d), toPositioned(eventsByDay.get(iso(d)) ?? []));
+    for (const d of days)
+      map.set(iso(d), toPositioned(eventsByDay.get(iso(d)) ?? []));
     return map;
   }, [days, eventsByDay]);
 
@@ -1856,8 +1970,8 @@ function Timeline({
     const merged = mergeExtraByHour(
       [...positionedByDay.values()].map(
         (evs) =>
-          buildStackLayout(evs, HOUR_HEIGHT, 26, undefined, stacks).extraByHour,
-      ),
+          buildStackLayout(evs, HOUR_HEIGHT, 26, undefined, stacks).extraByHour
+      )
     );
     const byDay = new Map<string, StackLayout>();
     for (const [key, evs] of positionedByDay)
@@ -1901,7 +2015,7 @@ function Timeline({
               <span
                 className={
                   styles.timelineHeaderDate +
-                  (isToday ? " " + styles.timelineHeaderDateToday : "")
+                  (isToday ? ' ' + styles.timelineHeaderDateToday : '')
                 }
               >
                 {d.getDate()}
@@ -1922,10 +2036,12 @@ function Timeline({
               key={h}
               className={styles.timelineHourLabel}
               style={
-                extraByHour[h] ? { height: HOUR_HEIGHT + extraByHour[h] } : undefined
+                extraByHour[h]
+                  ? { height: HOUR_HEIGHT + extraByHour[h] }
+                  : undefined
               }
             >
-              {h === 0 ? "" : formatHourLabel(h)}
+              {h === 0 ? '' : formatHourLabel(h)}
             </div>
           ))}
         </div>
@@ -1942,12 +2058,9 @@ function Timeline({
                     key={h}
                     className={styles.timelineHourSlot}
                     onClick={() =>
-                      onCreate?.(
-                        d,
-                        `${String(h).padStart(2, "0")}:00`,
-                      )
+                      onCreate?.(d, `${String(h).padStart(2, '0')}:00`)
                     }
-                    aria-label={t("calendar.addPostAt", {
+                    aria-label={t('calendar.addPostAt', {
                       time: formatHourLabel(h),
                     })}
                     style={{
@@ -1955,7 +2068,7 @@ function Timeline({
                         ? { height: HOUR_HEIGHT + extraByHour[h] }
                         : null),
                       ...(dragOver === slotKey
-                        ? { outline: "2px solid var(--fg)", outlineOffset: -2 }
+                        ? { outline: '2px solid var(--fg)', outlineOffset: -2 }
                         : null),
                     }}
                     onDragOver={
@@ -1969,9 +2082,7 @@ function Timeline({
                     onDragLeave={
                       onMoveEvent
                         ? () =>
-                            setDragOver((cur) =>
-                              cur === slotKey ? null : cur,
-                            )
+                            setDragOver((cur) => (cur === slotKey ? null : cur))
                         : undefined
                     }
                     onDrop={
@@ -1979,12 +2090,12 @@ function Timeline({
                         ? (e) => {
                             e.preventDefault();
                             setDragOver(null);
-                            const id = e.dataTransfer.getData("text/plain");
+                            const id = e.dataTransfer.getData('text/plain');
                             if (id)
                               onMoveEvent(
                                 id,
                                 d,
-                                `${String(h).padStart(2, "0")}:00`,
+                                `${String(h).padStart(2, '0')}:00`
                               );
                           }
                         : undefined
@@ -2009,7 +2120,7 @@ function Timeline({
                 return dayEvents.map((ev) => {
                   const natural = eventTopAndHeight(
                     ev.time,
-                    ev.durationMinutes ?? DEFAULT_DURATION,
+                    ev.durationMinutes ?? DEFAULT_DURATION
                   );
                   const slot = stack?.placements.get(ev.id);
                   const top = slot ? slot.top : natural.top;
@@ -2018,23 +2129,27 @@ function Timeline({
                   const canDrag = !!onMoveEvent && isDraggableStatus(ev.status);
                   // A stacked card owns the full column; only lane cards get
                   // a horizontal slice.
-                  const placement = slot?.stacked ? undefined : placements?.get(ev.id);
+                  const placement = slot?.stacked
+                    ? undefined
+                    : placements?.get(ev.id);
                   return (
                     <div
                       key={ev.id}
                       className={
                         styles.timelineEvent +
-                        (iconOnly ? " " + styles.timelineEventIconOnly : "")
+                        (iconOnly ? ' ' + styles.timelineEventIconOnly : '')
                       }
-                      title={`${ev.time}${c ? " · " + c.name : ""} — ${ev.title}`}
+                      title={`${ev.time}${c ? ' · ' + c.name : ''} — ${
+                        ev.title
+                      }`}
                       draggable={canDrag}
                       onClick={() => onOpenEvent?.(ev)}
                       onDragStart={
                         canDrag
                           ? (e) => {
                               e.stopPropagation();
-                              e.dataTransfer.setData("text/plain", ev.id);
-                              e.dataTransfer.effectAllowed = "move";
+                              e.dataTransfer.setData('text/plain', ev.id);
+                              e.dataTransfer.effectAllowed = 'move';
                             }
                           : undefined
                       }
@@ -2042,7 +2157,7 @@ function Timeline({
                         top,
                         height,
                         borderLeft: c ? `3px solid ${c.color}` : undefined,
-                        ...(canDrag ? { cursor: "grab" } : {}),
+                        ...(canDrag ? { cursor: 'grab' } : {}),
                         ...(placement
                           ? {
                               left: `calc(${placement.leftPct}% + 6px)`,
@@ -2053,25 +2168,29 @@ function Timeline({
                     >
                       {/* Renders nothing when the post has no media; hidden
                           entirely in icon-only columns, where it would not fit. */}
-                      {!iconOnly && <PostMediaThumb media={ev.media} size={24} />}
+                      {!iconOnly && (
+                        <PostMediaThumb media={ev.media} size={24} />
+                      )}
                       <div className={styles.timelineEventBody}>
-                      <div className={styles.timelineEventHead}>
-                        {c ? (
-                          <PlatformIcon platform={c.platform} size={16} />
-                        ) : (
-                          <span
-                            className={styles.timelineEventBadge}
-                            aria-hidden
-                          >?</span>
-                        )}
-                        <span className={styles.timelineEventTitle}>
-                          {ev.title}
+                        <div className={styles.timelineEventHead}>
+                          {c ? (
+                            <PlatformIcon platform={c.platform} size={16} />
+                          ) : (
+                            <span
+                              className={styles.timelineEventBadge}
+                              aria-hidden
+                            >
+                              ?
+                            </span>
+                          )}
+                          <span className={styles.timelineEventTitle}>
+                            {ev.title}
+                          </span>
+                        </div>
+                        <span className={styles.timelineEventMeta}>
+                          {ev.time}
+                          {c ? ` · ${c.name}` : ''}
                         </span>
-                      </div>
-                      <span className={styles.timelineEventMeta}>
-                        {ev.time}
-                        {c ? ` · ${c.name}` : ""}
-                      </span>
                       </div>
                     </div>
                   );
@@ -2170,8 +2289,8 @@ function YearView({ cursor, today, eventsByDay, onPickMonth }: YearViewProps) {
   const { locale } = useI18n();
   const monthNames = useMemo(() => buildMonthNames(locale), [locale]);
   const weekdaysNarrow = useMemo(
-    () => buildWeekdayNames(locale, "narrow"),
-    [locale],
+    () => buildWeekdayNames(locale, 'narrow'),
+    [locale]
   );
   const year = cursor.getFullYear();
 
@@ -2189,7 +2308,7 @@ function YearView({ cursor, today, eventsByDay, onPickMonth }: YearViewProps) {
             <span className={styles.yearMonthName}>{name}</span>
             <div className={styles.yearMonthGrid}>
               {weekdaysNarrow.map((d, i) => (
-                <span key={"w" + i} className={styles.yearWeekday}>
+                <span key={'w' + i} className={styles.yearWeekday}>
                   {d}
                 </span>
               ))}
@@ -2204,9 +2323,9 @@ function YearView({ cursor, today, eventsByDay, onPickMonth }: YearViewProps) {
                     key={idx}
                     className={
                       styles.yearDay +
-                      (muted ? " " + styles.yearDayMuted : "") +
-                      (isToday ? " " + styles.yearDayToday : "") +
-                      (hasEvent && !isToday ? " " + styles.yearDayHasEvent : "")
+                      (muted ? ' ' + styles.yearDayMuted : '') +
+                      (isToday ? ' ' + styles.yearDayToday : '') +
+                      (hasEvent && !isToday ? ' ' + styles.yearDayHasEvent : '')
                     }
                   >
                     {cell.date.getDate()}

@@ -54,7 +54,6 @@ function slimPost(post: any) {
   return rest;
 }
 
-
 /**
  * Strip the OAuth secrets from an integration before it crosses into workflow
  * code.
@@ -97,7 +96,7 @@ export class PostActivity {
     private _webhookService: WebhooksService,
     private _temporalService: TemporalService,
     private _subscriptionService: SubscriptionService,
-    private _providerEnvHelper: ProviderEnvHelper,
+    private _providerEnvHelper: ProviderEnvHelper
   ) {}
 
   @ActivityMethod()
@@ -109,9 +108,9 @@ export class PostActivity {
   async searchForMissingThreeHoursPosts() {
     const list = await this._postService.searchForMissingThreeHoursPosts();
     for (const post of list) {
-      await this._temporalService.client!
-        .getRawClient()!
-        .workflow.signalWithStart('postWorkflowV107', {
+      await this._temporalService
+        .client!.getRawClient()!
+        .workflow.signalWithStart('postWorkflowV108', {
           workflowId: `post_${post.id}`,
           taskQueue: 'main',
           signal: 'poke',
@@ -141,7 +140,12 @@ export class PostActivity {
   }
 
   @ActivityMethod()
-  async updatePost(id: string, postId: string, releaseURL: string, orgId?: string) {
+  async updatePost(
+    id: string,
+    postId: string,
+    releaseURL: string,
+    orgId?: string
+  ) {
     await this._postService.updatePost(id, postId, releaseURL, orgId);
   }
 
@@ -257,7 +261,7 @@ export class PostActivity {
           ),
           integration
         );
-      },
+      }
     );
   }
 
@@ -273,7 +277,9 @@ export class PostActivity {
           );
 
           if (!subscription) {
-            throw new Error('No active subscription found for this organization.');
+            throw new Error(
+              'No active subscription found for this organization.'
+            );
           }
         }
 
@@ -320,8 +326,8 @@ export class PostActivity {
         );
 
         try {
-          await this._temporalService.client!
-            .getRawClient()!
+          await this._temporalService
+            .client!.getRawClient()!
             .workflow.start('streakWorkflow', {
               args: [{ organizationId: integration.organizationId }],
               workflowId: `streak_${integration.organizationId}`,
@@ -343,7 +349,7 @@ export class PostActivity {
         }
 
         return postNow;
-      },
+      }
     );
   }
 
@@ -380,7 +386,13 @@ export class PostActivity {
   }
 
   @ActivityMethod()
-  async changeState(id: string, state: State, err?: any, body?: any, orgId?: string) {
+  async changeState(
+    id: string,
+    state: State,
+    err?: any,
+    body?: any,
+    orgId?: string
+  ) {
     await this._postService.changeState(id, state, err, body, orgId);
   }
 
@@ -396,14 +408,14 @@ export class PostActivity {
 
   @ActivityMethod()
   async sendWebhooks(postId: string, orgId: string, integrationId: string) {
-    const webhooks = (await this._webhookService.getWebhooksForDelivery(orgId)).filter(
-      (f) => {
-        return (
-          f.integrations.length === 0 ||
-          f.integrations.some((i) => i.integration.id === integrationId)
-        );
-      }
-    );
+    const webhooks = (
+      await this._webhookService.getWebhooksForDelivery(orgId)
+    ).filter((f) => {
+      return (
+        f.integrations.length === 0 ||
+        f.integrations.some((i) => i.integration.id === integrationId)
+      );
+    });
 
     // Nothing to deliver — skip the work (and the import below) entirely.
     if (webhooks.length === 0) {
@@ -471,7 +483,9 @@ export class PostActivity {
             // Network error — retry after backoff
           }
           if (attempt < 2) {
-            await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt)));
+            await new Promise((r) =>
+              setTimeout(r, 1000 * Math.pow(2, attempt))
+            );
           }
         }
         this._logger.warn(
@@ -533,7 +547,7 @@ export class PostActivity {
           await this._refreshIntegrationService.setBetweenSteps(integration);
           return false;
         }
-      },
+      }
     );
   }
 
@@ -565,10 +579,13 @@ export class PostActivity {
 
           return refresh;
         } catch (err) {
-          await this._refreshIntegrationService.setBetweenSteps(integration, cause);
+          await this._refreshIntegrationService.setBetweenSteps(
+            integration,
+            cause
+          );
           return false;
         }
-      },
+      }
     );
   }
 
@@ -614,7 +631,9 @@ export class PostActivity {
 
   @ActivityMethod()
   async isCommentableById(orgId: string, integrationId: string) {
-    return this.isCommentable(await this._loadIntegration(orgId, integrationId));
+    return this.isCommentable(
+      await this._loadIntegration(orgId, integrationId)
+    );
   }
 
   @ActivityMethod()
@@ -647,11 +666,7 @@ export class PostActivity {
   }
 
   @ActivityMethod()
-  async internalPlugsById(
-    orgId: string,
-    integrationId: string,
-    settings: any
-  ) {
+  async internalPlugsById(orgId: string, integrationId: string, settings: any) {
     return this.internalPlugs(
       await this._loadIntegration(orgId, integrationId),
       settings

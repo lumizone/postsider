@@ -5,6 +5,7 @@ export * from './post-workflows/post.workflow.v1.0.4';
 export * from './post-workflows/post.workflow.v1.0.5';
 export * from './post-workflows/post.workflow.v1.0.6';
 export * from './post-workflows/post.workflow.v1.0.7';
+export * from './post-workflows/post.workflow.v1.0.8';
 export * from './digest.email.workflow';
 export * from './missing.post.workflow';
 export * from './media.cleanup.workflow';

@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import styles from "./posts.module.css";
-import { ChannelAvatar } from "./channel-avatar";
+import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import styles from './posts.module.css';
+import { ChannelAvatar } from './channel-avatar';
 import {
   type CalendarEvent,
   type Channel,
   type PostStatus,
-} from "@/lib/calendar-data";
-import { useChannels } from "@/lib/use-channels";
+} from '@/lib/calendar-data';
+import { useChannels } from '@/lib/use-channels';
 import {
   createPost,
   fetchPostDetail,
@@ -19,43 +19,47 @@ import {
   duplicatePost,
   type BackendPost,
   type CreatePostInput,
-} from "@/lib/posts";
-import { backendPostToEvent } from "@/lib/use-calendar-data";
-import { EmptyState } from "./empty-state";
-import { useI18n, useT } from "@/lib/i18n";
-import { toggleEvergreen, listEvergreen, getEvergreenSettings } from "@/lib/evergreen-api";
-import { requestApproval, getApprovalByPost } from "@/lib/approval-api";
-import { PostDetailDrawer } from "./post-detail-drawer";
-import { PostMediaThumb } from "./post-media-thumb";
-import { ConfirmDialog } from "./confirm-dialog";
+} from '@/lib/posts';
+import { backendPostToEvent } from '@/lib/use-calendar-data';
+import { EmptyState } from './empty-state';
+import { useI18n, useT } from '@/lib/i18n';
+import {
+  toggleEvergreen,
+  listEvergreen,
+  getEvergreenSettings,
+} from '@/lib/evergreen-api';
+import { requestApproval, getApprovalByPost } from '@/lib/approval-api';
+import { PostDetailDrawer } from './post-detail-drawer';
+import { PostMediaThumb } from './post-media-thumb';
+import { ConfirmDialog } from './confirm-dialog';
 import {
   CreatePostModal,
   type NewPostInput,
   type InitialPostValue,
   type AttachedMedia,
-} from "./create-post-modal";
+} from './create-post-modal';
 
-type StatusFilter = "all" | PostStatus;
+type StatusFilter = 'all' | PostStatus;
 
 /** Date windows offered next to the status tabs. */
 type RangePreset =
-  | "all"
-  | "next7"
-  | "next30"
-  | "last7"
-  | "last30"
-  | "thisMonth"
-  | "custom";
+  | 'all'
+  | 'next7'
+  | 'next30'
+  | 'last7'
+  | 'last30'
+  | 'thisMonth'
+  | 'custom';
 
-type SortMode = "publishedFirst" | "smart" | "newest" | "oldest";
+type SortMode = 'publishedFirst' | 'smart' | 'newest' | 'oldest';
 
 const STATUS_LABEL_KEYS: Record<PostStatus, string> = {
-  draft: "posts.status.draft",
-  pendingApproval: "posts.status.pendingApproval",
-  scheduled: "posts.status.scheduled",
-  published: "posts.status.published",
-  failed: "posts.status.error",
-  held: "posts.status.held",
+  draft: 'posts.status.draft',
+  pendingApproval: 'posts.status.pendingApproval',
+  scheduled: 'posts.status.scheduled',
+  published: 'posts.status.published',
+  failed: 'posts.status.error',
+  held: 'posts.status.held',
 };
 
 /**
@@ -71,29 +75,30 @@ function dedupeById<T extends { id: string }>(items: T[]): T[] {
 
 function deriveStatus(ev: CalendarEvent): PostStatus {
   if (ev.status) return ev.status;
-  if (ev.published) return "published";
-  if (!ev.date) return "draft";
-  return "scheduled";
+  if (ev.published) return 'published';
+  if (!ev.date) return 'draft';
+  return 'scheduled';
 }
 
 function compactNumber(n: number): string {
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
-  if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, "") + "K";
+  if (n >= 1_000_000)
+    return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
   return String(n);
 }
 
 function parseDate(s: string): Date | null {
   if (!s) return null;
-  const [y, m, d] = s.split("-").map(Number);
+  const [y, m, d] = s.split('-').map(Number);
   if (!y) return null;
   return new Date(y, m - 1, d);
 }
 
 function formatDate(d: Date, locale: string): string {
   return d.toLocaleDateString(locale, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
   });
 }
 
@@ -102,14 +107,12 @@ function relativeFromNow(d: Date, t: ReturnType<typeof useT>): string {
   now.setHours(0, 0, 0, 0);
   const target = new Date(d);
   target.setHours(0, 0, 0, 0);
-  const diff = Math.round(
-    (target.getTime() - now.getTime()) / 86_400_000,
-  );
-  if (diff === 0) return t("posts.today");
-  if (diff === 1) return t("posts.tomorrow");
-  if (diff === -1) return t("posts.yesterday");
-  if (diff > 0) return t("posts.inDays", { n: diff });
-  return t("posts.daysAgo", { n: Math.abs(diff) });
+  const diff = Math.round((target.getTime() - now.getTime()) / 86_400_000);
+  if (diff === 0) return t('posts.today');
+  if (diff === 1) return t('posts.tomorrow');
+  if (diff === -1) return t('posts.yesterday');
+  if (diff > 0) return t('posts.inDays', { n: diff });
+  return t('posts.daysAgo', { n: Math.abs(diff) });
 }
 
 /**
@@ -122,7 +125,7 @@ function relativeFromNow(d: Date, t: ReturnType<typeof useT>): string {
 function rangeBounds(
   preset: RangePreset,
   from: string,
-  to: string,
+  to: string
 ): { start: Date | null; end: Date | null } {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -132,35 +135,39 @@ function rangeBounds(
     return d;
   };
   switch (preset) {
-    case "next7":
+    case 'next7':
       return { start: today, end: shifted(7) };
-    case "next30":
+    case 'next30':
       return { start: today, end: shifted(30) };
-    case "last7":
+    case 'last7':
       return { start: shifted(-7), end: today };
-    case "last30":
+    case 'last30':
       return { start: shifted(-30), end: today };
-    case "thisMonth":
+    case 'thisMonth':
       return {
         start: new Date(today.getFullYear(), today.getMonth(), 1),
         end: new Date(today.getFullYear(), today.getMonth() + 1, 0),
       };
-    case "custom":
-      return { start: from ? parseDate(from) : null, end: to ? parseDate(to) : null };
+    case 'custom':
+      return {
+        start: from ? parseDate(from) : null,
+        end: to ? parseDate(to) : null,
+      };
     default:
       return { start: null, end: null };
   }
 }
 
 function iso(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate(),
-  ).padStart(2, "0")}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+    2,
+    '0'
+  )}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /** Remove the backend-only `__type` discriminator from a settings object. */
 function stripDiscriminator(
-  settings: Record<string, unknown>,
+  settings: Record<string, unknown>
 ): Record<string, unknown> {
   const { __type, ...rest } = settings ?? {};
   void __type;
@@ -235,13 +242,13 @@ function RepeatIcon() {
 export function Posts() {
   const router = useRouter();
   const t = useT();
-  const [filter, setFilter] = useState<StatusFilter>("all");
-  const [query, setQuery] = useState("");
-  const [channelFilter, setChannelFilter] = useState<string>("all");
-  const [range, setRange] = useState<RangePreset>("all");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [sort, setSort] = useState<SortMode>("publishedFirst");
+  const [filter, setFilter] = useState<StatusFilter>('all');
+  const [query, setQuery] = useState('');
+  const [channelFilter, setChannelFilter] = useState<string>('all');
+  const [range, setRange] = useState<RangePreset>('all');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [sort, setSort] = useState<SortMode>('publishedFirst');
   const { channels } = useChannels();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [listTruncated, setListTruncated] = useState(false);
@@ -249,14 +256,19 @@ export function Posts() {
   const [error, setError] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
-  const [evergreenGroups, setEvergreenGroups] = useState<Set<string>>(new Set());
+  const [evergreenGroups, setEvergreenGroups] = useState<Set<string>>(
+    new Set()
+  );
   const [evergreenOrgEnabled, setEvergreenOrgEnabled] = useState(true);
-  const [detailPost, setDetailPost] = useState<{ id: string; status: PostStatus } | null>(null);
+  const [detailPost, setDetailPost] = useState<{
+    id: string;
+    status: PostStatus;
+  } | null>(null);
   // Editing an existing post from the list: prefilled composer + group to update.
   const [editPost, setEditPost] = useState<{
     group: string;
     initial: InitialPostValue;
-    approvalStatus?: "pending" | "approved" | "rejected" | "none";
+    approvalStatus?: 'pending' | 'approved' | 'rejected' | 'none';
     rejectionNote?: string;
   } | null>(null);
   const [editLoading, setEditLoading] = useState(false);
@@ -308,13 +320,14 @@ export function Posts() {
     setError(null);
     (async () => {
       try {
-        const states: ("all" | "scheduled" | "draft" | "published" | "failed" | "approval")[] = [
-          "scheduled",
-          "draft",
-          "published",
-          "failed",
-          "approval",
-        ];
+        const states: (
+          | 'all'
+          | 'scheduled'
+          | 'draft'
+          | 'published'
+          | 'failed'
+          | 'approval'
+        )[] = ['scheduled', 'draft', 'published', 'failed', 'approval'];
         const collected: BackendPost[] = [];
         let truncated = false;
         for (const state of states) {
@@ -326,7 +339,7 @@ export function Posts() {
               limit: 100,
               state,
             });
-            collected.push(...((res.posts as unknown) as BackendPost[]));
+            collected.push(...(res.posts as unknown as BackendPost[]));
             if (!res.hasMore) break;
             if (i === 4) truncated = true;
             page += 1;
@@ -338,7 +351,7 @@ export function Posts() {
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Could not load posts");
+          setError(err instanceof Error ? err.message : 'Could not load posts');
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -364,7 +377,8 @@ export function Posts() {
   const preStatus = useMemo(() => {
     const q = query.trim().toLowerCase();
     return allWithStatus.filter(({ ev }) => {
-      if (channelFilter !== "all" && ev.channelId !== channelFilter) return false;
+      if (channelFilter !== 'all' && ev.channelId !== channelFilter)
+        return false;
       if (bounds.start || bounds.end) {
         const d = parseDate(ev.date);
         // An undated draft cannot satisfy a date window, so it drops out of
@@ -375,7 +389,9 @@ export function Posts() {
       }
       if (!q) return true;
       const ch = channelsById.get(ev.channelId);
-      const haystack = `${ev.title} ${ev.excerpt ?? ""} ${ch?.name ?? ""} ${ch?.platform ?? ""}`.toLowerCase();
+      const haystack = `${ev.title} ${ev.excerpt ?? ''} ${ch?.name ?? ''} ${
+        ch?.platform ?? ''
+      }`.toLowerCase();
       return haystack.includes(q);
     });
   }, [allWithStatus, bounds, channelFilter, channelsById, query]);
@@ -415,7 +431,10 @@ export function Posts() {
       scheduled: 4,
       draft: 5,
     };
-    const byDate = (a: typeof preStatus[number], b: typeof preStatus[number]) => {
+    const byDate = (
+      a: (typeof preStatus)[number],
+      b: (typeof preStatus)[number]
+    ) => {
       const aDate = parseDate(a.ev.date)?.getTime() ?? 0;
       const bDate = parseDate(b.ev.date)?.getTime() ?? 0;
       // Undated posts sink to the bottom whichever way the sort runs - they
@@ -423,73 +442,85 @@ export function Posts() {
       if (!aDate && !bDate) return 0;
       if (!aDate) return 1;
       if (!bDate) return -1;
-      return sort === "oldest" ? aDate - bDate : bDate - aDate;
+      return sort === 'oldest' ? aDate - bDate : bDate - aDate;
     };
     return preStatus
-      .filter(({ status }) => filter === "all" || status === filter)
+      .filter(({ status }) => filter === 'all' || status === filter)
       .sort((a, b) => {
-        if (sort === "newest" || sort === "oldest") return byDate(a, b);
-        const order =
-          sort === "smart" ? STATUS_ORDER : PUBLISHED_FIRST_ORDER;
+        if (sort === 'newest' || sort === 'oldest') return byDate(a, b);
+        const order = sort === 'smart' ? STATUS_ORDER : PUBLISHED_FIRST_ORDER;
         const orderDelta = order[a.status] - order[b.status];
         if (orderDelta !== 0) return orderDelta;
         const aDate = parseDate(a.ev.date)?.getTime() ?? 0;
         const bDate = parseDate(b.ev.date)?.getTime() ?? 0;
         // Within a status: scheduled reads best soonest-first (what goes out
         // next), everything else newest-first.
-        if (a.status === "scheduled") return aDate - bDate;
+        if (a.status === 'scheduled') return aDate - bDate;
         return bDate - aDate;
       });
   }, [preStatus, filter, sort]);
 
   const filtersActive =
-    filter !== "all" ||
-    channelFilter !== "all" ||
-    range !== "all" ||
-    query.trim() !== "";
+    filter !== 'all' ||
+    channelFilter !== 'all' ||
+    range !== 'all' ||
+    query.trim() !== '';
 
   const resetFilters = useCallback(() => {
-    setFilter("all");
-    setChannelFilter("all");
-    setRange("all");
-    setFrom("");
-    setTo("");
-    setQuery("");
+    setFilter('all');
+    setChannelFilter('all');
+    setRange('all');
+    setFrom('');
+    setTo('');
+    setQuery('');
   }, []);
 
-  const handleRequestApproval = useCallback(async (postId: string) => {
-    try {
-      await requestApproval(postId);
-      setEvents((current) => current.filter((event) => event.id !== postId));
-      setToast(t("posts.toastApprovalSent"));
-    } catch (err) {
-      setToast(err instanceof Error ? err.message : t("posts.toastApprovalError"));
-    }
-    setTimeout(() => setToast(null), 3000);
-  }, [t]);
+  const handleRequestApproval = useCallback(
+    async (postId: string) => {
+      try {
+        await requestApproval(postId);
+        setEvents((current) => current.filter((event) => event.id !== postId));
+        setToast(t('posts.toastApprovalSent'));
+      } catch (err) {
+        setToast(
+          err instanceof Error ? err.message : t('posts.toastApprovalError')
+        );
+      }
+      setTimeout(() => setToast(null), 3000);
+    },
+    [t]
+  );
 
   const handleDuplicate = useCallback(
     async (group: string, targetIntegrationId?: string) => {
       try {
-        await duplicatePost(group, targetIntegrationId ? { targetIntegrationId } : undefined);
-        setToast(targetIntegrationId ? t("posts.toastDuplicatedTo") : t("posts.toastDuplicatedDraft"));
+        await duplicatePost(
+          group,
+          targetIntegrationId ? { targetIntegrationId } : undefined
+        );
+        setToast(
+          targetIntegrationId
+            ? t('posts.toastDuplicatedTo')
+            : t('posts.toastDuplicatedDraft')
+        );
         setTimeout(() => setToast(null), 3000);
         // Refresh the list
         setLoading(true);
-        const states: ("all" | "scheduled" | "draft" | "published" | "failed" | "approval")[] = [
-          "scheduled",
-          "draft",
-          "published",
-          "failed",
-          "approval",
-        ];
+        const states: (
+          | 'all'
+          | 'scheduled'
+          | 'draft'
+          | 'published'
+          | 'failed'
+          | 'approval'
+        )[] = ['scheduled', 'draft', 'published', 'failed', 'approval'];
         const collected: BackendPost[] = [];
         let truncated = false;
         for (const state of states) {
           let page = 0;
           for (let i = 0; i < 5; i++) {
             const res = await fetchPostsList({ page, limit: 100, state });
-            collected.push(...((res.posts as unknown) as BackendPost[]));
+            collected.push(...(res.posts as unknown as BackendPost[]));
             if (!res.hasMore) break;
             if (i === 4) truncated = true;
             page += 1;
@@ -498,16 +529,18 @@ export function Posts() {
         setEvents(dedupeById(collected).map(backendPostToEvent));
         setListTruncated(truncated);
       } catch (err) {
-        setToast(t("posts.toastDuplicateFailed"));
+        setToast(t('posts.toastDuplicateFailed'));
         setTimeout(() => setToast(null), 3000);
       } finally {
         setLoading(false);
       }
     },
-    [t],
+    [t]
   );
 
-  const [duplicateTargetGroup, setDuplicateTargetGroup] = useState<string | null>(null);
+  const [duplicateTargetGroup, setDuplicateTargetGroup] = useState<
+    string | null
+  >(null);
 
   /**
    * Open the composer in edit mode for a post, prefilled with its content,
@@ -523,14 +556,14 @@ export function Posts() {
       const channelId = detail.integration || ev.channelId;
       const when = detail.publishDate
         ? new Date(detail.publishDate)
-        : new Date(`${ev.date}T${ev.time || "09:00"}:00`);
+        : new Date(`${ev.date}T${ev.time || '09:00'}:00`);
       const initial: InitialPostValue = {
         channelIds: channelId ? [channelId] : [],
         date: iso(when),
-        time: `${String(when.getHours()).padStart(2, "0")}:${String(
-          when.getMinutes(),
-        ).padStart(2, "0")}`,
-        body: main?.content ?? "",
+        time: `${String(when.getHours()).padStart(2, '0')}:${String(
+          when.getMinutes()
+        ).padStart(2, '0')}`,
+        body: main?.content ?? '',
         threadParts: rest.map((p) => p.content),
         perChannelSettings:
           channelId && detail.settings
@@ -540,30 +573,35 @@ export function Posts() {
           (m, idx): AttachedMedia => ({
             id: m.id ?? `existing-${idx}-${ev.id}`,
             backendId: m.id,
-            name: m.url.split("/").pop()?.split("?")[0] || "attachment",
+            name: m.url.split('/').pop()?.split('?')[0] || 'attachment',
             kind: m.kind,
             size: 0,
             url: m.url,
-          }),
+          })
         ),
       };
-      let approvalStatus: "pending" | "approved" | "rejected" | "none" = "none";
+      let approvalStatus: 'pending' | 'approved' | 'rejected' | 'none' = 'none';
       let rejectionNote: string | undefined;
       try {
         const approval = await getApprovalByPost(ev.id);
-        if (approval?.status === "REJECTED") {
-          approvalStatus = "rejected";
+        if (approval?.status === 'REJECTED') {
+          approvalStatus = 'rejected';
           rejectionNote = approval.note ?? undefined;
-        } else if (approval?.status === "PENDING") {
-          approvalStatus = "pending";
+        } else if (approval?.status === 'PENDING') {
+          approvalStatus = 'pending';
         }
       } catch {
         // No approval record → not an approval-tracked post, fine.
       }
-      setEditPost({ group: detail.group, initial, approvalStatus, rejectionNote });
+      setEditPost({
+        group: detail.group,
+        initial,
+        approvalStatus,
+        rejectionNote,
+      });
     } catch (err) {
-      console.error("[edit-post]", err);
-      setToast(t("errors.postEdit"));
+      console.error('[edit-post]', err);
+      setToast(t('errors.postEdit'));
     } finally {
       setEditLoading(false);
     }
@@ -575,8 +613,8 @@ export function Posts() {
    */
   const submitEdit = async (
     post: NewPostInput,
-    type: "schedule" | "draft" | "now" | "update",
-    group?: string,
+    type: 'schedule' | 'draft' | 'now' | 'update',
+    group?: string
   ): Promise<Array<{ postId: string; integration: string }>> => {
     const isoDate = (() => {
       if (post.date && post.time) {
@@ -603,7 +641,7 @@ export function Posts() {
       perChannelBody: post.perChannelBody,
       threadParts: post.threadParts,
       firstComment: post.firstComment,
-      media: uploadedMedia.map((m) => ({ id: m.id ?? "", path: m.path })),
+      media: uploadedMedia.map((m) => ({ id: m.id ?? '', path: m.path })),
       shortLink: false,
       tags: [],
       perChannelSettings: post.perChannelSettings,
@@ -615,21 +653,22 @@ export function Posts() {
   const refreshList = async () => {
     setLoading(true);
     try {
-        const states: ("all" | "scheduled" | "draft" | "published" | "failed" | "approval" | "held")[] = [
-          "scheduled",
-          "draft",
-          "published",
-          "failed",
-          "approval",
-          "held",
-        ];
+      const states: (
+        | 'all'
+        | 'scheduled'
+        | 'draft'
+        | 'published'
+        | 'failed'
+        | 'approval'
+        | 'held'
+      )[] = ['scheduled', 'draft', 'published', 'failed', 'approval', 'held'];
       const collected: BackendPost[] = [];
       let truncated = false;
       for (const state of states) {
         let page = 0;
         for (let i = 0; i < 5; i++) {
           const res = await fetchPostsList({ page, limit: 100, state });
-          collected.push(...((res.posts as unknown) as BackendPost[]));
+          collected.push(...(res.posts as unknown as BackendPost[]));
           if (!res.hasMore) break;
           if (i === 4) truncated = true;
           page += 1;
@@ -638,7 +677,7 @@ export function Posts() {
       setEvents(dedupeById(collected).map(backendPostToEvent));
       setListTruncated(truncated);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load posts");
+      setError(err instanceof Error ? err.message : 'Could not load posts');
     } finally {
       setLoading(false);
     }
@@ -652,7 +691,7 @@ export function Posts() {
       setConfirmDelete(null);
       await refreshList();
     } catch (err) {
-      setToast(t("errors.postDelete"));
+      setToast(t('errors.postDelete'));
     } finally {
       setConfirmBusy(false);
     }
@@ -673,45 +712,59 @@ export function Posts() {
       )}
       <header className={styles.header}>
         <div className={styles.title}>
-          <span className={styles.eyebrow}>{t("posts.eyebrow")}</span>
-          <h1 className={styles.h1}>{t("posts.title")}</h1>
-          <p className={styles.subtitle}>
-            {t("posts.subtitle")}
-          </p>
+          <span className={styles.eyebrow}>{t('posts.eyebrow')}</span>
+          <h1 className={styles.h1}>{t('posts.title')}</h1>
+          <p className={styles.subtitle}>{t('posts.subtitle')}</p>
         </div>
         <div className={styles.headerControls}>
           <button
             type="button"
             className={styles.importBtn}
-            onClick={() => router.push("/posts/csv-import")}
+            onClick={() => router.push('/posts/csv-import')}
           >
-            {t("posts.importCsv")}
+            {t('posts.importCsv')}
           </button>
-          <button type="button" className={styles.newBtn} onClick={() => router.push("/calendar")}>
-            + {t("posts.newPost")}
+          <button
+            type="button"
+            className={styles.newBtn}
+            onClick={() => router.push('/calendar')}
+          >
+            + {t('posts.newPost')}
           </button>
         </div>
       </header>
 
       <div className={styles.filters}>
-        <div className={styles.tabs} role="tablist" aria-label={t("posts.statusFilter")}>
-          {(["all", "scheduled", "draft", "published", "failed", "pendingApproval", "held"] as StatusFilter[]).map(
-            (f) => (
-              <button
-                key={f}
-                type="button"
-                role="tab"
-                aria-selected={filter === f}
-                className={
-                  styles.tab + (filter === f ? " " + styles.tabActive : "")
-                }
-                onClick={() => setFilter(f)}
-              >
-                {f === "all" ? t("posts.all") : t(STATUS_LABEL_KEYS[f] as any)}
-                <span className={styles.tabCount}>{counts[f]}</span>
-              </button>
-            ),
-          )}
+        <div
+          className={styles.tabs}
+          role="tablist"
+          aria-label={t('posts.statusFilter')}
+        >
+          {(
+            [
+              'all',
+              'scheduled',
+              'draft',
+              'published',
+              'failed',
+              'pendingApproval',
+              'held',
+            ] as StatusFilter[]
+          ).map((f) => (
+            <button
+              key={f}
+              type="button"
+              role="tab"
+              aria-selected={filter === f}
+              className={
+                styles.tab + (filter === f ? ' ' + styles.tabActive : '')
+              }
+              onClick={() => setFilter(f)}
+            >
+              {f === 'all' ? t('posts.all') : t(STATUS_LABEL_KEYS[f] as any)}
+              <span className={styles.tabCount}>{counts[f]}</span>
+            </button>
+          ))}
         </div>
 
         <div className={styles.filterRow}>
@@ -723,9 +776,9 @@ export function Posts() {
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder={t("posts.search")}
+              placeholder={t('posts.search')}
               className={styles.searchInput}
-              aria-label={t("posts.search")}
+              aria-label={t('posts.search')}
             />
           </div>
 
@@ -733,9 +786,9 @@ export function Posts() {
             className={styles.select}
             value={channelFilter}
             onChange={(e) => setChannelFilter(e.target.value)}
-            aria-label={t("posts.filterChannel")}
+            aria-label={t('posts.filterChannel')}
           >
-            <option value="all">{t("posts.allChannels")}</option>
+            <option value="all">{t('posts.allChannels')}</option>
             {channels.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name} · {c.platform}
@@ -747,18 +800,18 @@ export function Posts() {
             className={styles.select}
             value={range}
             onChange={(e) => setRange(e.target.value as RangePreset)}
-            aria-label={t("posts.filterDate")}
+            aria-label={t('posts.filterDate')}
           >
-            <option value="all">{t("posts.dateAll")}</option>
-            <option value="next7">{t("posts.dateNext7")}</option>
-            <option value="next30">{t("posts.dateNext30")}</option>
-            <option value="last7">{t("posts.dateLast7")}</option>
-            <option value="last30">{t("posts.dateLast30")}</option>
-            <option value="thisMonth">{t("posts.dateThisMonth")}</option>
-            <option value="custom">{t("posts.dateCustom")}</option>
+            <option value="all">{t('posts.dateAll')}</option>
+            <option value="next7">{t('posts.dateNext7')}</option>
+            <option value="next30">{t('posts.dateNext30')}</option>
+            <option value="last7">{t('posts.dateLast7')}</option>
+            <option value="last30">{t('posts.dateLast30')}</option>
+            <option value="thisMonth">{t('posts.dateThisMonth')}</option>
+            <option value="custom">{t('posts.dateCustom')}</option>
           </select>
 
-          {range === "custom" && (
+          {range === 'custom' && (
             <>
               <input
                 type="date"
@@ -766,7 +819,7 @@ export function Posts() {
                 value={from}
                 max={to || undefined}
                 onChange={(e) => setFrom(e.target.value)}
-                aria-label={t("posts.dateFrom")}
+                aria-label={t('posts.dateFrom')}
               />
               <input
                 type="date"
@@ -774,7 +827,7 @@ export function Posts() {
                 value={to}
                 min={from || undefined}
                 onChange={(e) => setTo(e.target.value)}
-                aria-label={t("posts.dateTo")}
+                aria-label={t('posts.dateTo')}
               />
             </>
           )}
@@ -783,38 +836,58 @@ export function Posts() {
             className={styles.select}
             value={sort}
             onChange={(e) => setSort(e.target.value as SortMode)}
-            aria-label={t("posts.sort")}
+            aria-label={t('posts.sort')}
           >
-            <option value="publishedFirst">{t("posts.sortPublishedFirst")}</option>
-            <option value="smart">{t("posts.sortSmart")}</option>
-            <option value="newest">{t("posts.sortNewest")}</option>
-            <option value="oldest">{t("posts.sortOldest")}</option>
+            <option value="publishedFirst">
+              {t('posts.sortPublishedFirst')}
+            </option>
+            <option value="smart">{t('posts.sortSmart')}</option>
+            <option value="newest">{t('posts.sortNewest')}</option>
+            <option value="oldest">{t('posts.sortOldest')}</option>
           </select>
 
           {filtersActive && (
-            <button type="button" className={styles.resetBtn} onClick={resetFilters}>
-              {t("posts.resetFilters")}
+            <button
+              type="button"
+              className={styles.resetBtn}
+              onClick={resetFilters}
+            >
+              {t('posts.resetFilters')}
             </button>
           )}
 
           <span className={styles.resultCount} role="status">
-            {t("posts.resultCount", { n: items.length })}
+            {t('posts.resultCount', { n: items.length })}
           </span>
         </div>
       </div>
       {listTruncated && (
-        <div role="status" style={{ margin: "12px 0", padding: "10px 12px", borderRadius: 8, background: "rgb(var(--tint) / 0.04)", color: "var(--muted)", fontSize: 12 }}>
-          {t("posts.listTruncated")}
+        <div
+          role="status"
+          style={{
+            margin: '12px 0',
+            padding: '10px 12px',
+            borderRadius: 8,
+            background: 'rgb(var(--tint) / 0.04)',
+            color: 'var(--muted)',
+            fontSize: 12,
+          }}
+        >
+          {t('posts.listTruncated')}
         </div>
       )}
 
       {loading ? (
-        <div className={styles.empty}>{t("common.loading")}</div>
+        <div className={styles.empty}>{t('common.loading')}</div>
       ) : error ? (
         <div className={styles.empty}>
           <p>{error}</p>
-          <button type="button" className={styles.importBtn} onClick={() => setLoadAttempt((attempt) => attempt + 1)}>
-            {t("calendar.retry")}
+          <button
+            type="button"
+            className={styles.importBtn}
+            onClick={() => setLoadAttempt((attempt) => attempt + 1)}
+          >
+            {t('calendar.retry')}
           </button>
         </div>
       ) : items.length === 0 && events.length > 0 ? (
@@ -822,17 +895,17 @@ export function Posts() {
         // posts yet" here would read as data loss.
         <EmptyState
           icon="posts"
-          title={t("posts.emptyFiltered")}
-          description={t("posts.emptyFilteredDesc")}
-          actionLabel={t("posts.resetFilters")}
+          title={t('posts.emptyFiltered')}
+          description={t('posts.emptyFilteredDesc')}
+          actionLabel={t('posts.resetFilters')}
           onAction={resetFilters}
         />
       ) : items.length === 0 && channels.length === 0 ? (
         <EmptyState
           icon="channel"
-          title={t("empty.channelTitle")}
-          description={t("empty.channelDescAdmin")}
-          actionLabel={t("empty.channelAction")}
+          title={t('empty.channelTitle')}
+          description={t('empty.channelDescAdmin')}
+          actionLabel={t('empty.channelAction')}
           // Settings > General has no channel UI at all, so the old target was
           // a dead end for the one action this empty state exists to prompt.
           // ?connect=1 opens the calendar's real add-channel picker.
@@ -841,8 +914,8 @@ export function Posts() {
       ) : items.length === 0 ? (
         <EmptyState
           icon="posts"
-          title={t("posts.emptyAll")}
-          description={t("posts.emptyAllDesc")}
+          title={t('posts.emptyAll')}
+          description={t('posts.emptyAllDesc')}
           actionLabel="Open calendar"
           actionHref="/calendar"
         />
@@ -861,7 +934,9 @@ export function Posts() {
               onViewDetails={() => setDetailPost({ id: ev.id, status })}
               initialEvergreen={evergreenGroups.has(ev.group)}
               evergreenOrgEnabled={evergreenOrgEnabled}
-              onEvergreenOrgDisabledWarning={() => setToast(t("evergreen.orgDisabledWarning"))}
+              onEvergreenOrgDisabledWarning={() =>
+                setToast(t('evergreen.orgDisabledWarning'))
+              }
             />
           ))}
         </div>
@@ -884,20 +959,26 @@ export function Posts() {
           onClose={() => setEditPost(null)}
           onSaveDraft={() => setEditPost(null)}
           onSchedule={async (post) => {
-            await submitEdit(post, "update", editPost.group);
+            await submitEdit(post, 'update', editPost.group);
             setEditPost(null);
             void refreshList();
           }}
           onPublishNow={async (post) => {
-            await submitEdit(post, "now", editPost.group);
+            await submitEdit(post, 'now', editPost.group);
             setEditPost(null);
             void refreshList();
           }}
           onSendToApproval={
-            editPost.approvalStatus === "rejected"
+            editPost.approvalStatus === 'rejected'
               ? async (post) => {
-                  await submitEdit(post, "update", editPost.group);
-                  for (const c of (await submitEdit(post, "draft", editPost.group)) ?? []) {
+                  // Re-submit exactly once as a draft, then re-request approval.
+                  // (A second "update" submission would create a QUEUE copy that
+                  // the backend now arms — publishing without review.)
+                  for (const c of (await submitEdit(
+                    post,
+                    'draft',
+                    editPost.group
+                  )) ?? []) {
                     await requestApproval(c.postId);
                   }
                   setEditPost(null);
@@ -919,9 +1000,9 @@ export function Posts() {
         <ConfirmDialog
           danger
           busy={confirmBusy}
-          title={t("posts.deleteConfirmTitle")}
-          body={t("posts.deleteConfirmBody")}
-          confirmLabel={t("posts.deleteBtn")}
+          title={t('posts.deleteConfirmTitle')}
+          body={t('posts.deleteConfirmBody')}
+          confirmLabel={t('posts.deleteBtn')}
           onConfirm={() => void runDelete()}
           onCancel={() => setConfirmDelete(null)}
         />
@@ -944,10 +1025,24 @@ interface PostRowProps {
   onEvergreenOrgDisabledWarning?: () => void;
 }
 
-function PostRow({ ev, status, channel, onOpenEdit, onDuplicate, onDuplicateTo, onRequestApproval, onViewDetails, initialEvergreen, evergreenOrgEnabled, onEvergreenOrgDisabledWarning }: PostRowProps) {
+function PostRow({
+  ev,
+  status,
+  channel,
+  onOpenEdit,
+  onDuplicate,
+  onDuplicateTo,
+  onRequestApproval,
+  onViewDetails,
+  initialEvergreen,
+  evergreenOrgEnabled,
+  onEvergreenOrgDisabledWarning,
+}: PostRowProps) {
   const date = parseDate(ev.date);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [evergreenOn, setEvergreenOn] = useState<boolean>(initialEvergreen ?? false);
+  const [evergreenOn, setEvergreenOn] = useState<boolean>(
+    initialEvergreen ?? false
+  );
   const { t, locale } = useI18n();
 
   // Reflect the evergreen state once the parent's async fetch resolves.
@@ -959,7 +1054,8 @@ function PostRow({ ev, status, channel, onOpenEdit, onDuplicate, onDuplicateTo, 
     const next = !evergreenOn;
     setEvergreenOn(next); // optimistic
     void toggleEvergreen(ev.group, next).catch(() => setEvergreenOn(!next));
-    if (next && evergreenOrgEnabled === false) onEvergreenOrgDisabledWarning?.();
+    if (next && evergreenOrgEnabled === false)
+      onEvergreenOrgDisabledWarning?.();
   };
 
   const statusClass = `statusPill${status[0].toUpperCase()}${status.slice(1)}`;
@@ -971,7 +1067,7 @@ function PostRow({ ev, status, channel, onOpenEdit, onDuplicate, onDuplicateTo, 
       tabIndex={0}
       onClick={onOpenEdit}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
+        if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           onOpenEdit();
         }
@@ -981,7 +1077,7 @@ function PostRow({ ev, status, channel, onOpenEdit, onDuplicate, onDuplicateTo, 
         <span
           className={
             styles.statusPill +
-            " " +
+            ' ' +
             (styles[statusClass as keyof typeof styles] as string)
           }
         >
@@ -991,7 +1087,9 @@ function PostRow({ ev, status, channel, onOpenEdit, onDuplicate, onDuplicateTo, 
       </div>
 
       <div className={styles.titleCell}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+        <div
+          style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}
+        >
           <PostMediaThumb media={ev.media} size={26} />
           <span className={styles.postTitle}>{ev.title}</span>
         </div>
@@ -1008,7 +1106,7 @@ function PostRow({ ev, status, channel, onOpenEdit, onDuplicate, onDuplicateTo, 
             </span>
           </>
         ) : (
-          <span className={styles.muted}>{t("posts.unassigned")}</span>
+          <span className={styles.muted}>{t('posts.unassigned')}</span>
         )}
       </div>
 
@@ -1017,12 +1115,12 @@ function PostRow({ ev, status, channel, onOpenEdit, onDuplicate, onDuplicateTo, 
           <>
             <span className={styles.dateMain}>{formatDate(date, locale)}</span>
             <span className={styles.dateSub}>
-              {ev.time ? ev.time + " · " : ""}
+              {ev.time ? ev.time + ' · ' : ''}
               {relativeFromNow(date, t)}
             </span>
           </>
         ) : (
-          <span className={styles.muted}>{t("posts.noDate")}</span>
+          <span className={styles.muted}>{t('posts.noDate')}</span>
         )}
       </div>
 
@@ -1032,16 +1130,18 @@ function PostRow({ ev, status, channel, onOpenEdit, onDuplicate, onDuplicateTo, 
           // The "-" placeholder keeps the column rhythm on the desktop table.
           // In the phone card layout there is no column to keep, so it reads
           // as a stray dash and is hidden.
-          (status === "published" && ev.metrics ? "" : " " + styles.metricsEmpty)
+          (status === 'published' && ev.metrics
+            ? ''
+            : ' ' + styles.metricsEmpty)
         }
       >
-        {status === "published" && ev.metrics ? (
+        {status === 'published' && ev.metrics ? (
           <>
             <span className={styles.metricsMain}>
               {compactNumber(ev.metrics.impressions)}
             </span>
             <span className={styles.metricsSub}>
-              {compactNumber(ev.metrics.engagements)} {t("posts.engShort")}
+              {compactNumber(ev.metrics.engagements)} {t('posts.engShort')}
             </span>
           </>
         ) : (
@@ -1053,31 +1153,85 @@ function PostRow({ ev, status, channel, onOpenEdit, onDuplicate, onDuplicateTo, 
         <button
           type="button"
           className={styles.moreBtn}
-          onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            setMenuOpen(!menuOpen);
+          }}
           aria-label="Post actions"
         >
           <DotsIcon />
         </button>
         {menuOpen && (
-          <div className={styles.menu} onClick={(e) => { e.stopPropagation(); setMenuOpen(false); }} role="menu">
-            <button type="button" className={styles.menuItem} onClick={(e) => { e.stopPropagation(); onViewDetails(); }} role="menuitem">
-              {t("postDetail.viewDetails")}
+          <div
+            className={styles.menu}
+            onClick={(e) => {
+              e.stopPropagation();
+              setMenuOpen(false);
+            }}
+            role="menu"
+          >
+            <button
+              type="button"
+              className={styles.menuItem}
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewDetails();
+              }}
+              role="menuitem"
+            >
+              {t('postDetail.viewDetails')}
             </button>
-            <button type="button" className={styles.menuItem} onClick={(e) => { e.stopPropagation(); onDuplicate(); }} role="menuitem">
-              {t("posts.duplicate")}
+            <button
+              type="button"
+              className={styles.menuItem}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDuplicate();
+              }}
+              role="menuitem"
+            >
+              {t('posts.duplicate')}
             </button>
-            <button type="button" className={styles.menuItem} onClick={(e) => { e.stopPropagation(); onDuplicateTo(); }} role="menuitem">
-              {t("posts.duplicateTo")}
+            <button
+              type="button"
+              className={styles.menuItem}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDuplicateTo();
+              }}
+              role="menuitem"
+            >
+              {t('posts.duplicateTo')}
             </button>
-            <button type="button" className={styles.menuItem} onClick={(e) => { e.stopPropagation(); onToggleEvergreen(); }} role="menuitem">
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <button
+              type="button"
+              className={styles.menuItem}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleEvergreen();
+              }}
+              role="menuitem"
+            >
+              <span
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
                 <RepeatIcon />
-                {evergreenOn ? t("evergreen.unmarkEvergreen") : t("evergreen.markEvergreen")}
+                {evergreenOn
+                  ? t('evergreen.unmarkEvergreen')
+                  : t('evergreen.markEvergreen')}
               </span>
             </button>
-            {status === "draft" && (
-              <button type="button" className={styles.menuItem} onClick={(e) => { e.stopPropagation(); onRequestApproval(); }} role="menuitem">
-                {t("approval.requestBtn")}
+            {status === 'draft' && (
+              <button
+                type="button"
+                className={styles.menuItem}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRequestApproval();
+                }}
+                role="menuitem"
+              >
+                {t('approval.requestBtn')}
               </button>
             )}
           </div>
@@ -1086,7 +1240,6 @@ function PostRow({ ev, status, channel, onOpenEdit, onDuplicate, onDuplicateTo, 
     </div>
   );
 }
-
 
 function DuplicateChannelPicker({
   channels,
@@ -1100,10 +1253,10 @@ function DuplicateChannelPicker({
   const t = useT();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === 'Escape') onClose();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
   return (
@@ -1113,11 +1266,20 @@ function DuplicateChannelPicker({
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label={t("posts.duplicateToTitle")}
+        aria-label={t('posts.duplicateToTitle')}
       >
         <div className={styles.pickerHead}>
-          <span className={styles.pickerTitle}>{t("posts.duplicateToTitle")}</span>
-          <button type="button" className={styles.pickerClose} onClick={onClose} aria-label={t("common.close")}>×</button>
+          <span className={styles.pickerTitle}>
+            {t('posts.duplicateToTitle')}
+          </span>
+          <button
+            type="button"
+            className={styles.pickerClose}
+            onClick={onClose}
+            aria-label={t('common.close')}
+          >
+            ×
+          </button>
         </div>
         <div className={styles.pickerList}>
           {channels.map((ch) => (
