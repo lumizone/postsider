@@ -10,8 +10,8 @@ export class MediaService {
   constructor(private _mediaRepository: MediaRepository) {}
 
   /**
-   * Soft-delete the DB row and best-effort permanently remove the underlying
-   * blob from storage so the bucket / disk does not accumulate orphan files.
+   * Soft-delete the DB row and best-effort permanently remove an unreferenced
+   * underlying blob so the bucket / disk does not accumulate orphan files.
    *
    * The blob is removed only when the soft-delete actually persisted (i.e.
    * the row exists and belongs to the org). Storage failures are logged but
@@ -23,11 +23,7 @@ export class MediaService {
     const result = await this._mediaRepository.deleteMedia(org, id);
 
     if (existing?.path && existing.organizationId === org) {
-      try {
-        await this.storage.removeFile(existing.path);
-      } catch (err) {
-        console.error('Failed to remove physical file for media', id, err);
-      }
+      await this.removeBlobs(org, [existing]);
     }
 
     return result;
@@ -69,7 +65,7 @@ export class MediaService {
       org,
       unused.map((m) => m.id)
     );
-    await this.removeBlobs(unused);
+    await this.removeBlobs(org, unused);
     return { deleted: unused.length };
   }
 
@@ -84,14 +80,20 @@ export class MediaService {
       return { deleted: 0 };
     }
     await this._mediaRepository.softDeleteAllForOrg(org);
-    await this.removeBlobs(all);
+    await this.removeBlobs(org, all);
     return { deleted: all.length };
   }
 
-  /** Best-effort physical removal of a set of media blobs. */
-  private async removeBlobs(items: { id: string; path: string }[]) {
+  /** Best-effort physical removal of blobs that no active post still uses. */
+  private async removeBlobs(
+    org: string,
+    items: { id: string; path: string }[]
+  ) {
     for (const m of items) {
       if (!m.path) continue;
+      if (await this._mediaRepository.isMediaReferenced(org, m.id, m.path)) {
+        continue;
+      }
       try {
         await this.storage.removeFile(m.path);
       } catch (err) {

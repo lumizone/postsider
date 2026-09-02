@@ -31,6 +31,24 @@ export class MediaRepository {
     });
   }
 
+  async isMediaReferenced(org: string, id: string, path: string) {
+    const references = [path, path.split('/').pop(), id].filter(
+      (reference): reference is string => !!reference
+    );
+    const post = await this._post.model.post.findFirst({
+      where: {
+        organizationId: org,
+        deletedAt: null,
+        OR: [...new Set(references)].flatMap((reference) => [
+          { image: { contains: reference } },
+          { content: { contains: reference } },
+        ]),
+      },
+      select: { id: true },
+    });
+    return !!post;
+  }
+
   /** Soft-delete a specific set of media ids belonging to the organization. */
   softDeleteByIds(org: string, ids: string[]) {
     return this._media.model.media.updateMany({

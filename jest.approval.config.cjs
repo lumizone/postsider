@@ -11,7 +11,15 @@ module.exports = {
   rootDir: __dirname,
   roots: ['<rootDir>/libraries/nestjs-libraries/src/database/prisma/approval'],
   testMatch: ['**/*.spec.ts'],
+  moduleNameMapper: {
+    '^@postsider/helpers/(.*)$': '<rootDir>/libraries/helpers/src/$1',
+    '^@postsider/nestjs-libraries/(.*)$':
+      '<rootDir>/libraries/nestjs-libraries/src/$1',
+  },
   transform: {
-    '^.+\\.ts$': ['ts-jest', { isolatedModules: true, tsconfig: { esModuleInterop: true } }],
+    '^.+\\.ts$': [
+      'ts-jest',
+      { isolatedModules: true, tsconfig: { esModuleInterop: true } },
+    ],
   },
 };

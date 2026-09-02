@@ -53,7 +53,11 @@ export class ApprovalService {
   async requestApproval(orgId: string, postId: string, requestedById: string) {
     const post = await this._repo.getPost(orgId, postId);
     assertRequestable(post);
-    const approval = await this._repo.upsertRequest(orgId, postId, requestedById);
+    const approval = await this._repo.upsertRequest(
+      orgId,
+      postId,
+      requestedById
+    );
     // Distinguish pending-approval posts from plain drafts in the calendar and
     // filters. The State.APPROVAL enum was unused before — now it means "draft
     // that is waiting for approval" so calendars and lists can surface them.
@@ -106,7 +110,10 @@ export class ApprovalService {
     if (!count) {
       throw new BadRequestException('This approval has already been resolved');
     }
-    await this.onApproved(
+    await this.scheduleApprovedPost(orgId, approval!.postId, () =>
+      this._repo.revertApproved(orgId, approvalId, approverId)
+    );
+    await this.notifyApproved(
       orgId,
       approval!.postId,
       (approval as any)?.requestedBy?.email
@@ -179,7 +186,9 @@ export class ApprovalService {
   async getForGuestReview(token: string) {
     const approval = await this._repo.getByGuestToken(token);
     if (!approval) {
-      throw new BadRequestException('This review link is invalid or has expired.');
+      throw new BadRequestException(
+        'This review link is invalid or has expired.'
+      );
     }
     // Strip internal fields (org id, requester identity) the review UI has
     // no need for — the DB row carries more than a guest should ever see.
@@ -199,7 +208,9 @@ export class ApprovalService {
   ) {
     const approval = await this._repo.getByGuestToken(token);
     if (!approval) {
-      throw new BadRequestException('This review link is invalid or has expired.');
+      throw new BadRequestException(
+        'This review link is invalid or has expired.'
+      );
     }
     const status = action === 'approve' ? 'APPROVED' : 'REJECTED';
     const count = await this._repo.resolveByGuestToken(
@@ -214,7 +225,22 @@ export class ApprovalService {
     }
     const requesterEmail = (approval as any)?.requestedBy?.email;
     if (action === 'approve') {
-      await this.onApproved(approval.organizationId, approval.post.id, requesterEmail);
+      await this.scheduleApprovedPost(
+        approval.organizationId,
+        approval.post.id,
+        () =>
+          this._repo.revertGuestApproval(
+            approval.organizationId,
+            approval.id,
+            token,
+            approval.guestTokenExpiresAt!
+          )
+      );
+      await this.notifyApproved(
+        approval.organizationId,
+        approval.post.id,
+        requesterEmail
+      );
     } else {
       await this.onRejected(
         approval.organizationId,
@@ -230,16 +256,29 @@ export class ApprovalService {
       : ({ rejected: true } as Record<string, boolean>);
   }
 
-  private async onApproved(
+  private async scheduleApprovedPost(
+    orgId: string,
+    postId: string,
+    revert: () => Promise<number>
+  ) {
+    try {
+      await this._posts.changePostStatus(orgId, postId, 'schedule', true);
+    } catch (error) {
+      const reverted = await revert();
+      if (!reverted) {
+        throw new Error(
+          'Failed to restore pending approval after scheduling failed'
+        );
+      }
+      throw error;
+    }
+  }
+
+  private async notifyApproved(
     orgId: string,
     postId: string,
     requesterEmail?: string
   ) {
-    // Flip the draft to a scheduled (QUEUE) post and start its workflow.
-    // allowApprovalTransition=true: the caller chain (assertCanApprove +
-    // assertPending, above) already authorized moving this specific post out
-    // of APPROVAL — see changePostStatus's guard comment.
-    await this._posts.changePostStatus(orgId, postId, 'schedule', true);
     await this._notifications.inAppNotification(
       orgId,
       'Post approved',

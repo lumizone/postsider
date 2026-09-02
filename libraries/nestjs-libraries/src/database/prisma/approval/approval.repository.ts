@@ -54,7 +54,12 @@ export class ApprovalRepository {
         guestToken: null,
         guestTokenExpiresAt: null,
       },
-      create: { postId, organizationId: orgId, requestedById, status: 'PENDING' },
+      create: {
+        postId,
+        organizationId: orgId,
+        requestedById,
+        status: 'PENDING',
+      },
     });
   }
 
@@ -72,7 +77,14 @@ export class ApprovalRepository {
             image: true,
             settings: true,
             publishDate: true,
-            integration: { select: { id: true, name: true, providerIdentifier: true, picture: true } },
+            integration: {
+              select: {
+                id: true,
+                name: true,
+                providerIdentifier: true,
+                picture: true,
+              },
+            },
           },
         },
         requestedBy: { select: { name: true, email: true } },
@@ -92,6 +104,19 @@ export class ApprovalRepository {
     const res = await this._approval.model.postApproval.updateMany({
       where: { id, organizationId, status: 'PENDING' },
       data: { status, approverId, note, resolvedAt: new Date() },
+    });
+    return res.count;
+  }
+
+  async revertApproved(organizationId: string, id: string, approverId: string) {
+    const res = await this._approval.model.postApproval.updateMany({
+      where: { id, organizationId, status: 'APPROVED', approverId },
+      data: {
+        status: 'PENDING',
+        approverId: null,
+        note: null,
+        resolvedAt: null,
+      },
     });
     return res.count;
   }
@@ -131,6 +156,7 @@ export class ApprovalRepository {
         id: true,
         note: true,
         organizationId: true,
+        guestTokenExpiresAt: true,
         organization: { select: { name: true, logo: true } },
         requestedBy: { select: { email: true } },
         post: {
@@ -171,6 +197,31 @@ export class ApprovalRepository {
         resolvedAt: new Date(),
         guestToken: null,
         guestTokenExpiresAt: null,
+      },
+    });
+    return res.count;
+  }
+
+  async revertGuestApproval(
+    organizationId: string,
+    id: string,
+    token: string,
+    expiresAt: Date
+  ) {
+    const res = await this._approval.model.postApproval.updateMany({
+      where: {
+        id,
+        organizationId,
+        status: 'APPROVED',
+        approverId: null,
+        guestToken: null,
+      },
+      data: {
+        status: 'PENDING',
+        note: null,
+        resolvedAt: null,
+        guestToken: token,
+        guestTokenExpiresAt: expiresAt,
       },
     });
     return res.count;
