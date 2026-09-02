@@ -1,4 +1,13 @@
-import { Body, Controller, Get, HttpException, Param, Post, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpException,
+  Logger,
+  Param,
+  Post,
+  Req,
+} from '@nestjs/common';
 import { SubscriptionService } from '@postsider/nestjs-libraries/database/prisma/subscriptions/subscription.service';
 import { PolarService } from '@postsider/nestjs-libraries/services/polar.service';
 import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
@@ -12,6 +21,8 @@ import { Request } from 'express';
 @ApiTags('Billing')
 @Controller('/billing')
 export class BillingController {
+  private readonly _logger = new Logger(BillingController.name);
+
   constructor(
     private _subscriptionService: SubscriptionService,
     private _polarService: PolarService,
@@ -111,14 +122,24 @@ export class BillingController {
     @Body() body: { feedback: string }
   ) {
     this.assertOwner(org);
-    await this._notificationService.sendEmail(
-      process.env.EMAIL_FROM_ADDRESS || '',
-      'Subscription Cancelled',
-      `Organization ${org.name} has cancelled their subscription because: ${body.feedback}`,
-      user.email
-    );
+    const cancellation = await this._polarService.setToCancel(org.id);
 
-    return this._polarService.setToCancel(org.id);
+    try {
+      await this._notificationService.sendEmail(
+        process.env.EMAIL_FROM_ADDRESS || '',
+        'Subscription Cancelled',
+        `Organization ${org.name} has cancelled their subscription because: ${body.feedback}`,
+        user.email
+      );
+    } catch (error) {
+      this._logger.warn(
+        `Subscription feedback email failed for organization ${org.id}: ${
+          error instanceof Error ? error.message : error
+        }`
+      );
+    }
+
+    return cancellation;
   }
 
   @Post('/cancel-subscription')
@@ -130,5 +151,4 @@ export class BillingController {
 
     return this._polarService.cancelSubscription(org.id);
   }
-
 }

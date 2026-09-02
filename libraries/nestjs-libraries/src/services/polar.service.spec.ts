@@ -20,9 +20,11 @@ describe('PolarService subscription cancellation', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     subscriptions.getSubscriptionByIdentifier.mockResolvedValue(null);
-    subscriptions.deleteSubscriptionByOrganizationIdIfCurrent.mockResolvedValue({
-      count: 1,
-    });
+    subscriptions.deleteSubscriptionByOrganizationIdIfCurrent.mockResolvedValue(
+      {
+        count: 1,
+      }
+    );
     subscriptions.getSubscription.mockResolvedValue(null);
   });
 
@@ -41,9 +43,11 @@ describe('PolarService subscription cancellation', () => {
   });
 
   it('rejects an out-of-order cancellation after the subscription was replaced', async () => {
-    subscriptions.deleteSubscriptionByOrganizationIdIfCurrent.mockResolvedValue({
-      count: 0,
-    });
+    subscriptions.deleteSubscriptionByOrganizationIdIfCurrent.mockResolvedValue(
+      {
+        count: 0,
+      }
+    );
 
     await expect(
       (service as any).onSubscriptionCanceled({
@@ -101,4 +105,78 @@ describe('PolarService subscription cancellation', () => {
     ).toHaveBeenCalledWith('org-1', 'subscription-1');
     expect(subscriptions.deleteSubscription).not.toHaveBeenCalled();
   });
+});
+
+describe('PolarService webhook entitlement statuses', () => {
+  const createService = () =>
+    new PolarService({} as any, {} as any, {} as any, {} as any);
+
+  it.each(['trialing', 'active', 'past_due'])(
+    'upserts entitlements for explicit %s status',
+    async (status) => {
+      const service = createService();
+      const upsert = jest
+        .spyOn(service as any, 'onSubscriptionUpserted')
+        .mockResolvedValue({ ok: true });
+      const cancel = jest
+        .spyOn(service as any, 'onSubscriptionCanceled')
+        .mockResolvedValue({ ok: true });
+
+      await expect(
+        (service as any).dispatchWebhook({
+          type: 'subscription.updated',
+          data: { id: 'subscription-1', status },
+        })
+      ).resolves.toEqual({ ok: true });
+
+      expect(upsert).toHaveBeenCalledTimes(1);
+      expect(cancel).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(['canceled', 'paused', 'unpaid', 'revoked'])(
+    'removes entitlements for terminal %s status',
+    async (status) => {
+      const service = createService();
+      const upsert = jest
+        .spyOn(service as any, 'onSubscriptionUpserted')
+        .mockResolvedValue({ ok: true });
+      const cancel = jest
+        .spyOn(service as any, 'onSubscriptionCanceled')
+        .mockResolvedValue({ ok: true });
+
+      await expect(
+        (service as any).dispatchWebhook({
+          type: 'subscription.updated',
+          data: { id: 'subscription-1', status },
+        })
+      ).resolves.toEqual({ ok: true });
+
+      expect(cancel).toHaveBeenCalledTimes(1);
+      expect(upsert).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(['incomplete', 'incomplete_expired', 'unexpected', undefined])(
+    'does not grant entitlements for non-entitling status %s',
+    async (status) => {
+      const service = createService();
+      const upsert = jest
+        .spyOn(service as any, 'onSubscriptionUpserted')
+        .mockResolvedValue({ ok: true });
+      const cancel = jest
+        .spyOn(service as any, 'onSubscriptionCanceled')
+        .mockResolvedValue({ ok: true });
+
+      await expect(
+        (service as any).dispatchWebhook({
+          type: 'subscription.updated',
+          data: { id: 'subscription-1', status },
+        })
+      ).resolves.toEqual({ ok: true, ignored: true });
+
+      expect(upsert).not.toHaveBeenCalled();
+      expect(cancel).not.toHaveBeenCalled();
+    }
+  );
 });

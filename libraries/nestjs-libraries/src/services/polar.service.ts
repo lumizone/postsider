@@ -156,9 +156,18 @@ export class PolarService {
         // cancellation, while its status remains active until period end. Only
         // terminal statuses lose PostSider access; past_due keeps access while
         // Polar retries the payment.
-        return this.hasLostSubscriptionAccess(event.data)
-          ? this.onSubscriptionCanceled(event.data)
-          : this.onSubscriptionUpserted(event.data);
+        if (this.hasLostSubscriptionAccess(event.data)) {
+          return this.onSubscriptionCanceled(event.data);
+        }
+        if (this.hasSubscriptionAccess(event.data)) {
+          return this.onSubscriptionUpserted(event.data);
+        }
+        this._logger.warn(
+          `Ignoring Polar subscription ${
+            event.data?.id || 'unknown'
+          } with non-entitling status ${event.data?.status || 'unknown'}`
+        );
+        return { ok: true, ignored: true };
       default:
         return { ok: true };
     }
@@ -166,6 +175,12 @@ export class PolarService {
 
   private hasLostSubscriptionAccess(subscription: any) {
     return ['canceled', 'paused', 'unpaid', 'revoked'].includes(
+      String(subscription?.status || '').toLowerCase()
+    );
+  }
+
+  private hasSubscriptionAccess(subscription: any) {
+    return ['trialing', 'active', 'past_due'].includes(
       String(subscription?.status || '').toLowerCase()
     );
   }

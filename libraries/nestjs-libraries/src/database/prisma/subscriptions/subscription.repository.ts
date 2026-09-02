@@ -115,7 +115,10 @@ export class SubscriptionRepository {
     );
   }
 
-  deleteSubscriptionByOrgIdIfCurrent(organizationId: string, identifier: string) {
+  deleteSubscriptionByOrgIdIfCurrent(
+    organizationId: string,
+    identifier: string
+  ) {
     return this._prisma.$transaction((tx) =>
       this.deleteSubscriptionAndDisableChannels(tx, organizationId, identifier)
     );
@@ -405,7 +408,10 @@ export class SubscriptionRepository {
           _sum: { credits: true },
         }),
       ]);
-      if (existing + (pending._sum.credits || 0) + amount > TRIAL_X_POSTS_LIMIT) {
+      if (
+        existing + (pending._sum.credits || 0) + amount >
+        TRIAL_X_POSTS_LIMIT
+      ) {
         return null;
       }
       return tx.credits.create({
@@ -418,7 +424,12 @@ export class SubscriptionRepository {
     });
   }
 
-  async reserveMonthlyPostSlots(organizationId: string, from: Date, amount: number, limit: number) {
+  async reserveMonthlyPostSlots(
+    organizationId: string,
+    from: Date,
+    amount: number,
+    limit: number
+  ) {
     const pendingSince = new Date(Date.now() - MONTHLY_POST_RESERVATION_TTL_MS);
     return this._prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${organizationId}:${MONTHLY_POST_RESERVATION_TYPE}`}))`;
@@ -426,7 +437,7 @@ export class SubscriptionRepository {
         tx.post.count({
           where: {
             organizationId,
-            publishDate: { gte: from },
+            createdAt: { gte: from },
             OR: [
               { deletedAt: null, state: { in: ['QUEUE'] } },
               { state: 'PUBLISHED' },
@@ -444,7 +455,11 @@ export class SubscriptionRepository {
       ]);
       if (existing + (pending._sum.credits || 0) + amount > limit) return null;
       return tx.credits.create({
-        data: { organizationId, type: MONTHLY_POST_RESERVATION_TYPE, credits: amount },
+        data: {
+          organizationId,
+          type: MONTHLY_POST_RESERVATION_TYPE,
+          credits: amount,
+        },
       });
     });
   }
