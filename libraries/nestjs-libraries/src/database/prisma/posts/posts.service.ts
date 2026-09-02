@@ -691,7 +691,7 @@ export class PostsService {
       group: posts?.[0]?.group,
       posts: await Promise.all(
         (posts || []).map(async (post) => ({
-          ...post,
+          ...this.redactPostSecrets(post),
           image: await this.updateMedia(
             post.id,
             JSON.parse(post.image || '[]'),
@@ -744,7 +744,7 @@ export class PostsService {
       group: posts?.[0]?.group,
       posts: await Promise.all(
         (posts || []).map(async (post) => ({
-          ...post,
+          ...this.redactPostSecrets(post),
           image: await this.updateMedia(
             post.id,
             JSON.parse(post.image || '[]'),
@@ -759,6 +759,19 @@ export class PostsService {
     };
 
     return list;
+  }
+
+  /**
+   * The post-detail query carries the full Integration row (the publish
+   * activity path needs the token), but that row must NEVER cross the API
+   * boundary — the Prisma secret extension decrypts token/refreshToken on
+   * read, so a bare spread leaks live OAuth credentials to any org member.
+   */
+  private redactPostSecrets(post: any): any {
+    if (!post?.integration) return post;
+    const { token, refreshToken, customInstanceDetails, ...integration } =
+      post.integration;
+    return { ...post, integration };
   }
 
   async getOldPosts(orgId: string, date: string) {

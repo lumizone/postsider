@@ -8,12 +8,18 @@ describe('SubscriptionService monthly post reservations', () => {
   // reserveMonthlyPostSlots short-circuits to null when billing is disabled
   // (isBillingEnabled checks POLAR_ACCESS_TOKEN). Deterministically enable it
   // so the quota logic under test actually runs — no real Polar token needed.
+  // Freeze "now" in the same period as the fixture createdAt so the service's
+  // periodStart (createdAt + elapsed months) resolves to createdAt itself and
+  // the assertion is not date-sensitive.
   beforeAll(() => {
     process.env.POLAR_ACCESS_TOKEN = 'test-token';
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-08-01T00:00:00.000Z'));
   });
 
   afterAll(() => {
     delete process.env.POLAR_ACCESS_TOKEN;
+    jest.useRealTimers();
   });
 
   it('reserves the requested number of monthly post slots for the subscription period', async () => {
