@@ -5,7 +5,8 @@ import { PrismaRepository } from '@postsider/nestjs-libraries/database/prisma/pr
 export class OAuthRepository {
   constructor(
     private _oauthApp: PrismaRepository<'oAuthApp'>,
-    private _oauthAuth: PrismaRepository<'oAuthAuthorization'>
+    private _oauthAuth: PrismaRepository<'oAuthAuthorization'>,
+    private _userOrg: PrismaRepository<'userOrganization'>
   ) {}
 
   getAppByOrgId(orgId: string) {
@@ -170,8 +171,8 @@ export class OAuthRepository {
         organization: {
           select: {
             paymentId: true,
-          }
-        }
+          },
+        },
       },
       data: {
         accessToken: encryptedToken,
@@ -181,31 +182,61 @@ export class OAuthRepository {
     });
   }
 
-  findByAccessToken(encryptedToken: string) {
-    return this._oauthAuth.model.oAuthAuthorization.findFirst({
-      where: {
-        accessToken: encryptedToken,
-        revokedAt: null,
-      },
-      include: {
-        organization: {
-          include: {
-            subscription: {
-              select: {
-                subscriptionTier: true,
-                totalChannels: true,
-                isLifetime: true,
+  async findByAccessToken(encryptedToken: string) {
+    const authorization =
+      await this._oauthAuth.model.oAuthAuthorization.findFirst({
+        where: {
+          accessToken: encryptedToken,
+          revokedAt: null,
+        },
+        include: {
+          organization: {
+            include: {
+              subscription: {
+                select: {
+                  subscriptionTier: true,
+                  totalChannels: true,
+                  isLifetime: true,
+                },
               },
             },
           },
+          user: {
+            select: { id: true },
+          },
         },
-        user: {
-          select: { id: true },
-        },
+      });
+
+    if (!authorization) {
+      return null;
+    }
+
+    const membership = await this._userOrg.model.userOrganization.findFirst({
+      where: {
+        userId: authorization.userId,
+        organizationId: authorization.organizationId,
+        disabled: false,
+        user: { activated: true },
+      },
+      select: {
+        userId: true,
+        role: true,
+        disabled: true,
       },
     });
+
+    if (!membership) {
+      return null;
+    }
+
+    return { ...authorization, membership };
   }
 
+  /**
+   * The caller's live membership row for an organization, only when it is
+   * still active (not disabled). OAuth access tokens stay valid only as long
+   * as the authorizing user remains an active member.
+   */
   getApprovedApps(userId: string) {
     return this._oauthAuth.model.oAuthAuthorization.findMany({
       where: {

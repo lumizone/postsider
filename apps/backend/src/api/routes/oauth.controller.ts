@@ -12,7 +12,10 @@ import { OAuthService } from '@postsider/nestjs-libraries/database/prisma/oauth/
 import { GetUserFromRequest } from '@postsider/nestjs-libraries/user/user.from.request';
 import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
 import { User, Organization } from '@prisma/client';
-import { AuthorizeOAuthQueryDto, ApproveOAuthDto } from '@postsider/nestjs-libraries/dtos/oauth/authorize-oauth.dto';
+import {
+  AuthorizeOAuthQueryDto,
+  ApproveOAuthDto,
+} from '@postsider/nestjs-libraries/dtos/oauth/authorize-oauth.dto';
 import { TokenExchangeDto } from '@postsider/nestjs-libraries/dtos/oauth/token-exchange.dto';
 
 @ApiTags('OAuth')
@@ -72,12 +75,24 @@ export class OAuthController {
 export class OAuthAuthorizedController {
   constructor(private _oauthService: OAuthService) {}
 
+  private assertCanAuthorize(org: Organization) {
+    // @ts-ignore - the auth middleware attaches the current membership.
+    if (!['ADMIN', 'SUPERADMIN'].includes(org.users?.[0]?.role)) {
+      throw new HttpException(
+        'Only organization administrators can authorize OAuth applications',
+        HttpStatus.FORBIDDEN
+      );
+    }
+  }
+
   @Post('/authorize')
   async approveOrDeny(
     @Body() body: ApproveOAuthDto,
     @GetUserFromRequest() user: User,
     @GetOrgFromRequest() org: Organization
   ) {
+    this.assertCanAuthorize(org);
+
     const app = await this._oauthService.validateAuthorizationRequest(
       body.client_id
     );

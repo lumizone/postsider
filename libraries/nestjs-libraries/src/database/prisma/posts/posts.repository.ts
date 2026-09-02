@@ -1,4 +1,7 @@
-import { PrismaRepository, PrismaTransaction } from '@postsider/nestjs-libraries/database/prisma/prisma.service';
+import {
+  PrismaRepository,
+  PrismaTransaction,
+} from '@postsider/nestjs-libraries/database/prisma/prisma.service';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Post as PostBody } from '@postsider/nestjs-libraries/dtos/posts/create.post.dto';
 import {
@@ -19,6 +22,30 @@ import { v4 as uuidv4 } from 'uuid';
 import { CreateTagDto } from '@postsider/nestjs-libraries/dtos/posts/create.tag.dto';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import { randomBytes } from 'crypto';
+
+/**
+ * Integration fields safe to expose through post-detail responses. The Prisma
+ * secret extension decrypts `token`/`refreshToken`/`customInstanceDetails` on
+ * every read, so a bare `include: { integration: true }` would leak live OAuth
+ * credentials to any org member via GET /posts/:id and the public API.
+ */
+const SAFE_INTEGRATION_SELECT = {
+  id: true,
+  name: true,
+  picture: true,
+  providerIdentifier: true,
+  profile: true,
+  type: true,
+  internalId: true,
+  disabled: true,
+  refreshNeeded: true,
+  inBetweenSteps: true,
+  customerId: true,
+  postingTimes: true,
+  timezone: true,
+  additionalSettings: true,
+  createdAt: true,
+} as const;
 
 dayjs.extend(isoWeek);
 dayjs.extend(weekOfYear);
@@ -393,7 +420,7 @@ export class PostsRepository {
         : stateFilter === 'held'
         ? { state: State.HELD }
         : {
-          state: {
+            state: {
               in: [
                 State.QUEUE,
                 State.DRAFT,
@@ -516,7 +543,9 @@ export class PostsRepository {
         deletedAt: null,
       },
       include: {
-        integration: true,
+        integration: {
+          select: SAFE_INTEGRATION_SELECT,
+        },
         tags: {
           select: {
             tag: true,
@@ -562,7 +591,9 @@ export class PostsRepository {
       include: {
         ...(includeIntegration
           ? {
-              integration: true,
+              integration: {
+                select: SAFE_INTEGRATION_SELECT,
+              },
               tags: {
                 select: {
                   tag: true,
@@ -602,7 +633,13 @@ export class PostsRepository {
     });
   }
 
-  async changeState(id: string, state: State, err?: any, body?: any, orgId?: string) {
+  async changeState(
+    id: string,
+    state: State,
+    err?: any,
+    body?: any,
+    orgId?: string
+  ) {
     const update = await this._post.model.post.update({
       where: {
         id,
@@ -769,7 +806,9 @@ export class PostsRepository {
         },
         // Share token for public preview links. Only set on create (not update)
         // so a post keeps the same share URL for its entire lifetime.
-        ...(type === 'create' ? { shareToken: randomBytes(24).toString('base64url') } : {}),
+        ...(type === 'create'
+          ? { shareToken: randomBytes(24).toString('base64url') }
+          : {}),
       });
 
       posts.push(

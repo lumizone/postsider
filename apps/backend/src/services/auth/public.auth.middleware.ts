@@ -20,8 +20,14 @@ export class PublicAuthMiddleware implements NestMiddleware {
       return;
     }
     try {
-      if (auth.startsWith('pos_')) {
-        const authorization = await this._oauthService.getOrgByOAuthToken(auth);
+      const bearerOAuthToken = auth.match(/^Bearer\s+(pos_\S+)\s*$/i)?.[1];
+      const oauthToken =
+        bearerOAuthToken || (auth.startsWith('pos_') ? auth : null);
+
+      if (oauthToken) {
+        const authorization = await this._oauthService.getOrgByOAuthToken(
+          oauthToken
+        );
         if (!authorization) {
           res
             .status(HttpStatus.UNAUTHORIZED)
@@ -36,19 +42,22 @@ export class PublicAuthMiddleware implements NestMiddleware {
             .json({ msg: 'No subscription found' });
           return;
         }
-        if (isBillingEnabled() && !pricing[org.subscription?.subscriptionTier || 'FREE']?.public_api) {
-          res.status(HttpStatus.PAYMENT_REQUIRED).json({ msg: 'Public API is not available on this plan' });
+        if (
+          isBillingEnabled() &&
+          !pricing[org.subscription?.subscriptionTier || 'FREE']?.public_api
+        ) {
+          res
+            .status(HttpStatus.PAYMENT_REQUIRED)
+            .json({ msg: 'Public API is not available on this plan' });
           return;
         }
 
         // @ts-ignore
-        req.org = { ...org, users: [{ role: 'SUPERADMIN', disabled: false }] };
+        req.org = { ...org, users: [authorization.membership] };
       } else {
         const org = await this._organizationService.getOrgByApiKey(auth);
         if (!org) {
-          res
-            .status(HttpStatus.UNAUTHORIZED)
-            .json({ msg: 'Invalid API key' });
+          res.status(HttpStatus.UNAUTHORIZED).json({ msg: 'Invalid API key' });
           return;
         }
 
@@ -58,8 +67,13 @@ export class PublicAuthMiddleware implements NestMiddleware {
             .json({ msg: 'No subscription found' });
           return;
         }
-        if (isBillingEnabled() && !pricing[org.subscription?.subscriptionTier || 'FREE']?.public_api) {
-          res.status(HttpStatus.PAYMENT_REQUIRED).json({ msg: 'Public API is not available on this plan' });
+        if (
+          isBillingEnabled() &&
+          !pricing[org.subscription?.subscriptionTier || 'FREE']?.public_api
+        ) {
+          res
+            .status(HttpStatus.PAYMENT_REQUIRED)
+            .json({ msg: 'Public API is not available on this plan' });
           return;
         }
 
