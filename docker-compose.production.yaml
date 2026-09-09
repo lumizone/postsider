@@ -23,7 +23,7 @@ services:
         # deploy.sh exports these from .env.production before `docker compose build`.
         NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:?NEXT_PUBLIC_BACKEND_URL must be set in .env.production}
         NEXT_PUBLIC_SELF_HOSTED: ${NEXT_PUBLIC_SELF_HOSTED:-true}
-        NEXT_PUBLIC_VERSION: ${NEXT_PUBLIC_VERSION:-1.0.0}
+        NEXT_PUBLIC_VERSION: ${NEXT_PUBLIC_VERSION:-1.2.0}
         NEXT_PUBLIC_TELEGRAM_BOT_NAME: ${NEXT_PUBLIC_TELEGRAM_BOT_NAME:-}
         NEXT_PUBLIC_DISABLE_REGISTRATION: ${NEXT_PUBLIC_DISABLE_REGISTRATION:-}
     container_name: postsider-app
