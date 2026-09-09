@@ -1,0 +1,13 @@
+# Intentional upstream references: legal attribution, migration history, and tooling.
+LICENSE
+ATTRIBUTION.md
+CHANGELOG.md
+**/CHANGELOG.md
+README.md
+DEPLOYMENT.md
+scripts/rebrand-check.mjs
+.rebrand-allowlist
+pnpm-lock.yaml
+libraries/nestjs-libraries/src/database/prisma/integrations/integration.service.ts
+libraries/nestjs-libraries/src/database/prisma/migrations/20260826150000_drop_postiz_leftovers/migration.sql
+libraries/nestjs-libraries/src/database/prisma/organizations/organization.repository.ts
