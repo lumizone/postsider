@@ -935,10 +935,14 @@ const pl = {
     tiktok: {
       loadingCreator: "Wczytuję, na co pozwala to konto TikTok…",
       disabledByCreator: "(wyłączone na tym koncie TikTok)",
+      cannotPost:
+        "To konto TikTok nie może teraz publikować. Spróbuj ponownie później.",
       postingAs: "Publikujesz jako",
       maxVideoDuration: "Maks. {seconds} s",
       disclosureMaster: "Oznaczenie treści",
       disclosureHelp: "Wybierz wszystkie oznaczenia, które dotyczą tego posta.",
+      disclosureRequired:
+        "Musisz wskazać, czy Twoja treść promuje Ciebie, podmiot zewnętrzny, czy jedno i drugie.",
       disclosureOn: "ON",
       disclosureOff: "OFF",
       yourBrand: "Twoja marka",

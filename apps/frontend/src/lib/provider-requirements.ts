@@ -1223,6 +1223,23 @@ export function tiktokDisclosureBlocksPublish(
   return disclosure && !commercial;
 }
 
+/**
+ * TikTok UX rule (Content Sharing Guidelines, point 1b): when creator_info
+ * reports that the account cannot publish right now (a platform-side block or
+ * a spent daily post quota), the composer must stop the attempt and prompt the
+ * user to try again later.
+ */
+export function tiktokCreatorCannotPost(info: {
+  publishDisabled?: boolean;
+  dailyPostLimitRemaining?: number | null;
+}): boolean {
+  return (
+    Boolean(info.publishDisabled) ||
+    (typeof info.dailyPostLimitRemaining === "number" &&
+      info.dailyPostLimitRemaining <= 0)
+  );
+}
+
 /** Providers with no special settings: text post, optional media, max lengths. */
 const SIMPLE_TEXT: Record<string, { label: string; maxLength: number; editor: ProviderRequirement["editor"] }> = {
   nostr: { label: "Nostr", maxLength: 100000, editor: "normal" },

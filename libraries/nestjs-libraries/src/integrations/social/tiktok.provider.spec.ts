@@ -354,6 +354,47 @@ describe('TiktokProvider Direct Post', () => {
       );
     });
 
+    it('blocks publishing when creator_info reports the account cannot post', () => {
+      const provider = new TiktokProvider();
+      expect(
+        provider.validateCreatorRules(
+          { publishDisabled: true },
+          baseSettings,
+          []
+        )
+      ).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('cannot publish right now'),
+        ])
+      );
+    });
+
+    it('blocks publishing when the daily post quota is exhausted', () => {
+      const provider = new TiktokProvider();
+      expect(
+        provider.validateCreatorRules(
+          { dailyPostLimitRemaining: 0 },
+          baseSettings,
+          []
+        )
+      ).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('daily post limit'),
+        ])
+      );
+    });
+
+    it('does not block on a missing daily quota (field absent from creator_info)', () => {
+      const provider = new TiktokProvider();
+      expect(
+        provider.validateCreatorRules(
+          { privacyOptions: ['PUBLIC_TO_EVERYONE'] },
+          baseSettings,
+          []
+        )
+      ).toEqual([]);
+    });
+
     it('passes a conforming post', () => {
       const provider = new TiktokProvider();
       expect(

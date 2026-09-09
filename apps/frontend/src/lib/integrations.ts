@@ -316,6 +316,14 @@ export interface TiktokCreatorInfo {
   stitchDisabled: boolean;
   commentDisabled: boolean;
   maxDurationSeconds: number;
+  /**
+   * Content Posting Guidelines 1b: when creator_info says the account cannot
+   * publish at this moment, the composer must stop the attempt and prompt the
+   * user to try again later.
+   */
+  publishDisabled: boolean;
+  publishDisabledReason?: string;
+  dailyPostLimitRemaining?: number | null;
 }
 
 export async function getTiktokCreatorInfo(

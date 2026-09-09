@@ -2,6 +2,7 @@ import {
   defaultSettingsFor,
   getProviderRequirement,
   tiktokDisclosureBlocksPublish,
+  tiktokCreatorCannotPost,
 } from './provider-requirements';
 
 describe('TikTok composer requirements', () => {
@@ -149,6 +150,19 @@ describe('TikTok composer requirements', () => {
       })
     ).toBe(false);
     expect(tiktokDisclosureBlocksPublish({})).toBe(false);
+  });
+
+  it('blocks publishing when creator_info says the account cannot post (TikTok UX 1b)', () => {
+    expect(tiktokCreatorCannotPost({ publishDisabled: true })).toBe(true);
+    expect(
+      tiktokCreatorCannotPost({ publishDisabled: false, dailyPostLimitRemaining: 0 })
+    ).toBe(true);
+    expect(
+      tiktokCreatorCannotPost({ publishDisabled: false, dailyPostLimitRemaining: 3 })
+    ).toBe(false);
+    // Field absent from creator_info must not block (undefined ≠ 0).
+    expect(tiktokCreatorCannotPost({ publishDisabled: false })).toBe(false);
+    expect(tiktokCreatorCannotPost({})).toBe(false);
   });
 
   it('only Branded content (not Your brand) conflicts with Self only visibility', () => {

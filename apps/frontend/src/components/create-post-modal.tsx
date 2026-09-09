@@ -31,6 +31,7 @@ import {
   defaultSettingsFor,
   effectiveMaxLength,
   tiktokDisclosureBlocksPublish,
+  tiktokCreatorCannotPost,
   type ProviderRequirement,
   type SettingsField,
   type MediaLike,
@@ -1318,9 +1319,15 @@ export function CreatePostModal({
       if (tiktokDisclosureBlocksPublish(channelSettings[c.id] ?? {})) {
         return true;
       }
+      // Content Posting Guidelines 1b: creator_info says the account cannot
+      // publish right now — disable Publish/Schedule and prompt to retry later.
+      const info = tiktokCreators[c.id];
+      if (info && tiktokCreatorCannotPost(info)) {
+        return true;
+      }
     }
     return false;
-  }, [selectedChannels, requirementFor, channelSettings]);
+  }, [selectedChannels, requirementFor, channelSettings, tiktokCreators]);
 
   // Once the user resolves every gap, drop the "almost there" banner so it
   // doesn't linger. We keep `showValidation` itself so it can re-trigger.
@@ -2170,6 +2177,13 @@ function ProviderSettingsPanel({
         </div>
       )}
 
+      {isTiktok && creatorInfo && tiktokCreatorCannotPost(creatorInfo) && (
+        <div className={styles.providerWarning}>
+          <WarnIcon />
+          <div>{t("createPost.tiktok.cannotPost")}</div>
+        </div>
+      )}
+
       {requirement.mediaNote && media.length === 0 && problems.length === 0 && (
         <div className={styles.providerHint}>
           <WarnIcon />
@@ -2223,7 +2237,14 @@ function ProviderSettingsPanel({
             <span className={styles.tiktokDisclosureTitle}>
               {t("createPost.tiktok.disclosureMaster")}
             </span>
-            <label className={styles.tiktokSwitch}>
+            <label
+              className={styles.tiktokSwitch}
+              title={
+                disclosureEnabled && !commercial
+                  ? t("createPost.tiktok.disclosureRequired")
+                  : undefined
+              }
+            >
               <input
                 type="checkbox"
                 checked={disclosureEnabled}

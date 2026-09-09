@@ -1064,10 +1064,14 @@ settingsStorage: {
     tiktok: {
       loadingCreator: "Loading what this TikTok account allows…",
       disabledByCreator: "(turned off on this TikTok account)",
+      cannotPost:
+        "This TikTok account can't publish right now. Please try again later.",
       postingAs: "Posting as",
       maxVideoDuration: "Max {seconds}s",
       disclosureMaster: "Content disclosure",
       disclosureHelp: "Choose every disclosure that applies to this post.",
+      disclosureRequired:
+        "You need to indicate if your content promotes yourself, a third party, or both.",
       disclosureOn: "ON",
       disclosureOff: "OFF",
       yourBrand: "Your brand",

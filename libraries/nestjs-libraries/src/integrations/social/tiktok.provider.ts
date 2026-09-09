@@ -480,6 +480,12 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
       stitchDisabled: !!data?.stitch_disabled,
       commentDisabled: !!data?.comment_disabled,
       maxDurationSeconds: data?.max_video_post_duration_sec ?? 0,
+      // Content Posting Guidelines 1b: when creator_info reports the account
+      // cannot publish right now, the client must stop the attempt and ask the
+      // user to try again later — so surface the signal instead of dropping it.
+      publishDisabled: !!data?.post_publish_disabled,
+      publishDisabledReason: data?.post_publish_disabled_reason ?? '',
+      dailyPostLimitRemaining: data?.daily_post_limit_remaining ?? null,
     };
   }
 
@@ -500,11 +506,28 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
       stitchDisabled?: boolean;
       commentDisabled?: boolean;
       maxDurationSeconds?: number;
+      publishDisabled?: boolean;
+      dailyPostLimitRemaining?: number | null;
     },
     settings: TikTokDto,
     media: Array<{ path?: string; durationSeconds?: number }>
   ): string[] {
     const issues: string[] = [];
+    // Content Posting Guidelines 1b: an account that creator_info marks as
+    // unable to publish must not be sent a post — fail the validation and ask
+    // the user to try again later.
+    if (creator?.publishDisabled) {
+      issues.push(
+        'This TikTok account cannot publish right now. Please try again later.'
+      );
+    } else if (
+      typeof creator?.dailyPostLimitRemaining === 'number' &&
+      creator.dailyPostLimitRemaining <= 0
+    ) {
+      issues.push(
+        'This TikTok account has reached its daily post limit. Please try again later.'
+      );
+    }
     const privacy = settings?.privacy_level;
     const options = creator?.privacyOptions ?? [];
     if (privacy && options.length > 0 && !options.includes(privacy)) {
