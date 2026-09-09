@@ -1,0 +1,220 @@
+# PostSider — Production Deployment (VPS)
+
+This guide takes a fresh VPS to a running, HTTPS-secured PostSider instance.
+
+**Target:** a single VPS with ~6 GB free RAM and ~50 GB disk, a domain you control,
+and Docker installed. The full stack (app, Postgres, Redis, MinIO, Temporal,
+Elasticsearch) runs via `docker-compose.production.yaml`. A host-level reverse
+proxy terminates TLS and forwards to the app.
+
+```
+Internet ──443──> Caddy/nginx (host) ──> 127.0.0.1:5000 (app container nginx)
+                                    └──> 127.0.0.1:9000 (MinIO, /storage/*)
+```
+
+---
+
+## 1. Prerequisites
+
+On the VPS:
+
+```bash
+# Docker + compose plugin
+curl -fsSL https://get.docker.com | sh
+docker compose version   # must print a version
+```
+
+DNS: create an **A record** `app.example.com → <VPS_PUBLIC_IP>` (use your domain).
+
+---
+
+## 2. Firewall
+
+Expose only SSH and web. The app, database and admin UIs stay bound to
+`127.0.0.1` and are never reachable from the internet directly.
+
+```bash
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
+```
+
+---
+
+## 3. Configure environment
+
+Copy the template and fill it in. **Never reuse the development `.env`** — it
+contains weak/dev secrets and `NOT_SECURED=true`.
+
+```bash
+cp .env.production.example .env.production
+# Edit .env.production: set your domain + OAuth keys. Leave the CHANGE_ME
+# secrets — deploy.sh generates strong random values for them automatically.
+```
+
+Set at minimum:
+
+| Variable | Value |
+|----------|-------|
+| `FRONTEND_URL`, `BACKEND_URL` | `https://app.example.com` |
+| `NEXT_PUBLIC_BACKEND_URL` | `https://app.example.com/api` |
+| `NOT_SECURED` | **leave unset** |
+| `DISABLE_REGISTRATION` | `true` for a private instance |
+| `API_LIMIT` | `60`–`120` |
+
+Secrets — leave them as `CHANGE_ME...` and `deploy.sh` will generate strong
+random values automatically, **or** set them yourself:
+
+```bash
+openssl rand -base64 64   # JWT_SECRET
+openssl rand -base64 32   # ENCRYPTION_KEY
+openssl rand -hex 24      # POSTGRES_PASSWORD
+openssl rand -hex 32      # MINIO_SECRET_KEY / DBGATE_PASSWORD
+```
+
+> `ENCRYPTION_KEY` is required in production. Without it, stored provider
+> secrets fall back to the weaker legacy AES-256-CBC scheme derived from
+> `JWT_SECRET`.
+
+Add the OAuth credentials for the social platforms you actually use (X,
+LinkedIn, Facebook, …). Use **fresh production credentials**, not the dev keys.
+
+---
+
+## 4. Deploy
+
+```bash
+sudo ./deploy.sh --bootstrap
+```
+
+This will:
+
+1. Fill any remaining `CHANGE_ME` secrets (a timestamped backup is kept).
+2. Build the image with `NEXT_PUBLIC_*` baked in.
+3. Start the full stack and wait until the app is healthy.
+4. Create the first admin user (`--bootstrap`) — note the one-time password it prints.
+
+Re-deploys / updates:
+
+```bash
+git pull
+sudo ./deploy.sh            # rebuild + restart (migrations run automatically on boot)
+sudo ./deploy.sh --no-build # just restart after env-only changes
+```
+
+### Existing Postiz-data upgrades
+
+Before the first deploy of this schema to a database that may contain legacy
+Postiz rows, run this preflight while the old `CreationMethod` enum still
+exists. The applied migration `20260628160000_remove_stripped_ai_models`
+removes `MCP` and `AUTOPOST` without remapping rows first, so Prisma will abort
+before any later migration can run if either value remains.
+
+```sql
+BEGIN;
+UPDATE "Post"
+SET "creationMethod" = 'API'
+WHERE "creationMethod" IN ('MCP', 'AUTOPOST');
+COMMIT;
+```
+
+Verify that the update affected the expected rows, then run
+`./deploy.sh`.
+Fresh installs and databases that never used those creation paths do not need
+this preflight. Do not edit the applied migration: its Prisma checksum must
+remain unchanged.
+
+First login: sign in with `admin@setup.local` and the one-time password from
+the bootstrap step, then set your real email and password.
+
+---
+
+## 5. Reverse proxy + HTTPS (on the host)
+
+Pick one. Both forward `/` to the app and `/storage/*` to MinIO.
+
+### Option A — Caddy (automatic HTTPS, recommended)
+
+```bash
+sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+sudo nano /etc/caddy/Caddyfile      # set your domain + email
+sudo systemctl reload caddy
+```
+
+### Option B — nginx + certbot
+
+```bash
+sudo apt install nginx certbot python3-certbot-nginx
+sudo cp deploy/nginx-host.conf /etc/nginx/sites-available/postsider
+sudo ln -s /etc/nginx/sites-available/postsider /etc/nginx/sites-enabled/
+sudo nano /etc/nginx/sites-available/postsider   # set your domain
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d app.example.com
+```
+
+Open `https://app.example.com` — you should reach the dashboard.
+
+---
+
+## 6. Admin UIs (optional, keep them private)
+
+DbGate (`127.0.0.1:8082`) and Temporal UI (`127.0.0.1:8080`) are bound to
+localhost only. Access them over an SSH tunnel:
+
+```bash
+ssh -L 8080:127.0.0.1:8080 -L 8082:127.0.0.1:8082 user@your-vps
+```
+
+Only expose them publicly behind basic auth (see the commented blocks in
+`deploy/Caddyfile`). The MinIO console (`:9001`) can be removed from the compose
+`ports` list in production.
+
+---
+
+## 7. Backups
+
+Critical state lives in the Postgres and MinIO volumes. The current helper
+backs up PostgreSQL only; it does **not** create a MinIO media backup. Configure
+an object-storage/volume backup before treating the deployment as disaster-
+recoverable.
+
+```bash
+# Database and optional MinIO backup helper
+./var/deploy/backup.sh
+```
+
+The helper stores timestamped database backups in `/opt/postsider-backups/`
+and keeps 30 days by default. Install its six-hour cron job with
+`./var/deploy/setup-backup-cron.sh`. Store a copy off-box; the helper's
+optional MinIO upload requires a configured `mc` alias.
+
+---
+
+## 8. Pre-flight security checklist
+
+- [ ] `NOT_SECURED` is unset in `.env.production`
+- [ ] `JWT_SECRET` and `ENCRYPTION_KEY` are random (not the dev defaults)
+- [ ] Strong `POSTGRES_PASSWORD`, `MINIO_SECRET_KEY`, `DBGATE_PASSWORD`
+- [ ] `DISABLE_REGISTRATION=true` (unless you want open sign-up)
+- [ ] `API_LIMIT` set to a sane production value (60–120)
+- [ ] Firewall allows only 22/80/443
+- [ ] HTTPS works and HTTP redirects to it
+- [ ] DbGate / Temporal UI not publicly exposed (or behind auth)
+- [ ] Production OAuth keys in use — dev keys from `.env` rotated/removed
+- [ ] Backups scheduled
+- [ ] PostgreSQL backups copied off the VPS
+- [ ] MinIO media backup configured and restore-tested
+
+---
+
+## Troubleshooting
+
+| Symptom | Cause / fix |
+|---------|-------------|
+| Dashboard loads but every API call fails / hits `localhost:3000` | `NEXT_PUBLIC_BACKEND_URL` wasn't set at build time. Set it in `.env.production` and rebuild with `sudo ./deploy.sh`. |
+| 502 from the reverse proxy | App container not healthy yet — `docker compose --env-file .env.production -f docker-compose.production.yaml logs -f postsider`. |
+| Scheduled posts never publish | Orchestrator/Temporal issue — check `postsider-temporal` and the orchestrator process inside the app container (`docker exec postsider-app pm2 ls`). |
+| Workers appear healthy but publishing is stuck | Check `docker exec postsider-app wget -qO- http://127.0.0.1:3002/health/workers` and describe the `main` task queue; publishing requires active `main` pollers and zero backlog. |
+| Login works locally but not in prod | Remove `NOT_SECURED` from `.env.production`; any set value enables insecure mode and prevents the production session cookie. |
+| Images don't load (`/storage/...` 404) | Reverse proxy `/storage` → MinIO mapping missing, or the `postsider-media` bucket wasn't created. |

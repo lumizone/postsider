@@ -1,0 +1,189 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────────────
+# PostSider — Production deploy script (VPS)
+# ─────────────────────────────────────────────────────────────────────────────
+# What it does:
+#   1. Verifies prerequisites (docker + compose plugin).
+#   2. Ensures .env.production exists; auto-fills any remaining CHANGE_ME
+#      placeholders with strong random secrets (a timestamped backup is kept).
+#   3. Builds the image with the NEXT_PUBLIC_* build args baked in.
+#   4. Starts the full stack and waits for the app to become healthy.
+#
+# Database migrations run automatically inside the container on startup
+# (pm2-run → prisma-migrate-deploy). For the very first install, create the
+# initial admin afterwards:  ./deploy.sh --bootstrap   (or see README).
+#
+# Usage:
+#   ./deploy.sh              # build + deploy
+#   ./deploy.sh --bootstrap  # build + deploy, then create the first admin user
+#   ./deploy.sh --no-build   # (re)start without rebuilding the image
+# ─────────────────────────────────────────────────────────────────────────────
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+ENV_FILE=".env.production"
+COMPOSE_FILE="docker-compose.production.yaml"
+COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
+
+# Suppress the host uptime monitor (if one is installed) for the duration of the
+# deploy: during a rebuild the app container restarts and briefly goes
+# unhealthy / endpoints flap, which would otherwise fire false alerts. The flag
+# is removed on exit — success OR failure — via the trap. No-op if the monitor
+# directory does not exist (e.g. a plain self-host install).
+MAINT_FLAG="${MONITOR_MAINTENANCE_FLAG:-/var/lib/postsider/monitoring/MAINTENANCE}"
+if [[ -d "$(dirname "$MAINT_FLAG")" ]]; then
+  touch "$MAINT_FLAG" 2>/dev/null || true
+  # EXIT alone does NOT fire on an untrapped SIGINT/SIGTERM (verified on this
+  # host), which used to leak the flag and mute the monitor indefinitely. The
+  # monitor now also has a TTL on the flag as the second line of defense.
+  cleanup_maint() { rm -f "$MAINT_FLAG" 2>/dev/null || true; }
+  trap cleanup_maint EXIT
+  trap 'cleanup_maint; exit 130' INT
+  trap 'cleanup_maint; exit 143' TERM
+fi
+
+BOOTSTRAP=false
+DO_BUILD=true
+for arg in "$@"; do
+  case "$arg" in
+    --bootstrap) BOOTSTRAP=true ;;
+    --no-build)  DO_BUILD=false ;;
+    -h|--help)   sed -n '2,30p' "$0"; exit 0 ;;
+    *) echo "Unknown option: $arg" >&2; exit 1 ;;
+  esac
+done
+
+log()  { printf '\033[1;34m▶ %s\033[0m\n' "$*"; }
+ok()   { printf '\033[1;32m✓ %s\033[0m\n' "$*"; }
+warn() { printf '\033[1;33m! %s\033[0m\n' "$*"; }
+die()  { printf '\033[1;31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
+
+# ── 1. Prerequisites ─────────────────────────────────────────────────────────
+log "Checking prerequisites"
+command -v docker >/dev/null 2>&1 || die "docker is not installed"
+docker compose version >/dev/null 2>&1 || die "the docker compose plugin is not installed"
+command -v openssl >/dev/null 2>&1 || die "openssl is required to generate secrets"
+if [[ ! -f "$ENV_FILE" ]]; then
+  if [[ -f "${ENV_FILE}.example" ]]; then
+    cp "${ENV_FILE}.example" "$ENV_FILE"
+    warn "Created $ENV_FILE from ${ENV_FILE}.example — review it and set your domain + OAuth keys."
+  else
+    die "$ENV_FILE not found and no ${ENV_FILE}.example to copy from."
+  fi
+fi
+ok "Prerequisites OK"
+
+# ── 2. Auto-fill remaining CHANGE_ME secrets ─────────────────────────────────
+# Replaces VAR=...CHANGE_ME... lines with a freshly generated secret. Values you
+# already set by hand are left untouched. A backup is written before any change.
+fill_secret() {
+  local var="$1" value="$2"
+  if grep -qE "^${var}=.*CHANGE_ME" "$ENV_FILE"; then
+    # Escape & and / for sed replacement safety.
+    local esc=${value//\\/\\\\}; esc=${esc//&/\\&}; esc=${esc//\//\\/}
+    sed -i.bak "s/^${var}=.*/${var}=\"${esc}\"/" "$ENV_FILE"
+    ok "Generated ${var}"
+  fi
+}
+
+if grep -qE "CHANGE_ME" "$ENV_FILE"; then
+  log "Filling remaining CHANGE_ME placeholders with random secrets"
+  cp "$ENV_FILE" "${ENV_FILE}.bak.$(date +%Y%m%d%H%M%S)"
+  fill_secret JWT_SECRET        "$(openssl rand -base64 64 | tr -d '\n')"
+  fill_secret ENCRYPTION_KEY    "$(openssl rand -base64 32 | tr -d '\n')"
+  fill_secret POSTGRES_PASSWORD "$(openssl rand -hex 24)"
+  fill_secret MINIO_ACCESS_KEY  "postsider-$(openssl rand -hex 8)"
+  fill_secret MINIO_SECRET_KEY  "$(openssl rand -hex 32)"
+  fill_secret DBGATE_PASSWORD   "$(openssl rand -hex 16)"
+  rm -f "${ENV_FILE}.bak"
+fi
+
+# Any CHANGE_ME left now is a non-secret placeholder the operator must set
+# (e.g. domain-specific or provider values) — warn but don't block.
+if grep -qE "CHANGE_ME" "$ENV_FILE"; then
+  warn "Some CHANGE_ME values remain in $ENV_FILE — review them:"
+  grep -nE "CHANGE_ME" "$ENV_FILE" | sed 's/^/    /' || true
+fi
+
+# ── 3. Load env so compose can interpolate build args ────────────────────────
+set -a
+# shellcheck disable=SC1090
+. "$ENV_FILE"
+set +a
+[[ -n "${NEXT_PUBLIC_BACKEND_URL:-}" ]] || die "NEXT_PUBLIC_BACKEND_URL is empty in $ENV_FILE"
+
+# ── 4. Build + start ─────────────────────────────────────────────────────────
+if $DO_BUILD; then
+  # Keep a rollback handle: the fresh build re-tags :latest and would leave the
+  # currently-running image dangling — the only way back was a full rebuild.
+  if docker image inspect postsider_app-postsider:latest >/dev/null 2>&1; then
+    docker tag postsider_app-postsider:latest postsider_app-postsider:prev
+    ok "Tagged current image as postsider_app-postsider:prev (rollback handle)"
+  fi
+  log "Building image (NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL)"
+  "${COMPOSE[@]}" build
+fi
+
+# Safety net before boot-time `prisma migrate deploy`: the nightly backup can be
+# up to ~20h stale. Skipped on first install (no postgres container yet).
+if docker ps --format '{{.Names}}' | grep -qx postsider-postgres; then
+  PREDEPLOY_DIR="${PREDEPLOY_BACKUP_DIR:-/var/lib/postsider/backups}/predeploy-$(date +%Y%m%d-%H%M%S)"
+  log "Pre-deploy DB backup -> $PREDEPLOY_DIR"
+  mkdir -p "$PREDEPLOY_DIR"
+  if docker exec postsider-postgres pg_dump -U "${POSTGRES_USER:-postsider}" -Fc "${POSTGRES_DB:-postsider_prod}" > "$PREDEPLOY_DIR/postsider_prod.dump"; then
+    cp "$ENV_FILE" "$PREDEPLOY_DIR/env.production.bak" && chmod -R go-rwx "$PREDEPLOY_DIR"
+    git -C "$SCRIPT_DIR" rev-parse HEAD > "$PREDEPLOY_DIR/DEPLOYED_COMMIT.txt" 2>/dev/null || true
+    # keep the last 5 pre-deploy dumps
+    ls -1dt "${PREDEPLOY_BACKUP_DIR:-/var/lib/postsider/backups}"/predeploy-* 2>/dev/null | tail -n +6 | xargs -r rm -rf
+    ok "Pre-deploy backup done"
+  else
+    rm -rf "$PREDEPLOY_DIR"
+    die "Pre-deploy pg_dump failed — NOT deploying on top of an unbackupable database"
+  fi
+fi
+
+log "Starting stack"
+"${COMPOSE[@]}" up -d
+
+# ── 5. Wait for health ───────────────────────────────────────────────────────
+# Timeout is a HARD failure: a migrate-crash-looping container shows `starting`
+# forever, and the old behavior (warn + "Deploy complete.") reported success on
+# a dead deploy. Rollback hint: postsider_app-postsider:prev + the pre-deploy
+# dump above.
+log "Waiting for the app container to become healthy (up to ~5 min)"
+deadline=$(( $(date +%s) + 300 ))
+while true; do
+  status=$(docker inspect --format '{{.State.Health.Status}}' postsider-app 2>/dev/null || echo "starting")
+  case "$status" in
+    healthy) ok "App is healthy"; break ;;
+    unhealthy) die "App became unhealthy. Check logs: ${COMPOSE[*]} logs postsider" ;;
+  esac
+  [[ $(date +%s) -lt $deadline ]] || die "Timed out waiting for health — deploy FAILED. Logs: ${COMPOSE[*]} logs postsider | Rollback: docker tag postsider_app-postsider:prev postsider_app-postsider:latest && ${COMPOSE[*]} up -d"
+  sleep 5
+done
+
+# ── 5b. Housekeeping: stop deploys from slowly eating the disk ───────────────
+# Each build adds a build-cache generation and orphans the previous image
+# (~2-3GB); measured 19GB of cache before this was added. Dangling-only prune —
+# tagged images of other stacks (n8n, umami) are untouched.
+log "Pruning docker build cache (keep 5GB) + dangling images"
+docker builder prune -f --keep-storage=5GB >/dev/null 2>&1 || true
+docker image prune -f >/dev/null 2>&1 || true
+
+# ── 6. Optional: bootstrap first admin ───────────────────────────────────────
+if $BOOTSTRAP; then
+  log "Creating the first admin user"
+  # Run the compiled CLI directly. `pnpm bootstrap` would try to rebuild from
+  # source, which isn't present in the slim runtime image.
+  BOOT="apps/commands/dist/apps/commands/src/bootstrap.main.js"
+  # -t only when we actually have a TTY — `-it` under cron/CI aborts instantly.
+  TTY_FLAG=""; [[ -t 0 ]] && TTY_FLAG="-t"
+  docker exec -i $TTY_FLAG postsider-app node "$BOOT" bootstrap \
+    || warn "Bootstrap failed — run it manually: docker exec -it postsider-app node $BOOT bootstrap"
+fi
+
+ok "Deploy complete."
+echo "   Next: point your host reverse proxy (Caddy/nginx) at 127.0.0.1:5000 with HTTPS."
+echo "   Logs: ${COMPOSE[*]} logs -f postsider"

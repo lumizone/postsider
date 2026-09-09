@@ -1,6 +1,6 @@
-# PostSider - Production Docker Compose
+# PostSider SaaS — Production Docker Compose
 # Target: VPS with 6GB free RAM, 50GB free disk
-# Domain: your domain (behind nginx reverse proxy on host)
+# Domain: app.example.com (behind nginx reverse proxy on host)
 #
 # Total estimated RAM usage: ~3.5-4GB
 # - PostgreSQL:    ~256MB (shared_buffers)
@@ -20,7 +20,7 @@ services:
       dockerfile: Dockerfile
       args:
         # NEXT_PUBLIC_* must be available at build time (baked into the JS bundle).
-        # Export these from .env.production before `docker compose build`.
+        # deploy.sh exports these from .env.production before `docker compose build`.
         NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:?NEXT_PUBLIC_BACKEND_URL must be set in .env.production}
         NEXT_PUBLIC_SELF_HOSTED: ${NEXT_PUBLIC_SELF_HOSTED:-true}
         NEXT_PUBLIC_VERSION: ${NEXT_PUBLIC_VERSION:-1.0.0}
@@ -348,7 +348,7 @@ services:
     restart: always
     environment:
       - TEMPORAL_ADDRESS=postsider-temporal:7233
-      - TEMPORAL_CORS_ORIGINS=https://app.yourdomain.com
+      - TEMPORAL_CORS_ORIGINS=https://app.example.com
     deploy:
       resources:
         limits:

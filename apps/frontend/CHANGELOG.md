@@ -109,8 +109,8 @@ All notable changes to the PostSider dashboard.
 
 ## 1.1.0 — Production deployment readiness
 
-Docker image, deployment tooling, and runtime fixes that make PostSider
-deployable on a VPS with Docker and docker-compose.
+Docker image, deploy tooling, and runtime fixes that make PostSider actually
+deployable on a VPS with a single `./deploy.sh` command.
 
 ### Docker / build fixes (image previously did not build or start)
 
@@ -137,12 +137,19 @@ deployable on a VPS with Docker and docker-compose.
   `NEXT_PUBLIC_*` at compile time; without it the browser called
   `http://localhost:3000` in production.
 
-### Deployment tooling
+### Deploy tooling (new files)
 
-- **`docker-compose.production.yaml`** — full production stack (app, Postgres,
-  Redis, MinIO, Temporal, Elasticsearch) runnable with a single command.
-- **`.env.production.example`** — tracked template (no secrets) so a fresh
-  `git clone` can be brought up with docker-compose.
+- **`deploy.sh`** — single command to verify prerequisites, auto-generate
+  strong secrets for any remaining `CHANGE_ME` placeholders, build the image
+  with correct build-args, start the full stack, wait for health, and
+  optionally bootstrap the first admin.
+- **`deploy/Caddyfile`** — host reverse proxy config with automatic HTTPS
+  (Let's Encrypt), HSTS, security headers, `/storage/*` → MinIO routing.
+- **`deploy/nginx-host.conf`** — alternative nginx + certbot config.
+- **`DEPLOYMENT.md`** — step-by-step VPS deployment guide (DNS, firewall,
+  env config, deploy, HTTPS, backups, security checklist, troubleshooting).
+- **`.env.production.example`** — tracked template (no secrets) so
+  `git clone` + `./deploy.sh` works out of the box.
 
 ### Compose / env improvements
 
