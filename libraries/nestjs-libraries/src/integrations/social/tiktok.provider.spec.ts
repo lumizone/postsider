@@ -631,6 +631,19 @@ describe('TiktokProvider Direct Post', () => {
   });
 
   describe('posting caps (guideline 1b)', () => {
+    it('explains the unaudited restriction instead of blaming the account', () => {
+      const provider = new TiktokProvider();
+
+      expect(
+        provider.handleErrors(
+          '{"error":{"code":"unaudited_client_can_only_post_to_private_accounts"}}'
+        )
+      ).toMatchObject({
+        type: 'bad-body',
+        value: expect.stringContaining('must be set to private'),
+      });
+    });
+
     it('treats a revoked authorization as a reconnect prompt, not a retry', () => {
       const provider = new TiktokProvider();
 

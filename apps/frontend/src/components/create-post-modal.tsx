@@ -371,6 +371,7 @@ function localizeTiktokMessage(t: Translate, msg: string): string {
     [/^This TikTok account has reached its daily post limit\. Please try again later$/i, "dailyLimit"],
     [/^Daily active user quota reached, please try again later$/i, "quotaReached"],
     [/^This TikTok account removed access for PostSider\. Please reconnect the account$/i, "accessRemoved"],
+    [/^TikTok has not approved this app for public posting yet\. Until the review passes, the TikTok account must be set to private and posts can use Self only visibility$/i, "unaudited"],
     [/^TikTok supports photos in JPEG or WebP format only$/i, "photoFormatOnly"],
     [/^TikTok did not return the allowed privacy levels for this account\. Please try again later$/i, "privacyUnavailable"],
     [/^TikTok did not return the creator information\. Please try again later$/i, "creatorInfoUnavailable"],

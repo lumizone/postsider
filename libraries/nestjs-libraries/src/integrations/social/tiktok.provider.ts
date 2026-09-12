@@ -370,9 +370,13 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     if (
       body.indexOf('unaudited_client_can_only_post_to_private_accounts') > -1
     ) {
+      // Until the Direct Post audit passes, TikTok only lets this app post to
+      // accounts that are private at the time of posting. The message names the
+      // actual cause instead of implying the account is broken.
       return {
         type: 'bad-body' as const,
-        value: 'App not approved for public posting, contact support',
+        value:
+          'TikTok has not approved this app for public posting yet. Until the review passes, the TikTok account must be set to private and posts can use Self only visibility.',
       };
     }
 

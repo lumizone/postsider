@@ -1072,6 +1072,8 @@ settingsStorage: {
         "TikTok's daily limit for this app was reached. Please try again later.",
       accessRemoved:
         "This TikTok account removed access for PostSider. Please reconnect the account.",
+      unaudited:
+        "TikTok has not approved this app for public posting yet. Until the review passes, the TikTok account must be set to private and posts can use Self only visibility.",
       postingAs: "Posting as",
       maxVideoDuration: "Max {seconds}s",
       disclosureMaster: "Content disclosure",

@@ -943,6 +943,8 @@ const pl = {
         "Osiągnięto dzienny limit TikToka dla tej aplikacji. Spróbuj ponownie później.",
       accessRemoved:
         "To konto TikTok odebrało dostęp aplikacji PostSider. Połącz konto ponownie.",
+      unaudited:
+        "TikTok nie zatwierdził jeszcze tej aplikacji do publicznego publikowania. Do czasu zakończenia weryfikacji konto TikTok musi być prywatne, a posty mogą mieć widoczność tylko dla Ciebie.",
       postingAs: "Publikujesz jako",
       maxVideoDuration: "Maks. {seconds} s",
       disclosureMaster: "Oznaczenie treści",
