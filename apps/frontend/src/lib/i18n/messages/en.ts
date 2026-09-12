@@ -1070,6 +1070,8 @@ settingsStorage: {
         "This TikTok account has reached its daily post limit. Please try again later.",
       quotaReached:
         "TikTok's daily limit for this app was reached. Please try again later.",
+      accessRemoved:
+        "This TikTok account removed access for PostSider. Please reconnect the account.",
       postingAs: "Posting as",
       maxVideoDuration: "Max {seconds}s",
       disclosureMaster: "Content disclosure",

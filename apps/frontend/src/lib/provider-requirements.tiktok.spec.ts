@@ -29,9 +29,22 @@ describe('TikTok composer requirements', () => {
     ).toMatchObject({
       showForMedia: 'photo',
     });
+    // AI labelling applies to photo posts too (TikTok takes the flag at the
+    // top level of the photo payload), so the control is not video-only.
     expect(
       requirement.fields.find((field) => field.key === 'video_made_with_ai')
-    ).toMatchObject({ showForMedia: 'video', label: 'AI-generated content' });
+    ).toMatchObject({
+      showForMedia: 'attached',
+      label: 'AI-generated content',
+    });
+    // Duet and Stitch stay video-only: TikTok's photo post_info has no such
+    // fields.
+    expect(
+      requirement.fields.find((field) => field.key === 'duet')
+    ).toMatchObject({ showForMedia: 'video' });
+    expect(
+      requirement.fields.find((field) => field.key === 'stitch')
+    ).toMatchObject({ showForMedia: 'video' });
   });
 
   it('requires privacy, validates commercial disclosures, and enforces the creator duration limit', () => {

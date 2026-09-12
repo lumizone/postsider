@@ -553,7 +553,95 @@ describe('TiktokProvider Direct Post', () => {
     });
   });
 
+  describe('AI-generated flag', () => {
+    it('sends is_aigc for a photo post at the top level', async () => {
+      const provider = new TiktokProvider();
+      const fetch = jest
+        .fn()
+        .mockResolvedValueOnce({
+          json: async () => ({ data: { publish_id: 'publish-photo' } }),
+        })
+        .mockResolvedValueOnce({
+          json: async () => ({
+            data: {
+              status: 'PUBLISH_COMPLETE',
+              publicaly_available_post_id: [],
+            },
+          }),
+        });
+      provider.fetch = fetch;
+
+      await provider.post(
+        'post-photo',
+        'token',
+        [
+          {
+            id: 'post-photo',
+            message: 'Caption',
+            media: [{ path: 'https://cdn.example/a.jpg' }],
+            settings: { ...baseSettings, video_made_with_ai: true },
+          },
+        ] as any,
+        { profile: 'creator' } as any
+      );
+
+      const body = JSON.parse(fetch.mock.calls[0][1].body);
+      expect(body.post_mode).toBe('DIRECT_POST');
+      expect(body.media_type).toBe('PHOTO');
+      expect(body.is_aigc).toBe(true);
+      // Photos have no post_info.is_aigc field.
+      expect(body.post_info.is_aigc).toBeUndefined();
+    });
+
+    it('keeps is_aigc inside post_info for a video post', async () => {
+      const provider = new TiktokProvider();
+      const fetch = jest
+        .fn()
+        .mockResolvedValueOnce({
+          json: async () => ({ data: { publish_id: 'publish-video' } }),
+        })
+        .mockResolvedValueOnce({
+          json: async () => ({
+            data: {
+              status: 'PUBLISH_COMPLETE',
+              publicaly_available_post_id: ['video-1'],
+            },
+          }),
+        });
+      provider.fetch = fetch;
+
+      await provider.post(
+        'post-video',
+        'token',
+        [
+          {
+            id: 'post-video',
+            message: 'Caption',
+            media: [{ path: 'https://cdn.example/a.mp4' }],
+            settings: { ...baseSettings, video_made_with_ai: true },
+          },
+        ] as any,
+        { profile: 'creator' } as any
+      );
+
+      const body = JSON.parse(fetch.mock.calls[0][1].body);
+      expect(body.post_info.is_aigc).toBe(true);
+      expect(body.is_aigc).toBeUndefined();
+    });
+  });
+
   describe('posting caps (guideline 1b)', () => {
+    it('treats a revoked authorization as a reconnect prompt, not a retry', () => {
+      const provider = new TiktokProvider();
+
+      expect(provider.handleErrors('{"fail_reason":"auth_removed"}')).toMatchObject(
+        {
+          type: 'bad-body',
+          value: expect.stringContaining('reconnect'),
+        }
+      );
+    });
+
     it('maps a platform-side posting block to a retry-later prompt', () => {
       const provider = new TiktokProvider();
 

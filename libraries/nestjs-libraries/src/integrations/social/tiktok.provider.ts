@@ -128,20 +128,23 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
   isBetweenSteps = false;
   convertToJPEG = true;
   /**
-   * Every scope here is used by a shipped feature, which is what the audit
-   * asks the demo to show:
+   * One scope per shipped feature, which is what the audit asks the demo to
+   * show:
    *  - `user.info.basic` / `user.info.profile`: the connected account's name,
    *    username and avatar in the composer and on the channel list.
-   *  - `user.info.stats` / `video.list`: channel + per-video analytics.
+   *  - `user.info.stats` / `video.list`: channel and per-video analytics.
    *  - `video.publish`: Direct Post itself.
-   *  - `video.upload`: Direct Post is not the only flow the API surface
-   *    exposes; the scope is requested so an account that granted it is not
-   *    downgraded on reconnect.
+   *
+   * `video.upload` is deliberately NOT requested: it only authorizes the
+   * inbox/draft endpoints (`/inbox/video/init/`, `post_mode=MEDIA_UPLOAD`),
+   * and this provider only ever calls the Direct Post endpoints. Requesting a
+   * scope no code path exercises is what the audit rejects, and an already
+   * connected account is unaffected because scope checks only require the
+   * scopes listed here.
    */
   scopes = [
     'user.info.basic',
     'video.publish',
-    'video.upload',
     'user.info.profile',
     'user.info.stats',
     'video.list',
@@ -230,6 +233,17 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
       return {
         type: 'bad-body' as const,
         value: 'Additional permissions required, please re-authenticate',
+      };
+    }
+
+    // Documented fail_reason: the creator removed the app's access mid-publish.
+    // TikTok says explicitly that a retry must NOT be attempted, so this is a
+    // reconnect prompt rather than a transient failure.
+    if (body.indexOf('auth_removed') > -1) {
+      return {
+        type: 'bad-body' as const,
+        value:
+          'This TikTok account removed access for PostSider. Please reconnect the account',
       };
     }
 
@@ -983,6 +997,12 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
           body: JSON.stringify({
             ...this.buildTikokPostInfoBody(firstPost),
             ...this.buildTikokSourceInfoBody(firstPost),
+            // Photo posts take the AI-generated flag at the TOP level (the
+            // video payload carries it inside post_info). TikTok labels the
+            // photo with an AI-generated tag when it is set.
+            ...(isPhoto
+              ? { is_aigc: firstPost.settings.video_made_with_ai || false }
+              : {}),
           }),
         }
       )

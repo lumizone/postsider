@@ -941,6 +941,8 @@ const pl = {
         "To konto TikTok osiągnęło dzienny limit publikacji. Spróbuj ponownie później.",
       quotaReached:
         "Osiągnięto dzienny limit TikToka dla tej aplikacji. Spróbuj ponownie później.",
+      accessRemoved:
+        "To konto TikTok odebrało dostęp aplikacji PostSider. Połącz konto ponownie.",
       postingAs: "Publikujesz jako",
       maxVideoDuration: "Maks. {seconds} s",
       disclosureMaster: "Oznaczenie treści",

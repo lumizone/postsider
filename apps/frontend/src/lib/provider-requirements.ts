@@ -272,11 +272,14 @@ const REGISTRY: Record<string, ProviderRequirement> = {
         showForMedia: "video",
       },
       {
+        // Applies to both media types: TikTok's video payload carries the flag
+        // inside post_info and the photo payload at the top level, and both
+        // label the post as AI generated.
         key: "video_made_with_ai",
         label: "AI-generated content",
         type: "checkbox",
         defaultValue: false,
-        showForMedia: "video",
+        showForMedia: "attached",
       },
       {
         key: "brand_organic_toggle",
