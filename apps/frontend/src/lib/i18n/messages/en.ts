@@ -1066,6 +1066,10 @@ settingsStorage: {
       disabledByCreator: "(turned off on this TikTok account)",
       cannotPost:
         "This TikTok account can't publish right now. Please try again later.",
+      dailyLimit:
+        "This TikTok account has reached its daily post limit. Please try again later.",
+      quotaReached:
+        "TikTok's daily limit for this app was reached. Please try again later.",
       postingAs: "Posting as",
       maxVideoDuration: "Max {seconds}s",
       disclosureMaster: "Content disclosure",
@@ -1093,6 +1097,18 @@ settingsStorage: {
       labelPaidPartnershipPhoto:
         "Your photo will be labeled as \"Paid partnership\".",
       videoFormatOnly: "TikTok supports video in MP4, WebM or MOV format only.",
+      photoFormatOnly: "TikTok supports photos in JPEG or WebP format only.",
+      tooManyPhotos: "TikTok accepts up to {max} photos in one post.",
+      photoTooLarge:
+        "This photo is {width}×{height}. TikTok accepts photos up to {max}p.",
+      videoResolutionOutOfRange:
+        "This video is {width}×{height}. TikTok accepts video between {min} and {max} pixels on each side.",
+      privacyUnavailable:
+        "TikTok did not return the allowed privacy levels for this account. Please try again later.",
+      creatorInfoUnavailable:
+        "TikTok did not return the creator information. Please try again later.",
+      mediaUrlNotVerified:
+        "TikTok can only download media from a public https URL on a domain verified in your TikTok app settings.",
       privacyNotAllowed:
         "This TikTok account does not allow the chosen privacy level.",
       duetOff: "Duet is turned off on this TikTok account.",
@@ -1106,6 +1122,11 @@ settingsStorage: {
         "Add a video or at least one photo — TikTok can't post without media.",
       videoPostOneItem:
         "A video post can only contain one media item — use photos only when selecting multiple items.",
+      previewPostingAs: "Posting as",
+      previewPrivacy: "Who can see this",
+      previewPrivacyUnset: "Not selected yet",
+      previewDisclosureNone: "No commercial content",
+      previewNoMedia: "No photo or video attached yet",
       choosePrivacy: "Choose who can see this post on TikTok.",
       chooseDisclosure:
         "Choose the applicable content disclosure before posting to TikTok.",

@@ -32,6 +32,15 @@ export class TikTokDto {
   @IsIn(['yes', 'no'])
   autoAddMusic: 'yes' | 'no';
 
+  /**
+   * Master "Content disclosure" switch from guidelines 3a. It is not a TikTok
+   * API field — it exists so the server can reject a post whose disclosure is
+   * switched on but has no type chosen, the same rule the composer enforces.
+   */
+  @IsBoolean()
+  @IsOptional()
+  commercial_content?: boolean;
+
   @IsBoolean()
   brand_content_toggle: boolean;
 

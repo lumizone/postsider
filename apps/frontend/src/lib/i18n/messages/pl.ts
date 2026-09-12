@@ -937,6 +937,10 @@ const pl = {
       disabledByCreator: "(wyłączone na tym koncie TikTok)",
       cannotPost:
         "To konto TikTok nie może teraz publikować. Spróbuj ponownie później.",
+      dailyLimit:
+        "To konto TikTok osiągnęło dzienny limit publikacji. Spróbuj ponownie później.",
+      quotaReached:
+        "Osiągnięto dzienny limit TikToka dla tej aplikacji. Spróbuj ponownie później.",
       postingAs: "Publikujesz jako",
       maxVideoDuration: "Maks. {seconds} s",
       disclosureMaster: "Oznaczenie treści",
@@ -964,6 +968,18 @@ const pl = {
       labelPaidPartnershipPhoto:
         "Twoje zdjęcie zostanie oznaczone jako \"Paid partnership\".",
       videoFormatOnly: "TikTok obsługuje wideo wyłącznie w formacie MP4, WebM lub MOV.",
+      photoFormatOnly: "TikTok obsługuje zdjęcia wyłącznie w formacie JPEG lub WebP.",
+      tooManyPhotos: "TikTok przyjmuje maksymalnie {max} zdjęć w jednym poście.",
+      photoTooLarge:
+        "To zdjęcie ma {width}×{height}. TikTok przyjmuje zdjęcia do {max}p.",
+      videoResolutionOutOfRange:
+        "Ten film ma {width}×{height}. TikTok przyjmuje wideo od {min} do {max} pikseli na każdym boku.",
+      privacyUnavailable:
+        "TikTok nie zwrócił dozwolonych poziomów prywatności dla tego konta. Spróbuj ponownie później.",
+      creatorInfoUnavailable:
+        "TikTok nie zwrócił informacji o koncie. Spróbuj ponownie później.",
+      mediaUrlNotVerified:
+        "TikTok może pobierać media wyłącznie z publicznego adresu https w domenie zweryfikowanej w ustawieniach aplikacji TikTok.",
       privacyNotAllowed: "To konto TikTok nie pozwala na wybrany poziom prywatności.",
       duetOff: "Duety są wyłączone na tym koncie TikTok.",
       stitchOff: "Stitch jest wyłączony na tym koncie TikTok.",
@@ -976,6 +992,11 @@ const pl = {
         "Dodaj wideo lub co najmniej jedno zdjęcie — TikTok nie publikuje posta bez załącznika.",
       videoPostOneItem:
         "Post wideo może zawierać tylko jeden element — przy wielu elementach używaj wyłącznie zdjęć.",
+      previewPostingAs: "Publikujesz jako",
+      previewPrivacy: "Kto może to zobaczyć",
+      previewPrivacyUnset: "Jeszcze nie wybrano",
+      previewDisclosureNone: "Brak treści komercyjnych",
+      previewNoMedia: "Nie dodano jeszcze zdjęcia ani wideo",
       choosePrivacy: "Wybierz, kto może zobaczyć ten post na TikToku.",
       chooseDisclosure:
         "Wybierz odpowiednie oznaczenie treści przed publikacją na TikToku.",

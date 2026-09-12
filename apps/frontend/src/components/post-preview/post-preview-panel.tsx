@@ -5,6 +5,7 @@ import { ChannelAvatar } from "../channel-avatar";
 import type { Channel } from "@/lib/calendar-data";
 import { familyFor } from "./preview-families";
 import { mediaAspectRatio, previewFold, truncateBody } from "./preview-utils";
+import { TikTokPreview } from "./tiktok-preview";
 
 export interface PreviewMedia {
   id: string;
@@ -20,6 +21,10 @@ interface Props {
   threadParts: string[];
   maxLenFor: (channel: Channel) => number;
   identifierFor: (channel: Channel) => string | undefined;
+  /** TikTok only: the per-channel settings the preview restates. */
+  settingsFor?: (channelId: string) => Record<string, unknown> | undefined;
+  /** TikTok only: creator nickname from `creator_info`. */
+  nicknameFor?: (channelId: string) => string | undefined;
 }
 
 export function PostPreviewPanel({
@@ -30,6 +35,8 @@ export function PostPreviewPanel({
   threadParts,
   maxLenFor,
   identifierFor,
+  settingsFor,
+  nicknameFor,
 }: Props) {
   const [tab, setTab] = useState<string | null>(null);
 
@@ -86,6 +93,15 @@ export function PostPreviewPanel({
         </div>
       )}
 
+      {identifier === "tiktok" ? (
+        <TikTokPreview
+          channel={active}
+          nickname={nicknameFor?.(active.id)}
+          body={body}
+          media={media}
+          settings={settingsFor?.(active.id) ?? {}}
+        />
+      ) : (
       <article style={{ border: "1px solid var(--line-soft)", borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 10, background: "var(--bg)" }}>
         <header style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <ChannelAvatar channel={active} size={30} circular showPlatformBadge />
@@ -163,6 +179,7 @@ export function PostPreviewPanel({
           {body.length}{max > 0 ? ` / ${max}` : ""}{over ? " · over limit" : ""}
         </div>
       </article>
+      )}
     </div>
   );
 }

@@ -120,6 +120,9 @@ export interface AttachedMedia {
   url: string;
   /** Duration read from local video metadata when available. */
   durationSeconds?: number;
+  /** Pixel dimensions, read from the media's own metadata when available. */
+  width?: number;
+  height?: number;
   /**
    * Backend media id (when present, this media already exists server-side and
    * submitPost must NOT re-upload it — it rides along as {id, path}).
@@ -223,6 +226,54 @@ function readVideoDuration(url: string): Promise<number | undefined> {
   });
 }
 
+/**
+ * Pixel dimensions of a video, read from the element's metadata. TikTok caps
+ * videos at 4096 pixels per side and floors them at 360, and a violation is
+ * only reported by the API after the whole upload has been transferred, so the
+ * composer reads them up front.
+ */
+function readVideoDimensions(
+  url: string,
+): Promise<{ width: number; height: number } | undefined> {
+  return new Promise((resolve) => {
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      const { videoWidth: width, videoHeight: height } = video;
+      video.removeAttribute("src");
+      video.load();
+      resolve(width && height ? { width, height } : undefined);
+    };
+    video.onerror = () => resolve(undefined);
+    video.src = url;
+  });
+}
+
+/** Pixel dimensions of an image, read from a detached Image element. */
+function readImageDimensions(
+  url: string,
+): Promise<{ width: number; height: number } | undefined> {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () =>
+      resolve(
+        image.naturalWidth && image.naturalHeight
+          ? { width: image.naturalWidth, height: image.naturalHeight }
+          : undefined,
+      );
+    image.onerror = () => resolve(undefined);
+    image.src = url;
+  });
+}
+
+/** Dimensions for any attachment, so validators can run before upload. */
+function readMediaDimensions(
+  url: string,
+  kind: "image" | "video",
+): Promise<{ width: number; height: number } | undefined> {
+  return kind === "video" ? readVideoDimensions(url) : readImageDimensions(url);
+}
+
 /** Format an ISO datetime as a readable local label, e.g. "Mon 29 Jun, 18:00". */
 function formatSlotLabel(iso: string): string {
   const d = new Date(iso);
@@ -287,8 +338,43 @@ function localizeTiktokMessage(t: Translate, msg: string): string {
       max: duration[2],
     });
   }
+  const videoResolution = trimmed.match(
+    /^This video is (\d+)x(\d+)\. TikTok accepts video between (\d+) and (\d+) pixels on each side$/i,
+  );
+  if (videoResolution) {
+    return t("createPost.tiktok.videoResolutionOutOfRange", {
+      width: videoResolution[1],
+      height: videoResolution[2],
+      min: videoResolution[3],
+      max: videoResolution[4],
+    });
+  }
+  const photoCount = trimmed.match(
+    /^TikTok accepts up to (\d+) photos in one post$/i,
+  );
+  if (photoCount) {
+    return t("createPost.tiktok.tooManyPhotos", { max: photoCount[1] });
+  }
+  const photoSize = trimmed.match(
+    /^This photo is (\d+)x(\d+)\. TikTok accepts photos up to (\d+)p$/i,
+  );
+  if (photoSize) {
+    return t("createPost.tiktok.photoTooLarge", {
+      width: photoSize[1],
+      height: photoSize[2],
+      max: photoSize[3],
+    });
+  }
   const map: Array<[RegExp, string]> = [
     [/^TikTok supports video in MP4, WebM or MOV format only$/i, "videoFormatOnly"],
+    [/^This TikTok account cannot publish right now\. Please try again later$/i, "cannotPost"],
+    [/^This TikTok account has reached its daily post limit\. Please try again later$/i, "dailyLimit"],
+    [/^Daily active user quota reached, please try again later$/i, "quotaReached"],
+    [/^TikTok supports photos in JPEG or WebP format only$/i, "photoFormatOnly"],
+    [/^TikTok did not return the allowed privacy levels for this account\. Please try again later$/i, "privacyUnavailable"],
+    [/^TikTok did not return the creator information\. Please try again later$/i, "creatorInfoUnavailable"],
+    [/^TikTok can only download media from a public https URL on a domain verified in your TikTok app settings$/i, "mediaUrlNotVerified"],
+    [/^TikTok needs one video or at least one photo$/i, "addVideoOrPhoto"],
     [/^This TikTok account does not allow the chosen privacy level$/i, "privacyNotAllowed"],
     [/^Duet is turned off on this TikTok account$/i, "duetOff"],
     [/^Stitch is turned off on this TikTok account$/i, "stitchOff"],
@@ -1058,12 +1144,22 @@ export function CreatePostModal({
       });
     }
     setMedia((prev) => [...prev, ...next]);
-    for (const item of next.filter((media) => media.kind === "video")) {
-      void readVideoDuration(item.url).then((durationSeconds) => {
-        if (durationSeconds === undefined) return;
+    for (const item of next) {
+      if (item.kind === "video") {
+        void readVideoDuration(item.url).then((durationSeconds) => {
+          if (durationSeconds === undefined) return;
+          setMedia((prev) =>
+            prev.map((media) =>
+              media.id === item.id ? { ...media, durationSeconds } : media,
+            ),
+          );
+        });
+      }
+      void readMediaDimensions(item.url, item.kind).then((dimensions) => {
+        if (!dimensions) return;
         setMedia((prev) =>
           prev.map((media) =>
-            media.id === item.id ? { ...media, durationSeconds } : media,
+            media.id === item.id ? { ...media, ...dimensions } : media,
           ),
         );
       });
@@ -1096,6 +1192,22 @@ export function CreatePostModal({
     });
   };
 
+  // Attachments that arrive without dimensions (media already stored
+  // server-side when editing, or restored drafts) are probed once here, so the
+  // TikTok resolution rules run for every attachment rather than only for the
+  // files picked in this session.
+  useEffect(() => {
+    for (const item of media) {
+      if (item.width && item.height) continue;
+      void readMediaDimensions(item.url, item.kind).then((dimensions) => {
+        if (!dimensions) return;
+        setMedia((prev) =>
+          prev.map((m) => (m.id === item.id ? { ...m, ...dimensions } : m)),
+        );
+      });
+    }
+  }, [media]);
+
   const addThreadPart = () => setThreadParts((prev) => [...prev, ""]);
   const updateThreadPart = (i: number, value: string) =>
     setThreadParts((prev) => prev.map((p, idx) => (idx === i ? value : p)));
@@ -1123,9 +1235,12 @@ export function CreatePostModal({
         if (!channel || channelIdentifier(channel) !== "tiktok") {
           return [channelId, settings];
         }
-        const { commercial_content: _uiOnly, ...transportSettings } = settings;
+        // `commercial_content` is the master Content-disclosure switch. It is
+        // not a TikTok API field, but it is sent so the server can enforce the
+        // guidelines 3a rule (disclosure on with no type chosen is a block)
+        // instead of trusting the composer alone.
         return [channelId, {
-          ...transportSettings,
+          ...settings,
           content_posting_method: "DIRECT_POST",
         }];
       }),
@@ -1171,6 +1286,8 @@ export function CreatePostModal({
       media.map((m) => ({
         kind: m.kind,
         durationSeconds: m.durationSeconds,
+        width: m.width,
+        height: m.height,
         // Extension from the original file name so TikTok's validator can
         // reject unsupported video containers (e.g. .mkv) client-side too.
         ext: m.name ? (m.name.split(".").pop()?.toLowerCase() ?? undefined) : undefined,
@@ -1822,6 +1939,8 @@ export function CreatePostModal({
                 effectiveMaxLength(requirementFor(c), { verified: c.verified })
               }
               identifierFor={(c) => channelIdentifier(c)}
+              settingsFor={(channelId) => channelSettings[channelId]}
+              nicknameFor={(channelId) => tiktokCreators[channelId]?.nickname}
             />
           </aside>
 

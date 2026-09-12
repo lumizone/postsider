@@ -24,6 +24,13 @@ export interface MediaLike {
   /** Browser-derived duration, available for newly attached videos. */
   durationSeconds?: number;
   /**
+   * Pixel dimensions read from the media's own metadata. Used by TikTok's
+   * resolution rules (360–4096 for video, up to 1080p for photos) so a
+   * violation is caught before the whole upload is transferred.
+   */
+  width?: number;
+  height?: number;
+  /**
    * Original file extension without the dot (e.g. "mp4", "mov", "webm").
    * Carried so validators can reject video containers a provider does not
    * accept (TikTok supports mp4/webm/mov) even when the browser already
@@ -143,6 +150,16 @@ export interface ValidationInput {
   maxVideoDurationSeconds?: number;
 }
 
+/**
+ * Human label for a `creator_info` privacy value. The composer's own dropdown
+ * renders these labels, and the TikTok preview repeats the chosen one so the
+ * creator sees exactly how the post will be visible before publishing.
+ */
+export function privacyLevelLabel(value?: string): string | undefined {
+  if (!value) return undefined;
+  return PRIVACY_LEVELS.find((option) => option.value === value)?.label;
+}
+
 const PRIVACY_LEVELS: FieldOption[] = [
   { value: "PUBLIC_TO_EVERYONE", label: "Public to everyone" },
   { value: "MUTUAL_FOLLOW_FRIENDS", label: "Mutual follow friends" },
@@ -154,6 +171,18 @@ const PRIVACY_LEVELS: FieldOption[] = [
 const TIKTOK_VIDEO_EXTS = ["mp4", "webm", "mov"];
 /** Known video containers TikTok does NOT support (mkv, avi, m4v, …). */
 const OTHER_VIDEO_EXTS = ["mkv", "avi", "m4v", "mpeg", "wmv", "flv"];
+/**
+ * Photo containers TikTok's photo endpoint accepts. PNG is listed because the
+ * backend rewrites every PNG to JPEG before the request is built.
+ */
+const TIKTOK_PHOTO_EXTS = ["jpg", "jpeg", "png", "webp"];
+/** Content Posting API photo limit: up to 35 URLs per post. */
+const TIKTOK_MAX_PHOTOS = 35;
+/** Content Posting API photo resolution cap (max 1080p per side). */
+const TIKTOK_MAX_PHOTO_PIXELS = 1080;
+/** Content Posting API video resolution floor/ceiling per side. */
+const TIKTOK_MIN_VIDEO_PIXELS = 360;
+const TIKTOK_MAX_VIDEO_PIXELS = 4096;
 
 function countVideos(media: MediaLike[]): number {
   return media.filter((m) => m.kind === "video").length;
@@ -287,7 +316,41 @@ const REGISTRY: Record<string, ProviderRequirement> = {
           "A video post can only contain one media item — use photos only when selecting multiple items.",
         );
       }
-      const videoDuration = media.find((item) => item.kind === "video")?.durationSeconds;
+      // Photo carousel rules, mirroring the backend provider: TikTok takes at
+      // most 35 photos and only JPEG/WebP containers.
+      const photos = media.filter((item) => item.kind !== "video");
+      if (photos.length > TIKTOK_MAX_PHOTOS) {
+        problems.push(`TikTok accepts up to ${TIKTOK_MAX_PHOTOS} photos in one post.`);
+      }
+      const badPhoto = photos.find(
+        (item) => item.ext && !TIKTOK_PHOTO_EXTS.includes(item.ext),
+      );
+      if (badPhoto) {
+        problems.push("TikTok supports photos in JPEG or WebP format only.");
+      }
+      // Resolution rules from the media transfer guide: a video must be at
+      // least 360 and at most 4096 pixels on both sides, a photo at most 1080.
+      const video = media.find((item) => item.kind === "video");
+      if (
+        video &&
+        ((video.width && (video.width < TIKTOK_MIN_VIDEO_PIXELS || video.width > TIKTOK_MAX_VIDEO_PIXELS)) ||
+          (video.height && (video.height < TIKTOK_MIN_VIDEO_PIXELS || video.height > TIKTOK_MAX_VIDEO_PIXELS)))
+      ) {
+        problems.push(
+          `This video is ${video.width}×${video.height}. TikTok accepts video between ${TIKTOK_MIN_VIDEO_PIXELS} and ${TIKTOK_MAX_VIDEO_PIXELS} pixels on each side.`,
+        );
+      }
+      const oversizedPhoto = photos.find(
+        (item) =>
+          (item.width && item.width > TIKTOK_MAX_PHOTO_PIXELS) ||
+          (item.height && item.height > TIKTOK_MAX_PHOTO_PIXELS),
+      );
+      if (oversizedPhoto) {
+        problems.push(
+          `This photo is ${oversizedPhoto.width}×${oversizedPhoto.height}. TikTok accepts photos up to ${TIKTOK_MAX_PHOTO_PIXELS}p.`,
+        );
+      }
+      const videoDuration = video?.durationSeconds;
       if (
         videoDuration !== undefined &&
         maxVideoDurationSeconds &&

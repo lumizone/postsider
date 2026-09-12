@@ -299,6 +299,20 @@ export class PostActivity {
           posts
         );
 
+        // TikTok Direct Post gate. Runs on every publish, whatever route armed
+        // the queue row, and re-reads `creator_info` so a scheduled post never
+        // goes out with a privacy level or interaction setting the account no
+        // longer allows. Fail-closed: a validation error here marks the post
+        // ERROR instead of publishing something the API would reject.
+        if (integration.providerIdentifier === 'tiktok') {
+          for (const post of newPosts || []) {
+            await this._postService.validatePostAtPublish(
+              integration.organizationId,
+              post.id
+            );
+          }
+        }
+
         const postNow = await getIntegration.post(
           integration.internalId,
           integration.token,

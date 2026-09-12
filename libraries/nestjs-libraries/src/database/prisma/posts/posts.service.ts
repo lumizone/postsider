@@ -50,7 +50,10 @@ import {
 import { AnalyticsData } from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
 import { timer } from '@postsider/helpers/utils/timer';
 import { ioRedis } from '@postsider/nestjs-libraries/redis/redis.service';
-import { RefreshToken } from '@postsider/nestjs-libraries/integrations/social.abstract';
+import {
+  BadBody,
+  RefreshToken,
+} from '@postsider/nestjs-libraries/integrations/social.abstract';
 import { RefreshIntegrationService } from '@postsider/nestjs-libraries/integrations/refresh.integration.service';
 import { hasExtension } from '@postsider/helpers/utils/has.extension';
 import { TiktokProvider } from '@postsider/nestjs-libraries/integrations/social/tiktok.provider';
@@ -512,6 +515,12 @@ export class PostsService {
     orgId: string,
     convertToJPEG = false
   ) {
+    // A PNG that fails to convert must FAIL the publish, not fall through to
+    // the original file: providers that ask for JPEG (TikTok photo posts)
+    // reject PNG containers, and the old `catch { return imagesList }` sent
+    // exactly that. Tracked separately so the retry-safe fallback for every
+    // other failure is preserved.
+    let imageConversionError: Error | null = null;
     try {
       let imageUpdateNeeded = false;
       const getImageList = await Promise.all(
@@ -549,8 +558,12 @@ export class PostsService {
               return m;
             }
 
-            if (hasExtension(m.path, 'png')) {
-              imageUpdateNeeded = true;
+            if (!hasExtension(m.path, 'png')) {
+              return m;
+            }
+
+            imageUpdateNeeded = true;
+            try {
               const response = await axios.get(m.url, {
                 responseType: 'arraybuffer',
                 timeout: 15000,
@@ -593,11 +606,21 @@ export class PostsService {
                     ? process.env.UPLOAD_DIRECTORY + path
                     : path,
               };
+            } catch (err: any) {
+              // Keep the first conversion failure; the outer catch below
+              // rethrows it instead of publishing the original PNG.
+              imageConversionError =
+                imageConversionError || new Error(
+                  `Could not prepare "${m.name || m.path}" for this platform: the image could not be converted to JPEG. Please re-upload it as JPEG or WebP.`
+                );
+              return m;
             }
-
-            return m;
           })
       );
+
+      if (imageConversionError) {
+        throw imageConversionError;
+      }
 
       if (imageUpdateNeeded) {
         await this._postRepository.updateImages(
@@ -608,6 +631,9 @@ export class PostsService {
 
       return getImageList;
     } catch (err: any) {
+      if (imageConversionError) {
+        throw imageConversionError;
+      }
       return imagesList;
     }
   }
@@ -1148,6 +1174,165 @@ export class PostsService {
     );
   }
 
+  /**
+   * Offline TikTok validation for a post that is already stored: the settings
+   * DTO plus the provider's media rules, with no network call. Used whenever a
+   * draft is armed for publishing, so the paths that never touch
+   * `validatePosts` (draft -> schedule, approval, public API status flip,
+   * evergreen, duplicate) cannot queue a post the API would reject.
+   *
+   * Returns the problems found; an empty array means the post may be queued.
+   */
+  private async tiktokProblemsForStoredPost(
+    orgId: string,
+    postId: string
+  ): Promise<string[]> {
+    const posts = await this.getPostsRecursively(postId, true, orgId, true);
+    const main = posts?.[0] as (Post & { integration?: Integration }) | undefined;
+    const integration = main?.integration;
+    if (!main || !integration) {
+      throw new BadRequestException('Post not found');
+    }
+
+    const provider = this._integrationManager.getSocialIntegration(
+      integration.providerIdentifier
+    );
+    if (!(provider instanceof TiktokProvider) || !provider.dto) {
+      return [];
+    }
+
+    const settings = JSON.parse(main.settings || '{}');
+    const media = (posts || []).map((p) => JSON.parse(p.image || '[]'));
+    const problems: string[] = [];
+
+    const instance = plainToInstance(provider.dto, settings, {
+      enableImplicitConversion: true,
+    });
+    const validationErrors = await validate(instance as object, {
+      skipMissingProperties: false,
+    });
+    if (validationErrors.length) {
+      const properties = validationErrors.map((error) => error.property);
+      // The raw class-validator text ("privacy_level must be one of …") is not
+      // actionable, and the composer localises the provider wording, so the
+      // privacy case gets the same sentence the composer uses.
+      problems.push(
+        properties.includes('privacy_level')
+          ? 'Choose who can see this post on TikTok'
+          : this.firstValidationError(validationErrors) ||
+              'TikTok settings are incomplete'
+      );
+    }
+
+    try {
+      const validity = await provider.checkValidity(
+        media,
+        settings,
+        await this.additionalSettingsFor(integration)
+      );
+      if (validity !== true) {
+        problems.push(validity);
+      }
+    } catch (err: any) {
+      problems.push(err?.message || 'Invalid media');
+    }
+
+    return problems;
+  }
+
+  /**
+   * Publish-time gate for TikTok Direct Post.
+   *
+   * This is the only validation that runs immediately before the API call, so
+   * it is fail-closed: settings, media, and a *fresh* `creator_info` lookup
+   * all have to pass, and a TikTok outage stops the attempt instead of
+   * publishing on stale assumptions. Because it sits at the provider boundary
+   * it also covers queue rows armed by older workflow versions and by any path
+   * that skipped the controller validation.
+   */
+  async validatePostAtPublish(orgId: string, postId: string) {
+    const posts = await this.getPostsRecursively(postId, true, orgId, true);
+    const main = posts?.[0] as (Post & { integration?: Integration }) | undefined;
+    const integration = main?.integration;
+    if (!main || !integration) {
+      throw new BadRequestException('Post not found');
+    }
+    if (integration.providerIdentifier !== 'tiktok') {
+      return;
+    }
+
+    const provider = this._integrationManager.getSocialIntegration('tiktok');
+    if (!(provider instanceof TiktokProvider)) {
+      return;
+    }
+
+    const problems = await this.tiktokProblemsForStoredPost(orgId, postId);
+    if (problems.length) {
+      this.throwPublishValidation(problems);
+    }
+
+    // Guidelines 1/1a: the latest creator info is fetched when the post is
+    // about to be published, not when it was scheduled, because the allowed
+    // privacy levels, interaction locks and duration cap are properties of the
+    // account at this moment.
+    let creator: Awaited<ReturnType<TiktokProvider['creatorInfo']>>;
+    try {
+      creator = await provider.creatorInfo(integration.token);
+    } catch (err: any) {
+      this.throwPublishValidation([
+        err?.message ||
+          'TikTok creator information is unavailable right now. Please try again later.',
+      ]);
+    }
+
+    const mediaItems = JSON.parse(main.image || '[]');
+    const mediaWithMeta = await Promise.all(
+      (mediaItems || []).map(async (item: any) => {
+        if (!item?.id) {
+          return { path: item?.path };
+        }
+        const row = await this._mediaService.getMediaById(item.id, orgId);
+        return {
+          path: item?.path,
+          durationSeconds: row?.durationSeconds ?? undefined,
+          width: row?.width ?? undefined,
+          height: row?.height ?? undefined,
+        };
+      })
+    );
+    const creatorProblems = provider.validateCreatorRules(
+      creator!,
+      JSON.parse(main.settings || '{}'),
+      mediaWithMeta
+    );
+    if (creatorProblems.length) {
+      this.throwPublishValidation(creatorProblems);
+    }
+  }
+
+  /**
+   * A failed pre-publish check is a permanent input problem, not a transient
+   * one. `BadBody` is the non-retryable ApplicationFailure the providers
+   * already throw for rejected payloads, so the workflow reports it to the
+   * user immediately instead of retrying the same invalid post.
+   */
+  private throwPublishValidation(problems: string[]): never {
+    throw new BadBody(
+      'tiktok-publish-validation',
+      JSON.stringify({ problems }),
+      Buffer.from('{}'),
+      problems.join(' ')
+    );
+  }
+
+  private async additionalSettingsFor(integration: Integration) {
+    try {
+      return JSON.parse(integration.additionalSettings || '[]');
+    } catch {
+      return [];
+    }
+  }
+
   /** Returns the first class-validator message (incl. nested children), or ''. */
   private firstValidationError(errors: any[]): string {
     for (const e of errors || []) {
@@ -1192,12 +1377,21 @@ export class PostsService {
       const mediaWithDuration = await Promise.all(
         mediaItems.map(async (item) => {
           if (!item?.id) {
-            return { path: item?.path, durationSeconds: undefined };
+            return {
+              path: item?.path,
+              durationSeconds: undefined,
+              width: undefined,
+              height: undefined,
+            };
           }
           const row = await this._mediaService.getMediaById(item.id, orgId);
           return {
             path: item?.path,
             durationSeconds: row?.durationSeconds ?? undefined,
+            // Photo posts are capped at 1080p per side, and the dimensions are
+            // already probed and stored at upload time.
+            width: row?.width ?? undefined,
+            height: row?.height ?? undefined,
           };
         })
       );
@@ -1519,6 +1713,15 @@ export class PostsService {
     if (status === 'schedule') {
       // A paused org may move posts to draft, but not arm them for publish.
       await this.assertOrgNotPausedForSchedule(orgId);
+      // Drafts skip the TikTok settings DTO and media rules at creation time
+      // (that is deliberate — a half-written draft must be saveable), so the
+      // check has to happen here before the post can reach the queue.
+      if (getPostById.integration?.providerIdentifier === 'tiktok') {
+        const problems = await this.tiktokProblemsForStoredPost(orgId, id);
+        if (problems.length) {
+          throw new BadRequestException(problems.join(' '));
+        }
+      }
     }
     let monthlyReservation: string | null = null;
     if (state === 'QUEUE' && getPostById.state !== 'QUEUE') {
@@ -1595,6 +1798,19 @@ export class PostsService {
     // is allowed).
     if (action === 'schedule' && getPostById.state !== 'DRAFT') {
       await this.assertOrgNotPausedForSchedule(orgId);
+    }
+
+    // Same gate as changePostStatus: a draft moved straight onto the calendar
+    // must satisfy the TikTok settings and media rules before it is queued.
+    if (
+      action === 'schedule' &&
+      getPostById.state === 'DRAFT' &&
+      getPostById.integration?.providerIdentifier === 'tiktok'
+    ) {
+      const problems = await this.tiktokProblemsForStoredPost(orgId, id);
+      if (problems.length) {
+        throw new BadRequestException(problems.join(' '));
+      }
     }
 
     // schedule: Set status to QUEUE and change date (reschedule the post)

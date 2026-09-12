@@ -1,6 +1,18 @@
 import { validate } from 'class-validator';
 import { TikTokDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/tiktok.dto';
-import { TiktokProvider } from './tiktok.provider';
+import { isTikTokPullableUrl, TiktokProvider } from './tiktok.provider';
+
+/** A complete, creator-approved TikTok settings object. */
+const baseSettings: any = {
+  privacy_level: 'PUBLIC_TO_EVERYONE',
+  duet: false,
+  stitch: false,
+  comment: false,
+  autoAddMusic: 'no',
+  brand_content_toggle: false,
+  brand_organic_toggle: false,
+  content_posting_method: 'DIRECT_POST',
+};
 
 describe('TiktokProvider Direct Post', () => {
   it('rejects the inbox upload transport at DTO validation', async () => {
@@ -113,46 +125,36 @@ describe('TiktokProvider Direct Post', () => {
     logError.mockRestore();
   });
 
-  it('defaults a legacy post without stored privacy_level to PUBLIC_TO_EVERYONE', async () => {
+  it('refuses to publish a post that has no privacy_level instead of guessing one', async () => {
     const provider = new TiktokProvider();
-    const fetch = jest
-      .fn()
-      .mockResolvedValueOnce({
-        json: async () => ({ data: { publish_id: 'publish-legacy' } }),
-      })
-      .mockResolvedValueOnce({
-        json: async () => ({
-          data: {
-            status: 'PUBLISH_COMPLETE',
-            publicaly_available_post_id: ['video-legacy'],
-          },
-        }),
-      });
+    const fetch = jest.fn();
     provider.fetch = fetch;
 
-    await provider.post(
-      'post-legacy',
-      'token',
-      [
-        {
-          id: 'post-legacy',
-          message: 'Legacy caption',
-          media: [{ path: 'https://cdn.example/legacy.mp4' }],
-          settings: {
-            duet: false,
-            stitch: false,
-            comment: false,
-            autoAddMusic: 'no',
-            brand_content_toggle: false,
-            brand_organic_toggle: false,
+    await expect(
+      provider.post(
+        'post-legacy',
+        'token',
+        [
+          {
+            id: 'post-legacy',
+            message: 'Legacy caption',
+            media: [{ path: 'https://cdn.example/legacy.mp4' }],
+            settings: {
+              duet: false,
+              stitch: false,
+              comment: false,
+              autoAddMusic: 'no',
+              brand_content_toggle: false,
+              brand_organic_toggle: false,
+            },
           },
-        },
-      ] as any,
-      { profile: 'creator' } as any
-    );
+        ] as any,
+        { profile: 'creator' } as any
+      )
+    ).rejects.toThrow('Choose who can see this post on TikTok');
 
-    const body = JSON.parse(fetch.mock.calls[0][1].body);
-    expect(body.post_info.privacy_level).toBe('PUBLIC_TO_EVERYONE');
+    // Nothing may reach TikTok when the creator never chose a privacy level.
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   describe('media classification (MOV/WebM are videos, not photos)', () => {
@@ -243,17 +245,6 @@ describe('TiktokProvider Direct Post', () => {
   });
 
   describe('creator-derived rules (server-side best effort)', () => {
-    const baseSettings: any = {
-      privacy_level: 'PUBLIC_TO_EVERYONE',
-      duet: false,
-      stitch: false,
-      comment: false,
-      autoAddMusic: 'no',
-      brand_content_toggle: false,
-      brand_organic_toggle: false,
-      content_posting_method: 'DIRECT_POST',
-    };
-
     it('rejects a privacy level the creator cannot use', () => {
       const provider = new TiktokProvider();
       expect(
@@ -407,6 +398,318 @@ describe('TiktokProvider Direct Post', () => {
           [{ path: 'clip.mp4', durationSeconds: 30 }]
         )
       ).toEqual([]);
+    });
+  });
+
+  describe('photo post limits (Content Posting API)', () => {
+    it('accepts 35 photos and rejects 36', async () => {
+      const provider = new TiktokProvider();
+      const photos = (count: number) =>
+        Array.from({ length: count }, (_, i) => ({
+          path: `https://cdn.example/photo-${i}.jpg`,
+        }));
+
+      await expect(provider.checkValidity([photos(35)])).resolves.toBe(true);
+      await expect(provider.checkValidity([photos(36)])).resolves.toContain(
+        'up to 35 photos'
+      );
+    });
+
+    it('rejects image containers TikTok cannot post (gif, avif, tiff)', async () => {
+      const provider = new TiktokProvider();
+      for (const ext of ['gif', 'avif', 'tiff']) {
+        await expect(
+          provider.checkValidity([[{ path: `https://cdn.example/a.${ext}` }]])
+        ).resolves.toContain('JPEG or WebP');
+      }
+    });
+
+    it('accepts JPEG, PNG (converted before upload) and WebP', async () => {
+      const provider = new TiktokProvider();
+      for (const ext of ['jpg', 'jpeg', 'png', 'webp']) {
+        await expect(
+          provider.checkValidity([[{ path: `https://cdn.example/a.${ext}` }]])
+        ).resolves.toBe(true);
+      }
+    });
+
+    it('rejects a photo larger than 1080p using the stored dimensions', () => {
+      const provider = new TiktokProvider();
+      expect(
+        provider.validateCreatorRules(
+          { privacyOptions: ['PUBLIC_TO_EVERYONE'] },
+          { ...baseSettings, brand_content_toggle: false } as any,
+          [{ path: 'https://cdn.example/big.png', width: 2000, height: 2000 }]
+        )
+      ).toEqual(
+        expect.arrayContaining([expect.stringContaining('up to 1080p')])
+      );
+    });
+
+    it('rejects a video outside the 360–4096 pixel range', () => {
+      const provider = new TiktokProvider();
+      const rules = (width: number, height: number) =>
+        provider.validateCreatorRules(
+          { privacyOptions: ['PUBLIC_TO_EVERYONE'], maxDurationSeconds: 600 },
+          baseSettings,
+          [{ path: 'https://cdn.example/clip.mp4', width, height }]
+        );
+
+      expect(rules(300, 300)).toEqual(
+        expect.arrayContaining([expect.stringContaining('between 360 and 4096')])
+      );
+      expect(rules(5000, 1080)).toEqual(
+        expect.arrayContaining([expect.stringContaining('between 360 and 4096')])
+      );
+      expect(rules(1080, 1920)).toEqual([]);
+      expect(rules(360, 360)).toEqual([]);
+      expect(rules(4096, 2160)).toEqual([]);
+    });
+
+    it('does not block a video whose dimensions are unknown', () => {
+      const provider = new TiktokProvider();
+      expect(
+        provider.validateCreatorRules(
+          { privacyOptions: ['PUBLIC_TO_EVERYONE'], maxDurationSeconds: 600 },
+          baseSettings,
+          [{ path: 'https://cdn.example/clip.mp4' }]
+        )
+      ).toEqual([]);
+    });
+
+    it('accepts a photo at exactly 1080p', () => {
+      const provider = new TiktokProvider();
+      expect(
+        provider.validateCreatorRules(
+          { privacyOptions: ['PUBLIC_TO_EVERYONE'] },
+          baseSettings,
+          [{ path: 'https://cdn.example/ok.jpg', width: 1080, height: 1080 }]
+        )
+      ).toEqual([]);
+    });
+  });
+
+  describe('privacy and disclosure enforcement', () => {
+    it('requires a privacy level to be chosen', () => {
+      const provider = new TiktokProvider();
+      expect(
+        provider.validateCreatorRules(
+          { privacyOptions: ['PUBLIC_TO_EVERYONE'] },
+          { ...baseSettings, privacy_level: undefined } as any,
+          []
+        )
+      ).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('Choose who can see this post on TikTok'),
+        ])
+      );
+    });
+
+    it('blocks when creator_info returned no privacy options', () => {
+      const provider = new TiktokProvider();
+      expect(
+        provider.validateCreatorRules(
+          { privacyOptions: [] },
+          baseSettings,
+          []
+        )
+      ).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('did not return the allowed privacy levels'),
+        ])
+      );
+    });
+
+    it('blocks a disclosure that is switched on with no type selected', () => {
+      const provider = new TiktokProvider();
+      expect(
+        provider.validateCreatorRules(
+          { privacyOptions: ['PUBLIC_TO_EVERYONE'] },
+          { ...baseSettings, commercial_content: true } as any,
+          []
+        )
+      ).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining(
+            'Choose the applicable content disclosure before posting to TikTok'
+          ),
+        ])
+      );
+    });
+
+    it('allows the disclosure once a type is selected', () => {
+      const provider = new TiktokProvider();
+      expect(
+        provider.validateCreatorRules(
+          { privacyOptions: ['PUBLIC_TO_EVERYONE'] },
+          {
+            ...baseSettings,
+            commercial_content: true,
+            brand_organic_toggle: true,
+          } as any,
+          []
+        )
+      ).toEqual([]);
+    });
+  });
+
+  describe('posting caps (guideline 1b)', () => {
+    it('maps a platform-side posting block to a retry-later prompt', () => {
+      const provider = new TiktokProvider();
+
+      expect(
+        provider.handleErrors('{"error":{"code":"post_publish_disabled"}}')
+      ).toMatchObject({
+        type: 'bad-body',
+        value: expect.stringContaining('Please try again later'),
+      });
+      expect(
+        provider.handleErrors('{"error":{"code":"daily_post_limit_reached"}}')
+      ).toMatchObject({
+        type: 'bad-body',
+        value: expect.stringContaining('Please try again later'),
+      });
+    });
+  });
+
+  describe('creator_info error handling', () => {
+    it('fails when TikTok answers with an error code instead of data', async () => {
+      const provider = new TiktokProvider();
+      provider.fetch = jest.fn().mockResolvedValue({
+        json: async () => ({
+          error: { code: 'access_token_invalid', message: 'token expired' },
+        }),
+      });
+
+      await expect(provider.creatorInfo('token')).rejects.toThrow(
+        'TikTok did not return the creator information'
+      );
+    });
+
+    it('fails when TikTok answers ok but without data', async () => {
+      const provider = new TiktokProvider();
+      provider.fetch = jest.fn().mockResolvedValue({
+        json: async () => ({ error: { code: 'ok', message: '' } }),
+      });
+
+      await expect(provider.creatorInfo('token')).rejects.toThrow();
+    });
+
+    it('reports a missing scope as a reconnect problem', async () => {
+      const provider = new TiktokProvider();
+      provider.fetch = jest.fn().mockResolvedValue({
+        json: async () => ({
+          error: { code: 'scope_not_authorized', message: 'no scope' },
+        }),
+      });
+
+      await expect(provider.creatorInfo('token')).rejects.toThrow(
+        're-authenticate'
+      );
+    });
+  });
+
+  describe('PULL_FROM_URL requirements', () => {
+    const settings = { ...baseSettings, privacy_level: 'SELF_ONLY' };
+
+    it('blocks an http media URL before calling TikTok', async () => {
+      const provider = new TiktokProvider();
+      const fetch = jest.fn();
+      provider.fetch = fetch;
+
+      await expect(
+        provider.post(
+          'post-1',
+          'token',
+          [
+            {
+              id: 'post-1',
+              message: 'x',
+              media: [{ path: 'http://cdn.example/clip.mp4' }],
+              settings,
+            },
+          ] as any,
+          { profile: 'creator' } as any
+        )
+      ).rejects.toThrow('public https URL');
+
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('blocks a URL outside the configured verified prefix', async () => {
+      process.env.TIKTOK_VERIFIED_MEDIA_PREFIX =
+        'https://cdn.postsider.com/media';
+      try {
+        const provider = new TiktokProvider();
+        const fetch = jest.fn();
+        provider.fetch = fetch;
+
+        await expect(
+          provider.post(
+            'post-1',
+            'token',
+            [
+              {
+                id: 'post-1',
+                message: 'x',
+                media: [{ path: 'https://evil.example/clip.mp4' }],
+                settings,
+              },
+            ] as any,
+            { profile: 'creator' } as any
+          )
+        ).rejects.toThrow('public https URL');
+
+        expect(fetch).not.toHaveBeenCalled();
+      } finally {
+        delete process.env.TIKTOK_VERIFIED_MEDIA_PREFIX;
+      }
+    });
+
+    it('rejects more than 35 photos before calling TikTok', async () => {
+      const provider = new TiktokProvider();
+      const fetch = jest.fn();
+      provider.fetch = fetch;
+
+      await expect(
+        provider.post(
+          'post-1',
+          'token',
+          [
+            {
+              id: 'post-1',
+              message: 'x',
+              media: Array.from({ length: 36 }, (_, i) => ({
+                path: `https://cdn.example/p-${i}.jpg`,
+              })),
+              settings,
+            },
+          ] as any,
+          { profile: 'creator' } as any
+        )
+      ).rejects.toThrow('up to 35 photos');
+
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('accepts only https URLs under the configured prefix', () => {
+      process.env.TIKTOK_VERIFIED_MEDIA_PREFIX = 'https://cdn.postsider.com/media';
+      try {
+        expect(
+          isTikTokPullableUrl('https://cdn.postsider.com/media/a/b.mp4')
+        ).toBe(true);
+        expect(isTikTokPullableUrl('http://cdn.postsider.com/media/a.mp4')).toBe(
+          false
+        );
+        expect(isTikTokPullableUrl('https://cdn.postsider.com/other/a.mp4')).toBe(
+          false
+        );
+        expect(isTikTokPullableUrl('https://cdn.postsider.com.evil.io/a.mp4')).toBe(
+          false
+        );
+      } finally {
+        delete process.env.TIKTOK_VERIFIED_MEDIA_PREFIX;
+      }
     });
   });
 });

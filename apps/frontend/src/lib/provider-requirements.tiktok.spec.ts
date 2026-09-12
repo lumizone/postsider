@@ -127,6 +127,82 @@ describe('TikTok composer requirements', () => {
     );
   });
 
+  it('enforces the TikTok photo carousel rules (max 35, JPEG/WebP only)', () => {
+    const photos = (count: number, ext = 'jpg') =>
+      Array.from({ length: count }, () => ({ kind: 'image' as const, ext }));
+
+    const base = { privacy_level: 'PUBLIC_TO_EVERYONE' };
+
+    expect(
+      requirement.validate({
+        body: 'Caption',
+        media: photos(35),
+        settings: base,
+      })
+    ).toEqual([]);
+
+    expect(
+      requirement.validate({
+        body: 'Caption',
+        media: photos(36),
+        settings: base,
+      })
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('TikTok accepts up to 35 photos'),
+      ]),
+    );
+
+    expect(
+      requirement.validate({
+        body: 'Caption',
+        media: photos(1, 'gif'),
+        settings: base,
+      })
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('JPEG or WebP format only'),
+      ]),
+    );
+
+    expect(
+      requirement.validate({
+        body: 'Caption',
+        media: photos(1, 'webp'),
+        settings: base,
+      })
+    ).toEqual([]);
+  });
+
+  it('enforces TikTok resolution rules for video and photos', () => {
+    const base = { privacy_level: 'PUBLIC_TO_EVERYONE' };
+    const video = (width: number, height: number) => [
+      { kind: 'video' as const, ext: 'mp4', durationSeconds: 10, width, height },
+    ];
+
+    expect(
+      requirement.validate({ body: 'Caption', media: video(300, 300), settings: base })
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('between 360 and 4096'),
+      ]),
+    );
+
+    expect(
+      requirement.validate({ body: 'Caption', media: video(1080, 1920), settings: base })
+    ).toEqual([]);
+
+    expect(
+      requirement.validate({
+        body: 'Caption',
+        media: [{ kind: 'image' as const, ext: 'jpg', width: 2000, height: 1500 }],
+        settings: base,
+      })
+    ).toEqual(
+      expect.arrayContaining([expect.stringContaining('up to 1080p')]),
+    );
+  });
+
   it('blocks publishing when disclosure is ON but no type is chosen (TikTok UX 3a)', () => {
     expect(
       tiktokDisclosureBlocksPublish({

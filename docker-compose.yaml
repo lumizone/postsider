@@ -50,6 +50,10 @@ services:
       YOUTUBE_CLIENT_SECRET: ''
       TIKTOK_CLIENT_ID: ''
       TIKTOK_CLIENT_SECRET: ''
+      # Domain or URL prefix verified in the TikTok developer portal's URL
+      # properties. Required for Direct Post (PULL_FROM_URL); a media URL
+      # outside it is refused before the request is sent.
+      TIKTOK_VERIFIED_MEDIA_PREFIX: ''
       PINTEREST_CLIENT_ID: ''
       PINTEREST_CLIENT_SECRET: ''
       DRIBBBLE_CLIENT_ID: ''

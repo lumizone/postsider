@@ -7,6 +7,13 @@ import sharp from 'sharp';
 export type ValidityMedia = {
   path: string;
   thumbnail?: string;
+  /** Media row id, when the caller knows it. */
+  id?: string;
+  /** Pixel dimensions, persisted on the Media row at upload time. */
+  width?: number;
+  height?: number;
+  /** Video duration in seconds, probed at upload time. */
+  durationSeconds?: number;
 };
 
 export class RefreshToken extends ApplicationFailure {
