@@ -23,6 +23,7 @@ import { AuthService as AuthChecker } from '@postsider/helpers/auth/auth.service
 import { OrganizationService } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.service';
 import { CheckPolicies } from '@postsider/backend/services/auth/permissions/permissions.ability';
 import { getCookieUrlFromDomain } from '@postsider/helpers/subdomain/subdomain.management';
+import { isImpersonationEnabled } from '../../services/auth/impersonation.flag';
 import { pricing } from '@postsider/nestjs-libraries/database/prisma/subscriptions/pricing';
 import { ApiTags } from '@nestjs/swagger';
 import { UsersService } from '@postsider/nestjs-libraries/database/prisma/users/users.service';
@@ -195,8 +196,10 @@ export class UsersController {
     @GetUserFromRequest() user: User,
     @Query('name') name: string
   ) {
-    if (!user.isSuperAdmin) {
-      throw new HttpException('Unauthorized', 400);
+    // Disabled unless the operator opts in: on the managed cloud a superadmin
+    // must not be able to read another organization's content.
+    if (!isImpersonationEnabled() || !user.isSuperAdmin) {
+      throw new HttpException('Unauthorized', 403);
     }
 
     return this._userService.getImpersonateUser(name);
@@ -209,8 +212,8 @@ export class UsersController {
     @Body('id') id: string,
     @Res({ passthrough: true }) response: Response
   ) {
-    if (!user.isSuperAdmin) {
-      throw new HttpException('Unauthorized', 400);
+    if (!isImpersonationEnabled() || !user.isSuperAdmin) {
+      throw new HttpException('Unauthorized', 403);
     }
 
     // Impersonation reads a customer's account with their own permissions.

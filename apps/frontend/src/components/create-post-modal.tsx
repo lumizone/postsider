@@ -1050,20 +1050,23 @@ export function CreatePostModal({
   ) => {
     setChannelSettings((prev) => {
       const next = { ...(prev[integrationId] ?? {}), [key]: value };
-      if (key === "commercial_content") {
-        if (!value) {
-          next.brand_content_toggle = false;
-          next.brand_organic_toggle = false;
-        } else if (next.privacy_level === "SELF_ONLY") {
-          // TikTok forbids commercial posts restricted to the creator. Make a
-          // fresh privacy choice necessary instead of silently widening it.
-          delete next.privacy_level;
-        }
+      // Turning the disclosure master switch OFF clears any selected type.
+      // Turning it ON must NOT change visibility: no type is picked yet, so
+      // nothing constrains privacy, and publishing is already blocked until a
+      // type is chosen.
+      if (key === "commercial_content" && !value) {
+        next.brand_content_toggle = false;
+        next.brand_organic_toggle = false;
       }
-      if (
-        (key === "brand_content_toggle" || key === "brand_organic_toggle") &&
-        value
-      ) {
+      // "Your brand" (brand_organic_toggle) is allowed with Self only
+      // visibility, so it must not clear the privacy choice.
+      if (key === "brand_organic_toggle" && value) {
+        next.commercial_content = true;
+      }
+      // Only third-party Branded content cannot be private (Content Sharing
+      // Guidelines 3b): require a fresh privacy choice instead of silently
+      // widening it. The picker also disables SELF_ONLY when Branded is set.
+      if (key === "brand_content_toggle" && value) {
         next.commercial_content = true;
         if (next.privacy_level === "SELF_ONLY") delete next.privacy_level;
       }

@@ -10,6 +10,7 @@ import {
 } from '@postsider/helpers/subdomain/subdomain.management';
 import { HttpForbiddenException } from '@postsider/nestjs-libraries/services/exception.filter';
 import { MfaService } from './mfa.service';
+import { isImpersonationEnabled } from './impersonation.flag';
 
 export const removeAuth = (res: Response) => {
   const flags = {
@@ -83,7 +84,10 @@ export class AuthMiddleware implements NestMiddleware {
       }
 
       const impersonate = req.cookies.impersonate || req.headers.impersonate;
-      if (user?.isSuperAdmin && impersonate) {
+      // Fail closed: only honor an impersonation cookie when the operator has
+      // deliberately enabled it. Otherwise a superadmin can read another
+      // organization's content by design — which the managed cloud must not do.
+      if (isImpersonationEnabled() && user?.isSuperAdmin && impersonate) {
         const loadImpersonate = await this._organizationService.getUserOrg(
           impersonate
         );
