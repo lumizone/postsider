@@ -21,7 +21,7 @@ import { AuthService } from '@postsider/helpers/auth/auth.service';
  *
  * Migration is lazy and non-breaking: only values carrying the `v2:` marker are
  * decrypted, so rows written before this shipped keep working as plaintext
- * until a maintenance script rewrites them (encrypt-then-store in place).
+ * until `scripts/encrypt-integration-tokens.cjs` rewrites them.
  */
 
 const SECRET_FIELDS = ['token', 'refreshToken'] as const;

@@ -6,12 +6,12 @@ import { PostsService } from './posts.service';
 import { TiktokProvider } from '@postsider/nestjs-libraries/integrations/social/tiktok.provider';
 
 /**
- * Direct Post compliance is only guaranteed if it is enforced at the moment of
- * publishing, because drafts, approvals, the public API, duplicates and
- * evergreen all arm the queue without going through the composer. These tests
- * pin that gate (and the draft -> schedule gate in front of it).
+ * Drafts skip the TikTok settings DTO and media rules at creation time (that is
+ * deliberate — a half-written draft must be saveable), so arming one for
+ * publishing has to re-check them. The publish-time creator_info gate lives in
+ * the provider; this covers the offline gate in front of the queue.
  */
-describe('TikTok publish-time validation', () => {
+describe('TikTok queue-time validation', () => {
   const fullSettings = {
     privacy_level: 'PUBLIC_TO_EVERYONE',
     duet: false,
@@ -23,31 +23,14 @@ describe('TikTok publish-time validation', () => {
     content_posting_method: 'DIRECT_POST',
   };
 
-  const creatorOk = {
-    creator_nickname: 'Creator',
-    creator_username: 'creator',
-    privacy_level_options: ['PUBLIC_TO_EVERYONE', 'SELF_ONLY'],
-    comment_disabled: false,
-    duet_disabled: false,
-    stitch_disabled: false,
-    max_video_post_duration_sec: 600,
-  };
-
   const build = (options: {
     settings?: Record<string, unknown>;
     image?: any[];
-    provider?: TiktokProvider;
     state?: string;
     providerIdentifier?: string;
-    creatorResponse?: any;
   }) => {
     const providerIdentifier = options.providerIdentifier ?? 'tiktok';
-    const provider = options.provider ?? new TiktokProvider();
-    if (options.creatorResponse) {
-      (provider as any).fetch = jest.fn().mockResolvedValue({
-        json: async () => options.creatorResponse,
-      });
-    }
+    const provider = new TiktokProvider();
 
     const posts = {
       getPost: jest.fn().mockResolvedValue({
@@ -78,24 +61,18 @@ describe('TikTok publish-time validation', () => {
       updateImages: jest.fn().mockResolvedValue(undefined),
     };
 
-    const integrationManager = {
-      getSocialIntegration: jest.fn().mockReturnValue(provider),
-    };
-
-    const media = {
-      getMediaById: jest.fn().mockResolvedValue({
-        id: 'media-1',
-        width: 1080,
-        height: 1080,
-        durationSeconds: undefined,
-      }),
-    };
-
     const service = new PostsService(
       posts as any,
-      integrationManager as any,
+      { getSocialIntegration: jest.fn().mockReturnValue(provider) } as any,
       {} as any,
-      media as any,
+      {
+        getMediaById: jest.fn().mockResolvedValue({
+          id: 'media-1',
+          width: 1080,
+          height: 1080,
+          durationSeconds: undefined,
+        }),
+      } as any,
       {} as any,
       {} as any,
       {} as any,
@@ -114,106 +91,12 @@ describe('TikTok publish-time validation', () => {
     );
     (service as any).startWorkflow = jest.fn().mockResolvedValue(undefined);
 
-    return { service, posts, provider, integrationManager, media };
+    return { service, posts };
   };
 
-  it('passes a fully valid TikTok post', async () => {
-    const { service } = build({
-      creatorResponse: { error: { code: 'ok' }, data: creatorOk },
-    });
-
-    await expect(
-      service.validatePostAtPublish('org-1', 'post-1')
-    ).resolves.toBeUndefined();
-  });
-
-  it('rejects a post without a privacy level', async () => {
-    const { service } = build({
-      settings: { ...fullSettings, privacy_level: undefined },
-      creatorResponse: { error: { code: 'ok' }, data: creatorOk },
-    });
-
-    await expect(
-      service.validatePostAtPublish('org-1', 'post-1')
-    ).rejects.toThrow('Choose who can see this post on TikTok');
-  });
-
-  it('fails closed when creator_info cannot be read', async () => {
-    const { service } = build({
-      creatorResponse: {
-        error: { code: 'access_token_invalid', message: 'expired' },
-      },
-    });
-
-    await expect(
-      service.validatePostAtPublish('org-1', 'post-1')
-    ).rejects.toThrow(/creator information/i);
-  });
-
-  it('reports a rejected post as a non-retryable bad body so it fails fast', async () => {
-    const { service } = build({
-      settings: { ...fullSettings, privacy_level: undefined },
-    });
-
-    await expect(
-      service.validatePostAtPublish('org-1', 'post-1')
-    ).rejects.toMatchObject({ type: 'bad_body', nonRetryable: true });
-  });
-
-  it('rejects a privacy level the creator is not allowed to use', async () => {
-    const { service } = build({
-      settings: { ...fullSettings, privacy_level: 'SELF_ONLY' },
-      creatorResponse: {
-        error: { code: 'ok' },
-        data: { ...creatorOk, privacy_level_options: ['PUBLIC_TO_EVERYONE'] },
-      },
-    });
-
-    await expect(
-      service.validatePostAtPublish('org-1', 'post-1')
-    ).rejects.toThrow(/does not allow the chosen privacy level/i);
-  });
-
-  it('rejects a disclosure that is on with no type selected', async () => {
-    const { service } = build({
-      settings: { ...fullSettings, commercial_content: true },
-      creatorResponse: { error: { code: 'ok' }, data: creatorOk },
-    });
-
-    await expect(
-      service.validatePostAtPublish('org-1', 'post-1')
-    ).rejects.toThrow(/content disclosure/i);
-  });
-
-  it('rejects more than 35 photos', async () => {
-    const { service } = build({
-      image: Array.from({ length: 36 }, (_, i) => ({
-        id: `media-${i}`,
-        path: `https://cdn.example/p-${i}.jpg`,
-      })),
-      creatorResponse: { error: { code: 'ok' }, data: creatorOk },
-    });
-
-    await expect(
-      service.validatePostAtPublish('org-1', 'post-1')
-    ).rejects.toThrow(/35 photos/i);
-  });
-
-  it('leaves other providers untouched', async () => {
-    const { service, integrationManager } = build({
-      providerIdentifier: 'x-post',
-    });
-
-    await expect(
-      service.validatePostAtPublish('org-1', 'post-1')
-    ).resolves.toBeUndefined();
-    expect(integrationManager.getSocialIntegration).not.toHaveBeenCalled();
-  });
-
-  it('refuses to queue an invalid TikTok draft for publishing', async () => {
+  it('refuses to queue a TikTok draft without a privacy level', async () => {
     const { service, posts } = build({
       settings: { ...fullSettings, privacy_level: undefined },
-      state: 'DRAFT',
     });
 
     await expect(
@@ -222,8 +105,21 @@ describe('TikTok publish-time validation', () => {
     expect(posts.changeState).not.toHaveBeenCalled();
   });
 
+  it('refuses a TikTok draft whose photo count exceeds the API limit', async () => {
+    const { service } = build({
+      image: Array.from({ length: 36 }, (_, i) => ({
+        id: `media-${i}`,
+        path: `https://cdn.example/p-${i}.jpg`,
+      })),
+    });
+
+    await expect(
+      service.changePostStatus('org-1', 'post-1', 'schedule')
+    ).rejects.toThrow('up to 35 photos');
+  });
+
   it('queues a valid TikTok draft', async () => {
-    const { service, posts } = build({ state: 'DRAFT' });
+    const { service, posts } = build({});
 
     await expect(
       service.changePostStatus('org-1', 'post-1', 'schedule')
@@ -240,5 +136,14 @@ describe('TikTok publish-time validation', () => {
     await expect(
       service.changeDate('org-1', 'post-1', '2026-09-01T10:00:00', 'schedule')
     ).rejects.toThrow('Choose who can see this post on TikTok');
+  });
+
+  it('leaves other providers untouched', async () => {
+    const { service, posts } = build({ providerIdentifier: 'x-post' });
+
+    await expect(
+      service.changePostStatus('org-1', 'post-1', 'schedule')
+    ).resolves.toEqual({ id: 'post-1', state: 'QUEUE' });
+    expect(posts.changeState).toHaveBeenCalled();
   });
 });

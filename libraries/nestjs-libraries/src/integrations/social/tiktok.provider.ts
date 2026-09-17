@@ -14,7 +14,6 @@ import {
 import { TikTokDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/tiktok.dto';
 import { timer } from '@postsider/helpers/utils/timer';
 import { hasExtension } from '@postsider/helpers/utils/has.extension';
-import { randomBytes } from 'crypto';
 import { Integration } from '@prisma/client';
 import { Rules } from '@postsider/nestjs-libraries/chat/rules.description.decorator';
 import { Tool } from '@postsider/nestjs-libraries/integrations/tool.decorator';
@@ -35,9 +34,10 @@ const OTHER_VIDEO_EXTENSIONS = [
   'wmv',
   'flv',
 ] as const;
+
 /**
- * Image containers TikTok's photo endpoint rejects. The supported set is
- * JPEG and WebP; PNG is accepted here because `convertToJPEG` rewrites every
+ * Image containers TikTok's photo endpoint rejects. JPEG and WebP are the
+ * supported set; PNG is accepted here because `convertToJPEG` rewrites every
  * PNG to a JPEG upload before the request is built.
  */
 const OTHER_IMAGE_EXTENSIONS = [
@@ -127,23 +127,11 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
   name = 'Tiktok';
   isBetweenSteps = false;
   convertToJPEG = true;
-  /**
-   * One scope per shipped feature, which is what the audit asks the demo to
-   * show:
-   *  - `user.info.basic` / `user.info.profile`: the connected account's name,
-   *    username and avatar in the composer and on the channel list.
-   *  - `user.info.stats` / `video.list`: channel and per-video analytics.
-   *  - `video.publish`: Direct Post itself.
-   *
-   * `video.upload` is deliberately NOT requested: it only authorizes the
-   * inbox/draft endpoints (`/inbox/video/init/`, `post_mode=MEDIA_UPLOAD`),
-   * and this provider only ever calls the Direct Post endpoints. Requesting a
-   * scope no code path exercises is what the audit rejects, and an already
-   * connected account is unaffected because scope checks only require the
-   * scopes listed here.
-   */
   scopes = [
     'user.info.basic',
+    // Direct Post only: `video.publish` covers the init/status/creator_info
+    // endpoints. `video.upload` is the other (inbox Upload API) transport and
+    // is never used here, so it is not requested.
     'video.publish',
     'user.info.profile',
     'user.info.stats',
@@ -194,9 +182,6 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     if (photos.length > TIKTOK_MAX_PHOTOS) {
       return `TikTok accepts up to ${TIKTOK_MAX_PHOTOS} photos in one post`;
     }
-    // Only containers TikTok documents as unsupported are rejected outright. A
-    // URL without a recognised extension is left to TikTok's own check rather
-    // than being failed here.
     const unsupportedPhoto = photos.find((p) =>
       p?.path ? isOtherImagePath(p.path) : false
     );
@@ -439,63 +424,53 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     return undefined;
   }
 
-  /**
-   * TikTok's token endpoint answers HTTP 200 with `{ error, error_description }`
-   * for a rejected grant, so destructuring the body directly used to yield
-   * `undefined` tokens and a confusing downstream crash. Surface the real
-   * reason instead.
-   */
-  private async exchangeToken(value: Record<string, string>) {
-    const response = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      method: 'POST',
-      body: new URLSearchParams(value).toString(),
-    });
-
-    const body = await response.json().catch(() => ({} as any));
-    if (!response.ok || body?.error || !body?.access_token) {
-      throw new BadBody(
-        'tiktok-oauth-error',
-        JSON.stringify(body ?? {}),
-        Buffer.from('{}'),
-        body?.error_description ||
-          body?.error ||
-          'TikTok rejected the authorization request. Please reconnect the account.'
-      );
-    }
-
-    return body;
-  }
-
   async refreshToken(refreshToken: string): Promise<AuthTokenDetails> {
-    const { access_token, refresh_token } = await this.exchangeToken({
+    const value = {
       client_key: process.env.TIKTOK_CLIENT_ID!,
       client_secret: process.env.TIKTOK_CLIENT_SECRET!,
       grant_type: 'refresh_token',
       refresh_token: refreshToken,
-    });
+    };
 
-    const { avatar_url, display_name, open_id, username } =
-      await this.fetchUserInfo(access_token);
+    const { access_token, refresh_token, ...all } = await (
+      await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        method: 'POST',
+        body: new URLSearchParams(value).toString(),
+      })
+    ).json();
+
+    const {
+      data: {
+        user: { avatar_url, display_name, open_id, username },
+      },
+    } = await (
+      await fetch(
+        'https://open.tiktokapis.com/v2/user/info/?fields=open_id,avatar_url,display_name,union_id,username',
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${access_token}`,
+          },
+        }
+      )
+    ).json();
 
     return {
       refreshToken: refresh_token,
       expiresIn: dayjs().add(23, 'hours').unix() - dayjs().unix(),
       accessToken: access_token,
-      id: (open_id || '').replace(/-/g, ''),
-      name: display_name || username || '',
+      id: open_id.replace(/-/g, ''),
+      name: display_name,
       picture: avatar_url || '',
-      username: username || '',
+      username: username,
     };
   }
 
   async generateAuthUrl() {
-    // Crypto-random: this value doubles as the CSRF state and as the PKCE
-    // `code_verifier` echoed back at exchange time, so `Math.random()` (a
-    // guessable 32-bit PRNG) is not good enough.
-    const state = randomBytes(32).toString('base64url');
+    const state = Math.random().toString(36).substring(2);
 
     return {
       url:
@@ -534,61 +509,63 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
       }${process?.env?.FRONTEND_URL}/integrations/social/tiktok`,
     };
 
-    const { access_token, refresh_token, scope } = await this.exchangeToken(
-      value
-    );
+    const { access_token, refresh_token, scope } = await (
+      await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        method: 'POST',
+        body: new URLSearchParams(value).toString(),
+      })
+    ).json();
 
     this.checkScopes(this.scopes, scope);
 
-    const { avatar_url, display_name, open_id, username } =
-      await this.fetchUserInfo(access_token);
-
-    return {
-      id: (open_id || '').replace(/-/g, ''),
-      name: display_name || username || '',
-      accessToken: access_token,
-      refreshToken: refresh_token,
-      expiresIn: dayjs().add(23, 'hours').unix() - dayjs().unix(),
-      picture: avatar_url || '',
-      username: username || '',
-    };
-  }
-
-  async maxVideoLength(accessToken: string) {
-    const { maxDurationSeconds } = await this.creatorInfo(accessToken);
-
-    return { maxDurationSeconds };
-  }
-
-  /** The connected account's own profile fields, with the error surfaced. */
-  private async fetchUserInfo(accessToken: string) {
-    const response = await (
+    const {
+      data: {
+        user: { avatar_url, display_name, open_id, username },
+      },
+    } = await (
       await fetch(
         'https://open.tiktokapis.com/v2/user/info/?fields=open_id,avatar_url,display_name,union_id,username',
         {
           method: 'GET',
           headers: {
+            Authorization: `Bearer ${access_token}`,
+          },
+        }
+      )
+    ).json();
+
+    return {
+      id: open_id.replace(/-/g, ''),
+      name: display_name,
+      accessToken: access_token,
+      refreshToken: refresh_token,
+      expiresIn: dayjs().add(23, 'hours').unix() - dayjs().unix(),
+      picture: avatar_url,
+      username: username,
+    };
+  }
+
+  async maxVideoLength(accessToken: string) {
+    const {
+      data: { max_video_post_duration_sec },
+    } = await (
+      await fetch(
+        'https://open.tiktokapis.com/v2/post/publish/creator_info/query/',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json; charset=UTF-8',
             Authorization: `Bearer ${accessToken}`,
           },
         }
       )
     ).json();
 
-    const user = response?.data?.user;
-    if (!user) {
-      throw new BadBody(
-        'tiktok-user-info-error',
-        JSON.stringify(response ?? {}),
-        Buffer.from('{}'),
-        'Could not read the TikTok account details. Please reconnect the account.'
-      );
-    }
-
-    return user as {
-      open_id: string;
-      avatar_url?: string;
-      display_name?: string;
-      username?: string;
+    return {
+      maxDurationSeconds: max_video_post_duration_sec,
     };
   }
 
@@ -608,7 +585,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     dataSchema: [],
   })
   async creatorInfo(accessToken: string) {
-    const response = await (
+    const { data, error } = await (
       await this.fetch(
         'https://open.tiktokapis.com/v2/post/publish/creator_info/query/',
         {
@@ -621,23 +598,18 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
       )
     ).json();
 
-    // TikTok answers HTTP 200 with the failure inside `error.code`, so a plain
-    // fetch never throws here. Returning the empty object instead would let a
-    // post through with no privacy options at all, which is exactly the state
-    // the guidelines forbid — fail loudly.
-    const errorCode = response?.error?.code;
-    const data = response?.data;
-    if ((errorCode && errorCode !== 'ok') || !data) {
-      throw new BadBody(
-        'tiktok-error-creator-info',
-        JSON.stringify(response ?? {}),
-        Buffer.from('{}'),
-        errorCode === 'scope_not_authorized' ||
-          errorCode === 'scope_permission_missed'
-          ? 'Missing required permissions, please re-authenticate with all scopes'
-          : 'TikTok did not return the creator information. Please try again later.'
-      );
-    }
+    // TikTok answers HTTP 200 even when the creator cannot post; the real
+    // signal is a non-`ok` `error.code` (Content Posting API reference for
+    // creator_info). `post_publish_disabled` is NOT part of that response, so
+    // the codes below are what actually enforce Content Sharing Guidelines 1b.
+    const errorCode =
+      error?.code && error.code !== 'ok' ? String(error.code) : '';
+    const PUBLISH_BLOCKING_CODES = [
+      'spam_risk_too_many_posts',
+      'spam_risk_user_banned_from_posting',
+      'reached_active_user_cap',
+    ];
+    const blockedByCode = PUBLISH_BLOCKING_CODES.includes(errorCode);
 
     return {
       nickname: data?.creator_nickname ?? '',
@@ -650,25 +622,32 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
       stitchDisabled: !!data?.stitch_disabled,
       commentDisabled: !!data?.comment_disabled,
       maxDurationSeconds: data?.max_video_post_duration_sec ?? 0,
-      // Content Posting Guidelines 1b: when creator_info reports the account
-      // cannot publish right now, the client must stop the attempt and ask the
-      // user to try again later — so surface the signal instead of dropping it.
-      publishDisabled: !!data?.post_publish_disabled,
-      publishDisabledReason: data?.post_publish_disabled_reason ?? '',
-      dailyPostLimitRemaining: data?.daily_post_limit_remaining ?? null,
+      // 1b: when creator_info says the account cannot make more posts, surface
+      // it so the client stops and asks the user to try again later. The
+      // `post_publish_disabled*` fields are kept as a defensive fallback in
+      // case TikTok starts returning them.
+      publishDisabled: blockedByCode || !!data?.post_publish_disabled,
+      publishDisabledReason:
+        (blockedByCode ? error?.message || errorCode : '') ||
+        data?.post_publish_disabled_reason ||
+        '',
+      dailyPostLimitRemaining:
+        errorCode === 'spam_risk_too_many_posts'
+          ? 0
+          : data?.daily_post_limit_remaining ?? null,
+      errorCode,
     };
   }
 
   /**
-   * Creator-derived rules enforced server-side, mirroring what the composer
-   * enforces from `creator_info`. Returns human-readable problems; empty =
-   * valid. Used both at post creation (best effort, for fast feedback) and at
-   * publish time (authoritative, fail-closed).
+   * Creator-derived rules enforced server-side as a best effort at post
+   * validation (dashboard + public API), mirroring what the composer enforces
+   * from `creator_info`. Returns human-readable problems; empty = valid.
    *
-   * Privacy must be one of TikTok's own allowed levels, the interaction locks
-   * are honoured as "the account turned this off", commercial content can
-   * never be private, and a photo must not exceed the 1080p cap. The duration
-   * rule reuses the media row's probed `durationSeconds`.
+   * Privacy is checked only against TikTok's own allowed list, the interaction
+   * locks are honoured as "the account turned this off", and commercial
+   * content can never be private — the same rule the audit checks in the UI.
+   * The duration rule reuses the media row's probed `durationSeconds`.
    */
   validateCreatorRules(
     creator: {
@@ -691,17 +670,18 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     const issues: string[] = [];
     // Content Posting Guidelines 1b: an account that creator_info marks as
     // unable to publish must not be sent a post — fail the validation and ask
-    // the user to try again later.
-    if (creator?.publishDisabled) {
-      issues.push(
-        'This TikTok account cannot publish right now. Please try again later.'
-      );
-    } else if (
+    // the user to try again later. The daily cap is reported specifically when
+    // that is the cause.
+    if (
       typeof creator?.dailyPostLimitRemaining === 'number' &&
       creator.dailyPostLimitRemaining <= 0
     ) {
       issues.push(
         'This TikTok account has reached its daily post limit. Please try again later.'
+      );
+    } else if (creator?.publishDisabled) {
+      issues.push(
+        'This TikTok account cannot publish right now. Please try again later.'
       );
     }
     const privacy = settings?.privacy_level;
@@ -728,10 +708,12 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
       !settings?.brand_content_toggle &&
       !settings?.brand_organic_toggle
     ) {
-      issues.push('Choose the applicable content disclosure before posting to TikTok');
+      issues.push(
+        'Choose the applicable content disclosure before posting to TikTok'
+      );
     }
-    // Photo posts: the Content Posting API caps each image at 1080p, so every
-    // attached photo is checked, not just the first one.
+    // Resolution rules from the media transfer guide: a photo must not exceed
+    // 1080p and a video must stay between 360 and 4096 pixels per side.
     const firstMedia = media?.[0];
     const isPhoto = !!firstMedia?.path && !isTikTokVideoPath(firstMedia.path);
     if (isPhoto) {
@@ -745,6 +727,17 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
       if (oversized) {
         issues.push(
           `This photo is ${oversized.width}x${oversized.height}. TikTok accepts photos up to ${TIKTOK_MAX_PHOTO_PIXELS}p.`
+        );
+      }
+    } else if (firstMedia && (firstMedia.width || firstMedia.height)) {
+      const width = firstMedia.width ?? 0;
+      const height = firstMedia.height ?? 0;
+      const outOfRange = (value: number) =>
+        value > 0 &&
+        (value < TIKTOK_MIN_VIDEO_PIXELS || value > TIKTOK_MAX_VIDEO_PIXELS);
+      if (outOfRange(width) || outOfRange(height)) {
+        issues.push(
+          `This video is ${width}x${height}. TikTok accepts video between ${TIKTOK_MIN_VIDEO_PIXELS} and ${TIKTOK_MAX_VIDEO_PIXELS} pixels on each side.`
         );
       }
     }
@@ -763,21 +756,6 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
       issues.push(
         "Branded content can't be published with Self only visibility"
       );
-    }
-    // Video resolution bounds from the media transfer guide: below 360 or
-    // above 4096 pixels per side is rejected by the API after the whole
-    // transfer, so it is caught here instead.
-    if (firstMedia && !isPhoto && (firstMedia.width || firstMedia.height)) {
-      const width = firstMedia.width ?? 0;
-      const height = firstMedia.height ?? 0;
-      const outOfRange = (value: number) =>
-        value > 0 &&
-        (value < TIKTOK_MIN_VIDEO_PIXELS || value > TIKTOK_MAX_VIDEO_PIXELS);
-      if (outOfRange(width) || outOfRange(height)) {
-        issues.push(
-          `This video is ${width}x${height}. TikTok accepts video between ${TIKTOK_MIN_VIDEO_PIXELS} and ${TIKTOK_MAX_VIDEO_PIXELS} pixels on each side.`
-        );
-      }
     }
     const maxDuration = creator?.maxDurationSeconds ?? 0;
     if (
@@ -872,18 +850,6 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
 
   private buildTikokPostInfoBody(firstPost: PostDetails<TikTokDto>) {
     const isPhoto = !isTikTokVideoPath(firstPost?.media?.[0]?.path);
-    // No default privacy. The creator picks it, so guessing here (the old
-    // `|| 'PUBLIC_TO_EVERYONE'`) could publish a post publicly that the user
-    // never chose — the exact behaviour the guidelines forbid.
-    const privacyLevel = firstPost?.settings?.privacy_level;
-    if (!privacyLevel) {
-      throw new BadBody(
-        'tiktok-missing-privacy',
-        '{}',
-        Buffer.from('{}'),
-        'Choose who can see this post on TikTok before publishing'
-      );
-    }
     return {
       post_info: {
         ...(isPhoto && firstPost.settings.title
@@ -891,7 +857,11 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
           : {}),
         ...(!isPhoto && firstPost.message ? { title: firstPost.message } : {}),
         ...(isPhoto ? { description: firstPost.message } : {}),
-        privacy_level: privacyLevel,
+        // No default: TikTok's Content Sharing Guidelines require the user to
+        // choose the privacy level themselves. A post that reaches publish
+        // without one is rejected in `assertCreatorAllowsPublish`, never
+        // silently sent as public.
+        privacy_level: firstPost.settings.privacy_level,
         ...(isPhoto ? {} : { disable_duet: !firstPost.settings.duet || false }),
         disable_comment: !firstPost.settings.comment || false,
         ...(isPhoto
@@ -936,6 +906,59 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
           : {}),
       },
     };
+  }
+
+  /**
+   * Content Sharing Guidelines 1a-1c + 2b, enforced at the actual publish
+   * moment. A post can be scheduled days in advance, so the creator's allowed
+   * privacy levels, "cannot post right now" state and interaction locks are
+   * re-read from `creator_info` immediately before the Direct Post call.
+   *
+   * Fails closed: a missing privacy choice, an unreadable creator_info, or any
+   * rule violation aborts the publish instead of defaulting to a public post.
+   */
+  private async assertCreatorAllowsPublish(
+    accessToken: string,
+    firstPost: PostDetails<TikTokDto>
+  ): Promise<void> {
+    const privacy = firstPost?.settings?.privacy_level;
+    if (!privacy) {
+      throw new BadBody(
+        'tiktok-privacy-required',
+        '{}',
+        Buffer.from('{}'),
+        'TikTok requires choosing who can see the post; no privacy level was selected'
+      );
+    }
+
+    const creator = await this.creatorInfo(accessToken);
+    if (!creator?.privacyOptions?.length) {
+      throw new BadBody(
+        'tiktok-creator-info',
+        '{}',
+        Buffer.from('{}'),
+        'Could not verify the TikTok account settings before publishing. Please try again later'
+      );
+    }
+
+    const issues = this.validateCreatorRules(
+      creator,
+      firstPost.settings,
+      (firstPost.media ?? []).map((media) => ({
+        path: media.path,
+        durationSeconds: (media as { durationSeconds?: number }).durationSeconds,
+        width: (media as { width?: number }).width,
+        height: (media as { height?: number }).height,
+      }))
+    );
+    if (issues.length) {
+      throw new BadBody(
+        'tiktok-creator-rules',
+        '{}',
+        Buffer.from('{}'),
+        issues.join(' ')
+      );
+    }
   }
 
   /**
@@ -984,6 +1007,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     const isPhoto = !isTikTokVideoPath(firstPost?.media?.[0]?.path);
 
     this.assertPullable(firstPost);
+    await this.assertCreatorAllowsPublish(accessToken, firstPost);
 
     const {
       data: { publish_id },

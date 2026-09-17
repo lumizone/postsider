@@ -50,10 +50,7 @@ import {
 import { AnalyticsData } from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
 import { timer } from '@postsider/helpers/utils/timer';
 import { ioRedis } from '@postsider/nestjs-libraries/redis/redis.service';
-import {
-  BadBody,
-  RefreshToken,
-} from '@postsider/nestjs-libraries/integrations/social.abstract';
+import { RefreshToken } from '@postsider/nestjs-libraries/integrations/social.abstract';
 import { RefreshIntegrationService } from '@postsider/nestjs-libraries/integrations/refresh.integration.service';
 import { hasExtension } from '@postsider/helpers/utils/has.extension';
 import { TiktokProvider } from '@postsider/nestjs-libraries/integrations/social/tiktok.provider';
@@ -1238,91 +1235,6 @@ export class PostsService {
     }
 
     return problems;
-  }
-
-  /**
-   * Publish-time gate for TikTok Direct Post.
-   *
-   * This is the only validation that runs immediately before the API call, so
-   * it is fail-closed: settings, media, and a *fresh* `creator_info` lookup
-   * all have to pass, and a TikTok outage stops the attempt instead of
-   * publishing on stale assumptions. Because it sits at the provider boundary
-   * it also covers queue rows armed by older workflow versions and by any path
-   * that skipped the controller validation.
-   */
-  async validatePostAtPublish(orgId: string, postId: string) {
-    const posts = await this.getPostsRecursively(postId, true, orgId, true);
-    const main = posts?.[0] as (Post & { integration?: Integration }) | undefined;
-    const integration = main?.integration;
-    if (!main || !integration) {
-      throw new BadRequestException('Post not found');
-    }
-    if (integration.providerIdentifier !== 'tiktok') {
-      return;
-    }
-
-    const provider = this._integrationManager.getSocialIntegration('tiktok');
-    if (!(provider instanceof TiktokProvider)) {
-      return;
-    }
-
-    const problems = await this.tiktokProblemsForStoredPost(orgId, postId);
-    if (problems.length) {
-      this.throwPublishValidation(problems);
-    }
-
-    // Guidelines 1/1a: the latest creator info is fetched when the post is
-    // about to be published, not when it was scheduled, because the allowed
-    // privacy levels, interaction locks and duration cap are properties of the
-    // account at this moment.
-    let creator: Awaited<ReturnType<TiktokProvider['creatorInfo']>>;
-    try {
-      creator = await provider.creatorInfo(integration.token);
-    } catch (err: any) {
-      this.throwPublishValidation([
-        err?.message ||
-          'TikTok creator information is unavailable right now. Please try again later.',
-      ]);
-    }
-
-    const mediaItems = JSON.parse(main.image || '[]');
-    const mediaWithMeta = await Promise.all(
-      (mediaItems || []).map(async (item: any) => {
-        if (!item?.id) {
-          return { path: item?.path };
-        }
-        const row = await this._mediaService.getMediaById(item.id, orgId);
-        return {
-          path: item?.path,
-          durationSeconds: row?.durationSeconds ?? undefined,
-          width: row?.width ?? undefined,
-          height: row?.height ?? undefined,
-        };
-      })
-    );
-    const creatorProblems = provider.validateCreatorRules(
-      creator!,
-      JSON.parse(main.settings || '{}'),
-      mediaWithMeta
-    );
-    if (creatorProblems.length) {
-      this.throwPublishValidation(creatorProblems);
-    }
-  }
-
-  /**
-   * A failed pre-publish check is a permanent input problem, not a transient
-   * one. `BadBody` is the non-retryable ApplicationFailure the providers
-   * already throw for rejected payloads, so the workflow reports it to the
-   * user immediately instead of retrying the same invalid post.
-   */
-  private throwPublishValidation(problems: string[]): never {
-    throw new BadBody(
-      'tiktok-publish-validation',
-      JSON.stringify({ problems }),
-      Buffer.from('{}'),
-      problems.join(' ')
-    );
   }
 
   private async additionalSettingsFor(integration: Integration) {
