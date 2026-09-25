@@ -97,6 +97,7 @@ if grep -qE "CHANGE_ME" "$ENV_FILE"; then
   fill_secret MINIO_ACCESS_KEY  "postsider-$(openssl rand -hex 8)"
   fill_secret MINIO_SECRET_KEY  "$(openssl rand -hex 32)"
   fill_secret DBGATE_PASSWORD   "$(openssl rand -hex 16)"
+  fill_secret MCP_INTROSPECTION_SECRET "$(openssl rand -hex 32)"
   rm -f "${ENV_FILE}.bak"
 fi
 

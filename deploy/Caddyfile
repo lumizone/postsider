@@ -44,6 +44,18 @@ app.example.com {
 	}
 }
 
+# ── Remote MCP server (mcp.example.com) ──────────────────────────────────────
+# DNS: mcp.example.com → A record pointing at this VPS public IP.
+# The `postsider-mcp` container publishes 127.0.0.1:8081 (see
+# docker-compose.production.yaml); flush_interval -1 disables buffering so a
+# client that negotiates a text/event-stream response receives frames as they
+# are produced.
+mcp.example.com {
+	reverse_proxy 127.0.0.1:8081 {
+		flush_interval -1
+	}
+}
+
 # ── Optional: expose admin dashboards on separate subdomains (protected) ──────
 # Uncomment and protect with basic auth before exposing. Generate a hash with:
 #   caddy hash-password
