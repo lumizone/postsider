@@ -492,6 +492,7 @@ const pt = {
     creating: "Criando…",
     colName: "Nome",
     colKey: "Chave",
+    colScopes: "Escopos",
     colCreated: "Criada em",
     revoke: "Revogar",
     rename: "Renomear",

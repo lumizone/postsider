@@ -492,6 +492,7 @@ const de = {
     creating: "Wird erstellt…",
     colName: "Name",
     colKey: "Schlüssel",
+    colScopes: "Berechtigungen",
     colCreated: "Erstellt",
     revoke: "Widerrufen",
     rename: "Umbenennen",

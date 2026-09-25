@@ -492,6 +492,7 @@ const ko = {
     creating: "생성 중…",
     colName: "이름",
     colKey: "키",
+    colScopes: "권한 범위",
     colCreated: "생성일",
     revoke: "폐기",
     rename: "이름 변경",

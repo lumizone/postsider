@@ -492,6 +492,7 @@ const tr = {
     creating: "Oluşturuluyor…",
     colName: "Ad",
     colKey: "Anahtar",
+    colScopes: "Kapsamlar",
     colCreated: "Oluşturulma",
     revoke: "İptal et",
     rename: "Yeniden adlandır",

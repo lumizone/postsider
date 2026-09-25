@@ -1,5 +1,10 @@
 import { Body, Controller, Delete, Get, HttpException, Param, Post, Put } from '@nestjs/common';
 import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
+import {
+  CreateApiKeyDto,
+  UpdateApiKeyDto,
+} from '@postsider/nestjs-libraries/dtos/settings/create-api-key.dto';
+import { PUBLIC_API_SCOPES } from '@postsider/nestjs-libraries/services/public-api-scopes';
 import { Organization } from '@prisma/client';
 import { CheckPolicies } from '@postsider/backend/services/auth/permissions/permissions.ability';
 import { OrganizationService } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.service';
@@ -195,32 +200,61 @@ export class SettingsController {
   async createApiKey(
     @GetOrgFromRequest() org: Organization,
     @GetUserFromRequest() user: User,
-    @Body('name') name: string
+    @Body() body: CreateApiKeyDto
   ) {
-    if (!name || name.trim().length === 0) {
+    const name = body.name?.trim();
+    if (!name) {
       throw new HttpException('Name is required', 400);
     }
+    // Absent scopes keep the historical behaviour: a key that can do everything
+    // the Public API exposes. Integrations should request only what they need.
+    const scopes = body.scopes ?? [...PUBLIC_API_SCOPES];
     const created = await this._organizationService.createApiKey(
       org.id,
-      name.trim()
+      name,
+      scopes
     );
     await this._audit.logSecurityEvent(org.id, 'api_key.create', user.id, {
-      name: name.trim(),
+      name,
+      scopes,
     });
     return created;
   }
 
   @Put('/api-keys/:id')
   @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
-  async renameApiKey(
+  async updateApiKey(
     @GetOrgFromRequest() org: Organization,
+    @GetUserFromRequest() user: User,
     @Param('id') id: string,
-    @Body('name') name: string
+    @Body() body: UpdateApiKeyDto
   ) {
-    if (!name || name.trim().length === 0) {
-      throw new HttpException('Name is required', 400);
+    const name = body.name?.trim();
+    if (body.name !== undefined && !name) {
+      throw new HttpException('Name cannot be empty', 400);
     }
-    return this._organizationService.renameApiKey(org.id, id, name.trim());
+    if (name === undefined && body.scopes === undefined) {
+      throw new HttpException('Name or scopes are required', 400);
+    }
+    let updated: unknown;
+    try {
+      updated = await this._organizationService.updateNamedApiKey(org.id, id, {
+        name,
+        scopes: body.scopes,
+      });
+    } catch (error) {
+      // Prisma P2025: no row matched (missing, revoked, or another org's key).
+      if ((error as { code?: string })?.code === 'P2025') {
+        throw new HttpException('API key not found', 404);
+      }
+      throw error;
+    }
+    await this._audit.logSecurityEvent(org.id, 'api_key.update', user.id, {
+      apiKeyId: id,
+      ...(name === undefined ? {} : { name }),
+      ...(body.scopes === undefined ? {} : { scopes: body.scopes }),
+    });
+    return updated;
   }
 
   @Delete('/api-keys/:id')

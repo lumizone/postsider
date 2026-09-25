@@ -800,6 +800,7 @@ const en = {
     creating: "Creating…",
     colName: "Name",
     colKey: "Key",
+    colScopes: "Scopes",
     colCreated: "Created",
     revoke: "Revoke",
     rename: "Rename",

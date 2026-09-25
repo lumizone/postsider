@@ -9,11 +9,18 @@ import { OpenaiService } from '@postsider/nestjs-libraries/openai/openai.service
 import { ExtractContentService } from '@postsider/nestjs-libraries/openai/extract.content.service';
 import { CodesService } from '@postsider/nestjs-libraries/services/codes.service';
 import { PublicIntegrationsController } from '@postsider/backend/public-api/routes/v1/public.integrations.controller';
+import { PublicOrganizationController } from '@postsider/backend/public-api/routes/v1/public.organization.controller';
+import { PublicWebhookSubscriptionsController } from '@postsider/backend/public-api/routes/v1/public-webhook-subscriptions.controller';
 import { PublicAuthMiddleware } from '@postsider/backend/services/auth/public.auth.middleware';
+import { PublicApiScopeGuard } from '@postsider/backend/services/auth/public-api-scope.guard';
 import { ApiRateLimitGuard } from '@postsider/nestjs-libraries/services/api-rate-limit.guard';
 import { RequestIdMiddleware } from '@postsider/nestjs-libraries/services/request-id.middleware';
 
-const authenticatedController = [PublicIntegrationsController];
+const authenticatedController = [
+  PublicIntegrationsController,
+  PublicOrganizationController,
+  PublicWebhookSubscriptionsController,
+];
 @Module({
   imports: [UploadModule],
   controllers: [...authenticatedController],
@@ -26,6 +33,7 @@ const authenticatedController = [PublicIntegrationsController];
     CodesService,
     IntegrationManager,
     ApiRateLimitGuard,
+    PublicApiScopeGuard,
     {
       provide: APP_GUARD,
       useClass: ApiRateLimitGuard,
@@ -49,4 +57,3 @@ export class PublicApiModule implements NestModule {
     consumer.apply(PublicAuthMiddleware).forRoutes(...authenticatedController);
   }
 }
-

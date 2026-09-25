@@ -492,6 +492,7 @@ const fr = {
     creating: "Création…",
     colName: "Nom",
     colKey: "Clé",
+    colScopes: "Autorisations",
     colCreated: "Créée le",
     revoke: "Révoquer",
     rename: "Renommer",
