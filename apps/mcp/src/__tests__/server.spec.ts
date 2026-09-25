@@ -120,6 +120,34 @@ describe('createPostSiderMcpServer', () => {
     await mcpClient.close();
   });
 
+  it('documents required provider settings on the create-post tool', async () => {
+    const mcpClient = await connect();
+    const { tools } = await mcpClient.listTools();
+    const createPost = tools.find((tool) => tool.name === 'postsider_create_post');
+    const postsSchema = (createPost?.inputSchema as {
+      properties?: {
+        posts?: {
+          items?: {
+            properties?: { settings?: { description?: string } };
+          };
+        };
+      };
+    }).properties?.posts;
+    const description = postsSchema?.items?.properties?.settings?.description ?? '';
+
+    expect(description).toContain('X: who_can_reply_post');
+    expect(description).toContain('Instagram: post_type');
+    expect(description).toContain('YouTube: title and type');
+    expect(description).toContain('TikTok: privacy_level');
+    expect(description).toContain('PUBLIC_TO_EVERYONE');
+    expect(description).toContain('autoAddMusic (yes or no)');
+    expect(description).toContain('content_posting_method (DIRECT_POST or UPLOAD)');
+    expect(description).toContain('brand_content_toggle');
+    expect(description).not.toContain('usually omit');
+
+    await mcpClient.close();
+  });
+
   /**
    * Input schemas must reject malformed arguments locally. The API's own
    * contracts are the reference: ids are non-empty strings, dates are ISO 8601

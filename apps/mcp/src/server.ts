@@ -535,7 +535,9 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
               settings: z
                 .record(z.any())
                 .optional()
-                .describe('Optional provider-specific settings (advanced; usually omit).'),
+                .describe(
+                  'Provider-specific settings. Required fields: X: who_can_reply_post (everyone, following, mentionedUsers, subscribers, or verified). Instagram: post_type (post or story). YouTube: title and type (public, private, or unlisted). TikTok: privacy_level (PUBLIC_TO_EVERYONE, MUTUAL_FOLLOW_FRIENDS, FOLLOWER_OF_CREATOR, or SELF_ONLY); duet, stitch, comment, brand_content_toggle, and brand_organic_toggle (booleans); autoAddMusic (yes or no); and content_posting_method (DIRECT_POST or UPLOAD). Other providers may impose additional requirements; preserve settings returned by postsider_get_post when replacing an existing post.'
+                ),
             })
           )
           .min(1)
