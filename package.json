@@ -57,7 +57,7 @@
   "dependencies": {
     "@atproto/api": "^0.15.15",
     "@aws-sdk/client-s3": "^3.787.0",
-    "@aws-sdk/s3-request-presigner": "^3.787.0",
+    "@aws-sdk/s3-request-presigner": "^3.1118.0",
     "@casl/ability": "^6.5.0",
     "@nest-lab/throttler-storage-redis": "^1.2.0",
     "@nestjs/cli": "^11.0.21",
