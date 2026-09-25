@@ -13,7 +13,10 @@ import { z } from 'zod';
 
 export const DEFAULT_PUBLIC_URL = 'https://mcp.postsider.com';
 export const DEFAULT_AUTHORIZATION_SERVER_URL = 'https://api.postsider.com';
+/** Where tool calls are forwarded; the AS host doubles as the product API. */
+export const DEFAULT_API_URL = 'https://api.postsider.com';
 export const DEFAULT_SCOPES = ['posts:read', 'posts:write'] as const;
+export const DEFAULT_RATE_LIMIT_PER_MINUTE = 240;
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 
@@ -38,10 +41,15 @@ export function assertHttpsOrLoopback(raw: string, label: string): string {
 const HttpConfigSchema = z.object({
   publicUrl: z.string().min(1),
   authorizationServerUrl: z.string().min(1),
+  /** Base URL of the PostSider API; tool calls go to `<apiBaseUrl>/public/v1`. */
+  apiBaseUrl: z.string().min(1),
   scopesSupported: z.array(z.string().min(1)).min(1),
+  /** Unset means `/mcp` fails closed with 503 until an operator configures it. */
+  introspectionSecret: z.string().min(1).optional(),
   openaiAppsChallengeToken: z.string().min(1).optional(),
   port: z.number().int().min(1).max(65535),
   bindHost: z.string().min(1),
+  rateLimitPerMinute: z.number().int().min(1).max(100000),
 });
 
 export type HttpConfig = z.infer<typeof HttpConfigSchema>;
@@ -62,6 +70,16 @@ export function loadHttpConfig(
     );
   }
 
+  const rateRaw = (
+    env.MCP_RATE_LIMIT_RPM ?? String(DEFAULT_RATE_LIMIT_PER_MINUTE)
+  ).trim();
+  const rateLimitPerMinute = Number(rateRaw);
+  if (!Number.isInteger(rateLimitPerMinute) || rateLimitPerMinute < 1) {
+    throw new Error(
+      `MCP_RATE_LIMIT_RPM must be a positive integer, got: ${rateRaw}`
+    );
+  }
+
   const scopesSupported = (env.MCP_SCOPES ?? DEFAULT_SCOPES.join(','))
     .split(',')
     .map((scope) => scope.trim())
@@ -76,13 +94,24 @@ export function loadHttpConfig(
     ),
     authorizationServerUrl: stripTrailingSlashes(
       assertHttpsOrLoopback(
-        (env.MCP_AUTHORIZATION_SERVER_URL ?? DEFAULT_AUTHORIZATION_SERVER_URL).trim(),
+        (
+          env.MCP_AUTHORIZATION_SERVER_URL ?? DEFAULT_AUTHORIZATION_SERVER_URL
+        ).trim(),
         'MCP_AUTHORIZATION_SERVER_URL'
       )
     ),
+    apiBaseUrl: stripTrailingSlashes(
+      assertHttpsOrLoopback(
+        (env.MCP_API_URL ?? DEFAULT_API_URL).trim(),
+        'MCP_API_URL'
+      )
+    ),
     scopesSupported,
-    openaiAppsChallengeToken: env.MCP_OPENAI_APPS_CHALLENGE?.trim() || undefined,
+    introspectionSecret: env.MCP_INTROSPECTION_SECRET?.trim() || undefined,
+    openaiAppsChallengeToken:
+      env.MCP_OPENAI_APPS_CHALLENGE?.trim() || undefined,
     port,
     bindHost: (env.MCP_BIND_HOST ?? '0.0.0.0').trim(),
+    rateLimitPerMinute,
   });
 }

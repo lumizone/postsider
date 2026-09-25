@@ -2,8 +2,10 @@ import { afterAll, describe, expect, it } from '@jest/globals';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import {
+  DEFAULT_API_URL,
   DEFAULT_AUTHORIZATION_SERVER_URL,
   DEFAULT_PUBLIC_URL,
+  DEFAULT_RATE_LIMIT_PER_MINUTE,
   loadHttpConfig,
   type HttpConfig,
 } from '../http/config.js';
@@ -17,9 +19,12 @@ function testConfig(overrides: Partial<HttpConfig> = {}): HttpConfig {
   return {
     publicUrl: TEST_PUBLIC_URL,
     authorizationServerUrl: TEST_AS_URL,
+    apiBaseUrl: TEST_AS_URL,
     scopesSupported: ['posts:read', 'posts:write'],
+    introspectionSecret: 'test-introspection-secret',
     port: 0,
     bindHost: '127.0.0.1',
+    rateLimitPerMinute: 240,
     ...overrides,
   };
 }
@@ -44,7 +49,39 @@ describe('loadHttpConfig', () => {
     expect(config.scopesSupported).toEqual(['posts:read', 'posts:write']);
     expect(config.port).toBe(8080);
     expect(config.bindHost).toBe('0.0.0.0');
+    expect(config.apiBaseUrl).toBe(DEFAULT_API_URL);
+    expect(config.rateLimitPerMinute).toBe(DEFAULT_RATE_LIMIT_PER_MINUTE);
+    expect(config.introspectionSecret).toBeUndefined();
     expect(config.openaiAppsChallengeToken).toBeUndefined();
+  });
+
+  it('reads the introspection secret, API URL and rate limit, ignoring blanks', () => {
+    const config = loadHttpConfig({
+      MCP_INTROSPECTION_SECRET: ' shared-secret ',
+      MCP_API_URL: 'https://api.internal.test',
+      MCP_RATE_LIMIT_RPM: '60',
+    });
+    expect(config.introspectionSecret).toBe('shared-secret');
+    expect(config.apiBaseUrl).toBe('https://api.internal.test');
+    expect(config.rateLimitPerMinute).toBe(60);
+
+    const blank = loadHttpConfig({ MCP_INTROSPECTION_SECRET: '   ' });
+    expect(blank.introspectionSecret).toBeUndefined();
+  });
+
+  it('rejects a non-positive MCP_RATE_LIMIT_RPM with the variable name', () => {
+    expect(() => loadHttpConfig({ MCP_RATE_LIMIT_RPM: 'abc' })).toThrow(
+      /MCP_RATE_LIMIT_RPM/
+    );
+    expect(() => loadHttpConfig({ MCP_RATE_LIMIT_RPM: '0' })).toThrow(
+      /MCP_RATE_LIMIT_RPM/
+    );
+  });
+
+  it('rejects a plain-HTTP MCP_API_URL off loopback', () => {
+    expect(() =>
+      loadHttpConfig({ MCP_API_URL: 'http://api.postsider.com' })
+    ).toThrow(/MCP_API_URL/);
   });
 
   it('rejects a plain-HTTP public URL off loopback', () => {
