@@ -1351,6 +1351,28 @@ settingsStorage: {
     signerError: "Sign-in did not return a signer. Please try again.",
     failed: "Connection failed.",
   },
+  mcpConsent: {
+    title: "Connect an AI assistant",
+    subtitle: "An application wants to access your PostSider account.",
+    requestedBy: "Requested by",
+    permissions: "Permissions requested",
+    scopeRead: "Read your posts, channels and analytics",
+    scopeWrite: "Create, edit and schedule posts",
+    organization: "Organization",
+    organizationHint: "The assistant will work in this organization's context.",
+    approve: "Allow access",
+    deny: "Deny",
+    approving: "Allowing…",
+    denying: "Denying…",
+    loading: "Checking this request…",
+    expired: "This request has expired or was already used. Start the connection again from your AI tool.",
+    invalid: "This authorization request is not valid.",
+    signInNeeded: "Sign in to review this request.",
+    signIn: "Sign in",
+    adminOnly: "Only organization administrators can approve this request. Ask an admin on your team.",
+    failed: "Something went wrong. Please try again.",
+    footer: "You can disconnect this assistant later from Settings → API.",
+  },
 } as const;
 
 export type Messages = Widen<typeof en>;
