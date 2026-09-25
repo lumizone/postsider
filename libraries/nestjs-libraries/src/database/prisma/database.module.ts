@@ -29,6 +29,8 @@ import { SetsRepository } from '@postsider/nestjs-libraries/database/prisma/sets
 import { RefreshIntegrationService } from '@postsider/nestjs-libraries/integrations/refresh.integration.service';
 import { OAuthRepository } from '@postsider/nestjs-libraries/database/prisma/oauth/oauth.repository';
 import { OAuthService } from '@postsider/nestjs-libraries/database/prisma/oauth/oauth.service';
+import { McpOAuthRepository } from '@postsider/nestjs-libraries/database/prisma/oauth/mcp-oauth.repository';
+import { McpOAuthService } from '@postsider/nestjs-libraries/database/prisma/oauth/mcp-oauth.service';
 import { AnnouncementsRepository } from '@postsider/nestjs-libraries/database/prisma/announcements/announcements.repository';
 import { AnnouncementsService } from '@postsider/nestjs-libraries/database/prisma/announcements/announcements.service';
 import { ErrorsRepository } from '@postsider/nestjs-libraries/database/prisma/errors/errors.repository';
@@ -95,6 +97,8 @@ import { PostAnalyticsService } from '@postsider/nestjs-libraries/database/prism
     SetsRepository,
     OAuthRepository,
     OAuthService,
+    McpOAuthRepository,
+    McpOAuthService,
     AnnouncementsRepository,
     AnnouncementsService,
     ErrorsRepository,
