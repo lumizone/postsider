@@ -1,0 +1,125 @@
+name: Release @postsider/mcp
+
+# Trusted publishing with provenance (OIDC). No npm token is stored in the repo.
+#
+# Two ways to run it:
+#   - push a release tag `mcp-v<version>`  -> every gate runs, then npm publish
+#   - manual dispatch on main              -> gate-only dry run by default
+#
+# The publish step is guarded so the dry path can never reach npm, and a manual
+# dispatch can only publish from `main`.
+#
+# npm trusted publishing requires npm CLI >= 11.5.1 and Node >= 22.14.0. The
+# runner installs a compliant npm explicitly instead of relying on whatever the
+# Node image happens to ship.
+
+on:
+  push:
+    tags:
+      - "mcp-v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run every gate but do not publish to npm"
+        type: boolean
+        default: true
+
+concurrency:
+  group: release-mcp-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Gates and release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.6.1
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      # The MCP package has no dependency on the rest of the monorepo, so the
+      # privileged job installs without running the root postinstall (Prisma
+      # generate) or any other lifecycle script.
+      - name: Install
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Version gate
+        run: node apps/mcp/scripts/version-gate.mjs
+
+      - name: Registry metadata validation
+        run: pnpm --filter @postsider/mcp validate:registry
+
+      - name: Typecheck
+        run: pnpm --filter @postsider/mcp typecheck
+
+      - name: Typecheck tests
+        run: pnpm --filter @postsider/mcp typecheck:tests
+
+      - name: Build
+        run: pnpm --filter @postsider/mcp build
+
+      - name: Tests
+        run: pnpm --filter @postsider/mcp test
+
+      - name: publint
+        run: pnpm dlx publint@0.3.24 apps/mcp
+
+      - name: Tarball install smoke
+        run: pnpm --filter @postsider/mcp smoke:tarball
+
+      # Required by the QA spec's package gate list. Verified to run without any
+      # user configuration, so a clean runner can enforce it.
+      - name: Validate the Claude Code plugin
+        run: |
+          npm install --global @anthropic-ai/claude-code@2.1.226
+          claude plugin validate --strict apps/mcp
+          claude plugin validate --strict .
+
+      # Trusted publishing needs npm >= 11.5.1; the OIDC exchange is skipped by
+      # older CLIs, which would silently fall back to an undefined token.
+      - name: Ensure an npm CLI that supports trusted publishing
+        run: |
+          npm install --global npm@^11.5.1
+          npm --version
+
+      - name: Resolve whether this run publishes
+        id: guard
+        run: |
+          set -euo pipefail
+          publish=false
+          reason=""
+          if [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "${GITHUB_REF}" != "${GITHUB_REF#refs/tags/mcp-v}" ]; then
+            publish=true
+            reason="release tag ${GITHUB_REF}"
+          elif [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "false" ]; then
+            if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+              publish=true
+              reason="manual dispatch on main"
+            else
+              echo "::error::Publishing from a manual dispatch is restricted to main; this run is on ${GITHUB_REF}."
+              exit 1
+            fi
+          fi
+          echo "publish=${publish}" >> "${GITHUB_OUTPUT}"
+          if [ "${publish}" = "false" ]; then
+            echo "DRY RUN: npm publish will be skipped. All gates above still ran."
+          else
+            echo "Publish requested (${reason}) for $(node -p "require('./apps/mcp/package.json').version")."
+          fi
+
+      - name: Publish to npm
+        if: steps.guard.outputs.publish == 'true'
+        working-directory: apps/mcp
+        run: npm publish --access public --provenance

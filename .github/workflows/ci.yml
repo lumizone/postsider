@@ -64,6 +64,19 @@ jobs:
       - name: MCP server tests
         timeout-minutes: 10
         run: NODE_OPTIONS=--experimental-vm-modules pnpm exec jest -c apps/mcp/jest.config.cjs
+      # The packaging gates the release depends on, so a broken tarball, plugin
+      # manifest or registry file fails on the pull request and not at tag time.
+      - name: MCP packaging gates
+        timeout-minutes: 15
+        run: |
+          node apps/mcp/scripts/version-gate.mjs
+          pnpm --filter @postsider/mcp validate:registry
+          pnpm --filter @postsider/mcp typecheck:tests
+          pnpm dlx publint@0.3.24 apps/mcp
+          pnpm --filter @postsider/mcp smoke:tarball
+          npm install --global @anthropic-ai/claude-code@2.1.226
+          claude plugin validate --strict apps/mcp
+          claude plugin validate --strict .
       - name: SDK build
         run: pnpm run build:sdk
       - name: SDK tests

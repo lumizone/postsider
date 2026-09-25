@@ -399,8 +399,13 @@ const channels = await client.integrations();
 
 PostSider ships an MCP server so AI agents (Claude Code, Claude Desktop, Codex,
 and any MCP-compatible client) can use the platform through the public API: list
-channels, schedule and publish posts, upload media, and read analytics. It is a thin,
-dependency-light wrapper over the public API.
+channels, review the calendar, create drafts, request approval, upload media, and
+read analytics. It is a thin, dependency-light wrapper over the public API.
+
+The server exposes **19 tools**. Its workflow is read-first and draft-first: the
+agent prepares work in the same calendar a human reviews, and publishing stays a
+human decision. The package directory is also a Claude Code plugin, with a
+`postsider-workflow` skill that enforces those rules.
 
 ```bash
 pnpm --filter @postsider/mcp build
@@ -410,8 +415,20 @@ Then point your agent at `apps/mcp/dist/index.js` with `POSTSIDER_API_KEY` (and
 `POSTSIDER_API_URL` for a self-hosted instance). See
 [`apps/mcp/README.md`](apps/mcp/README.md) for client config snippets and the
 full tool list, or
-[docs.postsider.com/agent/mcp/overview](https://docs.postsider.com/agent/mcp/overview)
+[docs.postsider.com/cloud/mcp](https://docs.postsider.com/cloud/mcp)
 for the hosted walkthrough.
+
+Claude Code can also install the server as a plugin from this repository, which
+registers the `postsider-workflow` skill and prompts for the API key as a secret
+setting:
+
+```bash
+claude plugin marketplace add lumizone/postsider
+claude plugin install postsider@postsider
+```
+
+To confirm the connection without changing anything, ask the agent:
+`List my connected PostSider channels. Do not create or modify anything.`
 
 ---
 

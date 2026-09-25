@@ -1,3 +1,6 @@
+// Imported explicitly, like the other suites, so the specs type-check without
+// relying on ambient test globals.
+import { describe, it, expect } from '@jest/globals';
 import { buildCreatePostBody, type CreatePostArgs } from '../post-body.js';
 
 describe('buildCreatePostBody', () => {

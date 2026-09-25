@@ -1,0 +1,45 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.lumizone/postsider",
+  "title": "PostSider",
+  "description": "Social media calendar for AI agents: read channels, create drafts, request approval.",
+  "version": "1.0.0",
+  "websiteUrl": "https://postsider.com",
+  "repository": {
+    "url": "https://github.com/lumizone/postsider",
+    "source": "github",
+    "subfolder": "apps/mcp",
+    "id": "1334967121"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@postsider/mcp",
+      "version": "1.0.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "POSTSIDER_API_KEY",
+          "description": "Organization API key from PostSider under Settings -> API.",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "POSTSIDER_API_URL",
+          "description": "Instance base URL. Defaults to https://api.postsider.com and must be HTTPS for non-local hosts.",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ],
+  "_meta": {
+    "io.modelcontextprotocol.registry/publisher-provided": {
+      "longDescription": "PostSider MCP lets Claude Code, Codex, Cursor and other MCP clients inspect a real social media calendar, prepare native channel versions, create drafts, request approval and read publishing results through PostSider's public API.",
+      "documentation": "https://docs.postsider.com/cloud/mcp",
+      "toolCount": 19
+    }
+  }
+}
