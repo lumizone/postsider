@@ -65,6 +65,8 @@ model Organization {
   postApprovals        PostApproval[]
   channelAssignments   ChannelAssignment[]
   postAnalytics        PostAnalytics[]
+  mcpOAuthCodes        McpOAuthCode[]
+  mcpOAuthGrants       McpOAuthGrant[]
 
   @@index([apiKey])
   @@index([streakSince])
@@ -141,6 +143,8 @@ model User {
   approvalRequests      PostApproval[]       @relation("approvalRequester")
   approvalResolutions   PostApproval[]       @relation("approvalResolver")
   channelAssignments    ChannelAssignment[]
+  mcpOAuthCodes         McpOAuthCode[]
+  mcpOAuthGrants        McpOAuthGrant[]
 
   @@unique([email, providerName])
   @@index([lastReadNotifications])
@@ -774,6 +778,114 @@ model OAuthAuthorization {
   @@index([userId])
   @@index([organizationId])
   @@index([revokedAt])
+}
+
+model McpOAuthClient {
+  id                      String                        @id @default(uuid())
+  clientId                String                        @unique
+  name                    String
+  redirectUris            String[]
+  scopes                  String[]                      @default([])
+  tokenEndpointAuthMethod String                        @default("none")
+  clientSecret            String?
+  registrationIp          String?
+  createdAt               DateTime                      @default(now())
+  updatedAt               DateTime                      @updatedAt
+  grants                  McpOAuthGrant[]
+  pendingAuthorizations   McpOAuthPendingAuthorization[]
+  codes                   McpOAuthCode[]
+
+  @@index([createdAt])
+}
+
+model McpOAuthPendingAuthorization {
+  id                  String         @id @default(uuid())
+  mcpOAuthClientId    String
+  codeChallenge       String
+  codeChallengeMethod String         @default("S256")
+  scopes              String[]
+  state               String?
+  redirectUri         String
+  createdAt           DateTime       @default(now())
+  expiresAt           DateTime
+  consumedAt          DateTime?
+  client              McpOAuthClient @relation(fields: [mcpOAuthClientId], references: [id])
+
+  @@index([mcpOAuthClientId])
+  @@index([expiresAt])
+}
+
+model McpOAuthCode {
+  id                  String         @id @default(uuid())
+  codeHash            String         @unique
+  mcpOAuthClientId    String
+  userId              String
+  organizationId      String
+  scopes              String[]
+  codeChallenge       String
+  codeChallengeMethod String         @default("S256")
+  redirectUri         String
+  createdAt           DateTime       @default(now())
+  expiresAt           DateTime
+  consumedAt          DateTime?
+  client              McpOAuthClient @relation(fields: [mcpOAuthClientId], references: [id])
+  user                User           @relation(fields: [userId], references: [id])
+  organization        Organization   @relation(fields: [organizationId], references: [id])
+
+  @@index([mcpOAuthClientId])
+  @@index([userId])
+  @@index([organizationId])
+  @@index([expiresAt])
+}
+
+model McpOAuthGrant {
+  id               String         @id @default(uuid())
+  mcpOAuthClientId String
+  userId           String
+  organizationId   String
+  scopes           String[]
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  lastUsedAt       DateTime?
+  revokedAt        DateTime?
+  revokedReason    String?
+  client           McpOAuthClient @relation(fields: [mcpOAuthClientId], references: [id])
+  user             User           @relation(fields: [userId], references: [id])
+  organization     Organization   @relation(fields: [organizationId], references: [id])
+  accessTokens     McpOAuthAccessToken[]
+  refreshTokens    McpOAuthRefreshToken[]
+
+  @@unique([mcpOAuthClientId, userId, organizationId])
+  @@index([userId])
+  @@index([organizationId])
+  @@index([revokedAt])
+}
+
+model McpOAuthAccessToken {
+  id        String        @id @default(uuid())
+  tokenHash String        @unique
+  grantId   String
+  createdAt DateTime      @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+  grant     McpOAuthGrant @relation(fields: [grantId], references: [id])
+
+  @@index([grantId])
+  @@index([expiresAt])
+}
+
+model McpOAuthRefreshToken {
+  id           String        @id @default(uuid())
+  tokenHash    String        @unique
+  grantId      String
+  createdAt    DateTime      @default(now())
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  replacedById String?
+  grant        McpOAuthGrant @relation(fields: [grantId], references: [id])
+
+  @@index([grantId])
+  @@index([expiresAt])
 }
 
 enum OrderStatus {
