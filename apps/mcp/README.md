@@ -17,10 +17,6 @@ In PostSider, open **Settings -> API** and generate an organization API key.
 
 ### 2. Connect your client
 
-> **RELEASE_NOT_VERIFIED**: the commands below assume `@postsider/mcp` is
-> published on npm. Until the first release is confirmed, use the
-> [from source](#from-source) path instead.
-
 Claude Code:
 
 ```bash
