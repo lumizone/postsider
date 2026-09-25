@@ -1,0 +1,29 @@
+{
+  "name": "postsider",
+  "description": "Prepare and schedule social media work in PostSider from Claude Code. The agent reads your real calendar and creates drafts, and nothing goes live without your review.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Lumi Zone Lukasz Blania",
+    "email": "lukasz@postsider.com",
+    "url": "https://postsider.com"
+  },
+  "homepage": "https://postsider.com",
+  "repository": "https://github.com/lumizone/postsider",
+  "license": "AGPL-3.0",
+  "keywords": [
+    "mcp",
+    "social-media",
+    "scheduling",
+    "postsider",
+    "claude-code"
+  ],
+  "userConfig": {
+    "api_key": {
+      "type": "string",
+      "title": "PostSider API key",
+      "description": "Organization API key. Create one in PostSider under Settings -> API.",
+      "sensitive": true,
+      "required": true
+    }
+  }
+}

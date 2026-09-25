@@ -1,27 +1,70 @@
 {
   "name": "@postsider/mcp",
   "version": "1.0.0",
-  "description": "PostSider MCP server - gives AI agents full access to the PostSider platform over its public API (list channels, schedule/publish posts, analytics, media).",
+  "mcpName": "io.github.lumizone/postsider",
+  "description": "PostSider MCP server - gives AI agents access to the PostSider social media platform over its public API (list channels, review the calendar, create drafts, request approval, analytics, media).",
   "license": "AGPL-3.0",
   "type": "module",
   "bin": {
     "postsider-mcp": "dist/index.js"
   },
-  "main": "dist/index.js",
   "files": [
-    "dist"
+    "dist",
+    "skills",
+    ".claude-plugin",
+    ".mcp.json",
+    "server.json",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "tsc -p tsconfig.json && node -e \"require('node:fs').chmodSync('dist/index.js',0o755)\"",
+    "prepack": "npm run clean && npm run build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck:tests": "tsc -p tsconfig.test.json --noEmit",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest -c jest.config.cjs --runInBand",
+    "smoke:tarball": "node scripts/tarball-smoke.mjs",
+    "validate:registry": "node scripts/validate-registry.mjs",
+    "version:gate": "node scripts/version-gate.mjs",
     "start": "node dist/index.js",
     "dev": "tsc -p tsconfig.json --watch"
+  },
+  "homepage": "https://postsider.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lumizone/postsider.git",
+    "directory": "apps/mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/lumizone/postsider/issues"
+  },
+  "author": "Lumi Zone Łukasz Blania <lukasz@postsider.com>",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "claude-code",
+    "ai-agents",
+    "social-media",
+    "scheduling",
+    "postsider"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.22.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@jest/globals": "29.7.0",
     "@types/node": "^22.10.0",
+    "ajv": "^8.17.1",
+    "jest": "29.7.0",
+    "ts-jest": "^29.1.0",
     "typescript": "^5.5.0"
   },
   "engines": {

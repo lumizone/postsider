@@ -1,0 +1,16 @@
+{
+  "name": "postsider",
+  "description": "PostSider plugins: work with a real social media calendar from your AI agent, with a human deciding what goes live.",
+  "owner": {
+    "name": "Lumi Zone Lukasz Blania",
+    "email": "lukasz@postsider.com",
+    "url": "https://postsider.com"
+  },
+  "plugins": [
+    {
+      "name": "postsider",
+      "source": "./apps/mcp",
+      "description": "Read your PostSider calendar, prepare channel versions and create drafts from Claude Code. Nothing goes live without your review."
+    }
+  ]
+}
