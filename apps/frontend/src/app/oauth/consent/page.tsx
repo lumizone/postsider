@@ -42,6 +42,9 @@ type Phase =
 function scopeLabel(t: ReturnType<typeof useT>, scope: string): string {
   if (scope === "posts:read") return t("mcpConsent.scopeRead");
   if (scope === "posts:write") return t("mcpConsent.scopeWrite");
+  if (scope === "openid" || scope === "email") {
+    return t("mcpConsent.scopeIdentity");
+  }
   return scope;
 }
 

@@ -1358,6 +1358,7 @@ settingsStorage: {
     permissions: "Permissions requested",
     scopeRead: "Read your posts, channels and analytics",
     scopeWrite: "Create, edit and schedule posts",
+    scopeIdentity: "Confirm the email address of your account",
     organization: "Organization",
     organizationHint: "The assistant will work in this organization's context.",
     approve: "Allow access",

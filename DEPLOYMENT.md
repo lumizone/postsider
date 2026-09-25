@@ -236,6 +236,14 @@ curl -s https://mcp.example.com/.well-known/oauth-protected-resource      # meta
 curl -s -o /dev/null -w '%{http_code}\n' -X POST https://mcp.example.com/mcp   # 401
 ```
 
+OAuth clients also need the authorization-server metadata on the AS host (the
+backend): `curl -s https://<MCP_AUTHORIZATION_SERVER_URL>/.well-known/oauth-authorization-server`
+must return the `scopes_supported` list including `openid` and `email` — the
+OpenAI review rejects a connector whose UserInfo flow cannot advertise those
+scopes. If the proxy for that host only exposes the backend under `/api/`, add
+a root-path passthrough for `/.well-known/*` (the backend serves the metadata
+under its own prefix).
+
 A `401` on `POST /mcp` without a token — with a `WWW-Authenticate: Bearer
 resource_metadata="…"` header — is correct: every call is authenticated through
 OAuth (dynamic client registration → consent screen → PKCE token), and tool calls

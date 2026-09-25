@@ -1199,6 +1199,7 @@ const pl = {
     permissions: "Proszone uprawnienia",
     scopeRead: "Wgląd w Twoje posty, kanały i statystyki",
     scopeWrite: "Tworzenie, edycja i planowanie postów",
+    scopeIdentity: "Potwierdzenie adresu e-mail Twojego konta",
     organization: "Organizacja",
     organizationHint: "Asystent będzie pracować w kontekście tej organizacji.",
     approve: "Zezwól na dostęp",
