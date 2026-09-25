@@ -492,6 +492,7 @@ const it = {
     creating: "Creazione…",
     colName: "Nome",
     colKey: "Chiave",
+    colScopes: "Ambiti",
     colCreated: "Creata il",
     revoke: "Revoca",
     rename: "Rinomina",

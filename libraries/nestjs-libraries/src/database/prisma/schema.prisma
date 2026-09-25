@@ -51,7 +51,8 @@ model Organization {
   thirdParty           ThirdParty[]
   usedCodes            UsedCodes[]
   users                UserOrganization[]
-  webhooks             Webhooks[]
+  webhooks              Webhooks[]
+  publicWebhookSubscriptions PublicWebhookSubscription[]
   oauthApp             OAuthApp[]
   oauthAuthorizations  OAuthAuthorization[]
   apiKeys              ApiKey[]
@@ -643,6 +644,26 @@ model Webhooks {
   @@index([deletedAt])
 }
 
+model PublicWebhookSubscription {
+  id                  String       @id @default(uuid())
+  organizationId      String
+  name                String
+  url                 String
+  events              String[]
+  active              Boolean      @default(true)
+  secretVersion       String
+  consecutiveFailures Int          @default(0)
+  lastDeliveryAt      DateTime?
+  lastFailureAt       DateTime?
+  disabledAt          DateTime?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, active])
+  @@index([organizationId, createdAt])
+}
+
 model PublicApiIdempotency {
   id             String   @id @default(uuid())
   organizationId String
@@ -881,6 +902,10 @@ model ApiKey {
   organizationId String
   name           String
   key            String       @unique
+  // Empty is never valid: the service always writes the full catalog for the
+  // legacy "create a key from Settings" flow. Kept as a list so an integration
+  // can hold only the scopes it needs.
+  scopes         String[]     @default(["organization:read", "channels:read", "channels:write", "posts:read", "posts:write", "media:write", "approvals:read", "approvals:write", "analytics:read", "notifications:read", "publishing:read", "publishing:write", "webhooks:read", "webhooks:write"])
   createdAt      DateTime     @default(now())
   deletedAt      DateTime?
   organization   Organization @relation(fields: [organizationId], references: [id])

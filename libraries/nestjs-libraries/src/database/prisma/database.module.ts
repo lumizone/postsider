@@ -22,6 +22,8 @@ import { TrackService } from '@postsider/nestjs-libraries/track/track.service';
 import { ShortLinkService } from '@postsider/nestjs-libraries/short-linking/short.link.service';
 import { WebhooksRepository } from '@postsider/nestjs-libraries/database/prisma/webhooks/webhooks.repository';
 import { WebhooksService } from '@postsider/nestjs-libraries/database/prisma/webhooks/webhooks.service';
+import { PublicWebhookSubscriptionsService } from '@postsider/nestjs-libraries/database/prisma/webhooks/public-webhook-subscriptions.service';
+import { PublicWebhookDeliveryService } from '@postsider/nestjs-libraries/database/prisma/webhooks/public-webhook-delivery.service';
 import { SignatureRepository } from '@postsider/nestjs-libraries/database/prisma/signatures/signature.repository';
 import { SignatureService } from '@postsider/nestjs-libraries/database/prisma/signatures/signature.service';
 import { SetsService } from '@postsider/nestjs-libraries/database/prisma/sets/sets.service';
@@ -76,6 +78,8 @@ import { PostAnalyticsService } from '@postsider/nestjs-libraries/database/prism
     NotificationsRepository,
     WebhooksRepository,
     WebhooksService,
+    PublicWebhookSubscriptionsService,
+    PublicWebhookDeliveryService,
     IntegrationService,
     IntegrationRepository,
     PostsService,

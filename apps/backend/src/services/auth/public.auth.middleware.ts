@@ -54,12 +54,20 @@ export class PublicAuthMiddleware implements NestMiddleware {
 
         // @ts-ignore
         req.org = { ...org, users: [authorization.membership] };
+        // OAuth tokens predate granular connector scopes. Preserve their
+        // existing access until the OAuth consent flow supports scope grants.
+        // @ts-ignore
+        req.publicApiScopes = ['*'];
+        // @ts-ignore
+        req.publicApiCredential = { type: 'oauth' };
       } else {
-        const org = await this._organizationService.getOrgByApiKey(auth);
-        if (!org) {
+        const credential =
+          await this._organizationService.resolvePublicApiCredential(auth);
+        if (!credential) {
           res.status(HttpStatus.UNAUTHORIZED).json({ msg: 'Invalid API key' });
           return;
         }
+        const org = credential.organization;
 
         if (isBillingEnabled() && !org.subscription) {
           res
@@ -79,6 +87,13 @@ export class PublicAuthMiddleware implements NestMiddleware {
 
         // @ts-ignore
         req.org = { ...org, users: [{ role: 'SUPERADMIN', disabled: false }] };
+        // @ts-ignore
+        req.publicApiScopes = credential.scopes;
+        // @ts-ignore
+        req.publicApiCredential = {
+          type: credential.credentialType,
+          ...(credential.apiKeyId ? { id: credential.apiKeyId } : {}),
+        };
       }
     } catch (err) {
       throw new HttpForbiddenException();
