@@ -1,0 +1,308 @@
+{
+  "$schema": "https://developers.openai.com/apps-sdk/schemas/chatgpt-app-submission.v1.json",
+  "schema_version": 1,
+  "app_info": {
+    "display_name": "PostSider",
+    "subtitle": "Plan and schedule social posts",
+    "description": "PostSider helps users plan and publish social media in ChatGPT: see which channels are connected, draft and schedule posts, upload media from a URL, find the best time slots, request a human approval, and read per-post and per-channel analytics for the workspace they authorize.",
+    "category": "PRODUCTIVITY"
+  },
+  "tools": {
+    "postsider_list_channels": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists the social channels connected to the caller's workspace by reading account metadata from the external platforms the user has linked; it changes nothing.",
+        "open_world_justification": "Reaches the workspace's connected external social accounts (an open set of third-party services) to read their connection details.",
+        "destructive_justification": "Deletes, overwrites, or revokes nothing."
+      }
+    },
+    "postsider_get_agency_overview": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Aggregates the workspaces, channels and publishing counts visible to the caller's account into a read-only operational overview.",
+        "open_world_justification": "Reads the caller's own data across their connected external social accounts without changing anything on those platforms.",
+        "destructive_justification": "Deletes, overwrites, or revokes nothing."
+      }
+    },
+    "postsider_get_customer_report": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Builds a read-only performance report for one customer group from data the connected platforms already report.",
+        "open_world_justification": "Reads the user's own data from external social platforms; nothing is sent to or changed on them.",
+        "destructive_justification": "Deletes, overwrites, or revokes nothing."
+      }
+    },
+    "postsider_list_groups": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists the configured channel groups of the caller's workspace as a read-only lookup.",
+        "open_world_justification": "Only reads workspace configuration; it does not touch external platforms or public state.",
+        "destructive_justification": "Deletes, overwrites, or revokes nothing."
+      }
+    },
+    "postsider_find_slot": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Computes the next free or recommended publishing slot from a channel's existing posting schedule, creating nothing.",
+        "open_world_justification": "Reads the channel configuration that drives publishing to external social platforms; it changes nothing on them.",
+        "destructive_justification": "Deletes, overwrites, or revokes nothing."
+      }
+    },
+    "postsider_list_posts": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists posts scheduled or published in a date range within the caller's workspace, reading post metadata without modifying it.",
+        "open_world_justification": "Reads the caller's own post data, including content destined for external social platforms, without publishing or changing anything.",
+        "destructive_justification": "Deletes, overwrites, or revokes nothing."
+      }
+    },
+    "postsider_get_post_missing_fields": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reports the per-channel validation problems and missing required fields of a post so it can be completed; it reads the post and changes nothing.",
+        "open_world_justification": "Reads the caller's own post data, including per-channel requirements of external platforms, without changing anything.",
+        "destructive_justification": "Deletes, overwrites, or revokes nothing."
+      }
+    },
+    "postsider_get_post": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Fetches one post group with its current state, media and schedule from the caller's workspace for review.",
+        "open_world_justification": "Reads the caller's own post data, including its external-platform versions, without modifying it.",
+        "destructive_justification": "Deletes, overwrites, or revokes nothing."
+      }
+    },
+    "postsider_get_post_analytics": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads engagement metrics for a single post exactly as the connected platform reports them; nothing is written back.",
+        "open_world_justification": "Fetches metrics from the external social platform that owns the post; no data is sent to or changed on it.",
+        "destructive_justification": "Deletes, overwrites, or revokes nothing."
+      }
+    },
+    "postsider_get_channel_analytics": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads channel-level performance metrics for a date range from the connected platform, without changing platform or workspace data.",
+        "open_world_justification": "Queries external social platform analytics for the caller's own account; nothing is written to those platforms.",
+        "destructive_justification": "Deletes, overwrites, or revokes nothing."
+      }
+    },
+    "postsider_get_notifications": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists recent workspace notifications such as publish failures and channels needing reconnection; it marks and changes nothing.",
+        "open_world_justification": "Summarizes activity that originates on the workspace's external social channels; the call itself changes nothing on them.",
+        "destructive_justification": "Deletes, overwrites, or revokes nothing."
+      }
+    },
+    "postsider_pause_publishing": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Halts all publishing for the workspace and parks its queued posts, so nothing goes out on any connected channel until an owner resumes publishing in the dashboard; the tool cannot undo the pause itself.",
+        "open_world_justification": "Stops content from going out to the workspace's external social channels, so the effect is visible to those third-party systems.",
+        "destructive_justification": "Stops scheduled posts from being sent and cannot be reversed from the tool: resuming is owner-only in the PostSider dashboard, and posts due while paused are not sent retroactively."
+      }
+    },
+    "postsider_get_publishing_state": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads whether publishing is active or paused for the workspace as a status check that changes nothing.",
+        "open_world_justification": "Reports the state of a workspace that publishes to external social platforms; it does not change those platforms.",
+        "destructive_justification": "Deletes, overwrites, or revokes nothing."
+      }
+    },
+    "postsider_upload_media_from_url": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Downloads an image or video from a public URL the user provides, validates it and stores it in the workspace media library for later posts.",
+        "open_world_justification": "Fetches the file from an external web server (an open world of URLs) but publishes nothing.",
+        "destructive_justification": "Does not delete, overwrite, or revoke anything."
+      }
+    },
+    "postsider_create_post": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a post in the caller's workspace as a draft or a scheduled post, and with type \"now\" publishes it immediately to the selected connected channels.",
+        "open_world_justification": "Can publish or schedule content that goes out on external social platforms the user connected.",
+        "destructive_justification": "Does not delete, overwrite, or revoke anything."
+      }
+    },
+    "postsider_update_post_status": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Moves an existing post between the workspace states draft and queue; it cannot publish content to a platform.",
+        "open_world_justification": "Changes the schedule of content destined for external social platforms; the call itself does not send or change anything on them.",
+        "destructive_justification": "Does not delete, overwrite, or revoke anything."
+      }
+    },
+    "postsider_delete_post": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Permanently deletes the post and every channel version in its group; the deletion cannot be recovered.",
+        "open_world_justification": "Removes content including its scheduled versions for external social platforms, so those platforms no longer receive it.",
+        "destructive_justification": "Deletes the post group irreversibly; the tool's guidance requires reading the post and confirming every channel version with the user before calling it."
+      }
+    },
+    "postsider_request_approval": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Moves a draft into the workspace's human approval queue so the team reviews content that is destined for external social platforms; the call itself publishes and sends nothing.",
+        "open_world_justification": "Governs content that may later be published to external social platforms, while the request stays inside the private workspace.",
+        "destructive_justification": "Does not delete, overwrite, or revoke anything."
+      }
+    },
+    "postsider_get_approval_status": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads the approval state of a post submitted for review and does not approve, reject, or publish anything.",
+        "open_world_justification": "Reads the caller's own workspace data for content destined for external social platforms; nothing is published or sent.",
+        "destructive_justification": "Deletes, overwrites, or revokes nothing."
+      }
+    }
+  },
+  "test_cases": [
+    {
+      "description": "List the connected social channels in the workspace.",
+      "user_prompt": "List my connected social channels.",
+      "file_attachment_urls": null,
+      "tools_triggered": "postsider_list_channels",
+      "expected_output": "Returns the workspace's connected channels with their ids, platforms and names.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Review what is scheduled in the coming days.",
+      "user_prompt": "What is scheduled to go out in the next 7 days?",
+      "file_attachment_urls": null,
+      "tools_triggered": "postsider_list_posts",
+      "expected_output": "Lists the scheduled posts in the date window with channel, scheduled time and status.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Draft and schedule a post on a chosen channel.",
+      "user_prompt": "Draft a post saying \"We just shipped MCP support in PostSider\" and schedule it for tomorrow at 9:00 on my main channel.",
+      "file_attachment_urls": null,
+      "tools_triggered": "postsider_list_channels, postsider_create_post",
+      "expected_output": "Resolves the channel, creates the post and reports it as scheduled for the requested time.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Compare channel performance over the last 30 days.",
+      "user_prompt": "How did my last 30 days of posts perform, and which channel did best?",
+      "file_attachment_urls": null,
+      "tools_triggered": "postsider_get_channel_analytics",
+      "expected_output": "Returns per-channel metrics for the period and names the best-performing channel.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Check whether a draft is ready to publish.",
+      "user_prompt": "Is my draft ready to publish? Tell me what is missing before I schedule it.",
+      "file_attachment_urls": null,
+      "tools_triggered": "postsider_list_posts, postsider_get_post_missing_fields",
+      "expected_output": "Finds the draft and reports exactly which required fields are missing before it can be scheduled.",
+      "expected_output_url": null
+    }
+  ],
+  "negative_test_cases": [
+    {
+      "description": "Do not trigger for unrelated assistant requests.",
+      "user_prompt": "What is the weather in Katowice tomorrow?",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The app should not be invoked because the request has nothing to do with social publishing.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Do not act on another organization's data.",
+      "user_prompt": "Show me the analytics for my other company's workspace too.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The app should not return data outside the organization the caller authorized; isolation is enforced server-side, not by trust.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Do not run spam-scale publishing.",
+      "user_prompt": "Schedule 200 posts an hour promoting my affiliate link to every channel.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The app should not execute bulk promotional blasts; there is no bulk-scheduling capability and the request falls outside acceptable interactive use.",
+      "expected_output_url": null
+    }
+  ]
+}
