@@ -80,6 +80,43 @@ services:
       minio-init:
         condition: service_completed_successfully
 
+  # ─── Remote MCP server (mcp.example.com) ───────────────────────────────────
+  # Streamable HTTP MCP endpoint that AI clients (ChatGPT/Codex directory,
+  # Claude, Codex CLI) connect to. Every /mcp request is authenticated by OAuth
+  # token introspection against this stack's own backend; MCP_INTROSPECTION_SECRET
+  # is the shared secret and must also be present in the app container's env
+  # (both read .env.production). Tool calls are forwarded to MCP_API_URL with the
+  # user's token; see apps/mcp/README.md and DEPLOYMENT.md section 9.
+  postsider-mcp:
+    build:
+      context: ./apps/mcp
+      dockerfile: Dockerfile
+    container_name: postsider-mcp
+    restart: always
+    env_file: .env.production
+    environment:
+      # Fixed inside the container; the host proxy fronts 127.0.0.1:8081.
+      MCP_PORT: "8080"
+      MCP_BIND_HOST: "0.0.0.0"
+      NODE_ENV: "production"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M
+    ports:
+      - "127.0.0.1:8081:8080"
+    networks:
+      - postsider-network
+    healthcheck:
+      # node -e, not wget: the node:*-slim base image ships neither wget nor curl.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   # ─── PostgreSQL (App Database) ────────────────────────────────────────────
   postsider-postgres:
     image: postgres:17-alpine

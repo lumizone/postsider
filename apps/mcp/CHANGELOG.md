@@ -50,8 +50,8 @@ delete a post, and the organization-wide pause publishing kill switch).
 
 ### Distribution
 
-- A Claude Code plugin in the package (`plugin.json`, `.mcp.json`, the
-  `postsider-workflow` skill), installable from the repository marketplace:
+- A Claude Code plugin in the package (`plugin.json`, `.mcp.json`, and five
+  focused PostSider workflow skills), installable from the repository marketplace:
   `claude plugin marketplace add lumizone/postsider` and
   `claude plugin install postsider@postsider`.
 - `server.json` metadata for the MCP Registry, validated against the registry

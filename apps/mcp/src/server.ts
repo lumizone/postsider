@@ -10,6 +10,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { PostsiderClient } from './client.js';
 import { buildCreatePostBody } from './post-body.js';
+import { registerPostSiderSkills } from './skills-catalog.js';
 
 export const POSTSIDER_MCP_SERVER_NAME = 'postsider';
 export const POSTSIDER_MCP_SERVER_VERSION = '1.0.0';
@@ -111,10 +112,18 @@ const nonEmptyId = z.string().min(1, 'Must be a non-empty id.');
 
 /** Build the PostSider MCP server bound to `client`. */
 export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
-  const server = new McpServer({
-    name: POSTSIDER_MCP_SERVER_NAME,
-    version: POSTSIDER_MCP_SERVER_VERSION,
-  });
+  const server = new McpServer(
+    {
+      name: POSTSIDER_MCP_SERVER_NAME,
+      version: POSTSIDER_MCP_SERVER_VERSION,
+    },
+    {
+      instructions:
+        "Use PostSider for the authenticated user's social publishing workspace. Follow the user's explicit requested outcome. Resolve channel, post and customer ids from fresh read calls; never invent them. Before reporting a write as successful, read the created or changed record back. Treat delete and organization-wide pause as destructive actions.",
+    }
+  );
+
+  registerPostSiderSkills(server);
 
   // ───────────────────────────────────────────────────────────────────────────
   // Channels & scheduling helpers (read-only)

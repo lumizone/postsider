@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from '@jest/globals';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -221,6 +222,94 @@ describe('stdio entrypoint', () => {
     expect(harness.strayStdout).toEqual([]);
     expect(harness.residualStdout()).toBe('');
     expect(harness.stderr()).toContain('PostSider MCP server running (stdio)');
+  }, 30_000);
+
+  it('advertises and serves five complete static skills', async () => {
+    const harness = spawnServer({
+      ...process.env,
+      POSTSIDER_API_KEY: API_KEY,
+      POSTSIDER_API_URL: 'https://api.postsider.com',
+    });
+
+    try {
+      const init = await harness.request(1, 'initialize', {
+        protocolVersion: '2025-06-18',
+        capabilities: {},
+        clientInfo: { name: 'skills-test', version: '1.0.0' },
+      });
+      const capabilities = (
+        init.result as {
+          capabilities?: { extensions?: Record<string, unknown> };
+        }
+      ).capabilities;
+      expect(
+        capabilities?.extensions?.['io.modelcontextprotocol/skills']
+      ).toEqual({});
+
+      harness.child.stdin.write(
+        `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`
+      );
+
+      const listed = await harness.request(2, 'skills/list', {});
+      expect(listed.error).toBeUndefined();
+      const skills = (
+        listed.result as {
+          skills: Array<{
+            uri: string;
+            frontmatter: { name: string; description: string };
+            resources: Array<{ uri: string; digest: string }>;
+          }>;
+        }
+      ).skills;
+      expect(skills).toHaveLength(5);
+
+      for (let index = 0; index < skills.length; index += 1) {
+        const skill = skills[index];
+        expect(skill.uri).toBe(
+          `skill://postsider/${skill.frontmatter.name}/SKILL.md`
+        );
+        expect(skill.frontmatter.description.length).toBeGreaterThan(0);
+        expect(
+          skill.resources.map((resource) => resource.uri).sort()
+        ).toEqual(
+          [
+            `skill://postsider/${skill.frontmatter.name}/SKILL.md`,
+            `skill://postsider/${skill.frontmatter.name}/agents/openai.yaml`,
+          ].sort()
+        );
+
+        const fetched = await harness.request(10 + index, 'skills/get', {
+          uri: skill.uri,
+        });
+        expect((fetched.result as { skill: unknown }).skill).toEqual(skill);
+
+        for (
+          let resourceIndex = 0;
+          resourceIndex < skill.resources.length;
+          resourceIndex += 1
+        ) {
+          const resource = skill.resources[resourceIndex];
+          const read = await harness.request(
+            100 + index * 10 + resourceIndex,
+            'resources/read',
+            { uri: resource.uri }
+          );
+          const content = (
+            read.result as {
+              contents: Array<{ uri: string; text: string }>;
+            }
+          ).contents[0];
+          expect(content.uri).toBe(resource.uri);
+          expect(
+            `sha256:${createHash('sha256').update(content.text, 'utf8').digest('hex')}`
+          ).toBe(resource.digest);
+        }
+      }
+
+      expect(harness.strayStdout).toEqual([]);
+    } finally {
+      await harness.close();
+    }
   }, 30_000);
 
   it('exits 1 with an empty stdout when the API key is missing', async () => {

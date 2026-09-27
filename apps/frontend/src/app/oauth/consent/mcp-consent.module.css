@@ -1,0 +1,188 @@
+.wrap {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--page);
+}
+
+.card {
+  width: 100%;
+  max-width: 460px;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 650;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.sectionTitle {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 12px 0 0;
+}
+
+.clientRow {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  margin-top: 6px;
+}
+
+.clientBadge {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--on-fg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  flex: none;
+}
+
+.clientName {
+  font-weight: 600;
+  font-size: 14.5px;
+}
+
+.clientHost {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.scopes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.scopes li {
+  padding-left: 22px;
+  position: relative;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.scopes li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.orgStatic {
+  margin: 0;
+  font-size: 14px;
+}
+
+.orgList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.orgOption {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 14px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.orgOption:has(input:checked) {
+  border-color: var(--accent);
+}
+
+.orgOption input {
+  accent-color: var(--accent);
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: none;
+  background: var(--accent);
+  color: var(--on-fg);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.secondary {
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--line-soft);
+  background: transparent;
+  color: var(--fg);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.secondary:hover {
+  background: var(--hover);
+}
+
+.notice {
+  font-size: 13.5px;
+  line-height: 1.5;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 4px 0 0;
+  background: var(--hover);
+}
+
+.footer {
+  color: var(--muted);
+  font-size: 12.5px;
+  margin: 14px 0 0;
+}

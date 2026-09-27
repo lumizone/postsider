@@ -1,0 +1,16 @@
+interface:
+  display_name: "Analyze social performance"
+  short_description: "Compare post and channel analytics"
+  default_prompt: "Compare my PostSider channel performance for the last 30 days."
+policy:
+  products:
+    - CHAT
+    - CODEX
+  allow_implicit_invocation: true
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "postsider"
+      description: "Read and manage the authenticated user's PostSider social publishing workspace."
+      transport: "streamable_http"
+      url: "https://mcp.postsider.com/mcp"

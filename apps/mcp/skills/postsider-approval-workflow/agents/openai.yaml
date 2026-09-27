@@ -1,0 +1,16 @@
+interface:
+  display_name: "Review and approve drafts"
+  short_description: "Validate drafts and request approval"
+  default_prompt: "Check whether my PostSider draft is ready for approval."
+policy:
+  products:
+    - CHAT
+    - CODEX
+  allow_implicit_invocation: true
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "postsider"
+      description: "Read and manage the authenticated user's PostSider social publishing workspace."
+      transport: "streamable_http"
+      url: "https://mcp.postsider.com/mcp"

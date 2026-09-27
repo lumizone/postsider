@@ -1,0 +1,6 @@
+# Files that must never enter the image build context: the build stage
+# installs its own dependencies and compiles from src/.
+node_modules
+dist
+coverage
+*.tsbuildinfo

@@ -1,0 +1,16 @@
+interface:
+  display_name: "Review content calendar"
+  short_description: "Review channels and scheduled posts"
+  default_prompt: "Show what is scheduled in PostSider for the next 14 days."
+policy:
+  products:
+    - CHAT
+    - CODEX
+  allow_implicit_invocation: true
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "postsider"
+      description: "Read and manage the authenticated user's PostSider social publishing workspace."
+      transport: "streamable_http"
+      url: "https://mcp.postsider.com/mcp"

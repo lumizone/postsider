@@ -29,6 +29,7 @@
     "validate:registry": "node scripts/validate-registry.mjs",
     "version:gate": "node scripts/version-gate.mjs",
     "start": "node dist/index.js",
+    "start:http": "node dist/http.js",
     "dev": "tsc -p tsconfig.json --watch"
   },
   "homepage": "https://postsider.com",
