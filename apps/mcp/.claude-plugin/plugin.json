@@ -1,6 +1,6 @@
 {
   "name": "postsider",
-  "description": "Prepare and schedule social media work in PostSider from Claude Code. The agent reads your real calendar and creates drafts, and nothing goes live without your review.",
+  "description": "Review, draft, schedule, publish, approve, and analyze social media work in PostSider. Write actions follow the user's explicit requested outcome and are verified by reading the stored result back.",
   "version": "1.0.0",
   "author": {
     "name": "Lumi Zone Lukasz Blania",

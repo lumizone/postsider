@@ -86,9 +86,10 @@ Then point your client at the built entrypoint:
 
 The package directory is also a Claude Code plugin: `.claude-plugin/plugin.json`
 declares the API key as a secret user setting, `.mcp.json` starts this server at
-the pinned released version, and `skills/postsider-workflow/SKILL.md` teaches the
-read-first, draft-first workflow. The repository root is a plugin marketplace, so
-the plugin installs from the repository directly:
+the pinned released version, and `skills/` contains focused workflows for calendar
+review, content publishing, approvals, analytics, and agency operations. The
+repository root is a plugin marketplace, so the plugin installs from the
+repository directly:
 
 ```bash
 claude plugin marketplace add lumizone/postsider

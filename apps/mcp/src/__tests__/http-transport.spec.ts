@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
+import { createHash } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -219,6 +220,102 @@ describe('remote MCP transport', () => {
       expect(names).toContain('postsider_delete_post');
     } finally {
       await close();
+    }
+  });
+
+  it('serves the complete skill catalog over authenticated Streamable HTTP', async () => {
+    const initialized = await postMcp(mcp.base, TOKEN_RW, initializeBody);
+    expect(initialized.status).toBe(200);
+    const initBody = (await initialized.json()) as {
+      result?: { capabilities?: { extensions?: Record<string, unknown> } };
+    };
+    expect(
+      initBody.result?.capabilities?.extensions?.['io.modelcontextprotocol/skills']
+    ).toEqual({});
+
+    const listedResponse = await postMcp(mcp.base, TOKEN_RW, {
+      jsonrpc: '2.0',
+      id: 20,
+      method: 'skills/list',
+      params: {},
+    });
+    expect(listedResponse.status).toBe(200);
+    const listed = (await listedResponse.json()) as {
+      result?: {
+        skills?: Array<{
+          uri: string;
+          frontmatter: { name: string };
+          resources: Array<{ uri: string; digest: string }>;
+        }>;
+      };
+    };
+    const skills = listed.result?.skills ?? [];
+    expect(skills).toHaveLength(5);
+
+    for (let skillIndex = 0; skillIndex < skills.length; skillIndex += 1) {
+      const skill = skills[skillIndex];
+      const fetchedResponse = await postMcp(mcp.base, TOKEN_RW, {
+        jsonrpc: '2.0',
+        id: 30 + skillIndex,
+        method: 'skills/get',
+        params: { uri: skill.uri },
+      });
+      const fetched = (await fetchedResponse.json()) as {
+        result?: { skill?: unknown };
+      };
+      expect(fetched.result?.skill).toEqual(skill);
+
+      for (
+        let resourceIndex = 0;
+        resourceIndex < skill.resources.length;
+        resourceIndex += 1
+      ) {
+        const resource = skill.resources[resourceIndex];
+        const readResponse = await postMcp(mcp.base, TOKEN_RW, {
+          jsonrpc: '2.0',
+          id: 100 + skillIndex * 10 + resourceIndex,
+          method: 'resources/read',
+          params: { uri: resource.uri },
+        });
+        const read = (await readResponse.json()) as {
+          result?: { contents?: Array<{ uri: string; text: string }> };
+        };
+        const content = read.result?.contents?.[0];
+        expect(content?.uri).toBe(resource.uri);
+        expect(
+          `sha256:${createHash('sha256').update(content?.text ?? '', 'utf8').digest('hex')}`
+        ).toBe(resource.digest);
+      }
+    }
+  });
+
+  it('rejects unknown skill resources and malformed skill requests', async () => {
+    const requests = [
+      {
+        jsonrpc: '2.0',
+        id: 200,
+        method: 'skills/get',
+        params: { uri: 'skill://postsider/unknown/SKILL.md' },
+      },
+      {
+        jsonrpc: '2.0',
+        id: 201,
+        method: 'resources/read',
+        params: { uri: 'skill://postsider/unknown/SKILL.md' },
+      },
+      {
+        jsonrpc: '2.0',
+        id: 202,
+        method: 'skills/list',
+        params: { cursor: 123 },
+      },
+    ];
+
+    for (const request of requests) {
+      const response = await postMcp(mcp.base, TOKEN_RW, request);
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { error?: unknown };
+      expect(body.error).toBeDefined();
     }
   });
 

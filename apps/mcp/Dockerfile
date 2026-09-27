@@ -25,6 +25,7 @@ COPY package.json tsconfig.json ./
 RUN npm install --no-audit --no-fund
 
 COPY src ./src
+COPY skills ./skills
 RUN npm run build
 
 # Drop devDependencies: the runtime needs the MCP SDK, zod and their tree only
@@ -40,6 +41,7 @@ WORKDIR /app
 
 COPY --from=build /build/node_modules ./node_modules
 COPY --from=build /build/dist ./dist
+COPY --from=build /build/skills ./skills
 COPY --from=build /build/package.json ./package.json
 
 # The base image ships an unprivileged `node` user; nothing here needs root.
