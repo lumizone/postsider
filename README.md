@@ -42,7 +42,7 @@
 
 ## What is PostSider?
 
-PostSider is an open-source social media management and scheduling platform built around three ways of working:
+PostSider is an open-source social media management and scheduling platform built around four ways of working:
 
 | Use PostSider as | What you get |
 |---|---|
