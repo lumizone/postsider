@@ -252,7 +252,7 @@ importers:
         version: 0.66.0(request@2.88.2)
       nodemailer:
         specifier: '>=9.1.0 <10'
-        version: 9.1.1
+        version: 10.0.9
       nostr-tools:
         specifier: ^2.18.2
         version: 2.23.5(typescript@5.5.4)
@@ -6124,9 +6124,9 @@ packages:
     resolution: {integrity: sha512-s4Hrg5q+VPl4/tJVG++pImxF6eb8tNJNj4KnDqAOKL6zGU34lo9RXmyAN158njwGN+v8hdNf8s9fWIYW9hPb5A==}
     engines: {node: '>=0.12'}
 
-  nodemailer@9.1.1:
-    resolution: {integrity: sha512-izw9mVKFix6YSnC9eLgV6g1opl9DUlRio9ZNcq+Wu9Ujn2UwF+8Nl0B8nz22kEC+CTZCvinkxwJ0DeFbb6NwcQ==}
-    engines: {node: '>=6.0.0'}
+  nodemailer@10.0.9:
+    resolution: {integrity: sha512-BF0qcyplCwp+jMk6HCjFykBz/YhhZSsxrARhOldLwFWH+8kGjQsd2WIMIZhqEuyXRoGFi0ONbDeWDMDoL8MhLw==}
+    engines: {node: '>=20.0.0'}
 
   nodemon@3.1.14:
     resolution: {integrity: sha512-jakjZi93UtB3jHMWsXL68FXSAosbLfY0In5gtKq3niLSkrWznrVBzXFNOEMJUfc9+Ke7SHWoAZsiMkNP3vq6Jw==}
@@ -6562,6 +6562,10 @@ packages:
 
   qs@6.15.3:
     resolution: {integrity: sha512-O9gl3zCl5h5blw1KGUzQKhA5oUXSl8rwUIM5o0S3nCXMliSvy5Dzx7/DJcI+SwgICv+IneSZwhBh1oSyEHA71A==}
+    engines: {node: '>=0.6'}
+
+  qs@6.16.0:
+    resolution: {integrity: sha512-h6fhOIaRrID2CbEY2fqs+7t+UXZo+MLAnU5gRIq85uFtdiUPCdsApMlHhXogKVM4HM2DVbIjGNTTYH2OcmP1vA==}
     engines: {node: '>=0.6'}
 
   querystringify@2.2.0:
@@ -14464,7 +14468,7 @@ snapshots:
       - request
       - supports-color
 
-  nodemailer@9.1.1: {}
+  nodemailer@10.0.9: {}
 
   nodemon@3.1.14:
     dependencies:
@@ -14903,6 +14907,11 @@ snapshots:
       es-define-property: 1.0.1
       side-channel: 1.1.1
 
+  qs@6.16.0:
+    dependencies:
+      es-define-property: 1.0.1
+      side-channel: 1.1.1
+
   querystringify@2.2.0: {}
 
   queue-microtask@1.2.3: {}
@@ -15045,7 +15054,7 @@ snapshots:
       mime-types: 2.1.35
       oauth-sign: 0.9.0
       performance-now: 2.1.0
-      qs: 6.15.3
+      qs: 6.16.0
       safe-buffer: 5.2.1
       tough-cookie: 2.5.0
       tunnel-agent: 0.6.0
