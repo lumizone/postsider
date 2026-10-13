@@ -41,7 +41,10 @@ function fail(err: unknown) {
 const mediaItem = z
   .object({
     id: z.string().optional(),
-    path: z.string().min(1).describe('Media path/URL returned by an upload tool.'),
+    path: z
+      .string()
+      .min(1)
+      .describe('Media path/URL returned by an upload tool.'),
   })
   .passthrough();
 
@@ -50,16 +53,17 @@ const mediaItem = z
  * which accepts both `2026-06-01` and `2026-06-01T00:00:00Z`; validating any
  * harder here would reject payloads the API itself serves.
  */
-const isoDate = z
-  .string()
-  .regex(
-    /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?(Z|[+-]\d{2}:?\d{2})?)?$/,
-    'Must be an ISO 8601 date (2026-06-01) or date-time (2026-06-01T00:00:00Z).'
-  )
-  .refine(isRealCalendarValue, {
-    message:
-      'Must be a date that exists, e.g. 2026-06-01 (month 1-12, a real day for that month, time 00:00:00-23:59:59).',
-  });
+const isoDate = () =>
+  z
+    .string()
+    .regex(
+      /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?(Z|[+-]\d{2}:?\d{2})?)?$/,
+      'Must be an ISO 8601 date (2026-06-01) or date-time (2026-06-01T00:00:00Z).',
+    )
+    .refine(isRealCalendarValue, {
+      message:
+        'Must be a date that exists, e.g. 2026-06-01 (month 1-12, a real day for that month, time 00:00:00-23:59:59).',
+    });
 
 /**
  * The regex above checks the shape; this checks that the value is a real moment.
@@ -67,9 +71,8 @@ const isoDate = z
  * server-side with an opaque 400 instead of a local, fixable message.
  */
 function isRealCalendarValue(value: string): boolean {
-  const match = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2}))?)?/.exec(
-    value
-  );
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2}))?)?/.exec(value);
   if (!match) {
     return false;
   }
@@ -120,7 +123,7 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
     {
       instructions:
         "Use PostSider for the authenticated user's social publishing workspace. Follow the user's explicit requested outcome. Resolve channel, post and customer ids from fresh read calls; never invent them. Before reporting a write as successful, read the created or changed record back. Treat delete and organization-wide pause as destructive actions.",
-    }
+    },
   );
 
   registerPostSiderSkills(server);
@@ -149,7 +152,7 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
       } catch (e) {
         return fail(e);
       }
-    }
+    },
   );
 
   server.registerTool(
@@ -159,7 +162,13 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
       description:
         'Get an organization-wide operational overview for an agency: clients, channels, queued posts, drafts, published posts, errors, recent errors and pending approvals. Useful for morning checks and client reporting.',
       inputSchema: {
-        days: z.number().int().positive().max(365).default(30).describe('Window for recent errors, in days.'),
+        days: z
+          .number()
+          .int()
+          .positive()
+          .max(365)
+          .default(30)
+          .describe('Window for recent errors, in days.'),
       },
       annotations: {
         readOnlyHint: true,
@@ -174,17 +183,26 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
       } catch (e) {
         return fail(e);
       }
-    }
+    },
   );
 
   server.registerTool(
     'postsider_get_customer_report',
     {
       title: 'Get customer report',
-      description: 'Get a customer-scoped agency report with channels, queued, draft, published, error and pending approval counts.',
+      description:
+        'Get a customer-scoped agency report with channels, queued, draft, published, error and pending approval counts.',
       inputSchema: {
-        customerId: nonEmptyId.describe('Customer id from postsider_list_groups.'),
-        days: z.number().int().positive().max(365).default(30).describe('Window for recent errors, in days.'),
+        customerId: nonEmptyId.describe(
+          'Customer id from postsider_list_groups.',
+        ),
+        days: z
+          .number()
+          .int()
+          .positive()
+          .max(365)
+          .default(30)
+          .describe('Window for recent errors, in days.'),
       },
       annotations: {
         readOnlyHint: true,
@@ -195,11 +213,16 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
     },
     async ({ customerId, days }) => {
       try {
-        return ok(await client.get(`/customers/${encodeURIComponent(customerId)}/report`, { days }));
+        return ok(
+          await client.get(
+            `/customers/${encodeURIComponent(customerId)}/report`,
+            { days },
+          ),
+        );
       } catch (e) {
         return fail(e);
       }
-    }
+    },
   );
 
   server.registerTool(
@@ -222,7 +245,7 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
       } catch (e) {
         return fail(e);
       }
-    }
+    },
   );
 
   server.registerTool(
@@ -233,7 +256,7 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
         'Return the next free scheduling date-time (UTC) for a channel, based on its configured posting queue. Use the returned value as the `date` for postsider_create_post when scheduling into the queue.',
       inputSchema: {
         channelId: nonEmptyId.describe(
-          'Channel (integration) id, from postsider_list_channels.'
+          'Channel (integration) id, from postsider_list_channels.',
         ),
       },
       annotations: {
@@ -245,11 +268,13 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
     },
     async ({ channelId }) => {
       try {
-        return ok(await client.get(`/find-slot/${encodeURIComponent(channelId)}`));
+        return ok(
+          await client.get(`/find-slot/${encodeURIComponent(channelId)}`),
+        );
       } catch (e) {
         return fail(e);
       }
-    }
+    },
   );
 
   server.registerTool(
@@ -259,8 +284,12 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
       description:
         'List posts scheduled or published within a date range (UTC). Useful for reviewing the content calendar before scheduling more.',
       inputSchema: {
-        startDate: isoDate.describe('Range start, ISO 8601 (e.g. 2026-06-01T00:00:00Z).'),
-        endDate: isoDate.describe('Range end, ISO 8601 (e.g. 2026-06-30T23:59:59Z).'),
+        startDate: isoDate().describe(
+          'Range start, ISO 8601 (e.g. 2026-06-01T00:00:00Z).',
+        ),
+        endDate: isoDate().describe(
+          'Range end, ISO 8601 (e.g. 2026-06-30T23:59:59Z).',
+        ),
         customer: nonEmptyId
           .optional()
           .describe('Optional customer id to filter by.'),
@@ -278,7 +307,7 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
       } catch (e) {
         return fail(e);
       }
-    }
+    },
   );
 
   server.registerTool(
@@ -299,11 +328,13 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
     },
     async ({ postId }) => {
       try {
-        return ok(await client.get(`/posts/${encodeURIComponent(postId)}/missing`));
+        return ok(
+          await client.get(`/posts/${encodeURIComponent(postId)}/missing`),
+        );
       } catch (e) {
         return fail(e);
       }
-    }
+    },
   );
 
   server.registerTool(
@@ -313,7 +344,9 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
       description:
         'Get the full organization-scoped post group, including current state, scheduled time, media, channel and publish error. Use this to inspect the result of an asynchronous create or publish operation.',
       inputSchema: {
-        postId: nonEmptyId.describe('Post id returned by postsider_create_post.'),
+        postId: nonEmptyId.describe(
+          'Post id returned by postsider_create_post.',
+        ),
       },
       annotations: {
         readOnlyHint: true,
@@ -328,7 +361,7 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
       } catch (e) {
         return fail(e);
       }
-    }
+    },
   );
 
   server.registerTool(
@@ -358,12 +391,12 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
         return ok(
           await client.get(`/analytics/post/${encodeURIComponent(postId)}`, {
             date: days,
-          })
+          }),
         );
       } catch (e) {
         return fail(e);
       }
-    }
+    },
   );
 
   server.registerTool(
@@ -374,7 +407,7 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
         'Get account-level analytics for a connected channel (where the provider supports it).',
       inputSchema: {
         channelId: nonEmptyId.describe(
-          'Channel (integration) id, from postsider_list_channels.'
+          'Channel (integration) id, from postsider_list_channels.',
         ),
         date: z
           .string()
@@ -391,12 +424,14 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
     async ({ channelId, date }) => {
       try {
         return ok(
-          await client.get(`/analytics/${encodeURIComponent(channelId)}`, { date })
+          await client.get(`/analytics/${encodeURIComponent(channelId)}`, {
+            date,
+          }),
         );
       } catch (e) {
         return fail(e);
       }
-    }
+    },
   );
 
   server.registerTool(
@@ -419,7 +454,7 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
       } catch (e) {
         return fail(e);
       }
-    }
+    },
   );
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -436,7 +471,9 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
         reason: z
           .string()
           .optional()
-          .describe('Optional reason, recorded in the audit trail and shown to the team.'),
+          .describe(
+            'Optional reason, recorded in the audit trail and shown to the team.',
+          ),
       },
       annotations: {
         readOnlyHint: false,
@@ -451,7 +488,7 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
       } catch (e) {
         return fail(e);
       }
-    }
+    },
   );
 
   server.registerTool(
@@ -474,7 +511,7 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
       } catch (e) {
         return fail(e);
       }
-    }
+    },
   );
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -488,7 +525,9 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
       description:
         'Download an image or video from a public URL and store it in the PostSider media library. Returns a media object; pass it (or its array) as `images` to postsider_create_post.',
       inputSchema: {
-        url: httpsUrl.describe('Public HTTPS URL of the image or video to import.'),
+        url: httpsUrl.describe(
+          'Public HTTPS URL of the image or video to import.',
+        ),
       },
       annotations: {
         readOnlyHint: false,
@@ -503,7 +542,7 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
       } catch (e) {
         return fail(e);
       }
-    }
+    },
   );
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -520,9 +559,11 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
         type: z
           .enum(['draft', 'schedule', 'now'])
           .default('schedule')
-          .describe('draft = save only; schedule = book for `date`; now = publish immediately.'),
-        date: isoDate.describe(
-          'Required publish date, ISO 8601 UTC (e.g. 2026-07-01T10:00:00Z). For "now" use the current time; drafts still require a date in the current API contract.'
+          .describe(
+            'draft = save only; schedule = book for `date`; now = publish immediately.',
+          ),
+        date: isoDate().describe(
+          'Required publish date, ISO 8601 UTC (e.g. 2026-07-01T10:00:00Z). For "now" use the current time; drafts still require a date in the current API contract.',
         ),
         shortLink: z
           .boolean()
@@ -531,23 +572,29 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
         posts: z
           .array(
             z.object({
-              channelId: nonEmptyId.describe('Channel (integration) id to publish to.'),
+              channelId: nonEmptyId.describe(
+                'Channel (integration) id to publish to.',
+              ),
               content: z.string().describe('The post text/caption.'),
               firstComment: z
                 .string()
                 .optional()
-                .describe('Optional first comment posted right after (where supported).'),
+                .describe(
+                  'Optional first comment posted right after (where supported).',
+                ),
               images: z
                 .array(mediaItem)
                 .optional()
-                .describe('Optional media objects from postsider_upload_media_from_url.'),
+                .describe(
+                  'Optional media objects from postsider_upload_media_from_url.',
+                ),
               settings: z
                 .record(z.any())
                 .optional()
                 .describe(
-                  'Provider-specific settings. Required fields: X: who_can_reply_post (everyone, following, mentionedUsers, subscribers, or verified). Instagram: post_type (post or story). YouTube: title and type (public, private, or unlisted). TikTok: privacy_level (PUBLIC_TO_EVERYONE, MUTUAL_FOLLOW_FRIENDS, FOLLOWER_OF_CREATOR, or SELF_ONLY); duet, stitch, comment, brand_content_toggle, and brand_organic_toggle (booleans); autoAddMusic (yes or no); and content_posting_method (DIRECT_POST or UPLOAD). Other providers may impose additional requirements; preserve settings returned by postsider_get_post when replacing an existing post.'
+                  'Provider-specific settings. Required fields: X: who_can_reply_post (everyone, following, mentionedUsers, subscribers, or verified). Instagram: post_type (post or story). YouTube: title and type (public, private, or unlisted). TikTok: privacy_level (PUBLIC_TO_EVERYONE, MUTUAL_FOLLOW_FRIENDS, FOLLOWER_OF_CREATOR, or SELF_ONLY); duet, stitch, comment, brand_content_toggle, and brand_organic_toggle (booleans); autoAddMusic (yes or no); and content_posting_method (DIRECT_POST or UPLOAD). Other providers may impose additional requirements; preserve settings returned by postsider_get_post when replacing an existing post.',
                 ),
-            })
+            }),
           )
           .min(1)
           .describe('One entry per channel to publish to.'),
@@ -560,7 +607,9 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
           .min(1)
           .max(255)
           .optional()
-          .describe('Stable key for safe retries. Reusing it with the same request returns the original result without creating duplicates.'),
+          .describe(
+            'Stable key for safe retries. Reusing it with the same request returns the original result without creating duplicates.',
+          ),
       },
       annotations: {
         readOnlyHint: false,
@@ -571,12 +620,18 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
     },
     async ({ type, date, shortLink, posts, tags, idempotencyKey }) => {
       try {
-        const body = buildCreatePostBody({ type, date, shortLink, posts, tags });
+        const body = buildCreatePostBody({
+          type,
+          date,
+          shortLink,
+          posts,
+          tags,
+        });
         return ok(await client.post('/posts', body, idempotencyKey));
       } catch (e) {
         return fail(e);
       }
-    }
+    },
   );
 
   server.registerTool(
@@ -601,12 +656,14 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
     async ({ postId, status }) => {
       try {
         return ok(
-          await client.put(`/posts/${encodeURIComponent(postId)}/status`, { status })
+          await client.put(`/posts/${encodeURIComponent(postId)}/status`, {
+            status,
+          }),
         );
       } catch (e) {
         return fail(e);
       }
-    }
+    },
   );
 
   server.registerTool(
@@ -632,7 +689,7 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
       } catch (e) {
         return fail(e);
       }
-    }
+    },
   );
 
   server.registerTool(
@@ -654,18 +711,20 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
     async ({ postId }) => {
       try {
         return ok(
-          await client.post(`/posts/${encodeURIComponent(postId)}/request-approval`)
+          await client.post(
+            `/posts/${encodeURIComponent(postId)}/request-approval`,
+          ),
         );
       } catch (e) {
         return fail(e);
       }
-    }
+    },
   );
 
   server.registerTool(
     'postsider_get_approval_status',
     {
-      title: 'Get a post\'s approval status',
+      title: "Get a post's approval status",
       description:
         'Check whether a post submitted via postsider_request_approval has been approved, rejected (with the reviewer\'s note, if any), or is still pending. Returns status "NONE" if the post was never sent for approval.',
       inputSchema: {
@@ -680,11 +739,13 @@ export function createPostSiderMcpServer(client: PostsiderClient): McpServer {
     },
     async ({ postId }) => {
       try {
-        return ok(await client.get(`/posts/${encodeURIComponent(postId)}/approval`));
+        return ok(
+          await client.get(`/posts/${encodeURIComponent(postId)}/approval`),
+        );
       } catch (e) {
         return fail(e);
       }
-    }
+    },
   );
 
   return server;
