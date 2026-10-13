@@ -105,7 +105,7 @@
     "cookie-parser": "^1.4.7",
     "dayjs": "^1.11.10",
     "dotenv": "^16.5.0",
-    "dotenv-cli": "^8.0.0",
+    "dotenv-cli": "^11.0.0",
     "evp_bytestokey": "^1.0.3",
     "facebook-nodejs-business-sdk": "^21.0.5",
     "ffprobe-static": "^3.1.0",
