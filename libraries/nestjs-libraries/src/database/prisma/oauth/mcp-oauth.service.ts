@@ -292,19 +292,22 @@ export class McpOAuthService {
       return url.toString();
     };
 
-    // Atomically claim the pending row so a double-submit cannot mint two codes.
-    const claimed = await this._repository.claimPending(pending.id);
-    if (!claimed) {
-      throw oauthError(
-        'invalid_request',
-        'This authorization request has expired or was already used'
-      );
-    }
-
     if (input.action === 'deny') {
+      // Denying needs no organization and cannot widen anything.
+      const claimedDeny = await this._repository.claimPending(pending.id);
+      if (!claimedDeny) {
+        throw oauthError(
+          'invalid_request',
+          'This authorization request has expired or was already used'
+        );
+      }
       return { redirect: buildRedirect({ error: 'access_denied' }) };
     }
 
+    // Validate everything BEFORE consuming the request. Claiming first meant a
+    // wrong organization, a non-admin or a bad scope list used the one-time
+    // request up and forced the whole authorization to start over (and let any
+    // signed-in user holding the id burn someone else's pending consent).
     if (!input.organizationId) {
       throw oauthError('invalid_request', 'organization_id is required');
     }
@@ -344,6 +347,15 @@ export class McpOAuthService {
         throw oauthError('invalid_request', 'No supported scopes selected');
       }
       scopes = narrowed;
+    }
+
+    // Atomically claim the pending row so a double-submit cannot mint two codes.
+    const claimed = await this._repository.claimPending(pending.id);
+    if (!claimed) {
+      throw oauthError(
+        'invalid_request',
+        'This authorization request has expired or was already used'
+      );
     }
 
     await this._repository.upsertGrant({

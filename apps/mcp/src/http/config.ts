@@ -15,7 +15,11 @@ export const DEFAULT_PUBLIC_URL = 'https://mcp.postsider.com';
 export const DEFAULT_AUTHORIZATION_SERVER_URL = 'https://api.postsider.com';
 /** Where tool calls are forwarded; the AS host doubles as the product API. */
 export const DEFAULT_API_URL = 'https://api.postsider.com';
-export const DEFAULT_SCOPES = ['posts:read', 'posts:write'] as const;
+export const DEFAULT_SCOPES = [
+  'posts:read',
+  'posts:write',
+  'channels:write',
+] as const;
 export const DEFAULT_RATE_LIMIT_PER_MINUTE = 240;
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
@@ -47,6 +51,13 @@ const HttpConfigSchema = z.object({
   /** Unset means `/mcp` fails closed with 503 until an operator configures it. */
   introspectionSecret: z.string().min(1).optional(),
   openaiAppsChallengeToken: z.string().min(1).optional(),
+  /**
+   * Extra browser Origins allowed to call `/mcp` (server-to-server clients send
+   * none). Defaults to empty: only the app's own public origin is accepted, so
+   * DNS-rebinding stays blocked unless an operator opts a trusted client in via
+   * MCP_ALLOWED_ORIGINS.
+   */
+  allowedOrigins: z.array(z.string().min(1)),
   port: z.number().int().min(1).max(65535),
   bindHost: z.string().min(1),
   rateLimitPerMinute: z.number().int().min(1).max(100000),
@@ -110,6 +121,10 @@ export function loadHttpConfig(
     introspectionSecret: env.MCP_INTROSPECTION_SECRET?.trim() || undefined,
     openaiAppsChallengeToken:
       env.MCP_OPENAI_APPS_CHALLENGE?.trim() || undefined,
+    allowedOrigins: (env.MCP_ALLOWED_ORIGINS ?? '')
+      .split(',')
+      .map((origin) => origin.trim().replace(/\/+$/, ''))
+      .filter(Boolean),
     port,
     bindHost: (env.MCP_BIND_HOST ?? '0.0.0.0').trim(),
     rateLimitPerMinute,

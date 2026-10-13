@@ -4,6 +4,7 @@ import { OrganizationService } from '@postsider/nestjs-libraries/database/prisma
 import { OAuthService } from '@postsider/nestjs-libraries/database/prisma/oauth/oauth.service';
 import { HttpForbiddenException } from '@postsider/nestjs-libraries/services/exception.filter';
 import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
+import { tokenAllows } from '@postsider/nestjs-libraries/database/prisma/oauth/mcp-scope-policy';
 import { pricing } from '@postsider/nestjs-libraries/database/prisma/subscriptions/pricing';
 
 @Injectable()
@@ -32,6 +33,30 @@ export class PublicAuthMiddleware implements NestMiddleware {
           res
             .status(HttpStatus.UNAUTHORIZED)
             .json({ msg: 'Invalid OAuth token' });
+          return;
+        }
+
+        // A token minted by the MCP authorization server carries the scopes
+        // the user approved. The MCP server enforces them per tool, but the
+        // token also works against this API directly, so enforce them here too:
+        // a read-only grant must not be able to write.
+        const scopeCheck = tokenAllows(
+          (authorization as { scopes?: string[] }).scopes,
+          req.method,
+          req.originalUrl || req.url
+        );
+        if (!scopeCheck.allowed) {
+          res
+            .status(HttpStatus.FORBIDDEN)
+            .setHeader(
+              'WWW-Authenticate',
+              `Bearer error="insufficient_scope", scope="${scopeCheck.required}"`
+            );
+          res.json({
+            msg: `This token does not include the ${scopeCheck.required} scope.`,
+            error: 'insufficient_scope',
+            scope: scopeCheck.required,
+          });
           return;
         }
 

@@ -4,6 +4,58 @@ Notable changes to `@postsider/mcp`. This file begins with the first released
 version: earlier internal iterations were never published, so they are not
 recorded here.
 
+## Unreleased
+
+### Fixed
+
+- API errors no longer collapse to "Bad Request". Per-channel validation
+  errors (`{provider, name, message}`) and Nest validation errors (`message` as
+  a string or list) are now reported with their text, prefixed by the channel
+  name.
+
+### Changed
+
+- `postsider_create_post`: `date` is optional for drafts (defaults to now);
+  still required to schedule.
+- `postsider_list_posts` filters by `state` and `channelId` and is paged
+  (`page`, `limit`, default 50) so failed or draft posts are one call away.
+- Tool results over 100,000 characters are cut with an instruction to narrow
+  the request instead of flooding the agent's context.
+
+### Added
+
+- Run the workspace from the agent: `postsider_connect_channel`,
+  `postsider_set_channel_enabled`, `postsider_disconnect_channel`,
+  `postsider_get_queue_plan`, `postsider_set_queue_plan`,
+  `postsider_get_smart_slots`, `postsider_set_channel_customer`,
+  `postsider_get_content_library`, `postsider_save_library_item`,
+  `postsider_delete_library_item`, `postsider_duplicate_post`,
+  `postsider_check_post`, `postsider_rewrite_post`, `postsider_delete_media`.
+  Backed by new `/public/v1` routes (`/integrations/:id/{enable,disable,
+  queue-plan,smart-slots,customer}`, `/library`, `/posts/:id/duplicate`,
+  `/posts/check`, `/posts/rewrite`, `DELETE /media/:id`).
+- New OAuth scope `channels:write` for channel configuration. Existing remote
+  connections keep working for everything else and must be reconnected to use
+  the channel tools. `DELETE /integrations/:id` through the remote server now
+  needs it too.
+- `GET /public/v1/integrations` also returns `refreshNeeded` and
+  `inBetweenSteps`, so a channel that needs a reconnect is visible.
+- `GET /public/v1/social/:platform?refresh=` now accepts the PostSider channel
+  id (it is translated to the platform id, like the dashboard does).
+- `postsider_get_channel_rules`: platform rules, length limit and required
+  `settings` for a channel (`GET /public/v1/integration-settings/:id`).
+- `postsider_update_post`: edit an existing post (text, media, date, settings,
+  first comment) instead of deleting and recreating it. Backed by the new
+  `PUT /public/v1/posts/:id`.
+- `postsider_upload_media_base64`: upload an image or MP4 from bytes, no public
+  URL needed. Backed by the new `POST /public/v1/upload-base64` (25 MB cap).
+- `postsider_upload_media_from_file` (local stdio server only): upload from a
+  file path on the user's machine via the existing multipart `/upload`.
+- `postsider_list_media`: browse the media library to reuse uploaded files.
+  Backed by the new `GET /public/v1/media`.
+- `createPostSiderMcpServer(client, { allowLocalFiles })`. The shared remote
+  server leaves local-file access off.
+
 ## 1.0.0 - 2026-09-24
 
 Initial release.

@@ -170,7 +170,7 @@ beforeAll(() => {
 });
 
 describe('stdio entrypoint', () => {
-  it('completes initialize and tools/list with the 19 tools, stdout clean', async () => {
+  it('completes initialize and tools/list with the full tool inventory, stdout clean', async () => {
     const harness = spawnServer({
       ...process.env,
       POSTSIDER_API_KEY: API_KEY,
@@ -214,8 +214,13 @@ describe('stdio entrypoint', () => {
     expect(initName).toBe('postsider');
     expect(listedError).toBeUndefined();
 
-    expect(toolNames).toHaveLength(EXPECTED_TOOL_COUNT);
-    expect([...toolNames].sort()).toEqual([...EXPECTED_TOOL_NAMES].sort());
+    // The local stdio server adds exactly one tool the shared surface lacks:
+    // reading a file from the user's own machine.
+    const stdioOnly = ['postsider_upload_media_from_file'];
+    expect(toolNames).toHaveLength(EXPECTED_TOOL_COUNT + stdioOnly.length);
+    expect([...toolNames].sort()).toEqual(
+      [...EXPECTED_TOOL_NAMES, ...stdioOnly].sort()
+    );
 
     // stdout is the protocol channel: not one non-protocol byte may appear,
     // including an unterminated trailing fragment.

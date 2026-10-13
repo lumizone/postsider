@@ -106,7 +106,8 @@ async function handleMcpRequest(
   if (
     typeof origin === 'string' &&
     origin &&
-    origin !== publicOrigin(ctx.config)
+    origin !== publicOrigin(ctx.config) &&
+    !ctx.config.allowedOrigins?.includes(origin)
   ) {
     return sendJson(res, 403, { error: 'forbidden' });
   }
@@ -167,7 +168,11 @@ async function handleMcpRequest(
     new PostsiderClient(token, ctx.config.apiBaseUrl),
     introspection.scopes
   );
-  const server = createPostSiderMcpServer(client);
+  // The Streamable HTTP transport refuses request bodies over 4 MiB. Base64 adds
+  // a third, so 2.5 MB of file leaves headroom for the JSON envelope.
+  const server = createPostSiderMcpServer(client, {
+    maxBase64Bytes: 2.5 * 1024 * 1024,
+  });
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,

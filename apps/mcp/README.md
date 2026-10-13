@@ -91,6 +91,11 @@ review, content publishing, approvals, analytics, and agency operations. The
 repository root is a plugin marketplace, so the plugin installs from the
 repository directly:
 
+> **Skill budget is full (5/5).** The remote server advertises the skills it
+> bundles through OpenAI's skills extension, which supports **at most 5**. All
+> five slots are taken, so adding a new skill requires retiring or merging an
+> existing one (`loadSkillCatalog` fails closed above 5).
+
 ```bash
 claude plugin marketplace add lumizone/postsider
 claude plugin install postsider@postsider
@@ -103,7 +108,7 @@ written into the plugin directory.
 
 ## What the agent can do
 
-19 tools, all prefixed `postsider_`.
+37 tools (38 on the local stdio server), all prefixed `postsider_`.
 
 ### Read
 
@@ -113,8 +118,13 @@ written into the plugin directory.
 | `postsider_get_agency_overview` | Org-wide overview: clients, channels, queued, drafts, published, errors, pending approvals. |
 | `postsider_get_customer_report` | The same report scoped to one customer. |
 | `postsider_list_groups` | List channel groups. |
+| `postsider_list_media` | Browse the media library (paged, searchable) to reuse files already uploaded. |
+| `postsider_get_channel_rules` | Platform rules, max length and required `settings` schema for one channel. Call before posting to a new channel. |
+| `postsider_get_queue_plan` | A channel's recurring posting slots and timezone. |
+| `postsider_get_smart_slots` | Best upcoming times to post on a channel, avoiding booked slots. |
+| `postsider_get_content_library` | Saved hashtag groups, caption templates and UTM presets. |
 | `postsider_find_slot` | Next free queue slot for a channel, in UTC. |
-| `postsider_list_posts` | List posts in a date range. |
+| `postsider_list_posts` | List posts in a date range, filterable by `state` (e.g. `ERROR`) and channel, paged. |
 | `postsider_get_post` | Full post details, including the publish error if any. |
 | `postsider_get_post_missing_fields` | Per-channel validation problems, so they can be fixed before publishing. |
 | `postsider_get_post_analytics` | Analytics for a single post. |
@@ -128,11 +138,36 @@ written into the plugin directory.
 | Tool | Action | Risk |
 |------|--------|------|
 | `postsider_create_post` | Create a post as a draft, a scheduled post, or an immediate publish across channels. | Creates content and can publish |
+| `postsider_update_post` | Edit an existing post in place: text, media, date, settings, first comment. Not for published or pending-approval posts. | Changes content, re-arms a scheduled post |
 | `postsider_update_post_status` | Move a post between `draft` and `schedule`. | Reversible |
 | `postsider_request_approval` | Send a draft into the human approval queue. | Reversible |
 | `postsider_upload_media_from_url` | Import media into the library from a public HTTPS URL. | Creates media |
+| `postsider_upload_media_base64` | Upload an image or MP4 you hold as bytes (base64: 25 MB on the local server, 2.5 MB over the remote connection). No public URL needed. | Creates media |
+| `postsider_upload_media_from_file` | **Local stdio server only.** Upload an image or video (jpg, png, gif, webp, avif, bmp, tiff, mp4, mov, webm, mkv; up to 500 MB) from a file path on your own machine. Other file types are refused before being read. | Creates media |
+| `postsider_connect_channel` | Get the sign-in link to connect or reconnect a social account (the user approves it on the platform). Needs `channels:write`. | Starts a connection |
+| `postsider_set_channel_enabled` | Switch a channel on or off. Needs `channels:write` and an admin role. | Reversible |
+| `postsider_disconnect_channel` | Disconnect a channel; unpublished posts become drafts. Needs `channels:write`. | Destructive |
+| `postsider_set_queue_plan` | Replace a channel's posting slots (`{time, days?}`: minutes from midnight, optional weekdays 0-6). Read the plan first, it is replaced whole. Needs `channels:write` and an admin role. | Replaces settings |
+| `postsider_set_channel_customer` | Assign a channel to a client by name. Needs `channels:write` and an admin role. | Reversible |
+| `postsider_save_library_item` | Create or update a hashtag group, caption template or UTM preset. | Creates content |
+| `postsider_delete_library_item` | Delete a library item. | Destructive |
+| `postsider_duplicate_post` | Copy a post as a new draft, optionally onto another channel. | Creates a draft |
+| `postsider_check_post` | AI check of draft text for up to 3 platforms (uses the monthly AI allowance). | Uses AI quota |
+| `postsider_rewrite_post` | AI rewrites of a text in a chosen tone (uses the monthly AI allowance). | Uses AI quota |
+| `postsider_delete_media` | Delete a media file from the library and storage. | Destructive |
 | `postsider_delete_post` | Permanently delete a post **and every other channel version of it** (one group). Read the post first. | Destructive |
 | `postsider_pause_publishing` | Emergency stop for the whole organization. Resuming is human-only. | Destructive |
+
+### Access scopes (remote server)
+
+| Scope | Allows |
+|-------|--------|
+| `posts:read` | Every read tool. |
+| `posts:write` | Posts, media, library, duplication and AI checks. |
+| `channels:write` | Connecting, enabling, disabling, re-timing, re-assigning and disconnecting channels. Granted separately so an agent that may only schedule posts cannot reconfigure the workspace. Connections made before this scope existed need to be reconnected to get it. |
+
+Billing, team and roles, API keys, MFA, account deletion and resuming a paused
+workspace are deliberately not available to agents; they stay in the dashboard.
 
 Every tool declares `readOnlyHint`, `destructiveHint`, `idempotentHint` and
 `openWorldHint` explicitly, so a client can tell a read from a kill switch.

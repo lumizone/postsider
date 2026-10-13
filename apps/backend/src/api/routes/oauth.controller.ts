@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   HttpException,
   HttpStatus,
   Param,
@@ -16,6 +17,7 @@ import { McpOAuthService } from '@postsider/nestjs-libraries/database/prisma/oau
 import { GetUserFromRequest } from '@postsider/nestjs-libraries/user/user.from.request';
 import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
 import { User, Organization } from '@prisma/client';
+import { assertOAuthRate } from './oauth.rate-limit';
 import { ApproveOAuthDto } from '@postsider/nestjs-libraries/dtos/oauth/authorize-oauth.dto';
 import {
   McpAuthorizeQueryDto,
@@ -37,6 +39,12 @@ export class OAuthController {
     // pending consent and send the browser to the consent page. The legacy
     // flow keeps returning the app-info JSON its own consent UI consumes.
     if (query.code_challenge || query.code_challenge_method) {
+      // Only a registered client can create a pending consent, so cap it per
+      // client. An unknown client_id is refused by beginAuthorization below.
+      const registered = await this._mcpOAuthService.getClient(query.client_id);
+      if (registered) {
+        await assertOAuthRate('authorize', registered.id);
+      }
       const { consentUrl } = await this._mcpOAuthService.beginAuthorization({
         clientId: query.client_id,
         redirectUri: query.redirect_uri,
@@ -94,8 +102,18 @@ export class OAuthController {
     };
   }
 
+  // RFC 6749 §5.1: a successful token response is 200. NestJS defaults @Post
+  // to 201, which strict OAuth clients (e.g. oauth4webapi, used by Smithery)
+  // reject as a non-conform response — the client then discards a perfectly
+  // valid token and loops back to "authentication required".
   @Post('/token')
+  @HttpCode(HttpStatus.OK)
   async token(@Body() body: McpTokenDto) {
+    const registered = await this._mcpOAuthService.getClient(body.client_id);
+    if (registered) {
+      await assertOAuthRate('token', registered.id);
+    }
+
     if (body.grant_type === 'refresh_token') {
       return this._mcpOAuthService.refresh({
         refreshToken: body.refresh_token,

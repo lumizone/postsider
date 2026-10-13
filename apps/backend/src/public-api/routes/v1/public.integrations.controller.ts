@@ -21,7 +21,7 @@ import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/
 import { CheckPolicies } from '@postsider/backend/services/auth/permissions/permissions.ability';
 import { PostsService } from '@postsider/nestjs-libraries/database/prisma/posts/posts.service';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { uploadInterceptorOptions } from '@postsider/nestjs-libraries/upload/upload.limits';
+import { uploadInterceptorOptions, maxUploadBytesForMime } from '@postsider/nestjs-libraries/upload/upload.limits';
 import { UploadFactory } from '@postsider/nestjs-libraries/upload/upload.factory';
 import { probeDimensions } from '@postsider/nestjs-libraries/upload/probe-dimensions';
 import { MediaService } from '@postsider/nestjs-libraries/database/prisma/media/media.service';
@@ -49,6 +49,9 @@ const PUBLIC_API_ALLOWED_MIME = new Set<string>([
   'image/tiff',
   'video/mp4',
 ]);
+// Inline base64 uploads travel through the JSON body parser (50 MB) and the
+// model context, so they are capped well below the multipart limit.
+const BASE64_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
 import * as Sentry from '@sentry/nestjs';
 import {
   socialIntegrationList,
@@ -134,36 +137,8 @@ export class PublicIntegrationsController {
         if (!detected || !PUBLIC_API_ALLOWED_MIME.has(detected.mime)) {
           throw new HttpException({ msg: 'Unsupported file type.' }, 400);
         }
-        const mimetype = detected.mime;
-        const ext = detected.ext;
         const originalName = body.url.split('/').pop()?.split('?')[0] || undefined;
-        const file = {
-          buffer,
-          mimetype,
-          size: buffer.length,
-          path: '',
-          fieldname: '',
-          destination: '',
-          stream: new Readable(),
-          filename: '',
-          originalname: `upload.${ext}`,
-          encoding: '',
-        } as Express.Multer.File;
-
-        const getFile = await this.storage.uploadFile(file);
-        const { width, height, durationSeconds } = await probeDimensions(file);
-
-        return this._mediaService.saveFile(
-          org.id,
-          getFile.originalname,
-          getFile.path,
-          originalName,
-          getFile.kind,
-          buffer.length,
-          width,
-          height,
-          durationSeconds
-        );
+        return this.storeBuffer(org.id, buffer, detected, originalName);
       });
     } catch (error) {
       if (error instanceof RemoteMediaTooLargeError) {
@@ -171,6 +146,103 @@ export class PublicIntegrationsController {
       }
       throw error;
     }
+  }
+
+  /** Persist an already-validated media buffer and record it in the library. */
+  private async storeBuffer(
+    orgId: string,
+    buffer: Buffer,
+    detected: { mime: string; ext: string },
+    originalName?: string
+  ) {
+    const file = {
+      buffer,
+      mimetype: detected.mime,
+      size: buffer.length,
+      path: '',
+      fieldname: '',
+      destination: '',
+      stream: new Readable(),
+      filename: '',
+      originalname: `upload.${detected.ext}`,
+      encoding: '',
+    } as Express.Multer.File;
+
+    const getFile = await this.storage.uploadFile(file);
+    const { width, height, durationSeconds } = await probeDimensions(file);
+
+    return this._mediaService.saveFile(
+      orgId,
+      getFile.originalname,
+      getFile.path,
+      originalName,
+      getFile.kind,
+      buffer.length,
+      width,
+      height,
+      durationSeconds
+    );
+  }
+
+  /**
+   * Upload a file sent inline as base64 (for agents that cannot make a
+   * multipart request or host a public URL). Same type allow-list and size
+   * caps as the other upload routes; the type is detected from the bytes.
+   */
+  @Post('/upload-base64')
+  async uploadBase64(
+    @GetOrgFromRequest() org: Organization,
+    @Body() body: { data?: string; filename?: string }
+  ) {
+    Sentry.metrics.count('public_api-request', 1);
+    if (typeof body?.data !== 'string' || !body.data) {
+      throw new HttpException({ msg: '`data` (base64) is required' }, 400);
+    }
+    // Accept a data URL too: "data:image/png;base64,...."
+    const raw = body.data.replace(/^data:[^;,]*;base64,/, '').replace(/\s+/g, '');
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(raw)) {
+      throw new HttpException({ msg: '`data` is not valid base64' }, 400);
+    }
+    // Decoded size = 3/4 of the base64 length; reject before allocating.
+    if ((raw.length * 3) / 4 > BASE64_UPLOAD_MAX_BYTES) {
+      throw new HttpException(
+        {
+          msg: `File too large for base64 upload (max ${
+            BASE64_UPLOAD_MAX_BYTES / 1024 / 1024
+          } MB). Use /upload (multipart) or /upload-from-url.`,
+        },
+        413
+      );
+    }
+    const buffer = Buffer.from(raw, 'base64');
+    const detected = await detectFileType(buffer);
+    if (!detected || !PUBLIC_API_ALLOWED_MIME.has(detected.mime)) {
+      throw new HttpException({ msg: 'Unsupported file type.' }, 400);
+    }
+    if (buffer.length > maxUploadBytesForMime(detected.mime)) {
+      throw new HttpException({ msg: 'File too large' }, 413);
+    }
+    const name =
+      typeof body.filename === 'string' && body.filename.trim()
+        ? body.filename.trim().slice(0, 200)
+        : undefined;
+    return this.storeBuffer(org.id, buffer, detected, name);
+  }
+
+  /** Browse the media library so already-uploaded files can be reused. */
+  @Get('/media')
+  async listMedia(
+    @GetOrgFromRequest() org: Organization,
+    @Query('page') page?: unknown,
+    @Query('search') search?: unknown
+  ) {
+    Sentry.metrics.count('public_api-request', 1);
+    const parsed = Number(page);
+    return this._mediaService.getMedia(
+      org.id,
+      Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1,
+      typeof search === 'string' ? search.slice(0, 200) : undefined
+    );
   }
 
   @Get('/find-slot/:id')
@@ -185,13 +257,42 @@ export class PublicIntegrationsController {
   @Get('/posts')
   async getPosts(
     @GetOrgFromRequest() org: Organization,
-    @Query() query: GetPostsDto
+    @Query() query: GetPostsDto,
+    @Query('state') rawState?: unknown,
+    @Query('integration') rawIntegration?: unknown,
+    @Query('page') page?: unknown,
+    @Query('limit') limit?: unknown
   ) {
     Sentry.metrics.count('public_api-request', 1);
-    const posts = await this._postsService.getPosts(org.id, query);
+    // Express parses `?state[x]=y` into an object; only plain strings are filters.
+    const state = typeof rawState === 'string' ? rawState : undefined;
+    const integration =
+      typeof rawIntegration === 'string' ? rawIntegration : undefined;
+    let posts = await this._postsService.getPosts(org.id, query);
+
+    // Optional filters, applied after the date-range query. Without any of
+    // them the response is exactly what it always was.
+    if (state) {
+      posts = posts.filter((p) => p.state === state.toUpperCase());
+    }
+    if (integration) {
+      posts = posts.filter((p) => p.integration?.id === integration);
+    }
+
+    const parsedLimit = Math.floor(Number(limit));
+    if (!Number.isFinite(parsedLimit) || parsedLimit < 1) {
+      return { posts };
+    }
+    const pageSize = Math.min(parsedLimit, 200);
+    const parsedPage = Math.floor(Number(page));
+    const pageNumber =
+      Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+    const start = (pageNumber - 1) * pageSize;
     return {
-      posts,
-      // comments,
+      posts: posts.slice(start, start + pageSize),
+      total: posts.length,
+      page: pageNumber,
+      hasMore: start + pageSize < posts.length,
     };
   }
 
@@ -250,63 +351,9 @@ export class PublicIntegrationsController {
     );
     body.type = rawBody.type;
 
-    if (
-      process.env.RESTRICT_UPLOAD_DOMAINS &&
-      body.posts.some((p) =>
-        p.value.some((a) =>
-          // A post created without media has no image array — don't throw.
-          (a.image ?? []).some(
-            (i) => i.path.indexOf(process.env.RESTRICT_UPLOAD_DOMAINS!) === -1
-          )
-        )
-      )
-    ) {
-      throw new HttpException(
-        {
-          msg: `All media must be uploaded through our upload API route and contain the domain: ${process.env.RESTRICT_UPLOAD_DOMAINS}`,
-        },
-        400
-      );
-    }
+    this.assertMediaDomains(body.posts);
 
-    // Server-side validation — same rules as the dashboard, surfaced as a
-    // readable 400 (see PostValidationExceptionFilter).
-    const validation = await this._postsService.validatePosts(
-      org.id,
-      body.posts,
-      body.type
-    );
-
-    const fail = (item: (typeof validation)[number], error: string) => {
-      throw new PostValidationException({
-        provider: item.identifier,
-        name: item.name,
-        error,
-      });
-    };
-
-    for (const item of validation) {
-      if (item.emptyContent) {
-        fail(
-          item,
-          'Your post should have at least one character or one image.'
-        );
-      }
-    }
-
-    if (body.type !== 'draft') {
-      for (const item of validation) {
-        if (!item.valid) {
-          fail(item, item.settingsError || 'Please fix your settings');
-        }
-        if (item.errors !== true) {
-          fail(item, item.errors as string);
-        }
-        if (item.tooLong) {
-          fail(item, 'post is too long, please fix it');
-        }
-      }
-    }
+    await this.assertPostsValid(org.id, body.posts, body.type);
 
     const allowedCreationMethods = ['CLI', 'API'] as const;
     const creationMethod = allowedCreationMethods.includes(
@@ -326,6 +373,131 @@ export class PublicIntegrationsController {
       if (claim?.kind === 'new') await this._idempotency.release(claim.id);
       throw error;
     }
+  }
+
+  /** Reject media outside RESTRICT_UPLOAD_DOMAINS (when configured). */
+  private assertMediaDomains(posts: Array<{ value: Array<{ image?: Array<{ path: string }> }> }>) {
+    if (
+      process.env.RESTRICT_UPLOAD_DOMAINS &&
+      posts.some((p) =>
+        p.value.some((a) =>
+          // A post created without media has no image array — don't throw.
+          (a.image ?? []).some(
+            (i) => i.path.indexOf(process.env.RESTRICT_UPLOAD_DOMAINS!) === -1
+          )
+        )
+      )
+    ) {
+      throw new HttpException(
+        {
+          msg: `All media must be uploaded through our upload API route and contain the domain: ${process.env.RESTRICT_UPLOAD_DOMAINS}`,
+        },
+        400
+      );
+    }
+  }
+
+  /**
+   * Server-side validation — same rules as the dashboard, surfaced as a
+   * readable 400 (see PostValidationExceptionFilter).
+   */
+  private async assertPostsValid(
+    orgId: string,
+    posts: any[],
+    type: 'draft' | 'schedule' | 'now' | 'update'
+  ) {
+    const validation = await this._postsService.validatePosts(
+      orgId,
+      posts,
+      type
+    );
+
+    const fail = (item: (typeof validation)[number], error: string) => {
+      throw new PostValidationException({
+        provider: item.identifier,
+        name: item.name,
+        error,
+      });
+    };
+
+    for (const item of validation) {
+      if (item.emptyContent) {
+        fail(
+          item,
+          'Your post should have at least one character or one image.'
+        );
+      }
+    }
+
+    if (type !== 'draft') {
+      for (const item of validation) {
+        if (!item.valid) {
+          fail(item, item.settingsError || 'Please fix your settings');
+        }
+        if (item.errors !== true) {
+          fail(item, item.errors as string);
+        }
+        if (item.tooLong) {
+          fail(item, 'post is too long, please fix it');
+        }
+      }
+    }
+  }
+
+  /**
+   * Edit an existing post in place (content, media, date, settings, first
+   * comment). Only the fields sent change. `PUBLISHED` and pending-approval
+   * posts are rejected. A QUEUE post is re-armed exactly like a dashboard edit.
+   */
+  @Put('/posts/:id')
+  async updatePost(
+    @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string,
+    @Body() rawBody: any
+  ) {
+    Sentry.metrics.count('public_api-request', 1);
+
+    const patch = {
+      content:
+        typeof rawBody?.content === 'string' ? rawBody.content : undefined,
+      images: Array.isArray(rawBody?.images) ? rawBody.images : undefined,
+      date: typeof rawBody?.date === 'string' ? rawBody.date : undefined,
+      settings:
+        rawBody?.settings && typeof rawBody.settings === 'object'
+          ? rawBody.settings
+          : undefined,
+      firstComment:
+        rawBody?.firstComment === null
+          ? null
+          : typeof rawBody?.firstComment === 'string'
+          ? rawBody.firstComment
+          : undefined,
+    };
+    if (Object.values(patch).every((v) => v === undefined)) {
+      throw new HttpException(
+        {
+          msg: 'Nothing to update. Send at least one of: content, images, date, settings, firstComment.',
+        },
+        400
+      );
+    }
+
+    const { dto, state } = await this._postsService.buildPostUpdate(
+      org.id,
+      id,
+      patch
+    );
+    const body = await this._postsService.mapTypeToPost(dto, org.id);
+
+    this.assertMediaDomains(body.posts);
+    // A draft may stay half-written, so it only gets the lenient checks.
+    await this.assertPostsValid(
+      org.id,
+      body.posts,
+      state === 'DRAFT' ? 'draft' : 'update'
+    );
+
+    return this._postsService.createPost(org.id, body, 'API');
   }
 
   @Delete('/posts/:id')
@@ -420,6 +592,10 @@ export class PublicIntegrationsController {
         identifier: integration.providerIdentifier,
         picture: integration.picture,
         disabled: integration.disabled,
+        // Surfaced so an agent can find channels that need a reconnect
+        // without reading notifications.
+        refreshNeeded: integration.refreshNeeded,
+        inBetweenSteps: integration.inBetweenSteps,
         profile: integration.profile,
         customer: integration.customer
           ? {
@@ -434,10 +610,11 @@ export class PublicIntegrationsController {
   @CheckPolicies([AuthorizationActions.Create, Sections.CHANNEL])
   async getIntegrationUrl(
     @Param('integration') integration: string,
-    @Query('refresh') refresh: string,
+    @Query('refresh') rawRefresh: unknown,
     @GetOrgFromRequest() org: Organization
   ) {
     Sentry.metrics.count('public_api-request', 1);
+    const refresh = typeof rawRefresh === 'string' && rawRefresh ? rawRefresh : undefined;
     if (
       !this._integrationManager
         .getAllowedSocialsIntegrations()
@@ -463,7 +640,19 @@ export class PublicIntegrationsController {
         await integrationProvider.generateAuthUrl();
 
       if (refresh) {
-        await ioRedis.set(`refresh:${state}`, refresh, 'EX', 3600);
+        // `refresh` is the PostSider channel id; the connect step compares it
+        // with the platform's own id (internalId), so translate it exactly like
+        // the dashboard route does. An unknown value passes through unchanged.
+        const existing = await this._integrationService.getIntegrationById(
+          org.id,
+          refresh
+        );
+        await ioRedis.set(
+          `refresh:${state}`,
+          existing?.internalId || refresh,
+          'EX',
+          3600
+        );
       }
 
       await ioRedis.set(`organization:${state}`, org.id, 'EX', 3600);
@@ -709,6 +898,15 @@ export class PublicIntegrationsController {
             throw new HttpException(
               { msg: 'Channel disconnected due to expired token' },
               401
+            );
+          }
+
+          if (refresh.status === 'deferred') {
+            throw new HttpException(
+              {
+                msg: 'Channel token refresh is temporarily unavailable, please retry',
+              },
+              503
             );
           }
 

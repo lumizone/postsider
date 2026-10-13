@@ -39,7 +39,7 @@
     "io.modelcontextprotocol.registry/publisher-provided": {
       "longDescription": "PostSider MCP lets Claude Code, Codex, Cursor and other MCP clients inspect a real social media calendar, prepare native channel versions, create drafts, request approval and read publishing results through PostSider's public API.",
       "documentation": "https://docs.postsider.com/cloud/mcp",
-      "toolCount": 19
+      "toolCount": 37
     }
   }
 }

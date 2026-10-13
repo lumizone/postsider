@@ -20,7 +20,7 @@ If the date range is omitted, use the next 14 days and state that choice. Do not
 
 1. Call `postsider_list_channels` when channel identity or coverage matters.
 2. Call `postsider_get_publishing_state` when the user asks whether publishing is active or when the result will be used to plan a later write.
-3. Call `postsider_list_posts` with explicit ISO 8601 range boundaries. Convert the user's local dates to UTC for the tool call and present times back in the user's timezone.
+3. Call `postsider_list_posts` with explicit ISO 8601 range boundaries. To answer "what failed" or "what is still a draft", pass `state` (`ERROR`, `DRAFT`, `QUEUE`, `APPROVAL`, `PUBLISHED`) and optionally `channelId` instead of fetching everything; follow `hasMore` with the next `page`. Convert the user's local dates to UTC for the tool call and present times back in the user's timezone.
 4. If the user asks for the next available slot, resolve the channel id from `postsider_list_channels`, then call `postsider_find_slot` for that channel.
 5. Keep `DRAFT`, `QUEUE`, `PUBLISHED`, and `ERROR` separate. An empty result means no matching posts in the inspected range, not a broken connection.
 

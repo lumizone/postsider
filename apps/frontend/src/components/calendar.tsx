@@ -26,6 +26,7 @@ import { useCalendarData } from '@/lib/use-calendar-data';
 import {
   deleteChannel as deleteChannelApi,
   getOauthUrl,
+  retryChannel as retryChannelApi,
   connectIntegration,
   setChannelColor as persistChannelColor,
   type CustomFieldDef,
@@ -298,6 +299,7 @@ export function Calendar({ year, month }: CalendarProps) {
   const enabled = useMemo(() => new Set(channels.map((c) => c.id)), [channels]);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [openChannelId, setOpenChannelId] = useState<string | null>(null);
+  const [retryingChannel, setRetryingChannel] = useState(false);
   const [addChannelOpen, setAddChannelOpen] = useState(false);
   // Onboarding hands off here with ?connect=1 rather than reimplementing the
   // per-provider connect branching. Strip the param once consumed so a later
@@ -456,6 +458,28 @@ export function Calendar({ year, month }: CalendarProps) {
         setChannelError(t('errors.channelConnect'));
         setChannelErrorIsPlanLimit(false);
       }
+    }
+  };
+
+  // Soft recovery: re-run the token exchange server-side and clear the
+  // "needs reconnect" flag if it heals, without sending the user through OAuth.
+  const retryOpenChannel = async (id: string) => {
+    setRetryingChannel(true);
+    try {
+      const res = await retryChannelApi(id);
+      if (res?.recovered) {
+        setOpenChannelId(null);
+        await refreshChannels();
+      } else {
+        setChannelError(t('errors.channelConnect'));
+        setChannelErrorIsPlanLimit(false);
+      }
+    } catch (err) {
+      console.error('[retry-channel]', err);
+      setChannelError(t('errors.channelConnect'));
+      setChannelErrorIsPlanLimit(false);
+    } finally {
+      setRetryingChannel(false);
     }
   };
 
@@ -1350,6 +1374,8 @@ export function Calendar({ year, month }: CalendarProps) {
           onClose={() => setOpenChannelId(null)}
           onColorChange={(color) => updateChannelColor(openChannel.id, color)}
           onReconnect={() => reconnectChannel(openChannel.id)}
+          onRetry={() => retryOpenChannel(openChannel.id)}
+          retrying={retryingChannel}
           onDelete={() =>
             setConfirm({
               kind: 'channel',

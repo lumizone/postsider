@@ -608,6 +608,104 @@ export class IntegrationRepository {
     return result.count === 1;
   }
 
+  /**
+   * A transient provider failure (network/5xx/timeout) is not a dead channel.
+   * Bump the revision — so the running refresh workflow's "revision changed"
+   * branch continues-as-new and retries — and push `tokenExpiration` out by a
+   * backoff so that retry is scheduled rather than immediate. `refreshNeeded`
+   * is deliberately left false: publishing and the workflow both stay alive.
+   */
+  async deferRefreshIfCurrent(
+    org: string,
+    id: string,
+    revision: number,
+    backoffMs: number
+  ): Promise<boolean> {
+    const result = await this._integration.model.integration.updateMany({
+      where: {
+        id,
+        organizationId: org,
+        revision,
+        disabled: false,
+        deletedAt: null,
+        inBetweenSteps: false,
+        refreshNeeded: false,
+      },
+      data: {
+        tokenExpiration: new Date(Date.now() + backoffMs),
+        revision: { increment: 1 },
+      },
+    });
+
+    return result.count === 1;
+  }
+
+  /**
+   * Channels marked `refreshNeeded` that are worth retrying: the user may have
+   * been pushed into a manual reconnect by a transient fault that has since
+   * healed. Unlike `getAllForRefreshArming`, this deliberately ignores the
+   * refreshNeeded flag, and only returns channels that still hold a refresh
+   * token. Excludes deleted/disabled channels.
+   */
+  findRefreshNeededForRecovery(limit = 200) {
+    return this._integration.model.integration.findMany({
+      where: {
+        deletedAt: null,
+        disabled: false,
+        refreshNeeded: true,
+        refreshToken: { not: null },
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        providerIdentifier: true,
+      },
+      take: limit,
+    });
+  }
+
+  /**
+   * Persist recovered credentials for a channel that was flagged broken. Unlike
+   * `refreshSucceededIfCurrent`, this intentionally matches `refreshNeeded:
+   * true` rows and clears the flag on success, so a channel can heal without a
+   * manual reconnect. The revision CAS still guards against a concurrent
+   * reconnect/disable/delete.
+   */
+  async refreshRecoveredIfCurrent(
+    org: string,
+    id: string,
+    revision: number,
+    refresh: {
+      accessToken: string;
+      refreshToken?: string;
+      expiresIn?: number;
+    }
+  ): Promise<boolean> {
+    const result = await this._integration.model.integration.updateMany({
+      where: {
+        id,
+        organizationId: org,
+        revision,
+        disabled: false,
+        deletedAt: null,
+        inBetweenSteps: false,
+      },
+      data: {
+        token: refresh.accessToken,
+        ...(refresh.refreshToken !== undefined
+          ? { refreshToken: refresh.refreshToken }
+          : {}),
+        ...(refresh.expiresIn
+          ? { tokenExpiration: new Date(Date.now() + refresh.expiresIn * 1000) }
+          : {}),
+        refreshNeeded: false,
+        revision: { increment: 1 },
+      },
+    });
+
+    return result.count === 1;
+  }
+
   /** Refresh extension cookies without allowing a stale extension JWT to revive a channel. */
   async refreshExtensionCredentialsIfCurrent(
     org: string,

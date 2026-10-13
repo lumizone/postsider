@@ -46,7 +46,7 @@ describe('loadHttpConfig', () => {
     const config = loadHttpConfig({});
     expect(config.publicUrl).toBe(DEFAULT_PUBLIC_URL);
     expect(config.authorizationServerUrl).toBe(DEFAULT_AUTHORIZATION_SERVER_URL);
-    expect(config.scopesSupported).toEqual(['posts:read', 'posts:write']);
+    expect(config.scopesSupported).toEqual(['posts:read', 'posts:write', 'channels:write']);
     expect(config.port).toBe(8080);
     expect(config.bindHost).toBe('0.0.0.0');
     expect(config.apiBaseUrl).toBe(DEFAULT_API_URL);

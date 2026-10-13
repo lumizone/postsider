@@ -12,6 +12,22 @@ const nextConfig = {
     proxyTimeout: 90_000,
   },
   transpilePackages: ['crypto-hash'],
+  async headers() {
+    return [
+      {
+        // The OAuth consent screen is a one-click "give this app access to your
+        // workspace" decision. Anything that can frame it can hide it under a
+        // decoy and have a signed-in admin click Approve (clickjacking), so it
+        // must never be embeddable. The rest of the app stays frameable on
+        // purpose (Whop embeds it).
+        source: '/oauth/:path*',
+        headers: [
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+          { key: 'X-Frame-Options', value: 'DENY' },
+        ],
+      },
+    ];
+  },
   async redirects() {
     return [
       {

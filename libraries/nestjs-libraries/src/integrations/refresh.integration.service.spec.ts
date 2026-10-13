@@ -8,6 +8,7 @@ jest.mock(
 );
 
 import { RefreshIntegrationService } from './refresh.integration.service';
+import { RefreshToken } from './social.abstract';
 
 describe('RefreshIntegrationService lifecycle CAS', () => {
   const integration = {
@@ -20,7 +21,11 @@ describe('RefreshIntegrationService lifecycle CAS', () => {
     internalId: 'channel-1',
   } as any;
 
-  const createService = (providerRefresh: jest.Mock, oneTimeToken = false) => {
+  const createService = (
+    providerRefresh: jest.Mock,
+    oneTimeToken = false,
+    reConnect?: jest.Mock
+  ) => {
     const start = jest.fn().mockResolvedValue(undefined);
     const describe = jest.fn().mockRejectedValue(new Error('not found'));
     const terminate = jest.fn().mockResolvedValue(undefined);
@@ -28,6 +33,8 @@ describe('RefreshIntegrationService lifecycle CAS', () => {
     const integrationService = {
       refreshSucceededIfCurrent: jest.fn().mockResolvedValue(true),
       refreshFailedIfCurrent: jest.fn().mockResolvedValue(true),
+      deferRefreshIfCurrent: jest.fn().mockResolvedValue(true),
+      refreshRecoveredIfCurrent: jest.fn().mockResolvedValue(true),
       refreshLinkedTokensIfCurrent: jest.fn().mockResolvedValue(undefined),
       getLinkedTokenSiblingsForRefresh: jest.fn().mockResolvedValue([]),
       setBetweenRefreshStepsIfCurrent: jest.fn().mockResolvedValue(true),
@@ -38,6 +45,7 @@ describe('RefreshIntegrationService lifecycle CAS', () => {
       getSocialIntegration: jest.fn().mockReturnValue({
         refreshToken: providerRefresh,
         oneTimeToken,
+        reConnect,
       }),
     };
 
@@ -82,7 +90,11 @@ describe('RefreshIntegrationService lifecycle CAS', () => {
 
   it('only notifies when this revision wins the failure CAS', async () => {
     const { service, integrationService } = createService(
-      jest.fn().mockResolvedValue(false)
+      jest
+        .fn()
+        .mockRejectedValue(
+          new RefreshToken('id', '{}', 'body', 'invalid_grant')
+        )
     );
 
     await expect(
@@ -103,7 +115,11 @@ describe('RefreshIntegrationService lifecycle CAS', () => {
 
   it('reports a stale lifecycle instead of a refresh failure when its CAS loses', async () => {
     const { service, integrationService } = createService(
-      jest.fn().mockResolvedValue(false)
+      jest
+        .fn()
+        .mockRejectedValue(
+          new RefreshToken('id', '{}', 'body', 'invalid_grant')
+        )
     );
     integrationService.refreshFailedIfCurrent.mockResolvedValue(false);
 
@@ -268,5 +284,123 @@ describe('RefreshIntegrationService lifecycle CAS', () => {
       workflowIdConflictPolicy: 'USE_EXISTING',
       workflowIdReusePolicy: 'ALLOW_DUPLICATE',
     });
+  });
+
+  it('defers (never flags) on a transient provider failure', async () => {
+    const { service, integrationService } = createService(
+      jest.fn().mockRejectedValue(new Error('fetch failed (ECONNRESET)'))
+    );
+
+    await expect(service.refreshWithLifecycle(integration)).resolves.toEqual({
+      status: 'deferred',
+    });
+
+    expect(integrationService.deferRefreshIfCurrent).toHaveBeenCalledWith(
+      'org-1',
+      'channel-1',
+      7,
+      expect.any(Number)
+    );
+    expect(integrationService.refreshFailedIfCurrent).not.toHaveBeenCalled();
+    expect(integrationService.informAboutRefreshError).not.toHaveBeenCalled();
+  });
+
+  it('recovers a flagged channel and re-arms the refresh workflow', async () => {
+    const refreshed = {
+      id: 'provider-id',
+      name: 'Channel',
+      username: 'channel',
+      accessToken: 'new-access-token',
+      refreshToken: 'new-refresh-token',
+      expiresIn: 3600,
+    };
+    const { service, integrationService, start } = createService(
+      jest.fn().mockResolvedValue(refreshed)
+    );
+
+    await expect(service.recoverOnce(integration)).resolves.toBe(true);
+
+    expect(integrationService.refreshRecoveredIfCurrent).toHaveBeenCalledWith(
+      'org-1',
+      'channel-1',
+      7,
+      refreshed
+    );
+    expect(start).toHaveBeenCalledWith(
+      'refreshTokenWorkflowV3',
+      expect.objectContaining({ workflowId: 'refresh_channel-1' })
+    );
+  });
+
+  it('does not recover when the provider refresh still fails', async () => {
+    const { service, integrationService } = createService(
+      jest.fn().mockRejectedValue(new Error('still down'))
+    );
+
+    await expect(service.recoverOnce(integration)).resolves.toBe(false);
+    expect(integrationService.refreshRecoveredIfCurrent).not.toHaveBeenCalled();
+  });
+
+  it('defers when the provider returns no access token (not a permanent flag)', async () => {
+    const { service, integrationService } = createService(
+      jest.fn().mockResolvedValue({ accessToken: '' })
+    );
+
+    await expect(service.refreshWithLifecycle(integration)).resolves.toEqual({
+      status: 'deferred',
+    });
+
+    expect(integrationService.deferRefreshIfCurrent).toHaveBeenCalled();
+    expect(integrationService.refreshFailedIfCurrent).not.toHaveBeenCalled();
+  });
+
+  it('still flags a permanent credential rejection', async () => {
+    const { service, integrationService } = createService(
+      jest
+        .fn()
+        .mockRejectedValue(
+          new RefreshToken('id', '{}', 'body', 'invalid_grant')
+        )
+    );
+
+    await expect(service.refreshWithLifecycle(integration)).resolves.toEqual({
+      status: 'failed',
+    });
+
+    expect(integrationService.refreshFailedIfCurrent).toHaveBeenCalled();
+    expect(integrationService.deferRefreshIfCurrent).not.toHaveBeenCalled();
+    expect(integrationService.informAboutRefreshError).toHaveBeenCalled();
+  });
+
+  it('keeps refreshed credentials when reConnect fails', async () => {
+    const refreshed = {
+      id: 'provider-id',
+      name: 'Channel',
+      username: 'channel',
+      accessToken: 'new-access-token',
+      refreshToken: 'new-refresh-token',
+      expiresIn: 3600,
+    };
+    const { service, integrationService } = createService(
+      jest.fn().mockResolvedValue(refreshed),
+      false,
+      jest.fn().mockRejectedValue(new Error('Channel not found'))
+    );
+
+    await expect(
+      service.refreshWithLifecycle({
+        ...integration,
+        rootInternalId: 'root-id',
+        internalId: 'channel-1',
+      })
+    ).resolves.toEqual({ status: 'refreshed', refresh: refreshed });
+
+    expect(integrationService.refreshSucceededIfCurrent).toHaveBeenCalledWith(
+      'org-1',
+      'channel-1',
+      7,
+      refreshed
+    );
+    expect(integrationService.refreshFailedIfCurrent).not.toHaveBeenCalled();
   });
 });

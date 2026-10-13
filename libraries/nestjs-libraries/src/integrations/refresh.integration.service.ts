@@ -4,19 +4,41 @@ import {
   Injectable,
   OnApplicationBootstrap,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { Integration } from '@prisma/client';
+import { ioRedis } from '@postsider/nestjs-libraries/redis/redis.service';
 import { IntegrationManager } from '@postsider/nestjs-libraries/integrations/integration.manager';
 import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
 import {
   AuthTokenDetails,
   SocialProvider,
 } from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import {
+  NotEnoughScopes,
+  RefreshToken,
+} from '@postsider/nestjs-libraries/integrations/social.abstract';
 import { TemporalService } from 'nestjs-temporal-core';
 
 export type RefreshLifecycleResult =
   | { status: 'refreshed'; refresh: AuthTokenDetails }
+  | { status: 'deferred' }
   | { status: 'stale' }
   | { status: 'failed' };
+
+/**
+ * How long the scheduled refresh workflow waits before retrying a *transient*
+ * provider failure (network blip, 5xx, timeout). Kept well above the workflow's
+ * 5-minute pre-expiry buffer so a deferred retry always schedules a real sleep
+ * instead of hot-looping the provider.
+ */
+const TRANSIENT_REFRESH_BACKOFF_MS = 10 * 60 * 1000;
+
+/**
+ * Upper bound on a single provider refresh exchange. Kept below the Temporal
+ * activity's start-to-close budget; the PX TTL is the dead-man's switch if the
+ * process dies mid-refresh.
+ */
+const REFRESH_LOCK_TTL_MS = 60 * 1000;
 
 @Injectable()
 export class RefreshIntegrationService implements OnApplicationBootstrap {
@@ -47,7 +69,73 @@ export class RefreshIntegrationService implements OnApplicationBootstrap {
         )
       : [];
 
+    // Serialize concurrent refreshes of the SAME channel. The scheduled V3
+    // workflow, a publish-time refresh and the analytics sweep can all target
+    // one channel at once; for providers that rotate refresh tokens (TikTok,
+    // LinkedIn, Twitch, Discord, Whop) two concurrent exchanges can revoke the
+    // whole token family and force a reconnect. If another attempt holds the
+    // lock this one defers, and the winner's result lands in the database.
+    const lock = await this.acquireRefreshLock(integration.id);
+    if (!lock.acquired) {
+      const deferred = await this._integrationService.deferRefreshIfCurrent(
+        integration.organizationId,
+        integration.id,
+        integration.revision,
+        TRANSIENT_REFRESH_BACKOFF_MS
+      );
+      return deferred ? { status: 'deferred' } : { status: 'stale' };
+    }
+
+    try {
+      return await this.runRefreshLifecycle(
+        integration,
+        socialProvider,
+        siblings,
+        cause
+      );
+    } finally {
+      await this.releaseRefreshLock(integration.id, lock.token);
+    }
+  }
+
+  private async acquireRefreshLock(
+    integrationId: string
+  ): Promise<{ acquired: true; token: string } | { acquired: false }> {
+    const key = `refresh-lock:${integrationId}`;
+    const token = randomUUID();
+    try {
+      const result = await ioRedis.set(key, token, 'PX', REFRESH_LOCK_TTL_MS, 'NX');
+      return result === 'OK' ? { acquired: true, token } : { acquired: false };
+    } catch {
+      // Fail open: a lock-store outage must never block token refreshes.
+      return { acquired: true, token };
+    }
+  }
+
+  private async releaseRefreshLock(
+    integrationId: string,
+    token: string
+  ): Promise<void> {
+    try {
+      await ioRedis.eval(
+        "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end",
+        1,
+        `refresh-lock:${integrationId}`,
+        token
+      );
+    } catch {
+      // The PX TTL releases it; a failed release is not worth surfacing.
+    }
+  }
+
+  private async runRefreshLifecycle(
+    integration: Integration,
+    socialProvider: SocialProvider,
+    siblings: { id: string; revision: number }[],
+    cause: string
+  ): Promise<RefreshLifecycleResult> {
     let refresh: false | AuthTokenDetails;
+    let transient = false;
     try {
       refresh = await this.refreshProcess(integration, socialProvider);
     } catch (err) {
@@ -55,7 +143,27 @@ export class RefreshIntegrationService implements OnApplicationBootstrap {
         `[refresh] provider refresh failed for ${integration.providerIdentifier} (${integration.id})`,
         err
       );
+      // A network blip, provider 5xx or timeout is NOT proof that the
+      // credentials are dead. Treating every failure as permanent used to set
+      // `refreshNeeded`, which stops the refresh workflow, blocks publishing,
+      // and can only be cleared by a manual reconnect — so a momentary outage
+      // forced the user to reconnect the channel.
+      transient = !this.isPermanentRefreshError(err);
       refresh = false;
+    }
+
+    if (!refresh && transient) {
+      // Defer instead of flagging: bump the revision so the scheduled V3
+      // workflow's existing "revision changed => continueAsNew" branch retries,
+      // and push tokenExpiration out by the backoff so that retry is scheduled
+      // rather than immediate. The channel stays usable in the meantime.
+      const deferred = await this._integrationService.deferRefreshIfCurrent(
+        integration.organizationId,
+        integration.id,
+        integration.revision,
+        TRANSIENT_REFRESH_BACKOFF_MS
+      );
+      return deferred ? { status: 'deferred' } : { status: 'stale' };
     }
 
     if (!refresh) {
@@ -98,6 +206,79 @@ export class RefreshIntegrationService implements OnApplicationBootstrap {
     return persisted
       ? { status: 'refreshed', refresh }
       : { status: 'stale' };
+  }
+
+  /**
+   * Best-effort recovery for a channel flagged `refreshNeeded`. Runs the
+   * provider exchange again and, on success, clears the flag and re-arms the
+   * scheduled refresh workflow. Backs the daily recovery sweep and the manual
+   * "Retry" action. It never notifies and never flips flags on failure: the
+   * channel keeps whatever state it already had.
+   */
+  async recoverOnce(integration: Integration): Promise<boolean> {
+    if (!integration.refreshToken) {
+      return false;
+    }
+    const socialProvider = this._integrationManager.getSocialIntegration(
+      integration.providerIdentifier
+    );
+    const siblings = socialProvider.oneTimeToken
+      ? await this._integrationService.getLinkedTokenSiblingsForRefresh(
+          integration.organizationId,
+          integration.id,
+          integration.rootInternalId,
+          integration.refreshToken
+        )
+      : [];
+
+    const lock = await this.acquireRefreshLock(integration.id);
+    if (!lock.acquired) {
+      return false;
+    }
+    try {
+      let refresh: false | AuthTokenDetails;
+      try {
+        refresh = await this.refreshProcess(integration, socialProvider);
+      } catch (err) {
+        console.warn(
+          `[refresh recovery] ${integration.providerIdentifier} (${
+            integration.id
+          }) still failing: ${err instanceof Error ? err.message : String(err)}`
+        );
+        return false;
+      }
+      if (!refresh || !refresh.accessToken) {
+        return false;
+      }
+
+      const recovered = await this._integrationService.refreshRecoveredIfCurrent(
+        integration.organizationId,
+        integration.id,
+        integration.revision,
+        refresh
+      );
+      if (!recovered) {
+        return false;
+      }
+      if (socialProvider.oneTimeToken) {
+        await this._integrationService.refreshLinkedTokensIfCurrent(
+          integration.organizationId,
+          integration.id,
+          integration.rootInternalId,
+          integration.refreshToken,
+          siblings,
+          refresh
+        );
+      }
+      await this.startRefreshWorkflow(
+        integration.organizationId,
+        integration.id,
+        true
+      );
+      return true;
+    } finally {
+      await this.releaseRefreshLock(integration.id, lock.token);
+    }
   }
 
   public async setBetweenSteps(integration: Integration, cause = '') {
@@ -264,6 +445,30 @@ export class RefreshIntegrationService implements OnApplicationBootstrap {
     await start();
   }
 
+  /**
+   * Only a definitive credential rejection (revoked/expired refresh token,
+   * missing scopes, invalid_grant) should send the user back through OAuth.
+   * Everything else — DNS/network errors, provider 5xx, timeouts, HTML error
+   * pages, SDK parse failures — is transient and must be retried, never turned
+   * into a permanent "reconnect your channel".
+   */
+  private isPermanentRefreshError(err: unknown): boolean {
+    if (err instanceof RefreshToken || err instanceof NotEnoughScopes) {
+      return true;
+    }
+    const anyErr = err as any;
+    const type = anyErr?.type ?? anyErr?.cause?.type;
+    if (type === 'refresh_token' || type === 'not_enough_scopes') {
+      return true;
+    }
+    const message = `${anyErr?.message ?? ''} ${
+      anyErr?.cause?.message ?? ''
+    }`;
+    return /invalid_grant|invalid_token|token.*revoked|revoked.*token|access_token_invalid|invalid credentials|not enough scopes|invalid authentication credentials/i.test(
+      message
+    );
+  }
+
   private async refreshProcess(
     integration: Integration,
     socialProvider: SocialProvider
@@ -274,7 +479,13 @@ export class RefreshIntegrationService implements OnApplicationBootstrap {
     );
 
     if (!refresh || !refresh.accessToken) {
-      return false;
+      // No credentials came back. That alone is not proof the token was
+      // revoked, so throw (=> transient => deferred retry) instead of
+      // returning false (=> permanent => forced reconnect). A provider that
+      // detects a real rejection throws a typed error before it reaches here.
+      throw new Error(
+        `${integration.providerIdentifier} refresh returned no access token`
+      );
     }
 
     if (
@@ -284,15 +495,32 @@ export class RefreshIntegrationService implements OnApplicationBootstrap {
       return refresh;
     }
 
-    const reConnect = await socialProvider.reConnect(
-      integration.rootInternalId!,
-      integration.internalId,
-      refresh.accessToken
-    );
+    // `reConnect` only re-resolves the provider-side id/name/picture — none of
+    // which this service persists (refreshSucceededIfCurrent writes credentials
+    // only). It must therefore never be allowed to invalidate an otherwise-good
+    // refresh. YouTube is the live example: `reConnect` matches the selected
+    // channel against `channels.list({ mine: true })`, which does not always
+    // return brand-account channels, so it threw "Channel not found" and the
+    // channel was marked as needing a reconnect roughly every other day even
+    // though the freshly minted access token was perfectly valid.
+    try {
+      const reConnect = await socialProvider.reConnect(
+        integration.rootInternalId!,
+        integration.internalId,
+        refresh.accessToken
+      );
 
-    return {
-      ...refresh,
-      ...reConnect,
-    };
+      return {
+        ...refresh,
+        ...reConnect,
+      };
+    } catch (err) {
+      console.warn(
+        `[refresh] reConnect failed for ${integration.providerIdentifier} ` +
+          `(${integration.id}) — keeping refreshed credentials`,
+        err
+      );
+      return refresh;
+    }
   }
 }

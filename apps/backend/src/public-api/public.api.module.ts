@@ -9,11 +9,15 @@ import { OpenaiService } from '@postsider/nestjs-libraries/openai/openai.service
 import { ExtractContentService } from '@postsider/nestjs-libraries/openai/extract.content.service';
 import { CodesService } from '@postsider/nestjs-libraries/services/codes.service';
 import { PublicIntegrationsController } from '@postsider/backend/public-api/routes/v1/public.integrations.controller';
+import { PublicWorkspaceController } from '@postsider/backend/public-api/routes/v1/public.workspace.controller';
 import { PublicAuthMiddleware } from '@postsider/backend/services/auth/public.auth.middleware';
 import { ApiRateLimitGuard } from '@postsider/nestjs-libraries/services/api-rate-limit.guard';
 import { RequestIdMiddleware } from '@postsider/nestjs-libraries/services/request-id.middleware';
 
-const authenticatedController = [PublicIntegrationsController];
+const authenticatedController = [
+  PublicIntegrationsController,
+  PublicWorkspaceController,
+];
 @Module({
   imports: [UploadModule],
   controllers: [...authenticatedController],

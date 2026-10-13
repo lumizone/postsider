@@ -7,6 +7,7 @@ import {
 } from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import { LinkedinProvider } from '@postsider/nestjs-libraries/integrations/social/linkedin.provider';
+import { assertRefreshedAccessToken } from '@postsider/nestjs-libraries/integrations/social.abstract';
 import dayjs from 'dayjs';
 import { Integration } from '@prisma/client';
 import { Plug } from '@postsider/helpers/decorators/plug.decorator';
@@ -38,24 +39,25 @@ export class LinkedinPageProvider
   override async refreshToken(
     refresh_token: string
   ): Promise<AuthTokenDetails> {
-    const {
-      access_token: accessToken,
-      expires_in,
-      refresh_token: refreshToken,
-    } = await (
-      await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          grant_type: 'refresh_token',
-          refresh_token,
-          client_id: process.env.LINKEDIN_CLIENT_ID!,
-          client_secret: process.env.LINKEDIN_CLIENT_SECRET!,
-        }),
-      })
-    ).json();
+    const response = await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token,
+        client_id: process.env.LINKEDIN_CLIENT_ID!,
+        client_secret: process.env.LINKEDIN_CLIENT_SECRET!,
+      }),
+    });
+    const body = await response.json();
+    const accessToken = assertRefreshedAccessToken(
+      'linkedin-page',
+      body,
+      response.status
+    );
+    const { expires_in, refresh_token: refreshToken } = body;
 
     const {
       localizedFirstName,

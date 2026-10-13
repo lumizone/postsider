@@ -198,7 +198,7 @@ export class IntegrationService {
   ) {
     // Two things were wrong for the people who actually receive this: it named
     // only the provider ("your youtube channel" — which one, when the customer
-    // runs three?), and it linked to /launches, a Postiz route that does not
+    // runs three?), and it linked to /launches, an upstream-project route that does not
     // exist in this product, so the one action it asked for ended on a 404.
     const channel = `${integration.name} (${integration.providerIdentifier})`;
     const link = `${process.env.FRONTEND_URL}/calendar`;
@@ -250,6 +250,42 @@ export class IntegrationService {
       org,
       id,
       revision
+    );
+  }
+
+  deferRefreshIfCurrent(
+    org: string,
+    id: string,
+    revision: number,
+    backoffMs: number
+  ) {
+    return this._integrationRepository.deferRefreshIfCurrent(
+      org,
+      id,
+      revision,
+      backoffMs
+    );
+  }
+
+  findRefreshNeededForRecovery(limit?: number) {
+    return this._integrationRepository.findRefreshNeededForRecovery(limit);
+  }
+
+  refreshRecoveredIfCurrent(
+    org: string,
+    id: string,
+    revision: number,
+    refresh: {
+      accessToken: string;
+      refreshToken?: string;
+      expiresIn?: number;
+    }
+  ) {
+    return this._integrationRepository.refreshRecoveredIfCurrent(
+      org,
+      id,
+      revision,
+      refresh
     );
   }
 

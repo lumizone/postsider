@@ -48,6 +48,43 @@ export class NotEnoughScopes extends ApplicationFailure {
   }
 }
 
+/**
+ * Guard for raw-fetch token-refresh implementations. A refresh response
+ * without an access token is a failure, and it must be *thrown* so the
+ * lifecycle can classify it: `invalid_grant`/`invalid_client` is a permanent
+ * rejection (the user must reconnect), while anything else (5xx, rate limit,
+ * malformed upstream body) is transient and gets retried. Returns the access
+ * token when present.
+ *
+ * Providers that silently returned an object with `accessToken: undefined`
+ * made every transient outage look like a revoked credential, forcing a
+ * manual reconnect for a channel that was perfectly healthy.
+ */
+export function assertRefreshedAccessToken(
+  provider: string,
+  response: any,
+  status?: number
+): string {
+  const token = response?.access_token;
+  if (typeof token === 'string' && token.length > 0) {
+    return token;
+  }
+  const errorCode = String(
+    response?.error ?? response?.error_description ?? ''
+  );
+  const message = `${provider} token refresh failed${
+    errorCode ? `: ${errorCode}` : status ? ` (HTTP ${status})` : ''
+  }`;
+  if (
+    /invalid_grant|invalid_client|invalid_request|invalid_token|unauthorized|revoked/i.test(
+      errorCode
+    )
+  ) {
+    throw new RefreshToken(provider, JSON.stringify(response ?? {}), '', message);
+  }
+  throw new Error(message);
+}
+
 function safeStringify(obj: any) {
   const seen = new WeakSet();
 

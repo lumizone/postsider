@@ -357,6 +357,7 @@ describe('McpOAuthService', () => {
 
     it('refuses a second approval of the same request (claim race)', async () => {
       repo.getPendingById.mockResolvedValue(pending());
+      repo.getMembership.mockResolvedValue({ userId: 'u1', role: 'ADMIN', disabled: false });
       repo.claimPending.mockResolvedValue(0);
       const err = await catchErr(
         service.approveOrDeny({
@@ -367,6 +368,35 @@ describe('McpOAuthService', () => {
         })
       );
       expect(oauthErrorOf(err).error).toBe('invalid_request');
+    });
+
+    it('does not consume the request when the scopes or organization are wrong', async () => {
+      repo.getPendingById.mockResolvedValue(pending());
+      repo.getMembership.mockResolvedValue({ userId: 'u1', role: 'ADMIN', disabled: false });
+
+      const widened = await catchErr(
+        service.approveOrDeny({
+          pendingId: 'pending-1',
+          userId: 'u1',
+          organizationId: 'org1',
+          action: 'approve',
+          scopes: ['posts:read', 'channels:write'],
+        })
+      );
+      expect(oauthErrorOf(widened).error).toBe('invalid_request');
+
+      repo.getMembership.mockResolvedValue(null);
+      const stranger = await catchErr(
+        service.approveOrDeny({
+          pendingId: 'pending-1',
+          userId: 'u1',
+          organizationId: 'other-org',
+          action: 'approve',
+        })
+      );
+      expect((stranger as any).getStatus()).toBe(403);
+
+      expect(repo.claimPending).not.toHaveBeenCalled();
     });
 
     it('rejects non-admin members', async () => {
@@ -386,6 +416,8 @@ describe('McpOAuthService', () => {
         })
       );
       expect((err as any).getStatus()).toBe(403);
+      // A refused approval must leave the request usable (it used to be burned).
+      expect(repo.claimPending).not.toHaveBeenCalled();
     });
 
     it('rejects a non-member', async () => {

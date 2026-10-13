@@ -130,6 +130,7 @@ function transportConfig(
     apiBaseUrl: backendBase,
     scopesSupported: ['posts:read', 'posts:write'],
     introspectionSecret: INTROSPECTION_SECRET,
+    allowedOrigins: [],
     port: 0,
     bindHost: '127.0.0.1',
     rateLimitPerMinute: 240,
@@ -214,7 +215,7 @@ describe('remote MCP transport', () => {
     try {
       const tools = await client.listTools();
       const names = tools.tools.map((tool) => tool.name).sort();
-      expect(names).toHaveLength(19);
+      expect(names).toHaveLength(37);
       expect(names).toContain('postsider_list_channels');
       expect(names).toContain('postsider_create_post');
       expect(names).toContain('postsider_delete_post');

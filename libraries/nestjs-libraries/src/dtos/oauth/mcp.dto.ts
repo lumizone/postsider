@@ -12,6 +12,9 @@ import {
 /**
  * Scopes the MCP authorization server can grant. `posts:read`/`posts:write`
  * gate what the remote MCP resource server may do on behalf of the user;
+ * `channels:write` is the separate, higher-trust grant for connecting,
+ * disabling, re-timing and removing channels (kept apart so an agent that may
+ * only schedule posts cannot reconfigure the workspace);
  * `openid`/`email` exist so OAuth clients that expect OIDC-style scope values
  * (the OpenAI plugin flow asks for them) can request what they need without
  * being rejected — the UserInfo endpoint is what actually serves the claims.
@@ -19,6 +22,7 @@ import {
 export const MCP_SUPPORTED_SCOPES: readonly string[] = [
   'posts:read',
   'posts:write',
+  'channels:write',
   'openid',
   'email',
 ];

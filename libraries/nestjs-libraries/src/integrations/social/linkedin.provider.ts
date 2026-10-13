@@ -11,6 +11,7 @@ import { readOrFetch } from '@postsider/helpers/utils/read.or.fetch';
 import { hasExtension } from '@postsider/helpers/utils/has.extension';
 import { timer } from '@postsider/helpers/utils/timer';
 import {
+  assertRefreshedAccessToken,
   BadBody,
   SocialAbstract,
   ValidityMedia,
@@ -91,24 +92,25 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
   }
 
   async refreshToken(refresh_token: string): Promise<AuthTokenDetails> {
-    const {
-      access_token: accessToken,
-      refresh_token: refreshToken,
-      expires_in,
-    } = await (
-      await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          grant_type: 'refresh_token',
-          refresh_token,
-          client_id: process.env.LINKEDIN_CLIENT_ID!,
-          client_secret: process.env.LINKEDIN_CLIENT_SECRET!,
-        }),
-      })
-    ).json();
+    const response = await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token,
+        client_id: process.env.LINKEDIN_CLIENT_ID!,
+        client_secret: process.env.LINKEDIN_CLIENT_SECRET!,
+      }),
+    });
+    const body = await response.json();
+    const accessToken = assertRefreshedAccessToken(
+      'linkedin',
+      body,
+      response.status
+    );
+    const { refresh_token: refreshToken, expires_in } = body;
 
     const { vanityName } = await (
       await fetch('https://api.linkedin.com/v2/me', {

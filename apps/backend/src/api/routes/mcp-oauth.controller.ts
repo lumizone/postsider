@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Headers,
+  HttpCode,
   HttpException,
   HttpStatus,
   Post,
@@ -41,7 +42,10 @@ export class McpOAuthController {
     return this._mcpOAuthService.registerClient(body, clientIp(req));
   }
 
+  // RFC 7662 §2.2: a successful introspection response is 200 (NestJS @Post
+  // defaults to 201).
   @Post('/oauth/introspect')
+  @HttpCode(HttpStatus.OK)
   introspect(
     @Body() body: McpIntrospectDto,
     @Headers('authorization') auth?: string
@@ -50,7 +54,9 @@ export class McpOAuthController {
     return this._mcpOAuthService.introspect(body.token);
   }
 
+  // RFC 7009 §2.2: a successful revocation response is 200.
   @Post('/oauth/revoke')
+  @HttpCode(HttpStatus.OK)
   revoke(@Body() body: McpRevokeDto) {
     return this._mcpOAuthService.revokeToken(body.token);
   }

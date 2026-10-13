@@ -46,11 +46,13 @@ fi
 
 BOOTSTRAP=false
 DO_BUILD=true
+ALLOW_DIRTY=false
 for arg in "$@"; do
   case "$arg" in
-    --bootstrap) BOOTSTRAP=true ;;
-    --no-build)  DO_BUILD=false ;;
-    -h|--help)   sed -n '2,30p' "$0"; exit 0 ;;
+    --bootstrap)   BOOTSTRAP=true ;;
+    --no-build)    DO_BUILD=false ;;
+    --allow-dirty) ALLOW_DIRTY=true ;;
+    -h|--help)     sed -n '2,30p' "$0"; exit 0 ;;
     *) echo "Unknown option: $arg" >&2; exit 1 ;;
   esac
 done
@@ -74,6 +76,18 @@ if [[ ! -f "$ENV_FILE" ]]; then
   fi
 fi
 ok "Prerequisites OK"
+
+# ── 1b. Deploy hygiene: build only from a committed tree ─────────────────────
+# The image is built from the WORKING DIRECTORY, not a git ref, so an
+# uncommitted edit ships silently and "what is in git" diverges from "what is
+# running". Refuse a dirty tree unless the operator opts in with --allow-dirty.
+if ! $ALLOW_DIRTY && command -v git >/dev/null 2>&1 && git -C "$SCRIPT_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+  dirty="$(git -C "$SCRIPT_DIR" status --porcelain --untracked-files=no)"
+  if [[ -n "$dirty" ]]; then
+    die "Working tree has uncommitted changes and deploy builds from it — commit first, or pass --allow-dirty.
+$dirty"
+  fi
+fi
 
 # ── 2. Auto-fill remaining CHANGE_ME secrets ─────────────────────────────────
 # Replaces VAR=...CHANGE_ME... lines with a freshly generated secret. Values you
@@ -137,7 +151,10 @@ if docker ps --format '{{.Names}}' | grep -qx postsider-postgres; then
     cp "$ENV_FILE" "$PREDEPLOY_DIR/env.production.bak" && chmod -R go-rwx "$PREDEPLOY_DIR"
     git -C "$SCRIPT_DIR" rev-parse HEAD > "$PREDEPLOY_DIR/DEPLOYED_COMMIT.txt" 2>/dev/null || true
     # keep the last 5 pre-deploy dumps
-    ls -1dt "${PREDEPLOY_BACKUP_DIR:-/var/lib/postsider/backups}"/predeploy-* 2>/dev/null | tail -n +6 | xargs -r rm -rf
+    # `|| true`: retention is housekeeping. A root-owned leftover (e.g. an old
+    # sudo-run deploy) must never abort the deploy AFTER the backup but BEFORE
+    # containers are recreated — that left production on the old image.
+    ls -1dt "${PREDEPLOY_BACKUP_DIR:-/var/lib/postsider/backups}"/predeploy-* 2>/dev/null | tail -n +6 | xargs -r rm -rf 2>/dev/null || true
     ok "Pre-deploy backup done"
   else
     rm -rf "$PREDEPLOY_DIR"
@@ -164,6 +181,21 @@ while true; do
   [[ $(date +%s) -lt $deadline ]] || die "Timed out waiting for health — deploy FAILED. Logs: ${COMPOSE[*]} logs postsider | Rollback: docker tag postsider_app-postsider:prev postsider_app-postsider:latest && ${COMPOSE[*]} up -d"
   sleep 5
 done
+
+# ── 5c. Optional Public API / MCP smoke test ─────────────────────────────────
+# Opt-in: set POSTSIDER_SMOKE_API_KEY (a key for a TEST organization) to run the
+# end-to-end Public API / MCP surface check right after health. It writes and
+# deletes test data, so it never runs by default. Non-fatal: a smoke failure
+# leaves the deploy up but warns loudly.
+if [[ -n "${POSTSIDER_SMOKE_API_KEY:-}" ]]; then
+  log "Running Public API / MCP smoke test"
+  if docker exec -e POSTSIDER_API_KEY="$POSTSIDER_SMOKE_API_KEY" postsider-app \
+      node scripts/smoke-public-api.mjs --yes --no-media-attach; then
+    ok "Smoke test passed"
+  else
+    warn "Smoke test FAILED — deploy is up, but verify the Public API / MCP surface"
+  fi
+fi
 
 # ── 5b. Housekeeping: stop deploys from slowly eating the disk ───────────────
 # Each build adds a build-cache generation and orphans the previous image

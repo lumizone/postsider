@@ -135,9 +135,23 @@ export function integrationToChannel(i: BackendIntegration): Channel {
     verified: parseVerifiedFlag(i.additionalSettings),
     color: colorForIntegration(i.id, i.identifier),
     avatarUrl: i.picture || null,
+    refreshNeeded: i.refreshNeeded,
     audience: 0,
     audienceHistory: [],
   };
+}
+
+/**
+ * Re-run the provider token exchange for a channel flagged `refreshNeeded`
+ * and clear the flag on success. Recovers a channel from a transient fault
+ * without a full OAuth reconnect. Returns whether the channel healed.
+ */
+export async function retryChannel(id: string): Promise<{ recovered: boolean }> {
+  return api.post<{ recovered: boolean }>(
+    `/integrations/${id}/retry`,
+    undefined,
+    { silent: true },
+  );
 }
 
 export async function listChannels(): Promise<{

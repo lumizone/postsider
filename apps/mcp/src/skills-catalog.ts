@@ -187,9 +187,22 @@ const SkillsGetRequestSchema = z.object({
   }),
 });
 
+let cachedCatalog: ReturnType<typeof loadSkillCatalog> | undefined;
+
+/**
+ * The skill files never change while the process runs, but the remote server
+ * builds a fresh MCP server for every request. Reading and hashing every file
+ * synchronously each time put disk I/O on the hot path of every call, which an
+ * unauthenticated-but-valid-token client could use to burn CPU. Load once.
+ */
+function skillCatalog() {
+  cachedCatalog ??= loadSkillCatalog();
+  return cachedCatalog;
+}
+
 /** Advertise and serve OpenAI's bounded draft Skills extension. */
 export function registerPostSiderSkills(server: McpServer): void {
-  const catalog = loadSkillCatalog();
+  const catalog = skillCatalog();
 
   server.server.registerCapabilities({
     extensions: {

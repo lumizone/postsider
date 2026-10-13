@@ -266,6 +266,35 @@
   transform: scale(0.97);
 }
 
+.btnSecondary {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: background 140ms var(--ease), color 140ms var(--ease),
+    transform 120ms var(--ease);
+}
+
+.btnSecondary:hover {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.btnSecondary:active {
+  transform: scale(0.97);
+}
+
+.btnSecondary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .btnDanger {
   height: 36px;
   padding: 0 16px;
