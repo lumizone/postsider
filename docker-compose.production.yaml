@@ -26,6 +26,8 @@ services:
         NEXT_PUBLIC_VERSION: ${NEXT_PUBLIC_VERSION:-1.4.0}
         NEXT_PUBLIC_TELEGRAM_BOT_NAME: ${NEXT_PUBLIC_TELEGRAM_BOT_NAME:-}
         NEXT_PUBLIC_DISABLE_REGISTRATION: ${NEXT_PUBLIC_DISABLE_REGISTRATION:-}
+        NEXT_PUBLIC_MCP_URL: ${NEXT_PUBLIC_MCP_URL:-}
+        NEXT_PUBLIC_PUBLIC_API_URL: ${NEXT_PUBLIC_PUBLIC_API_URL:-}
     container_name: postsider-app
     security_opt:
       - no-new-privileges:true
