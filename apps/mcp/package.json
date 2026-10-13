@@ -1,6 +1,6 @@
 {
   "name": "@postsider/mcp",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "mcpName": "io.github.lumizone/postsider",
   "description": "PostSider MCP server - gives AI agents access to the PostSider social media platform over its public API (list channels, review the calendar, create drafts, request approval, analytics, media).",
   "license": "AGPL-3.0",

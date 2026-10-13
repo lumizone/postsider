@@ -1,7 +1,7 @@
 {
   "name": "postsider",
   "description": "Review, draft, schedule, publish, approve, and analyze social media work in PostSider. Write actions follow the user's explicit requested outcome and are verified by reading the stored result back.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": {
     "name": "Lumi Zone Lukasz Blania",
     "email": "lukasz@postsider.com",

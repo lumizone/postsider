@@ -4,7 +4,7 @@ Notable changes to `@postsider/mcp`. This file begins with the first released
 version: earlier internal iterations were never published, so they are not
 recorded here.
 
-## Unreleased
+## 1.1.0 - 2026-10-13
 
 ### Fixed
 
