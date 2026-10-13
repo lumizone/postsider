@@ -21,6 +21,7 @@ function testConfig(overrides: Partial<HttpConfig> = {}): HttpConfig {
     authorizationServerUrl: TEST_AS_URL,
     apiBaseUrl: TEST_AS_URL,
     scopesSupported: ['posts:read', 'posts:write'],
+    allowedOrigins: [],
     introspectionSecret: 'test-introspection-secret',
     port: 0,
     bindHost: '127.0.0.1',

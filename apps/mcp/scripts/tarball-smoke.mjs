@@ -21,7 +21,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const PKG_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const EXPECTED_TOOL_COUNT = 19;
+// Tools shared by the remote and local servers, plus the one tool only the local
+// stdio server adds (it reads a file from the user's own machine).
+const EXPECTED_TOOL_COUNT = 37;
+const STDIO_ONLY_TOOLS = ['postsider_upload_media_from_file'];
+const EXPECTED_STDIO_TOOL_COUNT = EXPECTED_TOOL_COUNT + STDIO_ONLY_TOOLS.length;
 const EXPECTED_SERVER_NAME = 'postsider';
 const EXPECTED_SKILL_NAMES = [
   'postsider-agency-operations',
@@ -275,8 +279,8 @@ try {
     fail(`tools/list failed: ${JSON.stringify(listed.error)}`);
   }
   const tools = listed.result?.tools ?? [];
-  if (tools.length !== EXPECTED_TOOL_COUNT) {
-    fail(`expected ${EXPECTED_TOOL_COUNT} tools from the installed artifact, got ${tools.length}`);
+  if (tools.length !== EXPECTED_STDIO_TOOL_COUNT) {
+    fail(`expected ${EXPECTED_STDIO_TOOL_COUNT} tools from the installed artifact, got ${tools.length}`);
   }
 
   const listedSkills = await session.request(3, 'skills/list', {});
@@ -323,9 +327,9 @@ try {
   ]
     .map((match) => match[1])
     .sort();
-  if (registered.length !== EXPECTED_TOOL_COUNT) {
+  if (registered.length !== EXPECTED_STDIO_TOOL_COUNT) {
     fail(
-      `src/server.ts registers ${registered.length} tools, expected ${EXPECTED_TOOL_COUNT}`
+      `src/server.ts registers ${registered.length} tools, expected ${EXPECTED_STDIO_TOOL_COUNT}`
     );
   }
   const inventorySource = readFileSync(
@@ -348,11 +352,12 @@ try {
   }
 
   const installedNames = tools.map((tool) => tool.name).sort();
-  if (installedNames.join(',') !== frozen.join(',')) {
+  const expectedInstalled = [...frozen, ...STDIO_ONLY_TOOLS].sort();
+  if (installedNames.join(',') !== expectedInstalled.join(',')) {
     fail(
       'installed tool names differ from the frozen expectation list:\n' +
         `  installed: ${installedNames.join(', ')}\n` +
-        `  expected:  ${frozen.join(', ')}`
+        `  expected:  ${expectedInstalled.join(', ')}`
     );
   }
 
