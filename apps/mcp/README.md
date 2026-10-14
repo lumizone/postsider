@@ -23,6 +23,13 @@ Claude Code:
 claude mcp add postsider -e POSTSIDER_API_KEY=your_api_key -- npx -y @postsider/mcp
 ```
 
+Codex (the CLI, the ChatGPT desktop app, and the IDE extension share one MCP
+configuration):
+
+```bash
+codex mcp add postsider --env POSTSIDER_API_KEY=your_api_key -- npx -y @postsider/mcp
+```
+
 Claude Desktop or any generic MCP client:
 
 ```json
