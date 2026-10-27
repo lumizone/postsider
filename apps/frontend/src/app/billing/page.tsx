@@ -81,6 +81,26 @@ function BillingInner() {
   const canManage = user?.role === 'SUPERADMIN';
 
   const [period, setPeriod] = useState<BillingPeriod>('MONTHLY');
+  const [requestedTier, setRequestedTier] = useState<TierName | null>(null);
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem('postsider-pricing-intent');
+      if (!stored) return;
+      const intent = JSON.parse(stored) as { plan?: string; period?: string; savedAt?: number };
+      const valid = PLANS.some((p) => p.name === intent.plan);
+      const fresh = typeof intent.savedAt === 'number' &&
+        Date.now() - intent.savedAt >= 0 &&
+        Date.now() - intent.savedAt < 7 * 24 * 60 * 60 * 1000;
+      if (!valid || !fresh) {
+        window.localStorage.removeItem('postsider-pricing-intent');
+        return;
+      }
+      setRequestedTier(intent.plan as TierName);
+      setPeriod(intent.period === 'YEARLY' ? 'YEARLY' : 'MONTHLY');
+    } catch {
+      // Invalid or unavailable local storage must not break billing.
+    }
+  }, []);
   const [current, setCurrent] = useState<CurrentSubscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -224,6 +244,7 @@ function BillingInner() {
     setError(null);
     try {
       const res = await subscribe(tier, period);
+      try { window.localStorage.removeItem('postsider-pricing-intent'); } catch {}
       if (res.url) {
         window.location.href = res.url;
         return;
@@ -441,8 +462,8 @@ function BillingInner() {
                   // equivalent as the main price, total yearly below.
                   const displayPrice =
                     period === 'MONTHLY'
-                      ? plan.monthlyPrice
-                      : Math.round(plan.yearlyPrice / 12);
+                      ? plan.monthlyPrice.toFixed(2)
+                      : (plan.yearlyPrice / 12).toFixed(2);
 
                   return (
                     <div
@@ -465,6 +486,11 @@ function BillingInner() {
                         <span className={styles.planTagline}>
                           {planTagline(plan.name)}
                         </span>
+                        {requestedTier === plan.name && !hasPaidPlan && (
+                          <span style={{ fontSize: '12px', fontWeight: 650, marginTop: '6px' }}>
+                            Your selection from postsider.com
+                          </span>
+                        )}
                       </div>
 
                       <div>
