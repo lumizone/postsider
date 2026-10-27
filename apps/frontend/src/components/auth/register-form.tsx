@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { AuthShell } from "./auth-shell";
 import { BetaBanner, PRIVATE_BETA } from "./beta";
@@ -15,7 +15,33 @@ import { trackSignUp } from "@/lib/ga4";
 export function RegisterForm() {
   const t = useT();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { refresh } = useAuth();
+
+  // Preserve plan/billing-period intent from the marketing pricing page.
+  // This is informational only: signup never starts a charge automatically.
+  const requestedPlan = searchParams.get("plan")?.toUpperCase();
+  const requestedPeriod = searchParams.get("period")?.toUpperCase();
+  const selectedPlan =
+    requestedPlan && ["STANDARD", "TEAM", "PRO", "ULTIMATE"].includes(requestedPlan)
+      ? requestedPlan
+      : null;
+  const selectedPeriod =
+    requestedPeriod === "YEARLY" || requestedPeriod === "MONTHLY"
+      ? requestedPeriod
+      : "MONTHLY";
+
+  useEffect(() => {
+    if (!selectedPlan) return;
+    try {
+      window.localStorage.setItem(
+        "postsider-pricing-intent",
+        JSON.stringify({ plan: selectedPlan, period: selectedPeriod, savedAt: Date.now() }),
+      );
+    } catch {
+      // Storage may be disabled; registration still works without this hint.
+    }
+  }, [selectedPlan, selectedPeriod]);
   const [name, setName] = useState("");
   const [orgName, setOrgName] = useState("");
   const [email, setEmail] = useState("");
@@ -143,6 +169,13 @@ export function RegisterForm() {
         </>
       }
     >
+      {selectedPlan && (
+        <div className={styles.notice} role="status">
+          You viewed the {selectedPlan[0] + selectedPlan.slice(1).toLowerCase()} plan
+          ({selectedPeriod === "YEARLY" ? "annual" : "monthly"} billing).
+          Your 7-day trial starts without a charge; choose a paid plan later.
+        </div>
+      )}
       <GoogleButton label={t("auth.googleSignUp")} />
 
       <div className={styles.divider}>
