@@ -5,6 +5,7 @@ import { OAuthService } from '@postsider/nestjs-libraries/database/prisma/oauth/
 import { HttpForbiddenException } from '@postsider/nestjs-libraries/services/exception.filter';
 import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
 import { pricing } from '@postsider/nestjs-libraries/database/prisma/subscriptions/pricing';
+import { grantedScopesForOAuth } from '@postsider/nestjs-libraries/services/public-api-oauth-scopes';
 
 @Injectable()
 export class PublicAuthMiddleware implements NestMiddleware {
@@ -54,10 +55,11 @@ export class PublicAuthMiddleware implements NestMiddleware {
 
         // @ts-ignore
         req.org = { ...org, users: [authorization.membership] };
-        // OAuth tokens predate granular connector scopes. Preserve their
-        // existing access until the OAuth consent flow supports scope grants.
+        // MCP OAuth access grants carry actual scopes; legacy OAuth grants do
+        // not. Never promote either to '*' because it would give a read-only
+        // client access to new webhook secret/admin endpoints.
         // @ts-ignore
-        req.publicApiScopes = ['*'];
+        req.publicApiScopes = grantedScopesForOAuth(authorization.scopes);
         // @ts-ignore
         req.publicApiCredential = { type: 'oauth' };
       } else {
