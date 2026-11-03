@@ -25,6 +25,11 @@ export function AgentOnboarding({ onBack }: { onBack: () => void }) {
   const [copied, setCopied] = useState<string | null>(null);
   const [copyError, setCopyError] = useState(false);
   const [channelCount, setChannelCount] = useState<number | null>(null);
+  const [channelIds, setChannelIds] = useState<string[]>([]);
+  const [draftId, setDraftId] = useState("");
+  const [verifiedDraftId, setVerifiedDraftId] = useState<string | null>(null);
+  const [verifyingDraft, setVerifyingDraft] = useState(false);
+  const [draftVerificationFailed, setDraftVerificationFailed] = useState(false);
   const [draftCount, setDraftCount] = useState<number | null>(null);
   const [keyCount, setKeyCount] = useState<number | null>(null);
   const [channelError, setChannelError] = useState(false);
@@ -54,9 +59,11 @@ export function AgentOnboarding({ onBack }: { onBack: () => void }) {
 
     if (channelResult.status === "fulfilled" && Array.isArray(channelResult.value.channels)) {
       setChannelCount(channelResult.value.channels.length);
+      setChannelIds(channelResult.value.raw.map((integration) => integration.id));
       setChannelError(false);
     } else {
       setChannelCount(null);
+      setChannelIds([]);
       setChannelError(true);
     }
 
@@ -132,15 +139,46 @@ export function AgentOnboarding({ onBack }: { onBack: () => void }) {
     }
   };
 
+  const verifyDraftId = async () => {
+    const id = draftId.trim();
+    setVerifiedDraftId(null);
+    setDraftVerificationFailed(false);
+    if (!/^[a-zA-Z0-9_-]{6,128}$/.test(id) || channelIds.length === 0) {
+      setDraftVerificationFailed(true);
+      return;
+    }
+    setVerifyingDraft(true);
+    try {
+      // GET /posts/:id is already used by the dashboard. It is scoped by the
+      // authenticated organization and includes each stored post's state.
+      const result = await api.get<{
+        posts?: Array<{ id: string; state: string; integrationId: string }>;
+      }>("/posts/" + encodeURIComponent(id), undefined, { silent: true });
+      const verified = Array.isArray(result?.posts) && result.posts.some(
+        (post) => post.id === id &&
+          post.state === "DRAFT" &&
+          channelIds.includes(post.integrationId)
+      );
+      if (verified) setVerifiedDraftId(id);
+      else setDraftVerificationFailed(true);
+    } catch {
+      setDraftVerificationFailed(true);
+    } finally {
+      setVerifyingDraft(false);
+    }
+  };
+
   const complete = () => {
-    // Being in the same organization is not proof an agent performed the write.
-    // The user must also explicitly attest the read-only connection check.
-    if (!readConfirmed || !channelCount || !draftCount || checking) return;
+    // Proof is the user-confirmed read-only client check PLUS a specific,
+    // server-read draft ID belonging to this organization's active channels.
+    // It does not claim the application can attribute the draft to an MCP client.
+    if (!readConfirmed || !channelCount || !verifiedDraftId || checking || verifyingDraft) return;
     markOnboardingCompleted(user?.id, user?.orgId);
     router.replace("/calendar");
   };
 
-  const canFinish = readConfirmed && !!channelCount && !!draftCount && !checking;
+  const canFinish = readConfirmed && !!channelCount && !!verifiedDraftId &&
+    !checking && !verifyingDraft;
 
   return (
     <div className={styles.agentFlow}>
@@ -336,6 +374,39 @@ export function AgentOnboarding({ onBack }: { onBack: () => void }) {
                 ? t("developerOnboarding.agentRefreshing")
                 : t("developerOnboarding.agentRefresh")}
             </button>
+          </div>
+          <div className={styles.verifyDraft}>
+            <label htmlFor="onboarding-draft-id">
+              {t("developerOnboarding.agentDraftIdLabel")}
+            </label>
+            <div className={styles.verifyDraftRow}>
+              <input
+                id="onboarding-draft-id"
+                type="text"
+                value={draftId}
+                autoComplete="off"
+                spellCheck={false}
+                placeholder={t("developerOnboarding.agentDraftIdPlaceholder")}
+                onChange={(event) => {
+                  setDraftId(event.target.value);
+                  setVerifiedDraftId(null);
+                  setDraftVerificationFailed(false);
+                }}
+              />
+              <button type="button" disabled={verifyingDraft || !draftId.trim()}
+                onClick={() => void verifyDraftId()}>
+                {verifyingDraft
+                  ? t("developerOnboarding.agentVerifyingDraft")
+                  : t("developerOnboarding.agentVerifyDraft")}
+              </button>
+            </div>
+            <p className={styles.note} role="status" aria-live="polite">
+              {verifiedDraftId
+                ? t("developerOnboarding.agentVerifiedDraft")
+                : draftVerificationFailed
+                  ? t("developerOnboarding.agentVerifyFailed")
+                  : t("developerOnboarding.agentVerifyHelp")}
+            </p>
           </div>
           <p className={styles.note}>{t("developerOnboarding.agentDraftWarning")}</p>
           <Link className={styles.secondaryTextLink} href="/posts"
