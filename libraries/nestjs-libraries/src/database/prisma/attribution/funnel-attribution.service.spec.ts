@@ -107,7 +107,7 @@ describe('Stage 5 first-party conversion attribution', () => {
     const accepted = await service.recordClientStage('org1', 'agents', cookie);
     expect(accepted.recorded).toBe(true);
     expect(model.updateMany).toHaveBeenCalledWith({
-      where: { organizationId: 'org1', onboardingTypeSelectedAt: null },
+      where: { organizationId: 'org1', journeyId: cookie.ps_journey_id, onboardingTypeSelectedAt: null },
       data: { onboardingIntent: 'agents', onboardingTypeSelectedAt: expect.any(Date) },
     });
   });
@@ -126,6 +126,30 @@ describe('Stage 5 first-party conversion attribution', () => {
         firstPaidCurrency: 'USD',
       },
     });
+  });
+
+  it('rejects a second team member trying to overwrite original signup intent', async () => {
+    const { service, model } = create();
+    const wrongJourney = {
+      ...cookie,
+      ps_journey_id: 'b6db7935-69b6-497d-9715-8b9ce548220d',
+    };
+    await expect(service.recordClientStage('org1', 'scheduler', wrongJourney))
+      .resolves.toEqual({ recorded: false, consented: true });
+    expect(model.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('does not replay the original paid customer to another browser journey', async () => {
+    const { service } = create();
+    await expect(service.getJourney('org1', {
+      ps_analytics_consent: '1',
+      ps_journey_id: 'b6db7935-69b6-497d-9715-8b9ce548220d',
+    })).resolves.toEqual({ consented: true, milestones: null });
+    await expect(service.getJourney('org1', cookie))
+      .resolves.toMatchObject({ consented: true, milestones: {
+        signup_completed: true,
+        subscription_started: true,
+      }});
   });
 
   it('marks draft and OAuth milestones without generating a new attribution record', async () => {
