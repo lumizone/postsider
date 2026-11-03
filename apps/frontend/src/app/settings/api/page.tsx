@@ -250,9 +250,7 @@ export default function ApiSettingsPage() {
                 className={s.input}
               />
               <div style={{ fontSize: 12, lineHeight: 1.5, color: "var(--muted)" }}>
-                New keys start with read-only permissions. Enable write scopes only
-                for integrations that need them: <code>posts:write</code> also allows
-                scheduling or publishing without a mandatory approval step.
+                {t("settingsApi.scopesSafetyHint")}
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 8 }}>
                 {API_SCOPES.map((scope) => (
