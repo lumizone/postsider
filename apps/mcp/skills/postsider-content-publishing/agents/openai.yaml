@@ -1,0 +1,16 @@
+interface:
+  display_name: "Create social posts"
+  short_description: "Draft, schedule, or publish posts"
+  default_prompt: "Schedule this approved post in PostSider for tomorrow at 9:00."
+policy:
+  products:
+    - CHAT
+    - CODEX
+  allow_implicit_invocation: true
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "postsider"
+      description: "Read and manage the authenticated user's PostSider social publishing workspace."
+      transport: "streamable_http"
+      url: "https://mcp.postsider.com/mcp"

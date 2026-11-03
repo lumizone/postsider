@@ -2,32 +2,81 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   HttpException,
   HttpStatus,
+  Param,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Response } from 'express';
 import { OAuthService } from '@postsider/nestjs-libraries/database/prisma/oauth/oauth.service';
+import { McpOAuthService } from '@postsider/nestjs-libraries/database/prisma/oauth/mcp-oauth.service';
 import { GetUserFromRequest } from '@postsider/nestjs-libraries/user/user.from.request';
 import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
 import { User, Organization } from '@prisma/client';
+import { assertOAuthRate } from './oauth.rate-limit';
+import { ApproveOAuthDto } from '@postsider/nestjs-libraries/dtos/oauth/authorize-oauth.dto';
 import {
-  AuthorizeOAuthQueryDto,
-  ApproveOAuthDto,
-} from '@postsider/nestjs-libraries/dtos/oauth/authorize-oauth.dto';
-import { TokenExchangeDto } from '@postsider/nestjs-libraries/dtos/oauth/token-exchange.dto';
+  McpAuthorizeQueryDto,
+  McpConsentDto,
+  McpTokenDto,
+} from '@postsider/nestjs-libraries/dtos/oauth/mcp.dto';
 
 @ApiTags('OAuth')
 @Controller('/oauth')
 export class OAuthController {
-  constructor(private _oauthService: OAuthService) {}
+  constructor(
+    private _oauthService: OAuthService,
+    private _mcpOAuthService: McpOAuthService
+  ) {}
 
   @Get('/authorize')
-  async authorize(@Query() query: AuthorizeOAuthQueryDto) {
-    const app = await this._oauthService.validateAuthorizationRequest(
-      query.client_id
-    );
+  async authorize(@Query() query: McpAuthorizeQueryDto, @Res() res: Response) {
+    // Requests carrying a PKCE challenge belong to the MCP/DCR flow: record a
+    // pending consent and send the browser to the consent page. The legacy
+    // flow keeps returning the app-info JSON its own consent UI consumes.
+    if (query.code_challenge || query.code_challenge_method) {
+      // Only a registered client can create a pending consent, so cap it per
+      // client. An unknown client_id is refused by beginAuthorization below.
+      const registered = await this._mcpOAuthService.getClient(query.client_id);
+      if (registered) {
+        await assertOAuthRate('authorize', registered.id);
+      }
+      const { consentUrl } = await this._mcpOAuthService.beginAuthorization({
+        clientId: query.client_id,
+        redirectUri: query.redirect_uri,
+        codeChallenge: query.code_challenge,
+        codeChallengeMethod: query.code_challenge_method,
+        scope: query.scope,
+        state: query.state,
+      });
+      return res.redirect(HttpStatus.FOUND, consentUrl);
+    }
+
+    let app;
+    try {
+      app = await this._oauthService.validateAuthorizationRequest(
+        query.client_id
+      );
+    } catch (err) {
+      // A registered DCR client that forgot PKCE deserves a precise error
+      // instead of the generic "Invalid client_id" of the legacy table.
+      const mcpClient = await this._mcpOAuthService.getClient(query.client_id);
+      if (mcpClient) {
+        throw new HttpException(
+          {
+            error: 'invalid_request',
+            error_description:
+              'PKCE (code_challenge with S256) is required for this client',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      throw err;
+    }
 
     // RFC 6749 §3.1.2.3: a client that sends a redirect_uri must get a mismatch
     // error rather than a silent redirect elsewhere.
@@ -53,11 +102,52 @@ export class OAuthController {
     };
   }
 
+  // RFC 6749 §5.1: a successful token response is 200. NestJS defaults @Post
+  // to 201, which strict OAuth clients (e.g. oauth4webapi, used by Smithery)
+  // reject as a non-conform response — the client then discards a perfectly
+  // valid token and loops back to "authentication required".
   @Post('/token')
-  async token(@Body() body: TokenExchangeDto) {
+  @HttpCode(HttpStatus.OK)
+  async token(@Body() body: McpTokenDto) {
+    const registered = await this._mcpOAuthService.getClient(body.client_id);
+    if (registered) {
+      await assertOAuthRate('token', registered.id);
+    }
+
+    if (body.grant_type === 'refresh_token') {
+      return this._mcpOAuthService.refresh({
+        refreshToken: body.refresh_token,
+        clientId: body.client_id,
+        clientSecret: body.client_secret,
+      });
+    }
+
     if (body.grant_type !== 'authorization_code') {
       throw new HttpException(
         { error: 'unsupported_grant_type' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    // DCR clients always authenticate their code exchange with PKCE; legacy
+    // OAuth apps use a client secret instead.
+    const mcpClient = await this._mcpOAuthService.getClient(body.client_id);
+    if (mcpClient) {
+      return this._mcpOAuthService.exchangeCode({
+        code: body.code,
+        clientId: body.client_id,
+        clientSecret: body.client_secret,
+        codeVerifier: body.code_verifier,
+        redirectUri: body.redirect_uri,
+      });
+    }
+
+    if (!body.code || !body.client_secret) {
+      throw new HttpException(
+        {
+          error: 'invalid_request',
+          error_description: 'code and client_secret are required',
+        },
         HttpStatus.BAD_REQUEST
       );
     }
@@ -73,7 +163,10 @@ export class OAuthController {
 @ApiTags('OAuth')
 @Controller('/oauth')
 export class OAuthAuthorizedController {
-  constructor(private _oauthService: OAuthService) {}
+  constructor(
+    private _oauthService: OAuthService,
+    private _mcpOAuthService: McpOAuthService
+  ) {}
 
   private assertCanAuthorize(org: Organization) {
     // @ts-ignore - the auth middleware attaches the current membership.
@@ -118,5 +211,33 @@ export class OAuthAuthorizedController {
       redirectUrl.searchParams.set('state', body.state);
     }
     return { redirect: redirectUrl.toString() };
+  }
+
+  /** Consent-page data for an MCP authorization request. */
+  @Get('/mcp-request/:id')
+  async mcpConsentRequest(
+    @Param('id') id: string,
+    @GetUserFromRequest() user: User
+  ) {
+    const request = await this._mcpOAuthService.getConsentRequest(id);
+    const organizations = await this._mcpOAuthService.getConsentOrganizations(
+      user.id
+    );
+    return { ...request, organizations };
+  }
+
+  /** Approve or deny an MCP consent from the consent page. */
+  @Post('/mcp-consent')
+  async mcpConsent(
+    @Body() body: McpConsentDto,
+    @GetUserFromRequest() user: User
+  ) {
+    return this._mcpOAuthService.approveOrDeny({
+      pendingId: body.request_id,
+      userId: user.id,
+      organizationId: body.organization_id,
+      action: body.action,
+      scopes: body.scopes,
+    });
   }
 }

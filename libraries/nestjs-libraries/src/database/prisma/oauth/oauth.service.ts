@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { OAuthRepository } from '@postsider/nestjs-libraries/database/prisma/oauth/oauth.repository';
+import { McpOAuthRepository } from '@postsider/nestjs-libraries/database/prisma/oauth/mcp-oauth.repository';
 import { CreateOAuthAppDto } from '@postsider/nestjs-libraries/dtos/oauth/create-oauth-app.dto';
 import { UpdateOAuthAppDto } from '@postsider/nestjs-libraries/dtos/oauth/update-oauth-app.dto';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
@@ -7,7 +8,10 @@ import { AuthService } from '@postsider/helpers/auth/auth.service';
 
 @Injectable()
 export class OAuthService {
-  constructor(private _oauthRepository: OAuthRepository) {}
+  constructor(
+    private _oauthRepository: OAuthRepository,
+    private _mcpOAuthRepository: McpOAuthRepository
+  ) {}
 
   async getApp(orgId: string) {
     const app = await this._oauthRepository.getAppByOrgId(orgId);
@@ -162,7 +166,14 @@ export class OAuthService {
 
   async getOrgByOAuthToken(token: string) {
     const encrypted = AuthService.fixedEncryption(token);
-    return this._oauthRepository.findByAccessToken(encrypted);
+    const legacy = await this._oauthRepository.findByAccessToken(encrypted);
+    if (legacy) {
+      return legacy;
+    }
+    // Phase 2: access tokens minted by the MCP authorization server share the
+    // `pos_` family and authenticate the same public API surface. The scopes
+    // they carry are enforced per tool by the MCP resource server.
+    return this._mcpOAuthRepository.findActiveAccessForApi(encrypted);
   }
 
   async getApprovedApps(userId: string) {

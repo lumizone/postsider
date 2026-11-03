@@ -1,0 +1,16 @@
+interface:
+  display_name: "Review agency operations"
+  short_description: "Triage customers and publishing issues"
+  default_prompt: "Run a PostSider agency operations check for the last 30 days."
+policy:
+  products:
+    - CHAT
+    - CODEX
+  allow_implicit_invocation: true
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "postsider"
+      description: "Read and manage the authenticated user's PostSider social publishing workspace."
+      transport: "streamable_http"
+      url: "https://mcp.postsider.com/mcp"

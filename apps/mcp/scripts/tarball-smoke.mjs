@@ -14,14 +14,26 @@
  * Usage: node scripts/tarball-smoke.mjs   (or: pnpm run smoke:tarball)
  */
 import { spawn, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { accessSync, constants, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const PKG_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const EXPECTED_TOOL_COUNT = 19;
+// Tools shared by the remote and local servers, plus the one tool only the local
+// stdio server adds (it reads a file from the user's own machine).
+const EXPECTED_TOOL_COUNT = 37;
+const STDIO_ONLY_TOOLS = ['postsider_upload_media_from_file'];
+const EXPECTED_STDIO_TOOL_COUNT = EXPECTED_TOOL_COUNT + STDIO_ONLY_TOOLS.length;
 const EXPECTED_SERVER_NAME = 'postsider';
+const EXPECTED_SKILL_NAMES = [
+  'postsider-agency-operations',
+  'postsider-approval-workflow',
+  'postsider-calendar-review',
+  'postsider-content-publishing',
+  'postsider-performance-reporting',
+];
 const API_KEY = 'tarball-smoke-key';
 
 function fail(message) {
@@ -141,10 +153,14 @@ try {
     'server.json',
     '.mcp.json',
     '.claude-plugin/plugin.json',
-    'skills/postsider-workflow/SKILL.md',
+    ...EXPECTED_SKILL_NAMES.flatMap((name) => [
+      `skills/${name}/SKILL.md`,
+      `skills/${name}/agents/openai.yaml`,
+    ]),
     'dist/index.js',
     'dist/client.js',
     'dist/server.js',
+    'dist/skills-catalog.js',
     'dist/post-body.js',
   ];
   const shippedPaths = entries.map((file) =>
@@ -245,7 +261,7 @@ try {
 
   const session = await speak({ POSTSIDER_API_KEY: API_KEY });
   const init = await session.request(1, 'initialize', {
-    protocolVersion: '2024-11-05',
+    protocolVersion: '2025-06-18',
     capabilities: {},
     clientInfo: { name: 'tarball-smoke', version: '1.0.0' },
   });
@@ -263,8 +279,43 @@ try {
     fail(`tools/list failed: ${JSON.stringify(listed.error)}`);
   }
   const tools = listed.result?.tools ?? [];
-  if (tools.length !== EXPECTED_TOOL_COUNT) {
-    fail(`expected ${EXPECTED_TOOL_COUNT} tools from the installed artifact, got ${tools.length}`);
+  if (tools.length !== EXPECTED_STDIO_TOOL_COUNT) {
+    fail(`expected ${EXPECTED_STDIO_TOOL_COUNT} tools from the installed artifact, got ${tools.length}`);
+  }
+
+  const listedSkills = await session.request(3, 'skills/list', {});
+  if (listedSkills.error) {
+    fail(`skills/list failed: ${JSON.stringify(listedSkills.error)}`);
+  }
+  const skills = listedSkills.result?.skills ?? [];
+  const installedSkillNames = skills
+    .map((skill) => skill.frontmatter?.name)
+    .sort();
+  if (installedSkillNames.join(',') !== EXPECTED_SKILL_NAMES.join(',')) {
+    fail(
+      'installed skill names differ from the expected OpenAI import set:\n' +
+        `  installed: ${installedSkillNames.join(', ')}\n` +
+        `  expected:  ${EXPECTED_SKILL_NAMES.join(', ')}`
+    );
+  }
+  if (skills.some((skill) => !skill.uri || skill.resources?.length !== 2)) {
+    fail('every installed skill must expose its SKILL.md and agents/openai.yaml resources');
+  }
+  let resourceRequestId = 10;
+  for (const skill of skills) {
+    for (const resource of skill.resources) {
+      const read = await session.request(resourceRequestId++, 'resources/read', {
+        uri: resource.uri,
+      });
+      const content = read.result?.contents?.[0];
+      if (read.error || content?.uri !== resource.uri || typeof content?.text !== 'string') {
+        fail(`resources/read could not fetch ${resource.uri}: ${JSON.stringify(read.error)}`);
+      }
+      const digest = `sha256:${createHash('sha256').update(content.text, 'utf8').digest('hex')}`;
+      if (digest !== resource.digest) {
+        fail(`resource digest mismatch for ${resource.uri}`);
+      }
+    }
   }
 
   // Compare exact names against what the SOURCE registers, so the installed
@@ -276,9 +327,9 @@ try {
   ]
     .map((match) => match[1])
     .sort();
-  if (registered.length !== EXPECTED_TOOL_COUNT) {
+  if (registered.length !== EXPECTED_STDIO_TOOL_COUNT) {
     fail(
-      `src/server.ts registers ${registered.length} tools, expected ${EXPECTED_TOOL_COUNT}`
+      `src/server.ts registers ${registered.length} tools, expected ${EXPECTED_STDIO_TOOL_COUNT}`
     );
   }
   const inventorySource = readFileSync(
@@ -301,11 +352,12 @@ try {
   }
 
   const installedNames = tools.map((tool) => tool.name).sort();
-  if (installedNames.join(',') !== frozen.join(',')) {
+  const expectedInstalled = [...frozen, ...STDIO_ONLY_TOOLS].sort();
+  if (installedNames.join(',') !== expectedInstalled.join(',')) {
     fail(
       'installed tool names differ from the frozen expectation list:\n' +
         `  installed: ${installedNames.join(', ')}\n` +
-        `  expected:  ${frozen.join(', ')}`
+        `  expected:  ${expectedInstalled.join(', ')}`
     );
   }
 
@@ -320,7 +372,9 @@ try {
     fail(`non-protocol bytes on stdout: ${JSON.stringify(session.stray.slice(0, 3))}`);
   }
   await session.close();
-  console.log(`    install handshake ok, ${tools.length} tools, stdout clean`);
+  console.log(
+    `    install handshake ok, ${tools.length} tools, ${skills.length} skills, stdout clean`
+  );
 
   // 5. The missing-key path must exit 1 with an empty stdout.
   console.log('5/5 checking the missing-key path...');

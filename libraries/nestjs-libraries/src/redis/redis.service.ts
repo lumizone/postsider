@@ -139,9 +139,19 @@ class MockRedis {
   }
 }
 
-// Use real Redis if REDIS_URL is defined, otherwise use MockRedis
-export const ioRedis = process.env.REDIS_URL
-  ? new Redis(process.env.REDIS_URL, {
+// Use real Redis if REDIS_URL is defined, otherwise use MockRedis.
+//
+// Unit runs must stay hermetic: Jest sets JEST_WORKER_ID, and import graphs
+// that pull in @prisma/client re-load the repository `.env` into process.env
+// (Prisma's client runtime ships env-file loading) — that happens AFTER
+// jest.setup.unit.ts deleted REDIS_URL, so without this guard a spec that
+// imports Prisma before redis.service silently instantiates a real ioredis
+// client whose commands queue forever with no server, hanging tests with a
+// 5s timeout. The setup file's deletion stays as the belt; this is the braces.
+const redisUrl = process.env.JEST_WORKER_ID ? undefined : process.env.REDIS_URL;
+
+export const ioRedis = redisUrl
+  ? new Redis(redisUrl, {
       maxRetriesPerRequest: null,
       connectTimeout: 10000,
     })

@@ -29,6 +29,7 @@ const NAV_ITEMS: NavEntry[] = [
   { href: "/settings/security", labelKey: "settings.security" },
   { href: "/settings/storage", labelKey: "settings.storage", minRole: "ADMIN" },
   { href: "/settings/api", labelKey: "settings.api", minRole: "ADMIN" },
+  { href: "/settings/mcp", labelKey: "settings.mcp", minRole: "ADMIN" },
   { href: "/settings/webhooks", labelKey: "settings.webhooks", minRole: "ADMIN" },
 { href: "/settings/evergreen", labelKey: "settings.evergreen", minRole: "ADMIN" },
   { href: "/settings/queue-plan", labelKey: "settings.queuePlan", minRole: "ADMIN" },

@@ -2,7 +2,7 @@
   "mcpServers": {
     "postsider": {
       "command": "npx",
-      "args": ["-y", "@postsider/mcp@1.0.0"],
+      "args": ["-y", "@postsider/mcp@1.1.0"],
       "env": {
         "POSTSIDER_API_KEY": "${user_config.api_key}"
       }

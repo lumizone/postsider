@@ -1,0 +1,198 @@
+.endpointRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.endpoint {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow-x: auto;
+  user-select: all;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.clients {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.client {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-soft);
+  background: var(--bg);
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms var(--ease), background 140ms var(--ease),
+    transform 120ms var(--ease);
+}
+
+.client:hover {
+  background: rgb(var(--tint) / 0.04);
+}
+
+.client:active {
+  transform: scale(0.98);
+}
+
+.clientActive,
+.clientActive:hover {
+  border-color: var(--fg);
+  background: rgb(var(--tint) / 0.05);
+}
+
+.brand {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  background: var(--fg);
+  -webkit-mask: var(--brand) center / contain no-repeat;
+  mask: var(--brand) center / contain no-repeat;
+}
+
+.clientText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.clientName {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.clientSub {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.panelTitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+
+.steps li {
+  position: relative;
+  padding-left: 32px;
+  font-size: 13px;
+  line-height: 1.6;
+  counter-increment: step;
+}
+
+.steps li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 1px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgb(var(--tint) / 0.06);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.snippet {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.snippetRow {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.snippetCode {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow-x: auto;
+  line-height: 1.7;
+  white-space: pre;
+  word-break: normal;
+  user-select: all;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.snippetWrap {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 600px) {
+  .clients {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .client {
+    min-height: 52px;
+    padding: 10px 12px;
+  }
+
+  .clientSub {
+    display: none;
+  }
+
+  .endpointRow,
+  .snippetRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

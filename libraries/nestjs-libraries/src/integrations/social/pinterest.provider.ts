@@ -11,6 +11,7 @@ import axios from 'axios';
 import FormData from 'form-data';
 import { timer } from '@postsider/helpers/utils/timer';
 import {
+  assertRefreshedAccessToken,
   BadBody,
   SocialAbstract,
   ValidityMedia,
@@ -120,23 +121,31 @@ export class PinterestProvider
   }
 
   async refreshToken(refreshToken: string): Promise<AuthTokenDetails> {
-    const { access_token, expires_in } = await (
-      await fetch('https://api.pinterest.com/v5/oauth/token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          Authorization: `Basic ${Buffer.from(
-            `${process.env.PINTEREST_CLIENT_ID}:${process.env.PINTEREST_CLIENT_SECRET}`
-          ).toString('base64')}`,
-        },
-        body: new URLSearchParams({
-          grant_type: 'refresh_token',
-          refresh_token: refreshToken,
-          scope: this.scopes.join(','),
-          redirect_uri: `${process.env.FRONTEND_URL}/integrations/social/pinterest`,
-        }),
-      })
-    ).json();
+    const tokenResponse = await fetch('https://api.pinterest.com/v5/oauth/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: `Basic ${Buffer.from(
+          `${process.env.PINTEREST_CLIENT_ID}:${process.env.PINTEREST_CLIENT_SECRET}`
+        ).toString('base64')}`,
+      },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+        scope: this.scopes.join(','),
+        redirect_uri: `${process.env.FRONTEND_URL}/integrations/social/pinterest`,
+      }),
+    });
+    const tokenBody = await tokenResponse.json();
+    const access_token = assertRefreshedAccessToken(
+      'pinterest',
+      tokenBody,
+      tokenResponse.status
+    );
+    const {
+      expires_in,
+      refresh_token: rotatedRefreshToken,
+    } = tokenBody;
 
     const { id, profile_image, username } = await (
       await fetch('https://api.pinterest.com/v5/user_account', {
@@ -151,7 +160,9 @@ export class PinterestProvider
       id: id,
       name: username,
       accessToken: access_token,
-      refreshToken: refreshToken,
+      // Pinterest rotates the refresh token on every refresh; keeping the old
+      // one silently invalidates the channel on the next cycle.
+      refreshToken: rotatedRefreshToken || refreshToken,
       expiresIn: expires_in,
       picture: profile_image || '',
       username,

@@ -8,7 +8,10 @@ import {
 } from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import { timer } from '@postsider/helpers/utils/timer';
-import { SocialAbstract } from '@postsider/nestjs-libraries/integrations/social.abstract';
+import {
+  assertRefreshedAccessToken,
+  SocialAbstract,
+} from '@postsider/nestjs-libraries/integrations/social.abstract';
 import { WhopDto } from '@postsider/nestjs-libraries/dtos/posts/providers-settings/whop.dto';
 import { Integration } from '@prisma/client';
 import { Tool } from '@postsider/nestjs-libraries/integrations/tool.decorator';
@@ -74,31 +77,35 @@ export class WhopProvider extends SocialAbstract implements SocialProvider {
   }
 
   async refreshToken(refreshToken: string): Promise<AuthTokenDetails> {
-    const response = await (
-      await fetch('https://api.whop.com/oauth/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          grant_type: 'refresh_token',
-          refresh_token: refreshToken,
-          client_id: process.env.WHOP_CLIENT_ID,
-          ...(process.env.WHOP_CLIENT_SECRET
-            ? { client_secret: process.env.WHOP_CLIENT_SECRET }
-            : {}),
-        }),
-      })
-    ).json();
+    const tokenResponse = await fetch('https://api.whop.com/oauth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+        client_id: process.env.WHOP_CLIENT_ID,
+        ...(process.env.WHOP_CLIENT_SECRET
+          ? { client_secret: process.env.WHOP_CLIENT_SECRET }
+          : {}),
+      }),
+    });
+    const response = await tokenResponse.json();
+    const accessToken = assertRefreshedAccessToken(
+      'whop',
+      response,
+      tokenResponse.status
+    );
 
     const userInfo = await (
       await fetch('https://api.whop.com/oauth/userinfo', {
-        headers: { Authorization: `Bearer ${response.access_token}` },
+        headers: { Authorization: `Bearer ${accessToken}` },
       })
     ).json();
 
     return {
       id: userInfo.sub,
       name: userInfo.name || userInfo.preferred_username || '',
-      accessToken: response.access_token,
+      accessToken,
       refreshToken: response.refresh_token,
       expiresIn: response.expires_in || 3600,
       picture: userInfo.picture || '',

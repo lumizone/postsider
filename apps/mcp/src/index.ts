@@ -22,7 +22,7 @@ const baseUrl = process.env.POSTSIDER_API_URL || 'https://api.postsider.com';
 
 async function main(key: string, url: string) {
   const client = new PostsiderClient(key, url);
-  const server = createPostSiderMcpServer(client);
+  const server = createPostSiderMcpServer(client, { allowLocalFiles: true });
   const transport = new StdioServerTransport();
 
   await server.connect(transport);

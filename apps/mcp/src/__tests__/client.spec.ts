@@ -8,7 +8,7 @@ import {
 } from '@jest/globals';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { PostsiderClient } from '../client.js';
+import { PostsiderClient, describeApiError } from '../client.js';
 
 /**
  * The runtime's real fetch, captured before any hook replaces it. The redirect
@@ -745,5 +745,26 @@ describe('PostsiderClient', () => {
       expect(error?.message).toContain('POSTSIDER_API_URL');
       expect(error?.message).not.toContain(apiKey);
     });
+  });
+});
+
+describe('describeApiError', () => {
+  it('reads the three error shapes the API produces', () => {
+    expect(describeApiError({ msg: 'Post not found' }, 'Bad Request')).toBe('Post not found');
+    expect(
+      describeApiError(
+        { statusCode: 400, provider: 'x', name: 'X', message: 'post is too long, please fix it' },
+        'Bad Request'
+      )
+    ).toBe('X: post is too long, please fix it');
+    expect(
+      describeApiError({ statusCode: 400, message: ['date must be a valid ISO 8601 date', 'shortLink must be a boolean'] }, 'Bad Request')
+    ).toBe('date must be a valid ISO 8601 date; shortLink must be a boolean');
+  });
+
+  it('falls back to the status text when the body says nothing usable', () => {
+    expect(describeApiError(null, 'Bad Request')).toBe('Bad Request');
+    expect(describeApiError({ statusCode: 400 }, 'Bad Request')).toBe('Bad Request');
+    expect(describeApiError('plain text', 'Bad Request')).toBe('plain text');
   });
 });

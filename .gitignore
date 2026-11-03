@@ -86,3 +86,6 @@ scripts/encrypt-integration-tokens.cjs
 scripts/set-subscription.cjs
 scripts/temporal-refresh-v3-cutover.cjs
 .rebrand-allowlist
+
+# Node compile cache
+node-compile-cache/

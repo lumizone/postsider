@@ -58,6 +58,9 @@ function resolveBaseUrl(baseUrl: string): string {
 /** Hard ceiling on how long a single API request may take. */
 const REQUEST_TIMEOUT_MS = 30_000;
 
+/** Uploads of large videos need longer than a normal API call. */
+const UPLOAD_TIMEOUT_MS = 5 * 60_000;
+
 /** Hard ceiling on how much of a failing response body is read or echoed. */
 const MAX_ERROR_BODY_BYTES = 8 * 1024;
 
@@ -99,6 +102,41 @@ function thrownCauseMessage(err: unknown): string {
     }
   }
   return '';
+}
+
+/**
+ * Turn an error body into the one sentence an agent can act on.
+ *
+ * The API answers in three shapes: `{msg}` (hand-written errors), Nest's
+ * `{statusCode, message: string | string[]}` (DTO validation) and
+ * `{statusCode, provider, name, message}` (per-channel post validation, e.g.
+ * "post is too long"). Reading only `msg` reduced the last two to "Bad
+ * Request", hiding exactly what the agent needed to fix.
+ */
+export function describeApiError(data: unknown, fallback: string): string {
+  if (typeof data === 'string') {
+    return data || fallback;
+  }
+  if (!data || typeof data !== 'object') {
+    return fallback;
+  }
+  const body = data as Record<string, unknown>;
+  const raw = body.msg ?? body.message;
+  const text = Array.isArray(raw)
+    ? raw.map(String).join('; ')
+    : typeof raw === 'string'
+    ? raw
+    : '';
+  if (!text) {
+    return fallback;
+  }
+  const channel =
+    typeof body.name === 'string' && body.name
+      ? body.name
+      : typeof body.provider === 'string'
+      ? body.provider
+      : '';
+  return channel ? `${channel}: ${text}` : text;
 }
 
 /** Parse a JSON body, falling back to raw text when it is not JSON. */
@@ -199,7 +237,13 @@ export class PostsiderClient {
   private async request(
     method: string,
     path: string,
-    opts: { query?: Record<string, unknown>; body?: unknown; idempotencyKey?: string } = {}
+    opts: {
+      query?: Record<string, unknown>;
+      body?: unknown;
+      idempotencyKey?: string;
+      form?: FormData;
+      timeoutMs?: number;
+    } = {}
   ): Promise<unknown> {
     if (!path.startsWith('/')) {
       // Internal invariant: every path in server.ts is a literal starting with "/".
@@ -217,17 +261,19 @@ export class PostsiderClient {
       }
     }
 
+    const timeoutMs = opts.timeoutMs ?? REQUEST_TIMEOUT_MS;
     let res: Response;
     try {
       res = await fetch(url, {
         method,
         headers: {
           Authorization: this.apiKey,
-          ...(opts.body ? { 'Content-Type': 'application/json' } : {}),
+          // A FormData body sets its own multipart boundary header.
+          ...(opts.body && !opts.form ? { 'Content-Type': 'application/json' } : {}),
           ...(opts.idempotencyKey ? { 'Idempotency-Key': opts.idempotencyKey } : {}),
         },
-        body: opts.body ? JSON.stringify(opts.body) : undefined,
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        body: opts.form ?? (opts.body ? JSON.stringify(opts.body) : undefined),
+        signal: AbortSignal.timeout(timeoutMs),
         // The public API never legitimately redirects, and a redirect would
         // otherwise leave the validated origin: the HTTPS/loopback policy above
         // only covers the URL the user configured, not wherever it points next.
@@ -238,7 +284,7 @@ export class PostsiderClient {
       if (name === 'TimeoutError' || name === 'AbortError') {
         throw new Error(
           `PostSider did not respond within ${
-            REQUEST_TIMEOUT_MS / 1000
+            timeoutMs / 1000
           }s (${method} ${path} at ${url.origin}). Check POSTSIDER_API_URL and that the instance is online.`
         );
       }
@@ -270,7 +316,7 @@ export class PostsiderClient {
         if (name === 'TimeoutError' || name === 'AbortError') {
           throw new Error(
             `PostSider did not finish sending its response within ${
-              REQUEST_TIMEOUT_MS / 1000
+              timeoutMs / 1000
             }s (${method} ${path} at ${url.origin}). Check POSTSIDER_API_URL and that the instance is online.`
           );
         }
@@ -285,12 +331,7 @@ export class PostsiderClient {
     if (!res.ok) {
       const { text: raw, truncated } = await readBody(MAX_ERROR_BODY_BYTES);
       const data = parseBody(truncated ? `${raw} [truncated]` : raw);
-      const apiMsg =
-        data && typeof data === 'object' && 'msg' in (data as Record<string, unknown>)
-          ? String((data as Record<string, unknown>).msg)
-          : typeof data === 'string'
-          ? data
-          : res.statusText;
+      const apiMsg = describeApiError(data, res.statusText);
       // 423 = Emergency Pause (kill switch): surface WHY the post did not go
       // out so an agent understands a paused org instead of a generic failure.
       if (res.status === 423) {
@@ -330,6 +371,12 @@ export class PostsiderClient {
   }
   post(path: string, body?: unknown, idempotencyKey?: string) {
     return this.request('POST', path, { body, idempotencyKey });
+  }
+  /** Multipart upload of one file as form field `file` (large ceiling: video). */
+  upload(path: string, bytes: Uint8Array, filename: string) {
+    const form = new FormData();
+    form.set('file', new Blob([bytes]), filename);
+    return this.request('POST', path, { form, timeoutMs: UPLOAD_TIMEOUT_MS });
   }
   put(path: string, body?: unknown) {
     return this.request('PUT', path, { body });

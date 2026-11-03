@@ -1603,6 +1603,92 @@ export class PostsService {
     }
   }
 
+  /**
+   * Build the `update` payload for a Public API / MCP post edit.
+   *
+   * Only fields present in `patch` change; everything else (settings, other
+   * thread parts, tags, firstComment, date) is carried over from the stored
+   * post so a partial edit can never wipe data. The result goes through the
+   * same `createPost(type: 'update')` path the dashboard uses, so an edited
+   * QUEUE post re-arms its publish workflow exactly like a dashboard edit.
+   */
+  async buildPostUpdate(
+    orgId: string,
+    id: string,
+    patch: {
+      content?: string;
+      images?: Array<{ id?: string; path: string; [key: string]: any }>;
+      date?: string;
+      settings?: Record<string, any>;
+      firstComment?: string | null;
+    }
+  ): Promise<{ dto: CreatePostDto; state: string }> {
+    const thread = await this.getPostsRecursively(id, true, orgId, true);
+    if (!thread?.length) {
+      throw new BadRequestException('Post not found');
+    }
+    const first = thread[0] as any;
+    if (first.parentPostId) {
+      throw new BadRequestException(
+        'Pass the id of the first post of the thread, not a later part.'
+      );
+    }
+    if (!first.integration || first.integration.deletedAt) {
+      throw new BadRequestException('The channel of this post was removed.');
+    }
+    thread.forEach((p) => this.assertMutable(p));
+
+    if (
+      patch.date &&
+      first.state === 'QUEUE' &&
+      dayjs(patch.date).isBefore(dayjs().subtract(1, 'minute'))
+    ) {
+      throw new BadRequestException('Scheduled date cannot be in the past');
+    }
+
+    const settings =
+      patch.settings ?? JSON.parse((first.settings as string) || '{}');
+
+    return {
+      state: first.state,
+      dto: {
+        // A draft stays a draft and keeps the lenient draft validation: type
+        // 'update' would demand complete provider settings from a half-written
+        // post and refuse to save it.
+        type: first.state === 'DRAFT' ? 'draft' : 'update',
+        date: patch.date ?? dayjs(first.publishDate).toISOString(),
+        shortLink: false,
+        tags: (first.tags || [])
+          .map((t: any) => t?.tag?.name)
+          .filter(Boolean)
+          .map((name: string) => ({ value: name, label: name })),
+        posts: [
+          {
+            integration: { id: first.integrationId },
+            group: first.group,
+            firstComment:
+              patch.firstComment === undefined
+                ? first.firstComment ?? undefined
+                : patch.firstComment ?? undefined,
+            settings,
+            value: thread.map((p: any, index) => ({
+              id: p.id,
+              delay: p.delay || 0,
+              content:
+                index === 0 && patch.content !== undefined
+                  ? patch.content
+                  : p.content,
+              image:
+                index === 0 && patch.images !== undefined
+                  ? patch.images.map((m) => ({ ...m, id: m.id ?? '' }))
+                  : JSON.parse((p.image as string) || '[]'),
+            })),
+          },
+        ],
+      } as unknown as CreatePostDto,
+    };
+  }
+
   async changePostStatus(
     orgId: string,
     id: string,

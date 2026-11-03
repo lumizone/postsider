@@ -43,6 +43,7 @@ import { EnterpriseController } from '@postsider/backend/api/routes/enterprise.c
 import { OAuthAppController } from '@postsider/backend/api/routes/oauth-app.controller';
 import { ApprovedAppsController } from '@postsider/backend/api/routes/approved-apps.controller';
 import { OAuthController, OAuthAuthorizedController } from '@postsider/backend/api/routes/oauth.controller';
+import { McpOAuthController } from '@postsider/backend/api/routes/mcp-oauth.controller';
 import { AnnouncementsController } from '@postsider/backend/api/routes/announcements.controller';
 import { AdminController } from '@postsider/backend/api/routes/admin.controller';
 import { AuthProviderManager } from '@postsider/backend/services/auth/providers/providers.manager';
@@ -92,6 +93,7 @@ const authenticatedController = [
     NoAuthIntegrationsController,
     MetaComplianceController,
     OAuthController,
+    McpOAuthController,
     ...authenticatedController,
   ],
   providers: [

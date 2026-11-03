@@ -16,4 +16,5 @@ export * from './send.email.workflow';
 export * from './refresh.token.workflow';
 export * from './refresh.token.workflow.v2';
 export * from './refresh.token.workflow.v3';
+export * from './refresh.recovery.workflow';
 export * from './streak.workflow';

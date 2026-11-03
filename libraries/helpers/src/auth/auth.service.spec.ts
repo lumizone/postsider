@@ -61,13 +61,12 @@ describe('AuthService secret encryption', () => {
   it('GCM detects tampering via the auth tag', () => {
     process.env.ENCRYPTION_KEY = 'a-strong-encryption-key';
     const ct = encrypt_gcm('authentic');
-    // Flip a character in the ciphertext body, guaranteeing the new character
-    // differs from the original ('A' -> 'B', anything else -> 'A'). The old
-    // ternary could produce an unchanged string when the char was already
-    // 'A'/'B', which made this test flaky (~2% of runs).
-    const idx = ct.length - 2;
-    const flip = ct[idx] === 'A' ? 'B' : 'A';
-    const tampered = ct.slice(0, idx) + flip + ct.slice(idx + 1);
+    // Change a character in the ciphertext body. The replacement is chosen from
+    // the character actually there; comparing against the LAST character left a
+    // ~1 in 64 chance of "changing" it to the same value and not tampering at all.
+    const at = ct.length - 2;
+    const tampered = ct.slice(0, at) + (ct[at] === 'A' ? 'B' : 'A') + ct.slice(at + 1);
+    expect(tampered).not.toBe(ct);
     expect(() => decrypt_gcm(tampered)).toThrow();
   });
 });

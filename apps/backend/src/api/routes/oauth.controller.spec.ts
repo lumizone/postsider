@@ -1,5 +1,6 @@
-import { HttpException } from '@nestjs/common';
-import { OAuthAuthorizedController } from './oauth.controller';
+import { HttpException, HttpStatus } from '@nestjs/common';
+import { OAuthAuthorizedController, OAuthController } from './oauth.controller';
+import { McpOAuthController } from './mcp-oauth.controller';
 
 describe('OAuthAuthorizedController authorization role', () => {
   const app = {
@@ -55,4 +56,34 @@ describe('OAuthAuthorizedController authorization role', () => {
       );
     }
   );
+});
+
+/**
+ * Strict OAuth clients (oauth4webapi, used by Smithery) require the exact
+ * status code from the RFC; NestJS defaults @Post to 201, which made Smithery
+ * reject a valid token response and loop on "authentication required".
+ */
+describe('OAuth endpoint HTTP status conformance', () => {
+  const httpCode = (handler: unknown) =>
+    Reflect.getMetadata('__httpCode__', handler as object);
+
+  it('token endpoint returns 200 (RFC 6749 §5.1), not the default 201', () => {
+    expect(httpCode(OAuthController.prototype.token)).toBe(HttpStatus.OK);
+  });
+
+  it('introspection returns 200 (RFC 7662 §2.2)', () => {
+    expect(httpCode(McpOAuthController.prototype.introspect)).toBe(
+      HttpStatus.OK
+    );
+  });
+
+  it('revocation returns 200 (RFC 7009 §2.2)', () => {
+    expect(httpCode(McpOAuthController.prototype.revoke)).toBe(HttpStatus.OK);
+  });
+
+  it('dynamic client registration keeps the default 201 (RFC 7591 §3.2.1)', () => {
+    // No explicit @HttpCode here on purpose: NestJS's POST default of 201 is
+    // exactly what RFC 7591 (and oauth4webapi) require for DCR.
+    expect(httpCode(McpOAuthController.prototype.register)).toBeUndefined();
+  });
 });

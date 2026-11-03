@@ -13,6 +13,7 @@ import cookieParser from 'cookie-parser';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { LARGE_JSON_PATHS, LARGE_JSON_LIMIT } from './large-json.paths';
 
 import { SubscriptionExceptionFilter } from '@postsider/backend/services/auth/permissions/subscription.exception';
 import { PostValidationExceptionFilter } from '@postsider/backend/api/routes/posts.validation.exception';
@@ -71,8 +72,8 @@ async function start() {
     })
   );
 
-  app.use(['/posts'], (req: any, res: any, next: any) => {
-    json({ limit: '50mb' })(req, res, next);
+  app.use(LARGE_JSON_PATHS, (req: any, res: any, next: any) => {
+    json({ limit: LARGE_JSON_LIMIT })(req, res, next);
   });
 
   app.use(cookieParser());

@@ -33,6 +33,8 @@ export interface Channel {
   color: string;
   /** Profile picture from the connected account, or null when unavailable. */
   avatarUrl?: string | null;
+  /** Backend flag: the channel's token is unusable and it needs a retry/reconnect. */
+  refreshNeeded?: boolean;
   /** Current audience size (subscribers / followers / page likes). */
   audience: number;
   /** Daily snapshots for the last 90 days, oldest → newest. */

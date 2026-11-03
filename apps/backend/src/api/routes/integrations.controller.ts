@@ -3,6 +3,9 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
+  NotFoundException,
   Param,
   Post,
   Put,
@@ -79,6 +82,31 @@ export class IntegrationsController {
     );
 
     return integration?.internalId || refresh;
+  }
+
+  /**
+   * Retry a channel flagged `refreshNeeded` without a full OAuth reconnect:
+   * re-run the provider exchange and clear the flag if it succeeds. Lets a user
+   * recover from a transient fault (or a false positive) with one click
+   * instead of re-authorizing the account.
+   */
+  @Post('/:id/retry')
+  @HttpCode(HttpStatus.OK)
+  @CheckPolicies([AuthorizationActions.Create, Sections.CHANNEL])
+  async retryChannel(
+    @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string
+  ) {
+    const integration = await this._integrationService.getIntegrationById(
+      org.id,
+      id
+    );
+    if (!integration) {
+      throw new NotFoundException('Channel not found');
+    }
+    const recovered =
+      await this._refreshIntegrationService.recoverOnce(integration);
+    return { recovered };
   }
 
   // Optional per-channel scoping (ADMIN/SUPERADMIN only). No assignments for

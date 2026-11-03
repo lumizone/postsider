@@ -14,6 +14,8 @@ interface ChannelDetailModalProps {
   onClose: () => void;
   onColorChange: (color: string) => void;
   onReconnect: () => void;
+  onRetry: () => void;
+  retrying?: boolean;
   onDelete: () => void;
 }
 
@@ -71,6 +73,8 @@ export function ChannelDetailModal({
   onClose,
   onColorChange,
   onReconnect,
+  onRetry,
+  retrying = false,
   onDelete,
 }: ChannelDetailModalProps) {
   const t = useT();
@@ -179,6 +183,10 @@ export function ChannelDetailModal({
           </div>
         </section>
 
+        {channel.refreshNeeded && (
+          <p className={styles.sectionLabel}>{t("channels.retryHint")}</p>
+        )}
+
         <footer className={styles.actions}>
           <button
             type="button"
@@ -187,6 +195,16 @@ export function ChannelDetailModal({
           >
             {t("channels.delete")}
           </button>
+          {channel.refreshNeeded && (
+            <button
+              type="button"
+              className={styles.btnSecondary}
+              onClick={onRetry}
+              disabled={retrying}
+            >
+              {retrying ? t("channels.retrying") : t("channels.retry")}
+            </button>
+          )}
           <button
             type="button"
             className={styles.btnPrimary}

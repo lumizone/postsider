@@ -23,10 +23,14 @@ services:
         # deploy.sh exports these from .env.production before `docker compose build`.
         NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:?NEXT_PUBLIC_BACKEND_URL must be set in .env.production}
         NEXT_PUBLIC_SELF_HOSTED: ${NEXT_PUBLIC_SELF_HOSTED:-true}
-        NEXT_PUBLIC_VERSION: ${NEXT_PUBLIC_VERSION:-1.3.0}
+        NEXT_PUBLIC_VERSION: ${NEXT_PUBLIC_VERSION:-1.4.0}
         NEXT_PUBLIC_TELEGRAM_BOT_NAME: ${NEXT_PUBLIC_TELEGRAM_BOT_NAME:-}
         NEXT_PUBLIC_DISABLE_REGISTRATION: ${NEXT_PUBLIC_DISABLE_REGISTRATION:-}
+        NEXT_PUBLIC_MCP_URL: ${NEXT_PUBLIC_MCP_URL:-}
+        NEXT_PUBLIC_PUBLIC_API_URL: ${NEXT_PUBLIC_PUBLIC_API_URL:-}
     container_name: postsider-app
+    security_opt:
+      - no-new-privileges:true
     restart: always
     env_file: .env.production
     environment:
@@ -80,10 +84,51 @@ services:
       minio-init:
         condition: service_completed_successfully
 
+  # ─── Remote MCP server (mcp.example.com) ─────────────────────────────────
+  # Streamable HTTP MCP endpoint that AI clients (ChatGPT/Codex directory,
+  # Claude, Codex CLI) connect to. Every /mcp request is authenticated by OAuth
+  # token introspection against this stack's own backend; MCP_INTROSPECTION_SECRET
+  # is the shared secret and must also be present in the app container's env
+  # (both read .env.production). Tool calls are forwarded to MCP_API_URL with the
+  # user's token; see apps/mcp/README.md and DEPLOYMENT.md section 9.
+  postsider-mcp:
+    build:
+      context: ./apps/mcp
+      dockerfile: Dockerfile
+    container_name: postsider-mcp
+    security_opt:
+      - no-new-privileges:true
+    restart: always
+    env_file: .env.production
+    environment:
+      # Fixed inside the container; the host proxy fronts 127.0.0.1:8081.
+      MCP_PORT: "8080"
+      MCP_BIND_HOST: "0.0.0.0"
+      NODE_ENV: "production"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M
+    ports:
+      - "127.0.0.1:8081:8080"
+    networks:
+      - postsider-network
+    healthcheck:
+      # node -e, not wget: the node:*-slim base image ships neither wget nor curl.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   # ─── PostgreSQL (App Database) ────────────────────────────────────────────
   postsider-postgres:
     image: postgres:17-alpine
     container_name: postsider-postgres
+    security_opt:
+      - no-new-privileges:true
     restart: always
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set (remove the hardcoded fallback)}
@@ -121,6 +166,8 @@ services:
   postsider-redis:
     image: redis:7-alpine
     container_name: postsider-redis
+    security_opt:
+      - no-new-privileges:true
     restart: always
     # volatile-lru, NOT allkeys-lru: every key we write today has a TTL (OAuth
     # connect state, throttler counters, analytics caches), so behavior is
@@ -154,6 +201,8 @@ services:
     # To upgrade: change the digest DELIBERATELY and test the S3 surface.
     image: minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
     container_name: postsider-minio
+    security_opt:
+      - no-new-privileges:true
     restart: always
     command: server /data --console-address ":9001"
     environment:
@@ -188,6 +237,8 @@ services:
     # Pinned for the same reason as postsider-minio above.
     image: minio/mc@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
     container_name: postsider-minio-init
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       postsider-minio:
         condition: service_healthy
@@ -221,6 +272,8 @@ services:
     # Pinned — a DB UI with stored prod credentials should never self-upgrade.
     image: dbgate/dbgate@sha256:331726a5387fe38f0ed37b97092b12d891308e5995f36d8e4db3028fe0744140
     container_name: postsider-dbgate
+    security_opt:
+      - no-new-privileges:true
     restart: always
     environment:
       CONNECTIONS: con1
@@ -251,6 +304,8 @@ services:
   temporal-elasticsearch:
     image: elasticsearch:7.17.27
     container_name: postsider-temporal-es
+    security_opt:
+      - no-new-privileges:true
     restart: always
     environment:
       - cluster.routing.allocation.disk.threshold_enabled=true
@@ -276,6 +331,8 @@ services:
   temporal-postgresql:
     image: postgres:16-alpine
     container_name: postsider-temporal-pg
+    security_opt:
+      - no-new-privileges:true
     restart: always
     environment:
       POSTGRES_PASSWORD: temporal
@@ -301,6 +358,8 @@ services:
   temporal:
     image: temporalio/auto-setup:1.28.1
     container_name: postsider-temporal
+    security_opt:
+      - no-new-privileges:true
     restart: always
     depends_on:
       temporal-postgresql:
@@ -345,6 +404,8 @@ services:
   temporal-ui:
     image: temporalio/ui:2.34.0
     container_name: postsider-temporal-ui
+    security_opt:
+      - no-new-privileges:true
     restart: always
     environment:
       - TEMPORAL_ADDRESS=postsider-temporal:7233
