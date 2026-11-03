@@ -26,13 +26,23 @@ describe('PublicApiScopeGuard', () => {
     );
   });
 
-  it('keeps legacy and OAuth credentials backward compatible through wildcard access', () => {
+  it('rejects wildcard access even if a credential accidentally supplies it', () => {
     const reflector = {
-      getAllAndOverride: jest.fn().mockReturnValue(['posts:write']),
+      getAllAndOverride: jest.fn().mockReturnValue(['webhooks:write']),
     } as unknown as Reflector;
     const guard = new PublicApiScopeGuard(reflector);
 
-    expect(guard.canActivate(context(['*']))).toBe(true);
+    expect(() => guard.canActivate(context(['*']))).toThrow(ForbiddenException);
+  });
+
+  it('does not let a read-only MCP credential create or rotate webhooks', () => {
+    const reflector = {
+      getAllAndOverride: jest.fn().mockReturnValue(['webhooks:write']),
+    } as unknown as Reflector;
+    const guard = new PublicApiScopeGuard(reflector);
+
+    expect(() => guard.canActivate(context(['posts:read', 'channels:read']))).toThrow(ForbiddenException);
+    expect(guard.canActivate(context(['webhooks:write']))).toBe(true);
   });
 
   it('denies a scoped credential when the route scope is missing', () => {
