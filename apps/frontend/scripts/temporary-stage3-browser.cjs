@@ -162,12 +162,26 @@ async function inspectWidth(browser, width) {
     result.beforeConfirmDisabled=await page.getByRole("button",{name:"Finish AI setup"}).isDisabled();
     await page.getByRole("checkbox",{name:/I checked the response in my client/}).check();
     result.finishBeforeId=await page.getByRole("button",{name:"Finish AI setup"}).isEnabled();
+    await page.getByRole("textbox",{name:"Post ID returned by your agent"}).fill("unknown-post-123");
+    await page.getByRole("button",{name:"Verify this draft"}).click();
+    await page.getByText(/could not be verified as a draft/).waitFor({timeout:10000});
+    result.unknownDraftBlocked=await page.getByRole("button",{name:"Finish AI setup"}).isDisabled();
     await page.getByRole("textbox",{name:"Post ID returned by your agent"}).fill("stage3-draft-123");
     await page.getByRole("button",{name:"Verify this draft"}).click();
     await page.getByText(/Verified: this ID is a saved draft/).waitFor({timeout:10000});
     result.finishEnabled=await page.getByRole("button",{name:"Finish AI setup"}).isEnabled();
 
-    // Revisit an unfinished agent setup after a simulated social OAuth return.
+    // On a selected viewport, verify the real Calendar resume affordance.
+    if(width===375){
+      await page.getByRole("button",{name:"Continue later in the dashboard"}).click();
+      await page.waitForURL(/\/calendar/,{timeout:20000});
+      await page.getByRole("heading",{name:"Finish your AI agent setup"}).waitFor({timeout:15000});
+      result.calendarBanner=true;
+      await page.getByRole("link",{name:"Continue setup"}).click();
+      await page.getByRole("heading",{name:/Connect your agent/}).waitFor({timeout:10000});
+      result.resumeViaBanner=true;
+    }
+    // Revisit an unfinished agent setup after a simulated OAuth return.
     await page.reload({waitUntil:"domcontentloaded"});
     await page.getByRole("heading",{name:"What are you using PostSider for?"}).waitFor();
     await page.goto(BASE+"/onboarding?flow=agents",{waitUntil:"domcontentloaded"});
@@ -229,7 +243,7 @@ async function socialPath(browser) {
     if(x.agentWidth>x.width+2)failures.push(x.width+": agent horizontal overflow "+x.agentWidth);
     if(!x.choiceVisible||!x.localHasPackage||!x.localHasPlaceholder||!x.localHasEndpoint||
         !x.rawAuth||!x.noBearerAuth||!x.codexConfig||!x.copyWorked||
-        !x.initialFinishDisabled||!x.beforeConfirmDisabled||x.finishBeforeId||!x.finishEnabled||!x.resumeAgent){
+        !x.initialFinishDisabled||!x.beforeConfirmDisabled||x.finishBeforeId||!x.unknownDraftBlocked||!x.finishEnabled||!x.resumeAgent||(x.width===375&&(!x.calendarBanner||!x.resumeViaBanner))){
       failures.push(x.width+": onboarding interaction failed");
     }
     if(x.writes?.length) failures.push(x.width+": unexpected backend mutation "+JSON.stringify(x.writes));
