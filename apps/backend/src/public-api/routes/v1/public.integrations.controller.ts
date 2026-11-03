@@ -12,9 +12,10 @@ import {
   UploadedFile,
   UseInterceptors,
   UsePipes,
+  UseGuards,
 } from '@nestjs/common';
 import { CustomFileValidationPipe } from '@postsider/nestjs-libraries/upload/custom.upload.validation';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiHeader, ApiTags } from '@nestjs/swagger';
 import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
 import { Organization } from '@prisma/client';
 import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
@@ -38,6 +39,8 @@ import { Readable } from 'stream';
 import { ssrfSafeDispatcher } from '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
 import { detectFileType } from '@postsider/nestjs-libraries/upload/detect-file-type';
 import { ApprovalService } from '@postsider/nestjs-libraries/database/prisma/approval/approval.service';
+import { PublicApiScopeGuard } from '@postsider/backend/services/auth/public-api-scope.guard';
+import { RequirePublicApiScopes } from '@postsider/backend/services/auth/public-api-scope.decorator';
 
 const PUBLIC_API_ALLOWED_MIME = new Set<string>([
   'image/jpeg',
@@ -72,7 +75,13 @@ import {
 } from '@postsider/nestjs-libraries/upload/remote.response';
 
 @ApiTags('Public API')
+@ApiHeader({
+  name: 'Authorization',
+  required: true,
+  description: 'Raw PostSider API key or Bearer OAuth access token',
+})
 @Controller('/public/v1')
+@UseGuards(PublicApiScopeGuard)
 export class PublicIntegrationsController {
   private storage = UploadFactory.createStorage();
 
@@ -90,6 +99,7 @@ export class PublicIntegrationsController {
   ) {}
 
   @Post('/upload')
+  @RequirePublicApiScopes('media:write')
   @UseInterceptors(FileInterceptor('file', uploadInterceptorOptions))
   @UsePipes(new CustomFileValidationPipe())
   async uploadSimple(
@@ -117,6 +127,7 @@ export class PublicIntegrationsController {
   }
 
   @Post('/upload-from-url')
+  @RequirePublicApiScopes('media:write')
   async uploadsFromUrl(
     @GetOrgFromRequest() org: Organization,
     @Body() body: UploadDto
@@ -190,6 +201,7 @@ export class PublicIntegrationsController {
    * caps as the other upload routes; the type is detected from the bytes.
    */
   @Post('/upload-base64')
+  @RequirePublicApiScopes('media:write')
   async uploadBase64(
     @GetOrgFromRequest() org: Organization,
     @Body() body: { data?: string; filename?: string }
@@ -231,6 +243,7 @@ export class PublicIntegrationsController {
 
   /** Browse the media library so already-uploaded files can be reused. */
   @Get('/media')
+  @RequirePublicApiScopes('posts:read')
   async listMedia(
     @GetOrgFromRequest() org: Organization,
     @Query('page') page?: unknown,
@@ -246,6 +259,7 @@ export class PublicIntegrationsController {
   }
 
   @Get('/find-slot/:id')
+  @RequirePublicApiScopes('posts:read')
   async findSlotIntegration(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id?: string
@@ -255,6 +269,7 @@ export class PublicIntegrationsController {
   }
 
   @Get('/posts')
+  @RequirePublicApiScopes('posts:read')
   async getPosts(
     @GetOrgFromRequest() org: Organization,
     @Query() query: GetPostsDto,
@@ -297,6 +312,7 @@ export class PublicIntegrationsController {
   }
 
   @Get('/overview')
+  @RequirePublicApiScopes('analytics:read')
   async getAgencyOverview(
     @GetOrgFromRequest() org: Organization,
     @Query('days') days?: string
@@ -310,6 +326,7 @@ export class PublicIntegrationsController {
   }
 
   @Get('/customers/:customerId/report')
+  @RequirePublicApiScopes('analytics:read')
   async getCustomerReport(
     @GetOrgFromRequest() org: Organization,
     @Param('customerId') customerId: string,
@@ -325,6 +342,7 @@ export class PublicIntegrationsController {
   }
 
   @Get('/posts/:id')
+  @RequirePublicApiScopes('posts:read')
   async getPost(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string
@@ -334,6 +352,7 @@ export class PublicIntegrationsController {
   }
 
   @Post('/posts')
+  @RequirePublicApiScopes('posts:write')
   @CheckPolicies([AuthorizationActions.Create, Sections.POSTS_PER_MONTH])
   async createPost(
     @GetOrgFromRequest() org: Organization,
@@ -450,6 +469,7 @@ export class PublicIntegrationsController {
    * posts are rejected. A QUEUE post is re-armed exactly like a dashboard edit.
    */
   @Put('/posts/:id')
+  @RequirePublicApiScopes('posts:write')
   async updatePost(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string,
@@ -501,6 +521,7 @@ export class PublicIntegrationsController {
   }
 
   @Delete('/posts/:id')
+  @RequirePublicApiScopes('posts:write')
   async deletePost(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string
@@ -514,6 +535,7 @@ export class PublicIntegrationsController {
   }
 
   @Delete('/posts/group/:group')
+  @RequirePublicApiScopes('posts:write')
   deletePostByGroup(
     @GetOrgFromRequest() org: Organization,
     @Param('group') group: string
@@ -528,6 +550,7 @@ export class PublicIntegrationsController {
   // approval" click. There is no API-key-bound user, so the request is
   // attributed to the org's own SUPERADMIN (see ApprovalService).
   @Post('/posts/:id/request-approval')
+  @RequirePublicApiScopes('approvals:write')
   async requestApproval(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string
@@ -541,6 +564,7 @@ export class PublicIntegrationsController {
   // GET /posts, can't distinguish "rejected" from "never submitted", and
   // never carries the reviewer's note).
   @Get('/posts/:id/approval')
+  @RequirePublicApiScopes('approvals:read')
   async getApprovalStatus(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string
@@ -559,6 +583,7 @@ export class PublicIntegrationsController {
   }
 
   @Get('/is-connected')
+  @RequirePublicApiScopes('channels:read')
   async getActiveIntegrations(@GetOrgFromRequest() org: Organization) {
     Sentry.metrics.count('public_api-request', 1);
     const integrations = await this._integrationService.getIntegrationsList(org.id);
@@ -568,6 +593,7 @@ export class PublicIntegrationsController {
   }
 
   @Get('/groups')
+  @RequirePublicApiScopes('channels:read')
   async listGroups(@GetOrgFromRequest() org: Organization) {
     Sentry.metrics.count('public_api-request', 1);
     return (await this._integrationService.customers(org.id)).map(
@@ -579,6 +605,7 @@ export class PublicIntegrationsController {
   }
 
   @Get('/integrations')
+  @RequirePublicApiScopes('channels:read')
   async listIntegration(
     @GetOrgFromRequest() org: Organization,
     @Query('group') group?: string
@@ -607,6 +634,7 @@ export class PublicIntegrationsController {
   }
 
   @Get('/social/:integration')
+  @RequirePublicApiScopes('channels:write')
   @CheckPolicies([AuthorizationActions.Create, Sections.CHANNEL])
   async getIntegrationUrl(
     @Param('integration') integration: string,
@@ -665,6 +693,7 @@ export class PublicIntegrationsController {
   }
 
   @Get('/notifications')
+  @RequirePublicApiScopes('notifications:read')
   async getNotifications(
     @GetOrgFromRequest() org: Organization,
     @Query() query: GetNotificationsDto
@@ -677,6 +706,7 @@ export class PublicIntegrationsController {
   }
 
   @Delete('/integrations/:id')
+  @RequirePublicApiScopes('channels:write')
   async deleteChannel(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string
@@ -696,6 +726,7 @@ export class PublicIntegrationsController {
   // NOTE: the pause is attributed to the org's own SUPERADMIN — there is no
   // session user on the public API.
   @Post('/publishing/pause')
+  @RequirePublicApiScopes('publishing:write')
   async pausePublishing(
     @GetOrgFromRequest() org: Organization,
     @Body() body: { reason?: string }
@@ -714,6 +745,7 @@ export class PublicIntegrationsController {
   }
 
   @Get('/publishing/state')
+  @RequirePublicApiScopes('publishing:read')
   async getPublishingState(@GetOrgFromRequest() org: Organization) {
     Sentry.metrics.count('public_api-request', 1);
     const state = await this._postsService.getPublishingState(org.id);
@@ -726,6 +758,7 @@ export class PublicIntegrationsController {
   }
 
   @Get('/integration-settings/:id')
+  @RequirePublicApiScopes('channels:read')
   async getIntegrationSettings(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string
@@ -773,6 +806,7 @@ export class PublicIntegrationsController {
   }
 
   @Get('/posts/:id/missing')
+  @RequirePublicApiScopes('posts:read')
   async getMissingContent(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string
@@ -782,6 +816,7 @@ export class PublicIntegrationsController {
   }
 
   @Put('/posts/:id/status')
+  @RequirePublicApiScopes('posts:write')
   async changePostStatus(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string,
@@ -792,6 +827,7 @@ export class PublicIntegrationsController {
   }
 
   @Put('/posts/:id/release-id')
+  @RequirePublicApiScopes('posts:write')
   async updateReleaseId(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string,
@@ -802,6 +838,7 @@ export class PublicIntegrationsController {
   }
 
   @Get('/analytics/post/:postId')
+  @RequirePublicApiScopes('analytics:read')
   async getPostAnalytics(
     @GetOrgFromRequest() org: Organization,
     @Param('postId') postId: string,
@@ -817,6 +854,7 @@ export class PublicIntegrationsController {
   }
 
   @Get('/analytics/:integration')
+  @RequirePublicApiScopes('analytics:read')
   async getAnalytics(
     @GetOrgFromRequest() org: Organization,
     @Param('integration') integration: string,
@@ -827,6 +865,7 @@ export class PublicIntegrationsController {
   }
 
   @Post('/integration-trigger/:id')
+  @RequirePublicApiScopes('channels:write')
   async triggerIntegrationTool(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string,
