@@ -180,3 +180,62 @@ describe('PolarService webhook entitlement statuses', () => {
     }
   );
 });
+
+
+describe('PolarService first paid conversion', () => {
+  const originalProduct = process.env.POLAR_PRODUCT_TEAM_MONTHLY;
+  const productId = 'polar-stage5-team-monthly';
+
+  beforeEach(() => {
+    process.env.POLAR_PRODUCT_TEAM_MONTHLY = productId;
+  });
+
+  afterEach(() => {
+    if (originalProduct === undefined) delete process.env.POLAR_PRODUCT_TEAM_MONTHLY;
+    else process.env.POLAR_PRODUCT_TEAM_MONTHLY = originalProduct;
+  });
+
+  function serviceWithFunnel() {
+    const funnel = {
+      recordFirstPaidOrder: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new PolarService(
+      {} as any, {} as any, {} as any, {} as any, funnel as any
+    );
+    return { service, funnel };
+  }
+
+  const order = {
+    paid: true,
+    total_amount: 3500,
+    currency: 'usd',
+    product_id: productId,
+    subscription_id: 'polar_subscription_1',
+    customer: { external_id: 'org-from-verified-polar-customer' },
+  };
+
+  it('uses verified order.paid, not subscription.active, as the paid milestone', async () => {
+    const { service, funnel } = serviceWithFunnel();
+    await expect((service as any).dispatchWebhook({
+      type: 'order.paid', data: order,
+    })).resolves.toEqual({ ok: true });
+    expect(funnel.recordFirstPaidOrder).toHaveBeenCalledWith(
+      'org-from-verified-polar-customer', 'TEAM', 3500, 'USD'
+    );
+  });
+
+  it.each([
+    ['unpaid', { paid: false }],
+    ['free', { total_amount: 0 }],
+    ['no subscription', { subscription_id: null }],
+    ['unknown product', { product_id: 'other-product' }],
+    ['unknown customer', { customer: null }],
+    ['bad amount', { total_amount: '3500' }],
+  ])('does not attribute a %s order', async (_, change) => {
+    const { service, funnel } = serviceWithFunnel();
+    await expect((service as any).dispatchWebhook({
+      type: 'order.paid', data: { ...order, ...change },
+    })).resolves.toEqual({ ok: true, ignored: true });
+    expect(funnel.recordFirstPaidOrder).not.toHaveBeenCalled();
+  });
+});
