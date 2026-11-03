@@ -1,4 +1,5 @@
 import { PublicAuthMiddleware } from './public.auth.middleware';
+import { LEGACY_PUBLIC_API_SCOPES } from '@postsider/nestjs-libraries/services/public-api-oauth-scopes';
 
 describe('PublicAuthMiddleware credentials', () => {
   const originalPolarAccessToken = process.env.POLAR_ACCESS_TOKEN;
@@ -54,11 +55,36 @@ describe('PublicAuthMiddleware credentials', () => {
       expect(oauth.getOrgByOAuthToken).toHaveBeenCalledWith(token);
       expect(organizations.getOrgByApiKey).not.toHaveBeenCalled();
       expect(req.org.users).toEqual([membership]);
-      expect(req.publicApiScopes).toEqual(['*']);
+      expect(req.publicApiScopes).toEqual(LEGACY_PUBLIC_API_SCOPES);
       expect(req.publicApiCredential).toEqual({ type: 'oauth' });
       expect(next).toHaveBeenCalledTimes(1);
     }
   );
+
+  it.each([
+    [['posts:read'], ['posts:read', 'channels:read', 'analytics:read', 'organization:read']],
+    [['posts:write'], ['posts:write', 'media:write', 'approvals:write', 'publishing:write']],
+    [['channels:write'], ['channels:write']],
+    [[], []],
+  ])('preserves explicit MCP OAuth grant %p without webhook permissions', async (scopes, expected) => {
+    const oauth = {
+      getOrgByOAuthToken: jest.fn().mockResolvedValue({
+        organization: { id: 'org-1', subscription: null },
+        membership: { userId: 'user-1', role: 'USER', disabled: false },
+        scopes,
+      }),
+    };
+    const middleware = new PublicAuthMiddleware({} as any, oauth as any);
+    const req = { headers: { authorization: 'Bearer pos_scoped' } } as any;
+    const next = jest.fn();
+    await middleware.use(req, response() as any, next);
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(req.publicApiScopes).toEqual(expect.arrayContaining(expected));
+    expect(req.publicApiScopes).not.toContain('*');
+    expect(req.publicApiScopes).not.toContain('webhooks:read');
+    expect(req.publicApiScopes).not.toContain('webhooks:write');
+    expect(req.org.users[0].role).toBe('USER');
+  });
 
   it('preserves a raw API key and attaches its scopes to the request', async () => {
     const organizations = {
