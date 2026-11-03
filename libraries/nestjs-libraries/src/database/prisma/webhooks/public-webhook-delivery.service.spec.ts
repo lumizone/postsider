@@ -69,6 +69,7 @@ describe('PublicWebhookDeliveryService', () => {
     expect(result).toMatchObject({ attempted: 1, delivered: 1, failed: 0 });
     const [url, request] = (global.fetch as jest.Mock).mock.calls[0];
     expect(url).toBe('https://hooks.example.com/postsider');
+    expect(request.redirect).toBe('error');
     expect(request.headers).toEqual(
       expect.objectContaining({
         'X-Postsider-Event': 'post.published',
