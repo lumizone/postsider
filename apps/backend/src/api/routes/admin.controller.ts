@@ -8,6 +8,7 @@ import { GetUserFromRequest } from '@postsider/nestjs-libraries/user/user.from.r
 import { User } from '@prisma/client';
 import { ApiTags } from '@nestjs/swagger';
 import { ErrorsService } from '@postsider/nestjs-libraries/database/prisma/errors/errors.service';
+import { FunnelAttributionService } from '@postsider/nestjs-libraries/database/prisma/attribution/funnel-attribution.service';
 import { AdminStatsService } from '@postsider/nestjs-libraries/database/prisma/admin-stats/admin-stats.service';
 import dayjs from 'dayjs';
 
@@ -16,13 +17,23 @@ import dayjs from 'dayjs';
 export class AdminController {
   constructor(
     private _errorsService: ErrorsService,
-    private _adminStatsService: AdminStatsService
+    private _adminStatsService: AdminStatsService,
+    private _funnel: FunnelAttributionService
   ) {}
 
   private assertSuperAdmin(user: User) {
     if (!user?.isSuperAdmin) {
       throw new HttpException('Unauthorized', 403);
     }
+  }
+
+  @Get('/acquisition')
+  async getAcquisition(@GetUserFromRequest() user: User, @Query('days') days?: string) {
+    this.assertSuperAdmin(user);
+    const parsed = Number(days ?? 90);
+    const safeDays = Number.isInteger(parsed) && parsed >= 1 && parsed <= 365
+      ? parsed : 90;
+    return this._funnel.acquisitionReport(safeDays);
   }
 
   @Get('/errors')

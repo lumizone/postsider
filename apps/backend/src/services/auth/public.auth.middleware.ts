@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable, NestMiddleware } from '@nestjs/common';
+import { HttpStatus, Injectable, NestMiddleware, Optional } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { OrganizationService } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.service';
 import { OAuthService } from '@postsider/nestjs-libraries/database/prisma/oauth/oauth.service';
@@ -7,12 +7,14 @@ import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.f
 import { tokenAllows } from '@postsider/nestjs-libraries/database/prisma/oauth/mcp-scope-policy';
 import { grantedScopesForOAuth } from '@postsider/nestjs-libraries/services/public-api-oauth-scopes';
 import { pricing } from '@postsider/nestjs-libraries/database/prisma/subscriptions/pricing';
+import { FunnelAttributionService } from '@postsider/nestjs-libraries/database/prisma/attribution/funnel-attribution.service';
 
 @Injectable()
 export class PublicAuthMiddleware implements NestMiddleware {
   constructor(
     private _organizationService: OrganizationService,
-    private _oauthService: OAuthService
+    private _oauthService: OAuthService,
+    @Optional() private _funnelAttribution?: FunnelAttributionService
   ) {}
   async use(req: Request, res: Response, next: NextFunction) {
     const auth = (req.headers.authorization ||
@@ -76,6 +78,16 @@ export class PublicAuthMiddleware implements NestMiddleware {
             .status(HttpStatus.PAYMENT_REQUIRED)
             .json({ msg: 'Public API is not available on this plan' });
           return;
+        }
+
+        if (Array.isArray((authorization as { scopes?: string[] }).scopes)) {
+          // Successful use of a scoped MCP OAuth token, not merely pressing
+          // "Connect" in the onboarding UI. Do not log the token or request.
+          res.once('finish', () => {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              void this._funnelAttribution?.recordMcpConnected(org.id).catch(() => {});
+            }
+          });
         }
 
         // @ts-ignore
