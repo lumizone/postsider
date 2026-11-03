@@ -471,7 +471,7 @@ describe('PostsiderClient', () => {
         })
       );
       const client = new PostsiderClient(apiKey, 'https://api.postsider.com');
-      const error = await client.post('/posts', { type: 'draft' }).catch((err: unknown) => err as Error);
+      const error = (await client.post('/posts', { type: 'draft' }).catch((err: unknown) => err)) as Error;
       expect(error.message).toContain('Permission denied (403)');
       expect(error.message).toContain('posts:write');
       expect(error.message).toContain('Settings -> API');
