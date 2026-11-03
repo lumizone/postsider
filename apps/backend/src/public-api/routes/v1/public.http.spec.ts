@@ -17,6 +17,7 @@ import { PostCheckerService } from '@postsider/nestjs-libraries/post-checker/pos
 import { HttpExceptionFilter } from '@postsider/nestjs-libraries/services/exception.filter';
 import { PostValidationExceptionFilter } from '@postsider/backend/api/routes/posts.validation.exception';
 import { LARGE_JSON_LIMIT, LARGE_JSON_PATHS } from '../../../large-json.paths';
+import { PUBLIC_API_SCOPES } from '@postsider/nestjs-libraries/services/public-api-scopes';
 
 /**
  * Real HTTP through Nest's router, pipes and filters (only the services are
@@ -73,6 +74,10 @@ describe('Public API over HTTP', () => {
     // Stand-in for PublicAuthMiddleware.
     app.use((req: any, _res: any, next: any) => {
       req.org = { id: 'org-1', defaultTimezone: null, users: [{ role }] };
+      // Auth middleware is intentionally stubbed in this router/DTO suite.
+      // Mirror an explicitly provisioned full-scope test credential so the
+      // scope guard exercises the real routes instead of rejecting the mock.
+      req.publicApiScopes = [...PUBLIC_API_SCOPES];
       next();
     });
     await app.listen(0);

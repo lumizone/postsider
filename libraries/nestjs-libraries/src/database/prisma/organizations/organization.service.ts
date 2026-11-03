@@ -6,6 +6,7 @@ import { AddTeamMemberDto } from '@postsider/nestjs-libraries/dtos/settings/add.
 import { AuthService } from '@postsider/helpers/auth/auth.service';
 import dayjs from 'dayjs';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
+import { PublicApiScope } from '@postsider/nestjs-libraries/services/public-api-scopes';
 import { Organization, ShortLinkPreference } from '@prisma/client';
 import { teamInviteEmail } from '@postsider/nestjs-libraries/emails/email.templates';
 
@@ -117,6 +118,10 @@ export class OrganizationService {
 
   getOrgByApiKey(api: string) {
     return this._organizationRepository.getOrgByApiKey(api);
+  }
+
+  resolvePublicApiCredential(api: string) {
+    return this._organizationRepository.resolvePublicApiCredential(api);
   }
 
   getUserOrg(id: string) {
@@ -254,12 +259,16 @@ export class OrganizationService {
     return this._organizationRepository.listApiKeys(orgId);
   }
 
-  async createApiKey(orgId: string, name: string) {
-    return this._organizationRepository.createApiKey(orgId, name);
+  async createApiKey(orgId: string, name: string, scopes: PublicApiScope[]) {
+    return this._organizationRepository.createApiKey(orgId, name, scopes);
   }
 
-  async renameApiKey(orgId: string, keyId: string, name: string) {
-    return this._organizationRepository.renameApiKey(orgId, keyId, name);
+  async updateNamedApiKey(
+    orgId: string,
+    keyId: string,
+    input: { name?: string; scopes?: PublicApiScope[] }
+  ) {
+    return this._organizationRepository.updateNamedApiKey(orgId, keyId, input);
   }
 
   async deleteApiKey(orgId: string, keyId: string) {

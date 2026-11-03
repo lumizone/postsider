@@ -9,8 +9,11 @@ import {
   Post,
   Put,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { PublicApiScopeGuard } from '@postsider/backend/services/auth/public-api-scope.guard';
+import { RequirePublicApiScopes } from '@postsider/backend/services/auth/public-api-scope.decorator';
 import * as Sentry from '@sentry/nestjs';
 import { Organization } from '@prisma/client';
 import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
@@ -54,6 +57,7 @@ type LibraryKind = (typeof LIBRARY_KINDS)[number];
  */
 @ApiTags('Public API')
 @Controller('/public/v1')
+@UseGuards(PublicApiScopeGuard)
 export class PublicWorkspaceController {
   constructor(
     private _integrationService: IntegrationService,
@@ -87,6 +91,7 @@ export class PublicWorkspaceController {
   // Channels -----------------------------------------------------------------
 
   @Post('/integrations/:id/disable')
+  @RequirePublicApiScopes('channels:write')
   async disableChannel(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string
@@ -99,6 +104,7 @@ export class PublicWorkspaceController {
   }
 
   @Post('/integrations/:id/enable')
+  @RequirePublicApiScopes('channels:write')
   async enableChannel(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string
@@ -125,6 +131,7 @@ export class PublicWorkspaceController {
   }
 
   @Get('/integrations/:id/queue-plan')
+  @RequirePublicApiScopes('channels:read')
   async getQueuePlan(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string
@@ -134,6 +141,7 @@ export class PublicWorkspaceController {
   }
 
   @Put('/integrations/:id/queue-plan')
+  @RequirePublicApiScopes('channels:write')
   async setQueuePlan(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string,
@@ -154,6 +162,7 @@ export class PublicWorkspaceController {
   }
 
   @Get('/integrations/:id/smart-slots')
+  @RequirePublicApiScopes('channels:read')
   async smartSlots(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string,
@@ -171,6 +180,7 @@ export class PublicWorkspaceController {
 
   /** Assign the channel to a client (customer) by name; empty name unassigns. */
   @Put('/integrations/:id/customer')
+  @RequirePublicApiScopes('channels:write')
   async setChannelCustomer(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string,
@@ -188,6 +198,7 @@ export class PublicWorkspaceController {
   // Content library ----------------------------------------------------------
 
   @Get('/library')
+  @RequirePublicApiScopes('posts:read')
   async getLibrary(@GetOrgFromRequest() org: Organization) {
     Sentry.metrics.count('public_api-request', 1);
     const [hashtagGroups, captionTemplates, utmPresets] = await Promise.all([
@@ -234,6 +245,7 @@ export class PublicWorkspaceController {
   }
 
   @Post('/library/:kind')
+  @RequirePublicApiScopes('posts:write')
   async createLibraryItem(
     @GetOrgFromRequest() org: Organization,
     @Param('kind') kind: string,
@@ -250,6 +262,7 @@ export class PublicWorkspaceController {
   }
 
   @Put('/library/:kind/:id')
+  @RequirePublicApiScopes('posts:write')
   async updateLibraryItem(
     @GetOrgFromRequest() org: Organization,
     @Param('kind') kind: string,
@@ -267,6 +280,7 @@ export class PublicWorkspaceController {
   }
 
   @Delete('/library/:kind/:id')
+  @RequirePublicApiScopes('posts:write')
   async deleteLibraryItem(
     @GetOrgFromRequest() org: Organization,
     @Param('kind') kind: string,
@@ -285,6 +299,7 @@ export class PublicWorkspaceController {
 
   /** Copy a post as a new draft, optionally onto another channel and date. */
   @Post('/posts/:id/duplicate')
+  @RequirePublicApiScopes('posts:write')
   @CheckPolicies([AuthorizationActions.Create, Sections.POSTS_PER_MONTH])
   async duplicatePost(
     @GetOrgFromRequest() org: Organization,
@@ -307,6 +322,7 @@ export class PublicWorkspaceController {
   }
 
   @Post('/posts/check')
+  @RequirePublicApiScopes('posts:write')
   async checkPost(
     @GetOrgFromRequest() org: Organization,
     @Body() body: CheckPostDto
@@ -324,6 +340,7 @@ export class PublicWorkspaceController {
   }
 
   @Post('/posts/rewrite')
+  @RequirePublicApiScopes('posts:write')
   async rewritePost(
     @GetOrgFromRequest() org: Organization,
     @Body() body: RewritePostDto
@@ -357,6 +374,7 @@ export class PublicWorkspaceController {
   // Media --------------------------------------------------------------------
 
   @Delete('/media/:id')
+  @RequirePublicApiScopes('media:write')
   async deleteMedia(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string

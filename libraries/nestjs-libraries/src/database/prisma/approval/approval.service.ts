@@ -8,6 +8,8 @@ import {
 import { PostsService } from '@postsider/nestjs-libraries/database/prisma/posts/posts.service';
 import { NotificationService } from '@postsider/nestjs-libraries/database/prisma/notifications/notification.service';
 import { OrganizationRepository } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.repository';
+import { PublicWebhookDeliveryService } from '@postsider/nestjs-libraries/database/prisma/webhooks/public-webhook-delivery.service';
+import { PublicWebhookEvent } from '@postsider/nestjs-libraries/services/public-webhook-events';
 import { randomBytes } from 'crypto';
 
 const GUEST_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -18,7 +20,8 @@ export class ApprovalService {
     private _repo: ApprovalRepository,
     private _posts: PostsService,
     private _notifications: NotificationService,
-    private _organizations: OrganizationRepository
+    private _organizations: OrganizationRepository,
+    private _publicWebhookDelivery: PublicWebhookDeliveryService
   ) {}
 
   /**
@@ -80,6 +83,11 @@ export class ApprovalService {
       'A post has been submitted for approval and is waiting in the approval queue.',
       post?.integrationId
     );
+    await this.emitWebhook(orgId, 'approval.requested', {
+      approvalId: approval.id,
+      postId,
+      status: 'PENDING',
+    });
     return approval;
   }
 
@@ -118,6 +126,12 @@ export class ApprovalService {
       approval!.postId,
       (approval as any)?.requestedBy?.email
     );
+    await this.emitWebhook(orgId, 'approval.resolved', {
+      approvalId,
+      postId: approval!.postId,
+      status: 'APPROVED',
+      note: null,
+    });
     return { approved: true, postId: approval!.postId };
   }
 
@@ -147,6 +161,12 @@ export class ApprovalService {
       note ?? null,
       (approval as any)?.requestedBy?.email
     );
+    await this.emitWebhook(orgId, 'approval.resolved', {
+      approvalId,
+      postId: approval!.postId,
+      status: 'REJECTED',
+      note: note ?? null,
+    });
     return { rejected: true, postId: approval!.postId };
   }
 
@@ -249,6 +269,12 @@ export class ApprovalService {
         requesterEmail
       );
     }
+    await this.emitWebhook(approval.organizationId, 'approval.resolved', {
+      approvalId: approval.id,
+      postId: approval.post.id,
+      status,
+      note: note ?? null,
+    });
     // `action + 'd'` produced "rejectd" for rejections (and only worked at all
     // for "approve"). Callers branch on this, so spell both keys out.
     return action === 'approve'
@@ -297,6 +323,18 @@ export class ApprovalService {
           'Your post has been approved and is now scheduled for publishing.'
         );
       } catch {} // non-critical
+    }
+  }
+
+  private async emitWebhook(
+    organizationId: string,
+    event: PublicWebhookEvent,
+    data: Record<string, unknown>
+  ) {
+    try {
+      await this._publicWebhookDelivery.deliver(organizationId, event, data);
+    } catch {
+      // User callbacks are secondary and must never roll back approval state.
     }
   }
 

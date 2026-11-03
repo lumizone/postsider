@@ -17,6 +17,7 @@ import { RefreshIntegrationService } from '@postsider/nestjs-libraries/integrati
 import { timer } from '@postsider/helpers/utils/timer';
 import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
 import { WebhooksService } from '@postsider/nestjs-libraries/database/prisma/webhooks/webhooks.service';
+import { PublicWebhookDeliveryService } from '@postsider/nestjs-libraries/database/prisma/webhooks/public-webhook-delivery.service';
 import { TypedSearchAttributes } from '@temporalio/common';
 import {
   organizationId,
@@ -94,6 +95,7 @@ export class PostActivity {
     private _integrationService: IntegrationService,
     private _refreshIntegrationService: RefreshIntegrationService,
     private _webhookService: WebhooksService,
+    private _publicWebhookDelivery: PublicWebhookDeliveryService,
     private _temporalService: TemporalService,
     private _subscriptionService: SubscriptionService,
     private _providerEnvHelper: ProviderEnvHelper
@@ -394,6 +396,30 @@ export class PostActivity {
     orgId?: string
   ) {
     await this._postService.changeState(id, state, err, body, orgId);
+    if (state === 'ERROR') {
+      const eventOrganizationId =
+        orgId ??
+        body?.[0]?.integration?.organizationId ??
+        body?.[0]?.organizationId;
+      if (eventOrganizationId) {
+        const post = await this._postService
+          .getPostByForWebhookId(id, eventOrganizationId)
+          .catch(() => null);
+        await this._publicWebhookDelivery
+          .deliver(eventOrganizationId, 'post.failed', {
+            postId: id,
+            error: err == null ? null : String(err),
+            post,
+          })
+          .catch((error) => {
+            this._logger.warn(
+              `Public webhook delivery failed without blocking state update: ${String(
+                error
+              )}`
+            );
+          });
+      }
+    }
   }
 
   @ActivityMethod()
@@ -417,12 +443,22 @@ export class PostActivity {
       );
     });
 
-    // Nothing to deliver — skip the work (and the import below) entirely.
+    const post = await this._postService.getPostByForWebhookId(postId, orgId);
+    await this._publicWebhookDelivery
+      .deliver(orgId, 'post.published', { post })
+      .catch((error) => {
+        this._logger.warn(
+          `Public webhook delivery failed without blocking publish: ${String(
+            error
+          )}`
+        );
+      });
+
+    // Nothing left to deliver through the legacy webhook surface.
     if (webhooks.length === 0) {
       return;
     }
 
-    const post = await this._postService.getPostByForWebhookId(postId, orgId);
     // Re-validate egress at fire time. The stored URL was only checked for
     // public-HTTPS at create time, so a domain that later rebinds to an
     // internal IP (127.0.0.1 / 169.254.169.254 / RFC1918) would otherwise be
