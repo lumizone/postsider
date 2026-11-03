@@ -5,37 +5,7 @@ import Link from "next/link";
 import { PageHeader, Card, settingsStyles as s } from "@/components/settings-ui";
 import { useT } from "@/lib/i18n";
 import styles from "./mcp.module.css";
-
-const SELF_HOSTED = process.env.NEXT_PUBLIC_SELF_HOSTED === "true";
-
-/**
- * Public API base (the MCP server's POSTSIDER_API_URL). Self-hosted installs
- * serve it under their own backend URL; only the managed cloud uses
- * api.postsider.com.
- */
-const API_URL =
-  process.env.NEXT_PUBLIC_PUBLIC_API_URL ||
-  (SELF_HOSTED
-    ? (process.env.NEXT_PUBLIC_BACKEND_URL || "").replace(/\/+$/, "")
-    : "https://api.postsider.com");
-
-/**
- * Remote MCP endpoint. Set NEXT_PUBLIC_MCP_URL at build time to the exact
- * address of your MCP proxy. Without it a self-hosted install shows the
- * conventional mcp.<your-domain> host derived from the backend URL, never the
- * managed cloud address.
- */
-function defaultMcpUrl(): string {
-  if (!SELF_HOSTED) return "https://mcp.postsider.com/mcp";
-  try {
-    const u = new URL(process.env.NEXT_PUBLIC_BACKEND_URL || "");
-    const host = u.hostname.replace(/^[^.]+\./, "");
-    return `${u.protocol}//mcp.${host || u.hostname}/mcp`;
-  } catch {
-    return "https://mcp.example.com/mcp";
-  }
-}
-const MCP_URL = process.env.NEXT_PUBLIC_MCP_URL || defaultMcpUrl();
+import { API_URL, MCP_URL } from "@/lib/developer-endpoints";
 
 const CLAUDE_DIRECTORY_URL = "https://claude.ai/directory/postsider";
 
