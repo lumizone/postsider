@@ -493,6 +493,7 @@ const ko = {
     colName: "이름",
     colKey: "키",
     colScopes: "권한 범위",
+    scopesSafetyHint: "새 키는 기본적으로 읽기 전용입니다. 쓰기 권한은 필요한 경우에만 부여하세요. posts:write 권한으로는 필수 승인 절차 없이 예약하거나 게시할 수 있습니다.",
     colCreated: "생성일",
     revoke: "폐기",
     rename: "이름 변경",

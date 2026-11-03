@@ -493,6 +493,7 @@ const tr = {
     colName: "Ad",
     colKey: "Anahtar",
     colScopes: "Kapsamlar",
+    scopesSafetyHint: "Yeni anahtarlar varsayılan olarak salt okunurdur. Yazma iznini yalnızca gerektiğinde verin. posts:write zorunlu onay olmadan zamanlama veya yayınlama yapabilir.",
     colCreated: "Oluşturulma",
     revoke: "İptal et",
     rename: "Yeniden adlandır",

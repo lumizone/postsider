@@ -493,6 +493,7 @@ const pt = {
     colName: "Nome",
     colKey: "Chave",
     colScopes: "Escopos",
+    scopesSafetyHint: "As novas chaves são somente leitura por padrão. Ative a escrita apenas quando necessário. posts:write permite agendar ou publicar sem aprovação obrigatória.",
     colCreated: "Criada em",
     revoke: "Revogar",
     rename: "Renomear",

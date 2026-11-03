@@ -493,6 +493,7 @@ const ja = {
     colName: "名前",
     colKey: "キー",
     colScopes: "スコープ",
+    scopesSafetyHint: "新しいキーは既定で読み取り専用です。書き込み権限は必要な場合にのみ付与してください。posts:write では承認必須の手順なしに予約投稿や即時公開ができます。",
     colCreated: "作成日",
     revoke: "取り消し",
     rename: "名前変更",
