@@ -1,0 +1,26 @@
+name: Agent publishing examples
+
+on:
+  pull_request:
+    paths:
+      - "examples/agent-publishing/**"
+      - ".github/workflows/agent-publishing-demos.yml"
+  push:
+    branches: [main]
+    paths:
+      - "examples/agent-publishing/**"
+      - ".github/workflows/agent-publishing-demos.yml"
+
+jobs:
+  safe-draft-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: No-network, no-publishing contract tests
+        run: node --test examples/agent-publishing/verified-draft.spec.mjs
+      - name: Dry-run stays offline
+        run: node examples/agent-publishing/verified-draft.mjs
