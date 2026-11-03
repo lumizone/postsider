@@ -155,6 +155,7 @@ export class PolarService {
         const subscriptionId = order?.subscriptionId ?? order?.subscription_id ?? order?.subscription?.id;
         const orgId = this.extractOrgId(order?.subscription) ||
           this.extractOrgId(order) ||
+          order?.customer?.external_id || order?.customer?.externalId ||
           order?.externalCustomerId || order?.external_customer_id || null;
         const currency = String(order?.currency || '').toUpperCase();
         if (!paid || !subscriptionId || !ref ||
