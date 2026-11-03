@@ -38,6 +38,7 @@ export function AgentOnboarding({ onBack }: { onBack: () => void }) {
   const [keyError, setKeyError] = useState(false);
   const [checking, setChecking] = useState(true);
   const sequence = useRef(0);
+  const verificationSequence = useRef(0);
   const canManage = user?.role === "SUPERADMIN" || user?.role === "ADMIN";
 
   /**
@@ -47,6 +48,10 @@ export function AgentOnboarding({ onBack }: { onBack: () => void }) {
    */
   const refresh = useCallback(async () => {
     const current = ++sequence.current;
+    // An updated channel list invalidates any previously verified draft.
+    verificationSequence.current += 1;
+    setVerifiedDraftId(null);
+    setVerifyingDraft(false);
     setChecking(true);
     const results = await Promise.allSettled([
       listChannels(),
@@ -94,7 +99,10 @@ export function AgentOnboarding({ onBack }: { onBack: () => void }) {
 
   useEffect(() => {
     void refresh();
-    return () => { sequence.current += 1; };
+    return () => {
+      sequence.current += 1;
+      verificationSequence.current += 1;
+    };
   }, [refresh]);
 
   const hostedCode =
@@ -141,6 +149,7 @@ export function AgentOnboarding({ onBack }: { onBack: () => void }) {
   };
 
   const verifyDraftId = async () => {
+    const checkId = ++verificationSequence.current;
     const id = draftId.trim();
     setVerifiedDraftId(null);
     setDraftVerificationFailed(false);
@@ -155,13 +164,14 @@ export function AgentOnboarding({ onBack }: { onBack: () => void }) {
       const result = await api.get<unknown>(
         "/posts/" + encodeURIComponent(id), undefined, { silent: true }
       );
+      if (checkId !== verificationSequence.current) return;
       const verified = isVerifiedOnboardingDraft(result, id, channelIds);
       if (verified) setVerifiedDraftId(id);
       else setDraftVerificationFailed(true);
     } catch {
-      setDraftVerificationFailed(true);
+      if (checkId === verificationSequence.current) setDraftVerificationFailed(true);
     } finally {
-      setVerifyingDraft(false);
+      if (checkId === verificationSequence.current) setVerifyingDraft(false);
     }
   };
 
@@ -385,6 +395,9 @@ export function AgentOnboarding({ onBack }: { onBack: () => void }) {
                 spellCheck={false}
                 placeholder={t("developerOnboarding.agentDraftIdPlaceholder")}
                 onChange={(event) => {
+                  // Ignore a late response for the previous ID.
+                  verificationSequence.current += 1;
+                  setVerifyingDraft(false);
                   setDraftId(event.target.value);
                   setVerifiedDraftId(null);
                   setDraftVerificationFailed(false);
