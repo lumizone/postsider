@@ -8,8 +8,12 @@ mandatory on every workspace.
 ## The security boundary
 
 - A named API key is created under **Settings → API** with specific scopes.
-  New keys should be least-privilege; existing keys may retain legacy grants.
-  Send the **raw** API key as the `Authorization` header.
+  The create-key UI defaults to `organization:read`, `channels:read` and
+  `posts:read` (read-only); it requires deliberately selecting write scopes.
+  Existing keys keep their grants. For compatibility, API clients that omit
+  the `scopes` field in `POST /settings/api-keys` still receive the legacy
+  predefined set rather than UI defaults; integrations should send an explicit
+  scope list. Send the **raw** key in the `Authorization` header.
 - Remote MCP uses OAuth: `https://mcp.postsider.com/mcp`. The MCP client
   sends `Authorization: Bearer <access_token>` to MCP; PostSider checks the
   token by introspection and passes the user token to the Public API.
