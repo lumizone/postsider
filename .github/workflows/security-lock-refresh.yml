@@ -12,7 +12,8 @@ permissions:
 
 jobs:
   regenerate-lock:
-    if: github.event.head_commit.message == 'ci(security): regenerate lockfile for patched dependencies'
+    if: >-
+      github.event.head_commit.message == 'ci(security): regenerate lockfile for patched dependencies'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
