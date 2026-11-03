@@ -66,4 +66,31 @@ describe('PostActivity public webhook events', () => {
       publicWebhooks.deliver.mock.invocationCallOrder[0]
     );
   });
+  it('normalizes the real Prisma array shape to a single published-post object', async () => {
+    const { activity, posts, publicWebhooks } = createActivity();
+    posts.getPostByForWebhookId.mockResolvedValueOnce([
+      { id: 'post-1', state: 'PUBLISHED', integration: { id: 'channel-1' } },
+    ]);
+
+    await activity.sendWebhooks('post-1', 'org-1', 'channel-1');
+    expect(publicWebhooks.deliver).toHaveBeenCalledWith(
+      'org-1',
+      'post.published',
+      { post: { id: 'post-1', state: 'PUBLISHED', integration: { id: 'channel-1' } } }
+    );
+  });
+
+  it('normalizes a failed post event to the documented single-post shape', async () => {
+    const { activity, posts, publicWebhooks } = createActivity();
+    posts.getPostByForWebhookId.mockResolvedValueOnce([{ id: 'post-1', state: 'ERROR' }]);
+
+    await activity.changeState('post-1', 'ERROR' as any, 'provider failure', [
+      { integration: { organizationId: 'org-1' } },
+    ]);
+    expect(publicWebhooks.deliver).toHaveBeenCalledWith(
+      'org-1', 'post.failed',
+      { postId: 'post-1', error: 'provider failure', post: { id: 'post-1', state: 'ERROR' } }
+    );
+  });
+
 });

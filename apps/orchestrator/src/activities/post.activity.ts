@@ -409,7 +409,9 @@ export class PostActivity {
           .deliver(eventOrganizationId, 'post.failed', {
             postId: id,
             error: err == null ? null : String(err),
-            post,
+            // The repository returns an array; the documented event carries
+            // a single post object, not an unexpected array wrapper.
+            post: Array.isArray(post) ? post[0] ?? null : post,
           })
           .catch((error) => {
             this._logger.warn(
@@ -445,7 +447,9 @@ export class PostActivity {
 
     const post = await this._postService.getPostByForWebhookId(postId, orgId);
     await this._publicWebhookDelivery
-      .deliver(orgId, 'post.published', { post })
+      .deliver(orgId, 'post.published', {
+        post: Array.isArray(post) ? post[0] ?? null : post,
+      })
       .catch((error) => {
         this._logger.warn(
           `Public webhook delivery failed without blocking publish: ${String(
