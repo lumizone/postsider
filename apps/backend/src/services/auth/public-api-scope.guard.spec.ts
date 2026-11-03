@@ -8,9 +8,9 @@ import {
 } from '@postsider/nestjs-libraries/services/public-api-scopes';
 
 describe('PublicApiScopeGuard', () => {
-  const context = (scopes: string[]) =>
+  const context = (scopes: string[], type = 'api-key') =>
     ({
-      switchToHttp: () => ({ getRequest: () => ({ publicApiScopes: scopes }) }),
+      switchToHttp: () => ({ getRequest: () => ({ publicApiScopes: scopes, publicApiCredential: { type } }) }),
       getHandler: () => function handler() {},
       getClass: () => class Controller {},
     } as any);
@@ -26,13 +26,25 @@ describe('PublicApiScopeGuard', () => {
     );
   });
 
-  it('keeps legacy and OAuth credentials backward compatible through wildcard access', () => {
+  it('restricts wildcard bypass to legacy per-organization API keys', () => {
     const reflector = {
       getAllAndOverride: jest.fn().mockReturnValue(['posts:write']),
     } as unknown as Reflector;
     const guard = new PublicApiScopeGuard(reflector);
 
-    expect(guard.canActivate(context(['*']))).toBe(true);
+    expect(guard.canActivate(context(['*'], 'legacy'))).toBe(true);
+    expect(() => guard.canActivate(context(['*'], 'oauth'))).toThrow(ForbiddenException);
+    expect(() => guard.canActivate(context(['*'], 'api-key'))).toThrow(ForbiddenException);
+  });
+
+  it('rejects webhook administration by OAuth credentials lacking explicit grants', () => {
+    const reflector = {
+      getAllAndOverride: jest.fn().mockReturnValue(['webhooks:write']),
+    } as unknown as Reflector;
+    const guard = new PublicApiScopeGuard(reflector);
+    for (const scopes of [['posts:read'], ['posts:read', 'posts:write']]) {
+      expect(() => guard.canActivate(context(scopes, 'oauth'))).toThrow(ForbiddenException);
+    }
   });
 
   it('denies a scoped credential when the route scope is missing', () => {
