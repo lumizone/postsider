@@ -72,6 +72,9 @@ export class PublicWebhookDeliveryService {
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
         const response = await fetch(target.url, {
+          // Never follow a user-controlled Location. Redirects can downgrade
+          // HTTPS or forward the signed POST payload to another host.
+          redirect: 'error',
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
