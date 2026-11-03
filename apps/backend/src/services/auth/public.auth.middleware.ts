@@ -5,6 +5,7 @@ import { OAuthService } from '@postsider/nestjs-libraries/database/prisma/oauth/
 import { HttpForbiddenException } from '@postsider/nestjs-libraries/services/exception.filter';
 import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
 import { tokenAllows } from '@postsider/nestjs-libraries/database/prisma/oauth/mcp-scope-policy';
+import { publicApiScopesForOAuth } from './public-api-oauth-scopes';
 import { pricing } from '@postsider/nestjs-libraries/database/prisma/subscriptions/pricing';
 
 @Injectable()
@@ -79,8 +80,17 @@ export class PublicAuthMiddleware implements NestMiddleware {
 
         // @ts-ignore
         req.org = { ...org, users: [authorization.membership] };
+        // Never grant a wildcard to OAuth: legacy consent must not authorize
+        // newly introduced webhook subscriptions or secret rotation.
+        // @ts-ignore
+        req.publicApiScopes = publicApiScopesForOAuth(
+          (authorization as { scopes?: string[] }).scopes
+        );
+        // @ts-ignore
+        req.publicApiCredential = { type: 'oauth' };
       } else {
-        const org = await this._organizationService.getOrgByApiKey(auth);
+        const credential = await this._organizationService.resolvePublicApiCredential(auth);
+        const org = credential?.organization;
         if (!org) {
           res.status(HttpStatus.UNAUTHORIZED).json({ msg: 'Invalid API key' });
           return;
@@ -104,6 +114,13 @@ export class PublicAuthMiddleware implements NestMiddleware {
 
         // @ts-ignore
         req.org = { ...org, users: [{ role: 'SUPERADMIN', disabled: false }] };
+        // @ts-ignore
+        req.publicApiScopes = credential.scopes;
+        // @ts-ignore
+        req.publicApiCredential = {
+          type: credential.credentialType,
+          ...(credential.apiKeyId ? { id: credential.apiKeyId } : {}),
+        };
       }
     } catch (err) {
       throw new HttpForbiddenException();

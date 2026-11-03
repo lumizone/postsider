@@ -20,7 +20,11 @@ export class PublicApiScopeGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const granted: string[] = request.publicApiScopes ?? [];
 
-    if (granted.includes('*')) return true;
+    // Wildcards are valid only for the pre-existing per-organization API key.
+    // OAuth and scoped named keys cannot bypass a classified endpoint's scope.
+    if (granted.includes('*') && request.publicApiCredential?.type === 'legacy') {
+      return true;
+    }
     if (
       !required?.length ||
       !required.every((scope) => granted.includes(scope))
