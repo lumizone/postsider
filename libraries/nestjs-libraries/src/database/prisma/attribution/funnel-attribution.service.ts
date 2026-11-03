@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@postsider/nestjs-libraries/database/prisma/prisma.service';
 
-export type FunnelClientStage = 'signup_completed' | 'onboarding_type_selected';
+export type FunnelClientStage = 'onboarding_type_selected';
 export type OnboardingChoice = 'agents' | 'scheduler';
 
 type Attribution = {
@@ -61,20 +61,36 @@ export function parseJourneyId(raw: unknown): string | null {
 export class FunnelAttributionService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async recordClientStage(
+  /**
+   * Signup completion is recorded ONLY from the backend after a committed
+   * new organization, never from a client-issued "signup" event or a visit to
+   * /onboarding. This also covers newly registered Google/OAuth users.
+   */
+  async recordSignupCreated(
     organizationId: string,
-    organizationCreatedAt: Date,
-    event: FunnelClientStage,
-    choice: OnboardingChoice | null,
     cookies: Record<string, unknown> | undefined
   ) {
     if (cookies?.ps_analytics_consent !== '1') return { recorded: false, consented: false };
-    // Visiting /onboarding months later is not a new signup.
-    if (event === 'signup_completed' &&
-      Date.now() - new Date(organizationCreatedAt).getTime() > 14 * 86400000) {
-      return { recorded: false, consented: true };
-    }
-    if (event === 'onboarding_type_selected' && choice !== 'agents' && choice !== 'scheduler') {
+    const attribution = parseFirstTouch(cookies.ps_attribution_v1) ?? {};
+    const journeyId = parseJourneyId(cookies.ps_journey_id);
+    await this.prisma.funnelAttribution.upsert({
+      where: { organizationId },
+      create: {
+        organizationId, ...attribution, journeyId,
+        signupCompletedAt: new Date(),
+      },
+      update: {},
+    });
+    return { recorded: true, consented: true };
+  }
+
+  async recordClientStage(
+    organizationId: string,
+    choice: OnboardingChoice,
+    cookies: Record<string, unknown> | undefined
+  ) {
+    if (cookies?.ps_analytics_consent !== '1') return { recorded: false, consented: false };
+    if (choice !== 'agents' && choice !== 'scheduler') {
       return { recorded: false, consented: true };
     }
     const attribution = parseFirstTouch(cookies.ps_attribution_v1) ?? {};
@@ -84,16 +100,10 @@ export class FunnelAttributionService {
       create: { organizationId, ...attribution, journeyId },
       update: {},
     });
-    const where = {
-      organizationId,
-      ...(event === 'signup_completed'
-        ? { signupCompletedAt: null }
-        : { onboardingTypeSelectedAt: null }),
-    };
-    const data = event === 'signup_completed'
-      ? { signupCompletedAt: new Date() }
-      : { onboardingIntent: choice, onboardingTypeSelectedAt: new Date() };
-    const updated = await this.prisma.funnelAttribution.updateMany({ where, data });
+    const updated = await this.prisma.funnelAttribution.updateMany({
+      where: { organizationId, onboardingTypeSelectedAt: null },
+      data: { onboardingIntent: choice, onboardingTypeSelectedAt: new Date() },
+    });
     return { recorded: updated.count === 1, consented: true };
   }
 
