@@ -23,6 +23,28 @@ Claude Code:
 claude mcp add postsider -e POSTSIDER_API_KEY=your_api_key -- npx -y @postsider/mcp
 ```
 
+Codex CLI and its IDE extension share MCP configuration. Use **one** of
+these options for a server named `postsider`.
+
+Hosted MCP with OAuth (no organization key pasted into a config file):
+
+```bash
+codex mcp add postsider --url https://mcp.postsider.com/mcp
+```
+
+Complete the PostSider sign-in and permission flow in your client.
+
+Alternatively, run the local MCP package over stdio with an organization API
+key stored in your environment or secret manager:
+
+```bash
+codex mcp add postsider --env POSTSIDER_API_KEY=your_api_key -- npx -y @postsider/mcp
+```
+
+The local organization key has broad access to your workspace. Never commit it
+to a repository or include it in an agent prompt. For a guided walkthrough and
+a first safe draft, see https://postsider.com/developers/.
+
 Claude Desktop or any generic MCP client:
 
 ```json
