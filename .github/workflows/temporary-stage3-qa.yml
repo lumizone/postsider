@@ -30,7 +30,7 @@ jobs:
           pnpm --filter ./apps/frontend exec tsc --noEmit
           pnpm --filter ./apps/frontend run build
       - name: Onboarding per-user and org persistence tests
-        run: pnpm exec jest apps/frontend/src/lib/onboarding-progress.spec.ts --runInBand --coverage=false
+        run: pnpm exec jest apps/frontend/src/lib/onboarding-progress.spec.ts apps/frontend/src/lib/onboarding-draft-verification.spec.ts --runInBand --coverage=false
       - name: Install isolated Chromium
         run: |
           mkdir -p /tmp/postsider-stage3-qa
