@@ -4,7 +4,7 @@ import {
   CreateApiKeyDto,
   UpdateApiKeyDto,
 } from '@postsider/nestjs-libraries/dtos/settings/create-api-key.dto';
-import { PUBLIC_API_SCOPES } from '@postsider/nestjs-libraries/services/public-api-scopes';
+import { LEGACY_PUBLIC_API_SCOPES } from '@postsider/nestjs-libraries/services/public-api-oauth-scopes';
 import { Organization } from '@prisma/client';
 import { CheckPolicies } from '@postsider/backend/services/auth/permissions/permissions.ability';
 import { OrganizationService } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.service';
@@ -206,9 +206,9 @@ export class SettingsController {
     if (!name) {
       throw new HttpException('Name is required', 400);
     }
-    // Absent scopes keep the historical behaviour: a key that can do everything
-    // the Public API exposes. Integrations should request only what they need.
-    const scopes = body.scopes ?? [...PUBLIC_API_SCOPES];
+    // Omitted scopes retain pre-existing API access without silently opting
+    // legacy clients into newly added webhook/secret administration.
+    const scopes = body.scopes ?? [...LEGACY_PUBLIC_API_SCOPES];
     const created = await this._organizationService.createApiKey(
       org.id,
       name,
