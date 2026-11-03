@@ -137,7 +137,6 @@ and the generated password. PostSider then prompts you to set your real email ad
 
 ### Automation
 
-- [Consent-to-paid marketing attribution and event contracts](docs/MARKETING-ATTRIBUTION.md)
 - Public REST API
 - Node.js SDK: `@postsider/node`
 - MCP server: `@postsider/mcp`
