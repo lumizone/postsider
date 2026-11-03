@@ -89,7 +89,7 @@ export class AuthService {
               )
             : false;
 
-        const obj = { addedOrg, user: create.users[0].user, jwt: issueSession ? await this.jwt(create.users[0].user) : undefined };
+        const obj = { addedOrg, user: create.users[0].user, registeredOrgId: create.id, jwt: issueSession ? await this.jwt(create.users[0].user) : undefined };
         // The account is already committed at this point; a mail failure must not
         // fail the whole registration (the client could never retry — the email
         // would already be taken).
@@ -112,10 +112,10 @@ export class AuthService {
         throw new Error('User is not activated');
       }
 
-      return { addedOrg: false, user, jwt: issueSession ? await this.jwt(user) : undefined };
+      return { addedOrg: false, user, registeredOrgId: undefined, jwt: issueSession ? await this.jwt(user) : undefined };
     }
 
-    const user = await this.loginOrRegisterProvider(
+    const { user, registeredOrgId } = await this.loginOrRegisterProvider(
       provider,
       body as CreateOrgUserDto,
       ip,
@@ -132,7 +132,7 @@ export class AuthService {
             addToOrg.role
           )
         : false;
-    return { addedOrg, user, jwt: issueSession ? await this.jwt(user) : undefined };
+    return { addedOrg, user, registeredOrgId, jwt: issueSession ? await this.jwt(user) : undefined };
   }
 
   getUserById(id: string) {
@@ -184,7 +184,7 @@ export class AuthService {
       provider
     );
     if (user) {
-      return user;
+      return { user, registeredOrgId: undefined };
     }
 
     if (!(await this.canRegister(provider, hasValidInvite))) {
@@ -220,7 +220,7 @@ export class AuthService {
       // Don't fail registration if postRegistration fails
     }
 
-    return create.users[0].user;
+    return { user: create.users[0].user, registeredOrgId: create.id };
   }
 
   private async _track(

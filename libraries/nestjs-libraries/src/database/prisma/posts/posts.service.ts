@@ -4,6 +4,7 @@ import {
   HttpStatus,
   Injectable,
   Logger,
+  Optional,
   ValidationPipe,
 } from '@nestjs/common';
 import { PostsRepository } from '@postsider/nestjs-libraries/database/prisma/posts/posts.repository';
@@ -68,6 +69,7 @@ import {
 import { OrganizationRepository } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.repository';
 import { PublishingPausedException } from '@postsider/nestjs-libraries/services/publishing.paused.exception';
 import { NotificationService } from '@postsider/nestjs-libraries/database/prisma/notifications/notification.service';
+import { FunnelAttributionService } from '@postsider/nestjs-libraries/database/prisma/attribution/funnel-attribution.service';
 
 type PostWithConditionals = Post & {
   integration?: Integration;
@@ -90,7 +92,8 @@ export class PostsService {
     private _postAnalyticsService: PostAnalyticsService,
     private _subscriptionService: SubscriptionService,
     private _organizationRepository: OrganizationRepository,
-    private _notificationService: NotificationService
+    private _notificationService: NotificationService,
+    @Optional() private _funnelAttribution?: FunnelAttributionService
   ) {}
 
   searchForMissingThreeHoursPosts() {
@@ -1470,6 +1473,13 @@ export class PostsService {
         });
       }
 
+      if (body.type === 'draft' && postList.length) {
+        // First activation means a SAVED draft, not a submit or page click.
+        // Best effort: analytics must never block content creation.
+        await this._funnelAttribution?.recordFirstDraft(orgId).catch(() => {
+          this._logger.warn('Attribution first-draft marker could not be persisted');
+        });
+      }
       return postList;
     } finally {
       // Created posts become the durable count. The short-lived reservation

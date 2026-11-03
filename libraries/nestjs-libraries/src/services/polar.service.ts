@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Polar } from '@polar-sh/sdk';
 import {
   validateEvent,
@@ -12,6 +12,7 @@ import { BillingSubscribeDto } from '@postsider/nestjs-libraries/dtos/billing/bi
 import { pricing } from '@postsider/nestjs-libraries/database/prisma/subscriptions/pricing';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import { PrismaService } from '@postsider/nestjs-libraries/database/prisma/prisma.service';
+import { FunnelAttributionService } from '@postsider/nestjs-libraries/database/prisma/attribution/funnel-attribution.service';
 import {
   getPolarProductId,
   resolveProductRef,
@@ -45,7 +46,8 @@ export class PolarService {
     private _subscriptionService: SubscriptionService,
     private _organizationService: OrganizationService,
     private _notificationService: NotificationService,
-    private _prisma: PrismaService
+    private _prisma: PrismaService,
+    @Optional() private _funnelAttribution?: FunnelAttributionService
   ) {}
 
   /**
@@ -142,6 +144,33 @@ export class PolarService {
 
   private async dispatchWebhook(event: any) {
     switch (event.type) {
+      case 'order.paid': {
+        // Polar confirms a settled payment via order.paid. subscription.active
+        // can also be a free trial or a recovered payment, so it is NOT a
+        // reliable first-paid conversion event on its own.
+        const order = event.data;
+        const paid = order?.paid === true;
+        const amount = order?.totalAmount ?? order?.total_amount;
+        const ref = resolveProductRef(order?.productId ?? order?.product_id ?? order?.product?.id);
+        const subscriptionId = order?.subscriptionId ?? order?.subscription_id ?? order?.subscription?.id;
+        const orgId = this.extractOrgId(order?.subscription) ||
+          this.extractOrgId(order) ||
+          order?.customer?.external_id || order?.customer?.externalId ||
+          order?.externalCustomerId || order?.external_customer_id || null;
+        const currency = String(order?.currency || '').toUpperCase();
+        if (!paid || !subscriptionId || !ref ||
+          typeof amount !== 'number' || !Number.isSafeInteger(amount) ||
+          amount <= 0 || !orgId || !/^[A-Z]{3}$/.test(currency)) {
+          return { ok: true, ignored: true };
+        }
+        // Scope the update to existing, consented attribution records only.
+        // Webhook deduplication occurs before this dispatch; updateMany adds
+        // idempotency for repeated paid-order events.
+        await this._funnelAttribution?.recordFirstPaidOrder(
+          String(orgId), ref.tier, amount, currency
+        );
+        return { ok: true };
+      }
       case 'subscription.created':
       case 'subscription.active':
       case 'subscription.updated':

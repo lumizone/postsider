@@ -68,6 +68,7 @@ model Organization {
   postAnalytics        PostAnalytics[]
   mcpOAuthCodes        McpOAuthCode[]
   mcpOAuthGrants       McpOAuthGrant[]
+  funnelAttribution    FunnelAttribution?
 
   @@index([apiKey])
   @@index([streakSince])
@@ -1175,4 +1176,39 @@ model EvergreenSettings {
   maxPerRun      Int          @default(1)
   updatedAt      DateTime     @updatedAt
   organization   Organization @relation(fields: [organizationId], references: [id])
+}
+
+
+/**
+ * Consent-gated, first-touch acquisition funnel for one organization.
+ * This table intentionally contains NO email, post content, API key, token,
+ * remote URL or billing customer identifiers. A missing row means unknown.
+ */
+model FunnelAttribution {
+  id                         String       @id @default(uuid())
+  organizationId             String       @unique
+  organization               Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  journeyId                  String?      @db.VarChar(36)
+  landingPath                String?      @db.VarChar(181)
+  referrerHost               String?      @db.VarChar(120)
+  utmSource                  String?      @db.VarChar(90)
+  utmMedium                  String?      @db.VarChar(90)
+  utmCampaign                String?      @db.VarChar(90)
+  utmContent                 String?      @db.VarChar(90)
+  utmTerm                    String?      @db.VarChar(90)
+  consentedAt                DateTime     @default(now())
+  signupCompletedAt          DateTime?
+  onboardingIntent           String?      @db.VarChar(15)
+  onboardingTypeSelectedAt   DateTime?
+  mcpConnectedAt             DateTime?
+  firstDraftCreatedAt        DateTime?
+  subscriptionStartedAt      DateTime?
+  firstPaidTier              String?      @db.VarChar(20)
+  firstPaidCurrency          String?      @db.VarChar(3)
+  firstPaidAmount            Int?
+  createdAt                  DateTime     @default(now())
+  updatedAt                  DateTime     @updatedAt
+
+  @@index([subscriptionStartedAt])
+  @@index([utmSource, utmCampaign])
 }

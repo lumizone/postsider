@@ -60,6 +60,7 @@ import { CustomerReportService } from '@postsider/nestjs-libraries/database/pris
 import { ReportService } from '@postsider/nestjs-libraries/database/prisma/report/report.service';
 import { PublicApiIdempotencyService } from '@postsider/nestjs-libraries/database/prisma/idempotency/public-api-idempotency.service';
 import { PostAnalyticsRepository } from '@postsider/nestjs-libraries/database/prisma/post-analytics/post-analytics.repository';
+import { FunnelAttributionService } from '@postsider/nestjs-libraries/database/prisma/attribution/funnel-attribution.service';
 import { PostAnalyticsService } from '@postsider/nestjs-libraries/database/prisma/post-analytics/post-analytics.service';
 
 @Global()
@@ -131,6 +132,7 @@ import { PostAnalyticsService } from '@postsider/nestjs-libraries/database/prism
     ReportService,
     PostAnalyticsRepository,
     PostAnalyticsService,
+    FunnelAttributionService,
   ],
   get exports() {
     return this.providers;

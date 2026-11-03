@@ -20,6 +20,7 @@ import {
 } from '@/lib/billing-api';
 import { ApiError } from '@/lib/api';
 import { BILLING_TRUST_FEATURES } from '@/lib/billing-trust-features';
+import { syncFunnelMilestones } from '@/lib/funnel-analytics';
 import styles from './billing.module.css';
 
 const TIER_ORDER: Record<string, number> = {
@@ -179,6 +180,8 @@ function BillingInner() {
           if (cancelled) return;
           setProvisioning(false);
           await Promise.all([loadBilling(), refreshUser()]);
+          // Only the Polar order.paid webhook can create subscription_started.
+          void syncFunnelMilestones();
           return;
         }
       } catch {

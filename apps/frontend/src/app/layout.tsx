@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Inter, Changa_One } from "next/font/google";
 import { AppRoot } from "@/components/app-root";
+import { FunnelAnalyticsBridge } from "@/components/funnel-analytics-bridge";
 import { AuthProvider } from "@/lib/auth-context";
 import { I18nProvider } from "@/lib/i18n";
 import { THEME_INIT_SCRIPT, ThemeProvider } from "@/lib/theme";
@@ -48,6 +49,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <ThemeProvider>
           <I18nProvider>
             <AuthProvider>
+              <FunnelAnalyticsBridge />
               <AppRoot>{children}</AppRoot>
             </AuthProvider>
           </I18nProvider>
