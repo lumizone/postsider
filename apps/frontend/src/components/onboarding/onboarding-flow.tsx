@@ -11,6 +11,7 @@ import {
   type OnboardingIntent,
 } from "@/lib/onboarding-progress";
 import { AgentOnboarding } from "./agent-onboarding";
+import { recordClientFunnelStage } from "@/lib/funnel-analytics";
 import styles from "./onboarding.module.css";
 
 type Step = "choice" | "welcome" | "connect" | "agent";
@@ -38,6 +39,7 @@ export function OnboardingFlow() {
   }, [user?.id, user?.orgId, search]);
 
   const choose = (intent: OnboardingIntent) => {
+    void recordClientFunnelStage("onboarding_type_selected", intent === "agents" ? "agents" : "scheduler");
     saveOnboardingProgress(user?.id, user?.orgId, {
       intent,
       completed: false,
