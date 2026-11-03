@@ -24,8 +24,10 @@ describe('PublicAuthMiddleware credentials', () => {
     const res = {
       status: jest.fn(),
       json: jest.fn(),
+      setHeader: jest.fn(),
     };
     res.status.mockReturnValue(res);
+    res.setHeader.mockReturnValue(res);
     return res;
   };
 
@@ -62,11 +64,10 @@ describe('PublicAuthMiddleware credentials', () => {
   );
 
   it.each([
-    [['posts:read'], ['posts:read', 'channels:read', 'analytics:read', 'organization:read']],
-    [['posts:write'], ['posts:write', 'media:write', 'approvals:write', 'publishing:write']],
-    [['channels:write'], ['channels:write']],
-    [[], []],
-  ])('preserves explicit MCP OAuth grant %p without webhook permissions', async (scopes, expected) => {
+    [['posts:read'], ['posts:read', 'channels:read', 'analytics:read', 'organization:read'], 'GET', '/public/v1/posts'],
+    [['posts:write'], ['posts:write', 'media:write', 'approvals:write', 'publishing:write'], 'POST', '/public/v1/posts'],
+    [['channels:write'], ['channels:write'], 'POST', '/public/v1/integrations/channel-1/disable'],
+  ])('keeps an MCP OAuth grant %p on its exact allowed operations', async (scopes, expected, method, originalUrl) => {
     const oauth = {
       getOrgByOAuthToken: jest.fn().mockResolvedValue({
         organization: { id: 'org-1', subscription: null },
@@ -75,15 +76,37 @@ describe('PublicAuthMiddleware credentials', () => {
       }),
     };
     const middleware = new PublicAuthMiddleware({} as any, oauth as any);
-    const req = { headers: { authorization: 'Bearer pos_scoped' } } as any;
+    const req = { headers: { authorization: 'Bearer pos_scoped' }, method, originalUrl } as any;
     const next = jest.fn();
-    await middleware.use(req, response() as any, next);
+    const res = response();
+    await middleware.use(req, res as any, next);
     expect(next).toHaveBeenCalledTimes(1);
     expect(req.publicApiScopes).toEqual(expect.arrayContaining(expected));
     expect(req.publicApiScopes).not.toContain('*');
     expect(req.publicApiScopes).not.toContain('webhooks:read');
     expect(req.publicApiScopes).not.toContain('webhooks:write');
     expect(req.org.users[0].role).toBe('USER');
+  });
+
+  it.each([
+    [[], 'GET', '/public/v1/posts'],
+    [['posts:read'], 'POST', '/public/v1/posts'],
+    [['posts:write'], 'POST', '/public/v1/integrations/channel-1/disable'],
+  ])('denies an MCP grant %p without permission for %s %s', async (scopes, method, originalUrl) => {
+    const oauth = {
+      getOrgByOAuthToken: jest.fn().mockResolvedValue({
+        organization: { id: 'org-1', subscription: null },
+        membership: { userId: 'user-1', role: 'USER', disabled: false },
+        scopes,
+      }),
+    };
+    const middleware = new PublicAuthMiddleware({} as any, oauth as any);
+    const req = { headers: { authorization: 'Bearer pos_scoped' }, method, originalUrl } as any;
+    const res = response();
+    const next = jest.fn();
+    await middleware.use(req, res as any, next);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
   });
 
   it('preserves a raw API key and attaches its scopes to the request', async () => {
