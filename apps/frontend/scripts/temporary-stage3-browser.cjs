@@ -81,6 +81,15 @@ async function installApiMock(context, counters) {
     else if (pathname === "/posts/list") response = {
       p: [],t: counters.drafts ? 1 : 0,pg: 0,l: 1,hm: false
     };
+    else if (pathname === "/posts/stage3-draft-123") response = {
+      posts: [{
+        id: "stage3-draft-123",
+        group: "stage3-group",
+        state: counters.drafts ? "DRAFT" : "PUBLISHED",
+        integrationId: "stage3-test-channel",
+        content: "One harmless test draft",
+      }],
+    };
     else if (pathname === "/posts") response = {p: []};
     else if (pathname === "/integrations") response = { integrations: [] };
     else response = {};
@@ -152,6 +161,10 @@ async function inspectWidth(browser, width) {
     await page.getByText("1 draft(s) currently visible in the workspace").waitFor({timeout:10000});
     result.beforeConfirmDisabled=await page.getByRole("button",{name:"Finish AI setup"}).isDisabled();
     await page.getByRole("checkbox",{name:/I checked the response in my client/}).check();
+    result.finishBeforeId=await page.getByRole("button",{name:"Finish AI setup"}).isEnabled();
+    await page.getByRole("textbox",{name:"Post ID returned by your agent"}).fill("stage3-draft-123");
+    await page.getByRole("button",{name:"Verify this draft"}).click();
+    await page.getByText(/Verified: this ID is a saved draft/).waitFor({timeout:10000});
     result.finishEnabled=await page.getByRole("button",{name:"Finish AI setup"}).isEnabled();
 
     // Revisit an unfinished agent setup after a simulated social OAuth return.
@@ -216,7 +229,7 @@ async function socialPath(browser) {
     if(x.agentWidth>x.width+2)failures.push(x.width+": agent horizontal overflow "+x.agentWidth);
     if(!x.choiceVisible||!x.localHasPackage||!x.localHasPlaceholder||!x.localHasEndpoint||
         !x.rawAuth||!x.noBearerAuth||!x.codexConfig||!x.copyWorked||
-        !x.initialFinishDisabled||!x.beforeConfirmDisabled||!x.finishEnabled||!x.resumeAgent){
+        !x.initialFinishDisabled||!x.beforeConfirmDisabled||x.finishBeforeId||!x.finishEnabled||!x.resumeAgent){
       failures.push(x.width+": onboarding interaction failed");
     }
     if(x.writes?.length) failures.push(x.width+": unexpected backend mutation "+JSON.stringify(x.writes));
