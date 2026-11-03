@@ -812,6 +812,7 @@ const pl = {
     creating: "Tworzenie…",
     colName: "Nazwa",
     colKey: "Klucz",
+    colScopes: "Zakresy",
     colCreated: "Utworzony",
     revoke: "Unieważnij",
     rename: "Zmień nazwę",
