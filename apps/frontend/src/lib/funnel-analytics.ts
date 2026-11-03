@@ -23,7 +23,7 @@ declare global {
 }
 
 let loadAttempted = false;
-const pending: { event: FunnelStage; data: Record<string, string> }[] = [];
+const pending: { event: FunnelStage; data: Record<string, string>; key: string }[] = [];
 const STAGES: FunnelStage[] = [
   "signup_completed",
   "onboarding_type_selected",
@@ -67,8 +67,18 @@ function journeyId(): string {
 function flush() {
   if (!analyticsConsent() || typeof window === "undefined" || !window.umami) return;
   while (pending.length) {
-    const item = pending.shift()!;
-    try { window.umami.track(item.event, item.data); } catch {}
+    const item = pending[0];
+    try {
+      window.umami.track(item.event, item.data);
+      // Mark only after Umami's client accepted the event. Browser transport
+      // delivery itself cannot be guaranteed or observed by this integration.
+      try { localStorage.setItem(item.key, "1"); } catch {}
+      pending.shift();
+    } catch {
+      // Keep the item for a subsequent flush instead of falsely marking it
+      // as delivered and silently losing the conversion.
+      break;
+    }
   }
 }
 
@@ -104,13 +114,15 @@ function markKey(stage: FunnelStage) {
 function trackOnce(stage: FunnelStage, data: Record<string, string> = {}) {
   if (!analyticsConsent() || typeof window === "undefined") return;
   ensureFunnelAnalytics();
+  const key = markKey(stage);
   try {
-    if (localStorage.getItem(markKey(stage)) === "1") return;
-    localStorage.setItem(markKey(stage), "1");
+    if (localStorage.getItem(key) === "1") return;
   } catch {}
+  if (pending.some((item) => item.key === key)) return;
   const id = journeyId();
   pending.push({
     event: stage,
+    key,
     data: {
       ...(id ? { journey_id: id } : {}),
       ...(data.source ? { utm_source: safe(data.source) } : {}),
