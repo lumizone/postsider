@@ -933,6 +933,7 @@ const en = {
     colName: "Name",
     colKey: "Key",
     colScopes: "Scopes",
+    scopesSafetyHint: "New keys are read-only by default. Grant write permissions only when needed. posts:write can schedule or publish without mandatory approval.",
     colCreated: "Created",
     revoke: "Revoke",
     rename: "Rename",

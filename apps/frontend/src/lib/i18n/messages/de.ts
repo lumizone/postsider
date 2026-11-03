@@ -493,6 +493,7 @@ const de = {
     colName: "Name",
     colKey: "Schlüssel",
     colScopes: "Berechtigungen",
+    scopesSafetyHint: "Neue Schlüssel haben standardmäßig nur Leserechte. Schreibrechte nur bei Bedarf aktivieren. Mit posts:write kann ohne verpflichtende Freigabe geplant oder veröffentlicht werden.",
     colCreated: "Erstellt",
     revoke: "Widerrufen",
     rename: "Umbenennen",
