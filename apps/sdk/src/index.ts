@@ -111,6 +111,32 @@ export default class Postsider {
     });
   }
 
+  /** Read back a created or updated post before reporting success. */
+  async getPost(id: string) {
+    if (!id?.trim()) throw new TypeError('A non-empty post id is required');
+    return this.request(`/public/v1/posts/${encodeURIComponent(id)}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  /**
+   * Transition a saved draft into the queue, or return a queued post to draft.
+   * Scheduling authorizes future publication; call only when the user approved
+   * the post content, destination channels and the saved publish date.
+   */
+  async updatePostStatus(id: string, status: 'draft' | 'schedule') {
+    if (!id?.trim()) throw new TypeError('A non-empty post id is required');
+    if (status !== 'draft' && status !== 'schedule') {
+      throw new TypeError('status must be draft or schedule');
+    }
+    return this.request(`/public/v1/posts/${encodeURIComponent(id)}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+  }
+
   async postList(filters: GetPostsDto) {
     return this.request(`/public/v1/posts?${toQueryString(filters)}`, {
       method: 'GET',

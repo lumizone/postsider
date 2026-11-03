@@ -77,6 +77,12 @@ Show my PostSider calendar for the next 14 days. Do not create or modify anythin
 
 ### 4. Only then prepare a draft
 
+The MCP create-post tool defaults to **draft**, not `schedule` or `now`.
+`posts:write` is a powerful permission: it does not inherently require human
+approval for each publication. An agent must **not** schedule or publish
+without explicit authorization for the content, channel and timing. Use
+`postsider_get_post` to verify a write before reporting success.
+
 ```text
 Create one draft only for the selected channel. Show me the exact content first. Do not publish it.
 ```
@@ -193,6 +199,11 @@ workspace are deliberately not available to agents; they stay in the dashboard.
 
 Every tool declares `readOnlyHint`, `destructiveHint`, `idempotentHint` and
 `openWorldHint` explicitly, so a client can tell a read from a kill switch.
+
+For the exact API endpoint/scope matrix, a no-publication
+`draft → readback → schedule → status` test and the Claude/Codex/Cursor
+verification checklist, see
+[API & MCP trust checklist](../../docs/API-MCP-TRUST.md).
 
 ## Configuration
 

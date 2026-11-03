@@ -137,6 +137,7 @@ and the generated password. PostSider then prompts you to set your real email ad
 
 ### Automation
 
+- [Agent publishing safety, scoped-key permissions and MCP verification](docs/API-MCP-TRUST.md)
 - Public REST API
 - Node.js SDK: `@postsider/node`
 - MCP server: `@postsider/mcp`
