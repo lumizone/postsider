@@ -7,6 +7,7 @@ import {
 } from '@prisma/client';
 import { Injectable } from '@nestjs/common';
 import { AuthService } from '@postsider/helpers/auth/auth.service';
+import { LEGACY_PUBLIC_API_SCOPES } from '@postsider/nestjs-libraries/services/public-api-oauth-scopes';
 import { CreateOrgUserDto } from '@postsider/nestjs-libraries/dtos/auth/create.org.user.dto';
 import { PublicApiScope } from '@postsider/nestjs-libraries/services/public-api-scopes';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
@@ -77,9 +78,9 @@ export class OrganizationRepository {
       },
     } as const;
 
-    // Legacy single per-org keys predate named keys and have always had full
-    // Public API access, so they keep a wildcard scope. Owners migrate to a
-    // scoped key whenever they create one in Settings -> API.
+    // Legacy per-org keys keep every pre-existing Public API operation, but
+    // newly introduced webhook subscriptions and secret rotation require
+    // an explicit scoped key. Never expand legacy grants at deployment.
     const legacy = await this._organization.model.organization.findFirst({
       where: { apiKey: api },
       include: subscriptionInclude,
@@ -87,7 +88,7 @@ export class OrganizationRepository {
     if (legacy) {
       return {
         organization: legacy,
-        scopes: ['*'],
+        scopes: [...LEGACY_PUBLIC_API_SCOPES],
         credentialType: 'legacy' as const,
       };
     }
