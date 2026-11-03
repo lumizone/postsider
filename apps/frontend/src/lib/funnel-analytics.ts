@@ -6,7 +6,7 @@ const WEBSITE_ID = "8f4f0638-114f-4ed6-8d9f-eb553b4a2b61";
 const UMAMI_SRC = "https://analytics.darkdynasty.cloud/script.js";
 type FunnelStage = "signup_completed" | "onboarding_type_selected" |
   "mcp_connected" | "first_draft_created" | "subscription_started";
-type ClientStage = "signup_completed" | "onboarding_type_selected";
+type ClientStage = "onboarding_type_selected";
 type Intent = "agents" | "scheduler";
 type Journey = {
   consented: boolean;
@@ -105,8 +105,8 @@ function trackOnce(stage: FunnelStage, data: Record<string, string> = {}) {
   if (!analyticsConsent() || typeof window === "undefined") return;
   ensureFunnelAnalytics();
   try {
-    if (sessionStorage.getItem(markKey(stage)) === "1") return;
-    sessionStorage.setItem(markKey(stage), "1");
+    if (localStorage.getItem(markKey(stage)) === "1") return;
+    localStorage.setItem(markKey(stage), "1");
   } catch {}
   const id = journeyId();
   pending.push({
@@ -129,10 +129,7 @@ export async function recordClientFunnelStage(stage: ClientStage, intent?: Inten
   try {
     const result = await api.post<{ recorded: boolean; consented: boolean }>(
       "/analytics/funnel",
-      {
-        event: stage,
-        ...(stage === "onboarding_type_selected" ? { onboardingType: intent } : {}),
-      },
+      { event: stage, onboardingType: intent },
       { silent: true },
     );
     if (result.recorded) {

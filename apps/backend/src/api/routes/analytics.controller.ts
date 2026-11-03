@@ -22,17 +22,14 @@ export class AnalyticsController {
     @Req() req: Request,
     @Body() body: { event?: FunnelClientStage; onboardingType?: OnboardingChoice }
   ) {
-    if (body?.event !== 'signup_completed' && body?.event !== 'onboarding_type_selected') {
-      throw new BadRequestException('Only signup_completed and onboarding_type_selected are accepted');
+    if (body?.event !== 'onboarding_type_selected') {
+      throw new BadRequestException('signup_completed is recorded by the server only');
     }
-    if (body.event === 'onboarding_type_selected' &&
-      body.onboardingType !== 'agents' && body.onboardingType !== 'scheduler') {
+    if (body.onboardingType !== 'agents' && body.onboardingType !== 'scheduler') {
       throw new BadRequestException('onboardingType must be agents or scheduler');
     }
     return this._funnel.recordClientStage(
-      org.id, org.createdAt, body.event,
-      body.event === 'onboarding_type_selected' ? body.onboardingType! : null,
-      req.cookies
+      org.id, body.onboardingType!, req.cookies
     );
   }
 

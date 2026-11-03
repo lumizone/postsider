@@ -66,7 +66,7 @@ describe('Stage 5 first-party conversion attribution', () => {
 
   it('does not record anything if analytics consent is absent or rejected', async () => {
     const { service, model } = create();
-    await expect(service.recordClientStage('org1', newOrg, 'signup_completed', null, {}))
+    await expect(service.recordSignupCreated('org1', {}))
       .resolves.toEqual({ recorded: false, consented: false });
     await expect(service.getJourney('org1', { ps_analytics_consent: '0' }))
       .resolves.toEqual({ consented: false, milestones: null });
@@ -74,14 +74,15 @@ describe('Stage 5 first-party conversion attribution', () => {
     expect(model.findUnique).not.toHaveBeenCalled();
   });
 
-  it('uses the authenticated organization, consent and fixed first-touch fields', async () => {
+  it('records real backend account creation against consented first-touch fields', async () => {
     const { service, model } = create();
-    const result = await service.recordClientStage('org1', newOrg, 'signup_completed', null, cookie);
+    const result = await service.recordSignupCreated('org1', cookie);
     expect(result).toEqual({ recorded: true, consented: true });
     expect(model.upsert).toHaveBeenCalledWith({
       where: { organizationId: 'org1' },
       create: expect.objectContaining({
         organizationId: 'org1',
+        signupCompletedAt: expect.any(Date),
         utmSource: 'reddit',
         utmCampaign: 'agent-launch',
         landingPath: '/mcp-social-media-server/',
@@ -89,25 +90,21 @@ describe('Stage 5 first-party conversion attribution', () => {
       }),
       update: {},
     });
-    expect(model.updateMany).toHaveBeenCalledWith({
-      where: { organizationId: 'org1', signupCompletedAt: null },
-      data: { signupCompletedAt: expect.any(Date) },
-    });
+    expect(model.updateMany).not.toHaveBeenCalled();
   });
 
-  it('does not treat an old account reentering onboarding as a signup', async () => {
+  it('never accepts signup completion from the onboarding stage', async () => {
     const { service, model } = create();
-    const orgCreated = new Date(Date.now() - 31 * 86400000);
-    const result = await service.recordClientStage('org1', orgCreated, 'signup_completed', null, cookie);
+    const result = await service.recordClientStage('org1', 'signup_completed' as any, cookie);
     expect(result.recorded).toBe(false);
     expect(model.upsert).not.toHaveBeenCalled();
   });
 
   it('validates intent choices and records only the first selection', async () => {
     const { service, model } = create();
-    const rejected = await service.recordClientStage('org1', newOrg, 'onboarding_type_selected', null, cookie);
+    const rejected = await service.recordClientStage('org1', null as any, cookie);
     expect(rejected.recorded).toBe(false);
-    const accepted = await service.recordClientStage('org1', newOrg, 'onboarding_type_selected', 'agents', cookie);
+    const accepted = await service.recordClientStage('org1', 'agents', cookie);
     expect(accepted.recorded).toBe(true);
     expect(model.updateMany).toHaveBeenCalledWith({
       where: { organizationId: 'org1', onboardingTypeSelectedAt: null },
