@@ -5,6 +5,7 @@ import {
   Param,
   Post,
   Query,
+  Optional,
   Req,
   Res,
   UseGuards,
@@ -28,6 +29,7 @@ import * as Sentry from '@sentry/nestjs';
 import { AuthRateLimitGuard } from '@postsider/nestjs-libraries/services/auth-rate-limit.guard';
 import { MfaService } from '@postsider/backend/services/auth/mfa.service';
 import { AuthService as AuthChecker } from '@postsider/helpers/auth/auth.service';
+import { FunnelAttributionService } from '@postsider/nestjs-libraries/database/prisma/attribution/funnel-attribution.service';
 
 @ApiTags('Auth')
 @Controller('/auth')
@@ -36,7 +38,8 @@ export class AuthController {
     private _authService: AuthService,
     private _emailService: EmailService,
     private _audit: AuditLogger,
-    private _mfa: MfaService
+    private _mfa: MfaService,
+    @Optional() private _funnelAttribution?: FunnelAttributionService
   ) {}
 
   @Get('/can-register')
@@ -63,7 +66,7 @@ export class AuthController {
         body?.org || req?.cookies?.org
       );
 
-      const { jwt, addedOrg, user } = await this._authService.routeAuth(
+      const { jwt, addedOrg, user, registeredOrgId } = await this._authService.routeAuth(
         body.provider,
         body,
         ip,
@@ -72,6 +75,10 @@ export class AuthController {
       );
 
       if (!jwt) throw new Error('Unable to create session');
+      if (registeredOrgId) {
+        await this._funnelAttribution?.recordSignupCreated(registeredOrgId, req.cookies)
+          .catch(() => { /* optional attribution never rejects a successful signup */ });
+      }
 
       await this._audit.logAuthEvent('auth.register', {
         email: body.email,
@@ -152,7 +159,7 @@ export class AuthController {
         body?.org || req?.cookies?.org
       );
 
-      const { addedOrg, user } = await this._authService.routeAuth(
+      const { addedOrg, user, registeredOrgId } = await this._authService.routeAuth(
         body.provider,
         body,
         ip,
@@ -160,6 +167,11 @@ export class AuthController {
         getOrgFromCookie,
         false
       );
+
+      if (registeredOrgId) {
+        await this._funnelAttribution?.recordSignupCreated(registeredOrgId, req.cookies)
+          .catch(() => { /* optional attribution never breaks OAuth login */ });
+      }
 
       if (await this._mfa.requiresEnrollment(user)) {
         return this.requireMfaEnrollment(response, user.id);
