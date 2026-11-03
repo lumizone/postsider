@@ -563,7 +563,7 @@ const en = {
   developerOnboarding: {
     chooseKicker: "Your first step",
     chooseTitle: "What are you using PostSider for?",
-    chooseSubtitle: "Choose the setup that fits your workflow. Every plan keeps the same features, and you can switch whenever you want.",
+    chooseSubtitle: "Choose the setup that fits your workflow. This does not change your plan or permissions, and you can switch later.",
     chooseAgentsTitle: "AI agents & automation",
     chooseAgentsDescription: "Connect Claude, Codex, Cursor, n8n or your own code through MCP and the API. Start with a verified draft.",
     chooseAgentsMeta: "MCP · API · SDK",
