@@ -506,7 +506,7 @@ const pl = {
   developerOnboarding: {
     chooseKicker: "Pierwszy krok",
     chooseTitle: "Do czego chcesz używać PostSider?",
-    chooseSubtitle: "Wybierz sposób pierwszej konfiguracji. Obie ścieżki dają dostęp do tych samych funkcji — wybór możesz później zmienić.",
+    chooseSubtitle: "Wybierz sposób pierwszej konfiguracji. Nie zmienia to Twojego planu ani uprawnień — ścieżkę możesz później zmienić.",
     chooseAgentsTitle: "Agenci AI i automatyzacja",
     chooseAgentsDescription: "Podłącz Claude, Codex, Cursor, n8n lub własny kod przez MCP i API. Zacznij od weryfikacji zapisanego szkicu.",
     chooseAgentsMeta: "MCP · API · SDK",
