@@ -1,5 +1,5 @@
 // Temporary real-browser Stage 3 audit. This does not create any real posts.
-const { chromium } = require("playwright");
+const { chromium } = require(process.env.QA_PLAYWRIGHT_DIR || "playwright");
 const fs = require("node:fs");
 const path = require("node:path");
 const BASE = process.env.QA_URL || "http://127.0.0.1:4200";
