@@ -1,0 +1,60 @@
+name: Temporary Stage 3 onboarding browser QA
+on:
+  push:
+    branches:
+      - feat/stage3-intent-based-onboarding-20261103
+permissions:
+  contents: read
+jobs:
+  frontend-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 26
+    env:
+      NEXT_PUBLIC_BACKEND_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SELF_HOSTED: "false"
+      NEXT_TELEMETRY_DISABLED: "1"
+      QA_URL: http://127.0.0.1:4200
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Frontend TypeScript and production Next.js build
+        run: |
+          pnpm --filter ./apps/frontend exec tsc --noEmit
+          pnpm --filter ./apps/frontend run build
+      - name: Onboarding per-user and org persistence tests
+        run: pnpm exec jest apps/frontend/src/lib/onboarding-progress.spec.ts --runInBand --coverage=false
+      - name: Install isolated Chromium
+        run: |
+          mkdir -p /tmp/postsider-stage3-qa
+          cd /tmp/postsider-stage3-qa
+          npm init -y
+          npm install playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Test onboarding behavior in Chromium
+        env:
+          NODE_PATH: /tmp/postsider-stage3-qa/node_modules
+        run: |
+          pnpm --filter ./apps/frontend exec next start -p 4200 > /tmp/stage3-next.log 2>&1 &
+          for i in $(seq 1 75); do
+            if curl -fsS http://127.0.0.1:4200/onboarding >/dev/null; then break; fi
+            sleep 1
+          done
+          node apps/frontend/scripts/temporary-stage3-browser.cjs
+      - name: Capture Next logs on failure
+        if: failure()
+        run: tail -100 /tmp/stage3-next.log 2>/dev/null || true
+      - name: Upload browser result screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postsider-stage3-onboarding-qa
+          path: stage3-visual-results/
+          retention-days: 5
