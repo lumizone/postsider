@@ -11,7 +11,5 @@ ADD COLUMN "scopes" TEXT[] NOT NULL DEFAULT ARRAY[
   'analytics:read',
   'notifications:read',
   'publishing:read',
-  'publishing:write',
-  'webhooks:read',
-  'webhooks:write'
+  'publishing:write'
 ]::TEXT[];
