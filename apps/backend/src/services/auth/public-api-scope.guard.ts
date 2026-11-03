@@ -20,7 +20,6 @@ export class PublicApiScopeGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const granted: string[] = request.publicApiScopes ?? [];
 
-    if (granted.includes('*')) return true;
     if (
       !required?.length ||
       !required.every((scope) => granted.includes(scope))
