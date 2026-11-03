@@ -454,7 +454,7 @@ describe('PostsiderClient', () => {
       );
       const client = new PostsiderClient(apiKey, 'https://api.postsider.com');
       await expect(client.get('/integrations')).rejects.toThrow(
-        'Unauthorized (401). The POSTSIDER_API_KEY is missing or invalid. Generate one in PostSider under Settings -> API.'
+        'Unauthorized (401). The POSTSIDER_API_KEY is missing or invalid. Generate one in PostSider under Settings -> API; for OAuth, reconnect and sign in again.'
       );
     });
 
