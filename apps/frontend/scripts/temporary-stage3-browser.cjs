@@ -182,7 +182,9 @@ async function inspectWidth(browser, width) {
       result.resumeViaBanner=true;
     }
     // Revisit an unfinished agent setup after a simulated OAuth return.
-    await page.reload({waitUntil:"domcontentloaded"});
+    // A 375px run has already navigated back through the banner, so the URL
+    // has ?flow=agents and reloading must RESUME, not reset to choice.
+    await page.goto(BASE+"/onboarding",{waitUntil:"domcontentloaded"});
     await page.getByRole("heading",{name:"What are you using PostSider for?"}).waitFor();
     await page.goto(BASE+"/onboarding?flow=agents",{waitUntil:"domcontentloaded"});
     await page.getByRole("heading",{name:/Connect your agent/}).waitFor({timeout:10000});
