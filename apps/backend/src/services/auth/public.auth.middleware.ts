@@ -4,8 +4,9 @@ import { OrganizationService } from '@postsider/nestjs-libraries/database/prisma
 import { OAuthService } from '@postsider/nestjs-libraries/database/prisma/oauth/oauth.service';
 import { HttpForbiddenException } from '@postsider/nestjs-libraries/services/exception.filter';
 import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
-import { pricing } from '@postsider/nestjs-libraries/database/prisma/subscriptions/pricing';
+import { tokenAllows } from '@postsider/nestjs-libraries/database/prisma/oauth/mcp-scope-policy';
 import { grantedScopesForOAuth } from '@postsider/nestjs-libraries/services/public-api-oauth-scopes';
+import { pricing } from '@postsider/nestjs-libraries/database/prisma/subscriptions/pricing';
 
 @Injectable()
 export class PublicAuthMiddleware implements NestMiddleware {
@@ -36,6 +37,30 @@ export class PublicAuthMiddleware implements NestMiddleware {
           return;
         }
 
+        // A token minted by the MCP authorization server carries the scopes
+        // the user approved. The MCP server enforces them per tool, but the
+        // token also works against this API directly, so enforce them here too:
+        // a read-only grant must not be able to write.
+        const scopeCheck = tokenAllows(
+          (authorization as { scopes?: string[] }).scopes,
+          req.method,
+          req.originalUrl || req.url
+        );
+        if (!scopeCheck.allowed) {
+          res
+            .status(HttpStatus.FORBIDDEN)
+            .setHeader(
+              'WWW-Authenticate',
+              `Bearer error="insufficient_scope", scope="${scopeCheck.required}"`
+            );
+          res.json({
+            msg: `This token does not include the ${scopeCheck.required} scope.`,
+            error: 'insufficient_scope',
+            scope: scopeCheck.required,
+          });
+          return;
+        }
+
         const org = authorization.organization;
         if (isBillingEnabled() && !org.subscription) {
           res
@@ -55,16 +80,14 @@ export class PublicAuthMiddleware implements NestMiddleware {
 
         // @ts-ignore
         req.org = { ...org, users: [authorization.membership] };
-        // MCP OAuth access grants carry actual scopes; legacy OAuth grants do
-        // not. Never promote either to '*' because it would give a read-only
-        // client access to new webhook secret/admin endpoints.
+        // Deny newly introduced webhook capabilities to legacy OAuth, and
+        // enforce the actual consented grants for MCP OAuth.
         // @ts-ignore
-        req.publicApiScopes = grantedScopesForOAuth(authorization.scopes);
+        req.publicApiScopes = grantedScopesForOAuth((authorization as { scopes?: string[] }).scopes);
         // @ts-ignore
         req.publicApiCredential = { type: 'oauth' };
       } else {
-        const credential =
-          await this._organizationService.resolvePublicApiCredential(auth);
+        const credential = await this._organizationService.resolvePublicApiCredential(auth);
         if (!credential) {
           res.status(HttpStatus.UNAUTHORIZED).json({ msg: 'Invalid API key' });
           return;
