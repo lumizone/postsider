@@ -119,4 +119,21 @@ describe('PublicWebhookDeliveryService', () => {
       })
     );
   });
+  it('does not follow a redirect carrying signed webhook headers', async () => {
+    const update = jest.fn().mockResolvedValue({ consecutiveFailures: 1 });
+    const { service } = makeService({
+      findMany: jest.fn().mockResolvedValue([
+        { id: 'hook-1', url: 'https://hooks.example.com/old', secretVersion: 'v1' },
+      ]),
+      update,
+    });
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 302 }) as any;
+    await expect(service.deliver('org-1', 'post.published', { postId: 'p1' }))
+      .resolves.toMatchObject({ delivered: 0, failed: 1 });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect((global.fetch as jest.Mock).mock.calls[0][1]).toEqual(
+      expect.objectContaining({ redirect: 'manual' })
+    );
+  });
+
 });

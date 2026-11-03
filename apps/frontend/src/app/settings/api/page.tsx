@@ -36,6 +36,9 @@ const API_SCOPES = [
   "webhooks:write",
 ] as const;
 
+// New keys created in the UI start with read-only rights (least privilege).
+const DEFAULT_API_SCOPES = ["organization:read", "channels:read", "posts:read"] as const;
+
 export default function ApiSettingsPage() {
   const { t, locale } = useI18n();
   const { user } = useAuth();
@@ -48,7 +51,7 @@ export default function ApiSettingsPage() {
   // Create form
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
-  const [newScopes, setNewScopes] = useState<string[]>([...API_SCOPES]);
+  const [newScopes, setNewScopes] = useState<string[]>([...DEFAULT_API_SCOPES]);
   const [creating, setCreating] = useState(false);
 
   // Modal for newly created key
@@ -88,7 +91,7 @@ export default function ApiSettingsPage() {
       setShowModal(true);
       setShowCreate(false);
       setNewName("");
-      setNewScopes([...API_SCOPES]);
+      setNewScopes([...DEFAULT_API_SCOPES]);
       void refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create key");
@@ -245,7 +248,10 @@ export default function ApiSettingsPage() {
                 onKeyDown={(e) => { if (e.key === "Enter") void onCreate(); }}
                 className={s.input}
               />
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 8 }}>
+              <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: "var(--muted)" }}>
+                 {t("settingsApi.scopeDefaultHint")}
+               </p>
+               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 8 }}>
                 {API_SCOPES.map((scope) => (
                   <label key={scope} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontFamily: "monospace", color: "var(--muted)" }}>
                     <input
@@ -265,7 +271,7 @@ export default function ApiSettingsPage() {
                 <button type="button" className={s.btnPrimary} onClick={onCreate} disabled={creating || !newName.trim() || newScopes.length === 0} style={{ whiteSpace: "nowrap" }}>
                   {creating ? t("settingsApi.creating") : t("common.create")}
                 </button>
-                <button type="button" className={s.btnGhost} onClick={() => { setShowCreate(false); setNewName(""); setNewScopes([...API_SCOPES]); }}>
+                <button type="button" className={s.btnGhost} onClick={() => { setShowCreate(false); setNewName(""); setNewScopes([...DEFAULT_API_SCOPES]); }}>
                   {t("common.cancel")}
                 </button>
               </div>

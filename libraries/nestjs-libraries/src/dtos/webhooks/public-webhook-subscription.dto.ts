@@ -9,6 +9,7 @@ import {
   IsUrl,
   MaxLength,
 } from 'class-validator';
+import { IsSafeWebhookUrl } from './webhook.url.validator';
 import {
   PUBLIC_WEBHOOK_EVENTS,
   PublicWebhookEvent,
@@ -22,6 +23,7 @@ export class CreatePublicWebhookSubscriptionDto {
 
   @ApiProperty({ example: 'https://hooks.example.com/postsider' })
   @IsUrl({ protocols: ['https'], require_protocol: true })
+  @IsSafeWebhookUrl()
   @MaxLength(2048)
   url: string;
 

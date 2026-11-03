@@ -73,6 +73,8 @@ export class PublicWebhookDeliveryService {
       try {
         const response = await fetch(target.url, {
           method: 'POST',
+          // Signed webhooks are never forwarded to redirect destinations.
+          redirect: 'manual',
           headers: {
             'Content-Type': 'application/json',
             'User-Agent': 'PostSider-Webhooks/1.0',
