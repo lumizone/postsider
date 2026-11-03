@@ -20,7 +20,7 @@ describe('draft-first MCP publishing contract', () => {
   beforeEach(() => {
     requests = [];
     post = null;
-    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
       const url = new URL(String(input));
       const method = init?.method ?? 'GET';
       const path = url.pathname;
