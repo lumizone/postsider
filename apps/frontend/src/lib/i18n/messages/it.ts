@@ -493,6 +493,7 @@ const it = {
     colName: "Nome",
     colKey: "Chiave",
     colScopes: "Ambiti",
+    scopesSafetyHint: "Le nuove chiavi sono di sola lettura per impostazione predefinita. Abilita la scrittura solo se necessaria. posts:write consente di programmare o pubblicare senza approvazione obbligatoria.",
     colCreated: "Creata il",
     revoke: "Revoca",
     rename: "Rinomina",

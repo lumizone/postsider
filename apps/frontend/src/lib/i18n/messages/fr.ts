@@ -493,6 +493,7 @@ const fr = {
     colName: "Nom",
     colKey: "Clé",
     colScopes: "Autorisations",
+    scopesSafetyHint: "Les nouvelles clés sont en lecture seule par défaut. N'accordez l'écriture que si nécessaire. posts:write permet de planifier ou publier sans approbation obligatoire.",
     colCreated: "Créée le",
     revoke: "Révoquer",
     rename: "Renommer",

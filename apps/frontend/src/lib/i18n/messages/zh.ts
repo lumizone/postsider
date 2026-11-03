@@ -493,6 +493,7 @@ const zh = {
     colName: "名称",
     colKey: "密钥",
     colScopes: "权限范围",
+    scopesSafetyHint: "新密钥默认只有读取权限。仅在必要时授予写入权限。posts:write 可在无需强制审批的情况下安排或发布帖子。",
     colCreated: "创建时间",
     revoke: "撤销",
     rename: "重命名",

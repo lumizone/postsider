@@ -172,7 +172,9 @@ export function createPostSiderMcpServer(
     },
     {
       instructions:
-        "Use PostSider for the authenticated user's social publishing workspace. Follow the user's explicit requested outcome. Resolve channel, post and customer ids from fresh read calls; never invent them. Before reporting a write as successful, read the created or changed record back. Treat delete and organization-wide pause as destructive actions.",
+        "Use PostSider for the authenticated user's social publishing workspace. Follow the user's explicit requested outcome. Resolve channel, post and customer ids from fresh read calls; never invent them. Before reporting a write as successful, read the created or changed record back. " +
+        "Default to drafts when the user has not authorized a publication time. Creating a draft is not approval to schedule or publish it. Never schedule or publish without explicit authorization for the content, destination channels and timing; publish-now requires an explicit immediate-publishing request. " +
+        "Treat delete and organization-wide pause as destructive actions.",
     }
   );
 
@@ -744,12 +746,12 @@ export function createPostSiderMcpServer(
     {
       title: 'Create / schedule / publish a post',
       description:
-        'Create a post across one or more channels. `type`: "schedule" books it for `date`; "now" publishes immediately; "draft" saves without publishing. Get channel ids from postsider_list_channels, per-channel required `settings` and length limits from postsider_get_channel_rules, and a free slot from postsider_find_slot. Attach media by uploading first (postsider_upload_media_from_url, postsider_upload_media_base64, postsider_upload_media_from_file) or by reusing postsider_list_media, then pass the media objects as `images`. To change a post later use postsider_update_post.',
+        'Create a post across one or more channels. Default to "draft" (safe, no publication). Use "schedule" only when the user explicitly authorized the content, channels and future time; use "now" only when they explicitly requested immediate publishing. A draft or approval request is not permission to publish. `type`: "schedule" books it for `date`; "now" publishes immediately; "draft" saves without publishing. Get channel ids from postsider_list_channels, per-channel required `settings` and length limits from postsider_get_channel_rules, and a free slot from postsider_find_slot. Attach media by uploading first (postsider_upload_media_from_url, postsider_upload_media_base64, postsider_upload_media_from_file) or by reusing postsider_list_media, then pass the media objects as `images`. To change a post later use postsider_update_post.',
       inputSchema: {
         type: z
           .enum(['draft', 'schedule', 'now'])
-          .default('schedule')
-          .describe('draft = save only; schedule = book for `date`; now = publish immediately.'),
+          .default('draft')
+          .describe('Default draft saves without publishing. schedule = book for `date` after explicit user authorization; now = publish immediately only when explicitly requested.'),
         date: isoDate
           .optional()
           .describe(
@@ -880,7 +882,7 @@ export function createPostSiderMcpServer(
     {
       title: 'Update post status',
       description:
-        'Change the status of an existing post (e.g. move between draft and queue).',
+        'Move an existing post between draft and scheduled queue. Switching to "schedule" makes the post eligible for automatic publication at its saved date; do so only after the user explicitly authorized the content, channels and timing. Read the stored post before and after the change.',
       inputSchema: {
         postId: nonEmptyId.describe('Post id.'),
         status: z

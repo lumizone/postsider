@@ -78,4 +78,40 @@ describe('Postsider SDK', () => {
 
     await expect(client.deletePost('missing')).rejects.toBeInstanceOf(PostsiderApiError);
   });
+  it('reads back a post by its URL-encoded id', async () => {
+    mockedFetch.mockResolvedValue(response(200, { id: 'post/1', state: 'DRAFT' }));
+    const client = new Postsider('key');
+    await expect(client.getPost('post/1')).resolves.toMatchObject({
+      id: 'post/1',
+      state: 'DRAFT',
+    });
+    expect(mockedFetch.mock.calls[0][0]).toBe(
+      'https://api.postsider.com/public/v1/posts/post%2F1'
+    );
+    expect(mockedFetch.mock.calls[0][1]).toMatchObject({ method: 'GET' });
+  });
+
+  it('transitions a draft to schedule only on explicit call', async () => {
+    mockedFetch.mockResolvedValue(response(200, { state: 'QUEUE' }));
+    const client = new Postsider('key');
+    await expect(client.updatePostStatus('p1', 'schedule')).resolves.toMatchObject({
+      state: 'QUEUE',
+    });
+    expect(mockedFetch.mock.calls[0][0]).toBe(
+      'https://api.postsider.com/public/v1/posts/p1/status'
+    );
+    expect(mockedFetch.mock.calls[0][1]).toMatchObject({
+      method: 'PUT',
+      body: '{"status":"schedule"}',
+    });
+  });
+
+  it('refuses blank ids and invalid transitions without an HTTP request', async () => {
+    const client = new Postsider('key');
+    await expect(client.getPost('')).rejects.toThrow('non-empty post id');
+    await expect(client.updatePostStatus(' ', 'schedule')).rejects.toThrow('non-empty post id');
+    await expect(client.updatePostStatus('p1', 'now' as any)).rejects.toThrow('draft or schedule');
+    expect(mockedFetch).not.toHaveBeenCalled();
+  });
+
 });

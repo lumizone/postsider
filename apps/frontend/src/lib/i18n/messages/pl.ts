@@ -813,6 +813,7 @@ const pl = {
     colName: "Nazwa",
     colKey: "Klucz",
     colScopes: "Zakresy",
+    scopesSafetyHint: "Nowe klucze domyślnie mają dostęp tylko do odczytu. Uprawnienia zapisu włączaj wyłącznie wtedy, gdy są potrzebne. posts:write pozwala planować i publikować bez obowiązkowego zatwierdzenia.",
     colCreated: "Utworzony",
     revoke: "Unieważnij",
     rename: "Zmień nazwę",
