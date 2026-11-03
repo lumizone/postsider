@@ -5,6 +5,7 @@ jest.mock('isomorphic-dompurify', () => ({
 
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { PublicIntegrationsController } from './public.integrations.controller';
+import { PublicWorkspaceController } from './public.workspace.controller';
 import { PUBLIC_API_SCOPES_KEY } from '@postsider/backend/services/auth/public-api-scope.decorator';
 import { isPublicApiScope } from '@postsider/nestjs-libraries/services/public-api-scopes';
 
@@ -40,5 +41,29 @@ describe('PublicIntegrationsController scope contract', () => {
     expect(
       Reflect.getMetadata(PATH_METADATA, (prototype as any)[method])
     ).toBeDefined();
+  });
+});
+
+
+describe('PublicWorkspaceController scope contract', () => {
+  const prototype = PublicWorkspaceController.prototype;
+  const handlers = Object.getOwnPropertyNames(prototype)
+    .map((name) => ({ name, handler: (prototype as any)[name] }))
+    .filter(({ handler }) => Reflect.hasMetadata(METHOD_METADATA, handler));
+
+  it('denies newly added workspace APIs to unscoped credentials', () => {
+    expect(handlers).toHaveLength(14);
+    for (const { name, handler } of handlers) {
+      const scopes = Reflect.getMetadata(PUBLIC_API_SCOPES_KEY, handler);
+      expect(scopes?.length).toBeGreaterThan(0);
+      expect(scopes.every(isPublicApiScope)).toBe(true);
+    }
+  });
+
+  it.each([
+    ['disableChannel', ['channels:write']],
+    ['deleteMedia', ['media:write']],
+  ])('authorizes %s only with %j', (name, expected) => {
+    expect(Reflect.getMetadata(PUBLIC_API_SCOPES_KEY, (prototype as any)[name])).toEqual(expected);
   });
 });
