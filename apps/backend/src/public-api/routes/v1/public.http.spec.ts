@@ -27,6 +27,8 @@ describe('Public API over HTTP', () => {
   let app: INestApplication;
   let base: string;
   let role = 'SUPERADMIN';
+  let grantedScopes: string[] = ['*'];
+  let credentialType = 'legacy';
 
   const channel = { id: 'c1', deletedAt: null, providerIdentifier: 'x', postingTimes: '[]', timezone: null };
   const posts = [
@@ -73,6 +75,8 @@ describe('Public API over HTTP', () => {
     // Stand-in for PublicAuthMiddleware.
     app.use((req: any, _res: any, next: any) => {
       req.org = { id: 'org-1', defaultTimezone: null, users: [{ role }] };
+      req.publicApiScopes = grantedScopes;
+      req.publicApiCredential = { type: credentialType };
       next();
     });
     await app.listen(0);
@@ -84,6 +88,8 @@ describe('Public API over HTTP', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     role = 'SUPERADMIN';
+    grantedScopes = ['*'];
+    credentialType = 'legacy';
     integrationService.getIntegrationById.mockResolvedValue(channel);
     integrationService.setTimes.mockResolvedValue(channel);
     postsService.getPosts.mockResolvedValue(posts);
@@ -95,6 +101,32 @@ describe('Public API over HTTP', () => {
       headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
+
+
+  describe('public API route scopes over HTTP', () => {
+    it('allows a named read-only key to query posts', async () => {
+      grantedScopes = ['posts:read'];
+      credentialType = 'api-key';
+      const res = await send('GET', '/posts?startDate=2026-06-01&endDate=2026-06-30');
+      expect(res.status).toBe(200);
+    });
+
+    it('denies post modification and channel administration to a read-only key', async () => {
+      grantedScopes = ['posts:read'];
+      credentialType = 'api-key';
+      expect((await send('PUT', '/posts/p1', { content: 'new' })).status).toBe(403);
+      expect((await send('PUT', '/integrations/c1/queue-plan',
+        { time: [{ time: 540 }], timezone: 'Europe/Warsaw' })).status).toBe(403);
+    });
+
+    it('ignores a forged wildcard on named keys or OAuth grants', async () => {
+      grantedScopes = ['*'];
+      for (const type of ['api-key', 'oauth']) {
+        credentialType = type;
+        expect((await send('GET', '/posts')).status).toBe(403);
+      }
+    });
+  });
 
   describe('GET /posts', () => {
     it('accepts the extra filter and paging params next to the DTO', async () => {

@@ -27,7 +27,7 @@ describe('Public API OAuth grant translation', () => {
     expect(scopes).not.toContain('webhooks:write');
   });
 
-  it.each([[], ['admin:all'], ['webhooks:write'], ['*']])(
+  it.each([[[]], [['admin:all']], [['webhooks:write']], [['*']]])(
     'unsupported OAuth grant %j never escalates rights',
     (input) => {
       const scopes = publicApiScopesForOAuth(input);

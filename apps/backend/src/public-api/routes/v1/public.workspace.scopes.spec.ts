@@ -1,3 +1,8 @@
+jest.mock('isomorphic-dompurify', () => ({
+  __esModule: true,
+  default: { sanitize: (value: string) => value },
+}));
+
 import { GUARDS_METADATA, METHOD_METADATA } from '@nestjs/common/constants';
 import { PublicWorkspaceController } from './public.workspace.controller';
 import { PublicApiScopeGuard } from '@postsider/backend/services/auth/public-api-scope.guard';
