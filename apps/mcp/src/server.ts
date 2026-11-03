@@ -773,7 +773,7 @@ export function createPostSiderMcpServer(
                 .optional()
                 .describe('Optional media objects from an upload tool or postsider_list_media.'),
               settings: z
-                .record(z.any())
+                .record(z.string(), z.any())
                 .optional()
                 .describe(
                   'Provider-specific settings. Required fields: X: who_can_reply_post (everyone, following, mentionedUsers, subscribers, or verified). Instagram: post_type (post or story). YouTube: title and type (public, private, or unlisted). TikTok: privacy_level (PUBLIC_TO_EVERYONE, MUTUAL_FOLLOW_FRIENDS, FOLLOWER_OF_CREATOR, or SELF_ONLY); duet, stitch, comment, brand_content_toggle, and brand_organic_toggle (booleans); autoAddMusic (yes or no); and content_posting_method (DIRECT_POST or UPLOAD). Other providers may impose additional requirements; preserve settings returned by postsider_get_post when replacing an existing post.'
@@ -836,7 +836,7 @@ export function createPostSiderMcpServer(
           ),
         date: isoDate.optional().describe('New publish date, ISO 8601 UTC. Must not be in the past for scheduled posts.'),
         settings: z
-          .record(z.any())
+          .record(z.string(), z.any())
           .optional()
           .describe('Provider-specific settings; replaces the current settings object entirely, so start from postsider_get_post.'),
         firstComment: z
