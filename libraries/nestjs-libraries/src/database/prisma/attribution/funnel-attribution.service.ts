@@ -93,15 +93,19 @@ export class FunnelAttributionService {
     if (choice !== 'agents' && choice !== 'scheduler') {
       return { recorded: false, consented: true };
     }
-    const attribution = parseFirstTouch(cookies.ps_attribution_v1) ?? {};
-    const journeyId = parseJourneyId(cookies.ps_journey_id);
-    await this.prisma.funnelAttribution.upsert({
+    const id = parseJourneyId(cookies.ps_journey_id);
+    if (!id) return { recorded: false, consented: true };
+    const original = await this.prisma.funnelAttribution.findUnique({
       where: { organizationId },
-      create: { organizationId, ...attribution, journeyId },
-      update: {},
+      select: { journeyId: true, signupCompletedAt: true },
     });
+    // Only the original signup journey can choose its onboarding segment.
+    // An invited teammate's anonymous ID must never overwrite attribution.
+    if (!original?.signupCompletedAt || original.journeyId !== id) {
+      return { recorded: false, consented: true };
+    }
     const updated = await this.prisma.funnelAttribution.updateMany({
-      where: { organizationId, onboardingTypeSelectedAt: null },
+      where: { organizationId, journeyId: id, onboardingTypeSelectedAt: null },
       data: { onboardingIntent: choice, onboardingTypeSelectedAt: new Date() },
     });
     return { recorded: updated.count === 1, consented: true };
@@ -115,7 +119,11 @@ export class FunnelAttributionService {
     const row = await this.prisma.funnelAttribution.findUnique({
       where: { organizationId },
     });
-    if (!row) return { consented: true, milestones: null };
+    // Do not replay conversion milestones to invited team members or a
+    // different browser journey: this would multiply paid conversions in Umami.
+    if (!row || !row.journeyId || parseJourneyId(cookies?.ps_journey_id) !== row.journeyId) {
+      return { consented: true, milestones: null };
+    }
     return {
       consented: true,
       journeyId: row.journeyId,
