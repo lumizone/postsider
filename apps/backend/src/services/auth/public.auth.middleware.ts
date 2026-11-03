@@ -80,7 +80,7 @@ export class PublicAuthMiddleware implements NestMiddleware {
           return;
         }
 
-        if (Array.isArray((authorization as { scopes?: string[] }).scopes)) {
+        if (Array.isArray((authorization as { scopes?: string[] }).scopes) && typeof res.once === 'function') {
           // Successful use of a scoped MCP OAuth token, not merely pressing
           // "Connect" in the onboarding UI. Do not log the token or request.
           res.once('finish', () => {
