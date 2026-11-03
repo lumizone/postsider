@@ -343,9 +343,38 @@ export class PostsiderClient {
           }. No posts can be scheduled or published until an owner resumes from the PostSider dashboard.`
         );
       }
-      if (res.status === 401 || res.status === 403) {
+      if (res.status === 401) {
         throw new Error(
-          `Unauthorized (${res.status}). The POSTSIDER_API_KEY is missing or invalid. Generate one in PostSider under Settings -> API.`
+          'Unauthorized (401). The POSTSIDER_API_KEY is missing or invalid. Generate one in PostSider under Settings -> API; for OAuth, reconnect and sign in again.'
+        );
+      }
+      if (res.status === 403) {
+        const body = data && typeof data === 'object'
+          ? data as Record<string, unknown>
+          : {};
+        const required = Array.isArray(body.requiredScopes)
+          ? body.requiredScopes.filter(
+              (item): item is string =>
+                typeof item === 'string' && /^[a-z]+:(read|write)$/.test(item)
+            )
+          : typeof body.scope === 'string' && /^[a-z]+:(read|write)$/.test(body.scope)
+          ? [body.scope]
+          : [];
+        const scopeHint = required.length
+          ? ` Required scope: ${required.join(', ')}.`
+          : '';
+        throw new Error(
+          `Permission denied (403) for ${method} ${path}.${scopeHint} Check Settings -> API key scopes or reconnect the OAuth MCP client with the required permissions. A workspace role restriction may also apply.`
+        );
+      }
+      if (res.status === 402) {
+        throw new Error(
+          `This PostSider plan does not allow ${method} ${path} (402): ${apiMsg}. Review the plan's API access in Billing; do not retry with the same plan.`
+        );
+      }
+      if (res.status === 429) {
+        throw new Error(
+          `PostSider rate limit reached (429) for ${method} ${path}: ${apiMsg}. Wait before retrying; do not repeatedly submit a write, and use the same idempotency key for a safe retry.`
         );
       }
       throw new Error(

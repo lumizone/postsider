@@ -70,10 +70,10 @@ export class PublicWebhookDeliveryService {
     let lastOutcome = 'unknown error';
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      let response: Response | undefined;
       try {
-        const response = await fetch(target.url, {
-          // Never follow a user-controlled Location. Redirects can downgrade
-          // HTTPS or forward the signed POST payload to another host.
+        response = await fetch(target.url, {
+          // Do not forward a signed webhook to a redirect target.
           redirect: 'error',
           method: 'POST',
           headers: {
@@ -87,19 +87,30 @@ export class PublicWebhookDeliveryService {
           },
           body,
           signal: AbortSignal.timeout(10_000),
-          // @ts-ignore undici dispatcher adds DNS rebinding / private-IP protection
+          // @ts-ignore undici dispatcher blocks DNS rebinding / private IPs
           dispatcher: ssrfSafeDispatcher,
         });
-
-        if (response.ok) {
-          await this.recordSuccess(target.id);
-          return true;
-        }
-
-        lastOutcome = `HTTP ${response.status}`;
-        if (response.status !== 429 && response.status < 500) break;
       } catch (error) {
         lastOutcome = String(error);
+      }
+
+      if (response?.ok) {
+        // The receiving endpoint has ALREADY accepted the event. A database
+        // bookkeeping failure must not turn a successful delivery into a
+        // duplicate network POST on the next retry.
+        try {
+          await this.recordSuccess(target.id);
+        } catch {
+          this.logger.warn(
+            `Public webhook ${target.id} was delivered, but recording success failed`
+          );
+        }
+        return true;
+      }
+
+      if (response) {
+        lastOutcome = `HTTP ${response.status}`;
+        if (response.status !== 429 && response.status < 500) break;
       }
 
       if (attempt < MAX_ATTEMPTS) {
@@ -109,7 +120,15 @@ export class PublicWebhookDeliveryService {
       }
     }
 
-    await this.recordFailure(target.id);
+    // A deleted subscription or transient database outage must not cause the
+    // non-blocking delivery service to reject the publishing activity.
+    try {
+      await this.recordFailure(target.id);
+    } catch {
+      this.logger.warn(
+        `Public webhook ${target.id} failed, but recording the failure also failed`
+      );
+    }
     this.logger.warn(
       `Public webhook ${target.id} failed ${envelope.event}: ${lastOutcome}`
     );

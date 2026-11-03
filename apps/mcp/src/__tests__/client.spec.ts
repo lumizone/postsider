@@ -458,19 +458,65 @@ describe('PostsiderClient', () => {
       );
     });
 
-    it('gives the invalid-API-key message on 403', async () => {
+    it('distinguishes missing permission from an invalid key (403)', async () => {
       fetchMock.mockResolvedValue(
         mockResponse({
           ok: false,
           status: 403,
           statusText: 'Forbidden',
-          text: '',
+          text: JSON.stringify({
+            msg: 'API key does not have the required scope',
+            requiredScopes: ['posts:write'],
+          }),
         })
       );
       const client = new PostsiderClient(apiKey, 'https://api.postsider.com');
-      await expect(client.get('/integrations')).rejects.toThrow(
-        'Unauthorized (403). The POSTSIDER_API_KEY is missing or invalid. Generate one in PostSider under Settings -> API.'
+      const error = await client.post('/posts', { type: 'draft' }).catch((err: unknown) => err as Error);
+      expect(error.message).toContain('Permission denied (403)');
+      expect(error.message).toContain('posts:write');
+      expect(error.message).toContain('Settings -> API');
+      expect(error.message).not.toContain(apiKey);
+      expect(error.message).not.toContain('missing or invalid');
+    });
+
+    it('explains OAuth insufficient_scope without suggesting a new API key', async () => {
+      fetchMock.mockResolvedValue(
+        mockResponse({
+          ok: false,
+          status: 403,
+          statusText: 'Forbidden',
+          text: JSON.stringify({ error: 'insufficient_scope', scope: 'channels:write' }),
+        })
       );
+      const client = new PostsiderClient(apiKey, 'https://api.postsider.com');
+      await expect(client.get('/social/x')).rejects.toThrow(/channels:write/);
+      await expect(client.get('/social/x')).rejects.toThrow(/reconnect the OAuth MCP client/);
+    });
+
+    it('explains a plan restriction (402) without retry advice', async () => {
+      fetchMock.mockResolvedValue(
+        mockResponse({
+          ok: false,
+          status: 402,
+          statusText: 'Payment Required',
+          text: JSON.stringify({ msg: 'Public API is not available on this plan' }),
+        })
+      );
+      const client = new PostsiderClient(apiKey, 'https://api.postsider.com');
+      await expect(client.get('/posts')).rejects.toThrow(/does not allow GET \/posts \(402\).*Billing/);
+    });
+
+    it('explains rate limiting (429) and warns against duplicate writes', async () => {
+      fetchMock.mockResolvedValue(
+        mockResponse({
+          ok: false,
+          status: 429,
+          statusText: 'Too Many Requests',
+          text: JSON.stringify({ message: 'Limit reached' }),
+        })
+      );
+      const client = new PostsiderClient(apiKey, 'https://api.postsider.com');
+      await expect(client.post('/posts', { type: 'draft' })).rejects.toThrow(/429.*idempotency key/);
     });
 
     it('explains the emergency publishing pause on 423, including the reason', async () => {

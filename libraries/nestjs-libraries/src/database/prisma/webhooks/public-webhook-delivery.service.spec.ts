@@ -120,4 +120,40 @@ describe('PublicWebhookDeliveryService', () => {
       })
     );
   });
+  it('does not resend a 2xx webhook when persisting success fails', async () => {
+    const update = jest.fn().mockRejectedValue(new Error('database unavailable'));
+    const { service } = makeService({
+      findMany: jest.fn().mockResolvedValue([{
+        id: 'hook-1',
+        url: 'https://hooks.example.com/postsider',
+        secretVersion: 'version-1',
+      }]),
+      update,
+    });
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 204 }) as any;
+
+    await expect(service.deliver('org-1', 'post.published', { postId: 'p1' }))
+      .resolves.toMatchObject({ attempted: 1, delivered: 1, failed: 0 });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a failed webhook non-blocking if persisting the failure fails', async () => {
+    const update = jest.fn().mockRejectedValue(new Error('database unavailable'));
+    const { service } = makeService({
+      findMany: jest.fn().mockResolvedValue([{
+        id: 'hook-1',
+        url: 'https://hooks.example.com/postsider',
+        secretVersion: 'version-1',
+      }]),
+      update,
+    });
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 400 }) as any;
+
+    await expect(service.deliver('org-1', 'post.failed', { postId: 'p1' }))
+      .resolves.toMatchObject({ attempted: 1, delivered: 0, failed: 1 });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+
 });
