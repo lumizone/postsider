@@ -1,4 +1,5 @@
 import { OrganizationRepository } from './organization.repository';
+import { LEGACY_PUBLIC_API_SCOPES } from '@postsider/nestjs-libraries/services/public-api-oauth-scopes';
 
 function repositoryWithModels(models: Record<string, unknown>) {
   const prismaRepository = { model: models } as any;
@@ -11,7 +12,7 @@ function repositoryWithModels(models: Record<string, unknown>) {
 }
 
 describe('OrganizationRepository public API credentials', () => {
-  it('keeps legacy organization keys working with wildcard access', async () => {
+  it('keeps legacy organization keys working without new webhook permissions', async () => {
     const legacyOrganization = { id: 'org-legacy', subscription: null };
     const apiKeyFindFirst = jest.fn();
     const repository = repositoryWithModels({
@@ -25,7 +26,7 @@ describe('OrganizationRepository public API credentials', () => {
       repository.resolvePublicApiCredential('legacy-key')
     ).resolves.toEqual({
       organization: legacyOrganization,
-      scopes: ['*'],
+      scopes: LEGACY_PUBLIC_API_SCOPES,
       credentialType: 'legacy',
     });
     expect(apiKeyFindFirst).not.toHaveBeenCalled();
