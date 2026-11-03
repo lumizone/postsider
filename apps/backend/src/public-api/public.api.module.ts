@@ -9,6 +9,7 @@ import { OpenaiService } from '@postsider/nestjs-libraries/openai/openai.service
 import { ExtractContentService } from '@postsider/nestjs-libraries/openai/extract.content.service';
 import { CodesService } from '@postsider/nestjs-libraries/services/codes.service';
 import { PublicIntegrationsController } from '@postsider/backend/public-api/routes/v1/public.integrations.controller';
+import { PublicWorkspaceController } from '@postsider/backend/public-api/routes/v1/public.workspace.controller';
 import { PublicOrganizationController } from '@postsider/backend/public-api/routes/v1/public.organization.controller';
 import { PublicWebhookSubscriptionsController } from '@postsider/backend/public-api/routes/v1/public-webhook-subscriptions.controller';
 import { PublicAuthMiddleware } from '@postsider/backend/services/auth/public.auth.middleware';
@@ -18,6 +19,7 @@ import { RequestIdMiddleware } from '@postsider/nestjs-libraries/services/reques
 
 const authenticatedController = [
   PublicIntegrationsController,
+  PublicWorkspaceController,
   PublicOrganizationController,
   PublicWebhookSubscriptionsController,
 ];
@@ -57,3 +59,4 @@ export class PublicApiModule implements NestModule {
     consumer.apply(PublicAuthMiddleware).forRoutes(...authenticatedController);
   }
 }
+
