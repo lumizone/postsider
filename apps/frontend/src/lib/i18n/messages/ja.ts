@@ -492,6 +492,7 @@ const ja = {
     creating: "作成中…",
     colName: "名前",
     colKey: "キー",
+    colScopes: "スコープ",
     colCreated: "作成日",
     revoke: "取り消し",
     rename: "名前変更",

@@ -54,15 +54,22 @@ describe('PublicAuthMiddleware credentials', () => {
       expect(oauth.getOrgByOAuthToken).toHaveBeenCalledWith(token);
       expect(organizations.getOrgByApiKey).not.toHaveBeenCalled();
       expect(req.org.users).toEqual([membership]);
+      expect(req.publicApiScopes).toEqual(['*']);
+      expect(req.publicApiCredential).toEqual({ type: 'oauth' });
       expect(next).toHaveBeenCalledTimes(1);
     }
   );
 
-  it('preserves a raw API key unchanged', async () => {
+  it('preserves a raw API key and attaches its scopes to the request', async () => {
     const organizations = {
-      getOrgByApiKey: jest.fn().mockResolvedValue({
-        id: 'org-1',
-        subscription: null,
+      resolvePublicApiCredential: jest.fn().mockResolvedValue({
+        organization: {
+          id: 'org-1',
+          subscription: null,
+        },
+        scopes: ['posts:read'],
+        credentialType: 'api-key',
+        apiKeyId: 'key-1',
       }),
     };
     const oauth = { getOrgByOAuthToken: jest.fn() };
@@ -70,13 +77,20 @@ describe('PublicAuthMiddleware credentials', () => {
       organizations as any,
       oauth as any
     );
-    const req = { headers: { authorization: 'ps_raw-key' } } as any;
+    const req = { headers: { authorization: 'named-api-key' } } as any;
     const next = jest.fn();
 
     await middleware.use(req, response() as any, next);
 
-    expect(organizations.getOrgByApiKey).toHaveBeenCalledWith('ps_raw-key');
+    expect(organizations.resolvePublicApiCredential).toHaveBeenCalledWith(
+      'named-api-key'
+    );
     expect(oauth.getOrgByOAuthToken).not.toHaveBeenCalled();
+    expect(req.publicApiScopes).toEqual(['posts:read']);
+    expect(req.publicApiCredential).toEqual({
+      type: 'api-key',
+      id: 'key-1',
+    });
     expect(next).toHaveBeenCalledTimes(1);
   });
 

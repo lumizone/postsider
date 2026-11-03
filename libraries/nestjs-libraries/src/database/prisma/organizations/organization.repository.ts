@@ -8,6 +8,7 @@ import {
 import { Injectable } from '@nestjs/common';
 import { AuthService } from '@postsider/helpers/auth/auth.service';
 import { CreateOrgUserDto } from '@postsider/nestjs-libraries/dtos/auth/create.org.user.dto';
+import { PublicApiScope } from '@postsider/nestjs-libraries/services/public-api-scopes';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
 import { pricing } from '@postsider/nestjs-libraries/database/prisma/subscriptions/pricing';
@@ -61,6 +62,11 @@ export class OrganizationRepository {
   }
 
   async getOrgByApiKey(api: string) {
+    const credential = await this.resolvePublicApiCredential(api);
+    return credential?.organization ?? null;
+  }
+
+  async resolvePublicApiCredential(api: string) {
     const subscriptionInclude = {
       subscription: {
         select: {
@@ -71,27 +77,43 @@ export class OrganizationRepository {
       },
     } as const;
 
-    // Legacy single per-org key (Organization.apiKey), still issued at org
-    // creation and shown as `publicApi` in Settings — checked first since
-    // it's the common path for every existing org.
+    // Legacy single per-org keys predate named keys and have always had full
+    // Public API access, so they keep a wildcard scope. Owners migrate to a
+    // scoped key whenever they create one in Settings -> API.
     const legacy = await this._organization.model.organization.findFirst({
       where: { apiKey: api },
       include: subscriptionInclude,
     });
-    if (legacy) return legacy;
+    if (legacy) {
+      return {
+        organization: legacy,
+        scopes: ['*'],
+        credentialType: 'legacy' as const,
+      };
+    }
 
     // Self-service keys from Settings -> API (`ps_...`, multiple per org,
-    // individually revocable) live in the ApiKey table and were never
-    // checked here — every key generated through that flow 401'd on every
-    // Public API / MCP call. Stored via AuthService.fixedEncryption at
-    // creation (organization.repository.ts createApiKey), so the lookup
-    // applies the same deterministic transform to the incoming header.
+    // individually revocable) live in the ApiKey table. Stored via
+    // AuthService.fixedEncryption at creation, so the lookup applies the same
+    // deterministic transform to the incoming header. `scopes` comes straight
+    // from the row and is enforced by PublicApiScopeGuard.
     const db = this._organization.model as any;
     const selfService = await db.apiKey.findFirst({
       where: { key: AuthService.fixedEncryption(api), deletedAt: null },
-      include: { organization: { include: subscriptionInclude } },
+      select: {
+        id: true,
+        scopes: true,
+        organization: { include: subscriptionInclude },
+      },
     });
-    return selfService?.organization ?? null;
+    if (!selfService) return null;
+
+    return {
+      organization: selfService.organization,
+      scopes: selfService.scopes ?? [],
+      credentialType: 'api-key' as const,
+      apiKeyId: selfService.id,
+    };
   }
 
   getCount() {
@@ -641,14 +663,18 @@ export class OrganizationRepository {
       select: {
         id: true,
         name: true,
-        key: true,
+        scopes: true,
         createdAt: true,
       },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async createApiKey(orgId: string, name: string) {
+  async createApiKey(
+    organizationId: string,
+    name: string,
+    scopes: PublicApiScope[]
+  ) {
     const db = this._organization.model as any;
     const rawKey = 'ps_' + makeId(40);
     const hashedKey = AuthService.fixedEncryption(rawKey);
@@ -656,20 +682,30 @@ export class OrganizationRepository {
       data: {
         name,
         key: hashedKey,
-        organization: { connect: { id: orgId } },
+        scopes,
+        organization: { connect: { id: organizationId } },
       },
-      select: { id: true, name: true, createdAt: true },
+      select: { id: true, name: true, scopes: true, createdAt: true },
     });
     // Return the raw key only at creation (never again).
     return { ...created, key: rawKey };
   }
 
-  async renameApiKey(orgId: string, keyId: string, name: string) {
+  async updateNamedApiKey(
+    orgId: string,
+    keyId: string,
+    input: { name?: string; scopes?: PublicApiScope[] }
+  ) {
     const db = this._organization.model as any;
     return db.apiKey.update({
-      where: { id: keyId, organizationId: orgId },
-      data: { name },
-      select: { id: true, name: true },
+      // `deletedAt: null` keeps a revoked key from being resurrected by a
+      // stale settings tab; a miss surfaces as Prisma P2025 -> 404.
+      where: { id: keyId, organizationId: orgId, deletedAt: null },
+      data: {
+        ...(input.name === undefined ? {} : { name: input.name }),
+        ...(input.scopes === undefined ? {} : { scopes: input.scopes }),
+      },
+      select: { id: true, name: true, scopes: true, createdAt: true },
     });
   }
 

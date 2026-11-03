@@ -492,6 +492,7 @@ const ru = {
     creating: "Создаём…",
     colName: "Имя",
     colKey: "Ключ",
+    colScopes: "Области доступа",
     colCreated: "Создан",
     revoke: "Отозвать",
     rename: "Переименовать",

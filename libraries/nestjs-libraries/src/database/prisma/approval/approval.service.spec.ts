@@ -97,7 +97,8 @@ describe('ApprovalService approval compensation', () => {
       repo as any,
       posts as any,
       notifications as any,
-      {} as any
+      {} as any,
+      { deliver: jest.fn() } as any
     );
     return {
       service,
@@ -156,5 +157,75 @@ describe('ApprovalService approval compensation', () => {
       guestTokenExpiresAt
     );
     expect(notifications.inAppNotification).not.toHaveBeenCalled();
+  });
+});
+
+describe('ApprovalService public webhook events', () => {
+  it('emits approval.requested after the approval state is committed', async () => {
+    const repo = {
+      getPost: jest.fn().mockResolvedValue({
+        state: 'DRAFT',
+        parentPostId: null,
+        integrationId: 'channel-1',
+      }),
+      upsertRequest: jest.fn().mockResolvedValue({ id: 'approval-1' }),
+    };
+    const posts = { setPostState: jest.fn().mockResolvedValue(undefined) };
+    const notifications = {
+      inAppNotification: jest.fn().mockResolvedValue(undefined),
+      notifyApprovers: jest.fn().mockResolvedValue(undefined),
+    };
+    const delivery = { deliver: jest.fn().mockResolvedValue(undefined) };
+    const service = new ApprovalService(
+      repo as any,
+      posts as any,
+      notifications as any,
+      {} as any,
+      delivery as any
+    );
+
+    await service.requestApproval('org-1', 'post-1', 'user-1');
+
+    expect(posts.setPostState).toHaveBeenCalledWith(
+      'org-1',
+      'post-1',
+      'APPROVAL'
+    );
+    expect(delivery.deliver).toHaveBeenCalledWith(
+      'org-1',
+      'approval.requested',
+      {
+        approvalId: 'approval-1',
+        postId: 'post-1',
+        status: 'PENDING',
+      }
+    );
+  });
+
+  it('does not roll back an approval when webhook delivery fails', async () => {
+    const repo = {
+      getPost: jest.fn().mockResolvedValue({
+        state: 'DRAFT',
+        parentPostId: null,
+        integrationId: 'channel-1',
+      }),
+      upsertRequest: jest.fn().mockResolvedValue({ id: 'approval-1' }),
+    };
+    const service = new ApprovalService(
+      repo as any,
+      { setPostState: jest.fn().mockResolvedValue(undefined) } as any,
+      {
+        inAppNotification: jest.fn().mockResolvedValue(undefined),
+        notifyApprovers: jest.fn().mockResolvedValue(undefined),
+      } as any,
+      {} as any,
+      {
+        deliver: jest.fn().mockRejectedValue(new Error('callback down')),
+      } as any
+    );
+
+    await expect(
+      service.requestApproval('org-1', 'post-1', 'user-1')
+    ).resolves.toEqual({ id: 'approval-1' });
   });
 });

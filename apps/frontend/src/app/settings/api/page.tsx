@@ -15,15 +15,26 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 interface ApiKeyRow {
   id: string;
   name: string;
-  key: string; // hashed — only raw at creation
+  scopes: string[];
   createdAt: string;
 }
 
-function maskKey(key: string): string {
-  if (!key || key.length <= 10) return "ps_••••••••••";
-  if (key.startsWith("ps_")) return key.slice(0, 6) + "••••••••••••••••••" + key.slice(-4);
-  return key.slice(0, 4) + "••••••••••••••••••" + key.slice(-4);
-}
+const API_SCOPES = [
+  "organization:read",
+  "channels:read",
+  "channels:write",
+  "posts:read",
+  "posts:write",
+  "media:write",
+  "approvals:read",
+  "approvals:write",
+  "analytics:read",
+  "notifications:read",
+  "publishing:read",
+  "publishing:write",
+  "webhooks:read",
+  "webhooks:write",
+] as const;
 
 export default function ApiSettingsPage() {
   const { t, locale } = useI18n();
@@ -37,6 +48,7 @@ export default function ApiSettingsPage() {
   // Create form
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
+  const [newScopes, setNewScopes] = useState<string[]>([...API_SCOPES]);
   const [creating, setCreating] = useState(false);
 
   // Modal for newly created key
@@ -63,18 +75,20 @@ export default function ApiSettingsPage() {
   }, []);
 
   const onCreate = async () => {
-    if (!newName.trim() || creating) return;
+    if (!newName.trim() || newScopes.length === 0 || creating) return;
     setCreating(true);
     setError(null);
     try {
       const res = await api.post<ApiKeyRow & { key: string }>("/settings/api-keys", {
         name: newName.trim(),
+        scopes: newScopes,
       });
       setRevealedKey(res.key);
       setRevealedName(res.name);
       setShowModal(true);
       setShowCreate(false);
       setNewName("");
+      setNewScopes([...API_SCOPES]);
       void refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create key");
@@ -83,19 +97,20 @@ export default function ApiSettingsPage() {
     }
   };
 
-  const [renameTarget, setRenameTarget] = useState<{ id: string; name: string } | null>(null);
+  const [renameTarget, setRenameTarget] = useState<{ id: string; name: string; scopes: string[] } | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [editScopes, setEditScopes] = useState<string[]>([]);
   const [renameBusy, setRenameBusy] = useState(false);
 
   const onRename = async () => {
     if (!renameTarget) return;
     const name = renameValue.trim();
-    if (!name) return;
+    if (!name || editScopes.length === 0) return;
     setRenameBusy(true);
     try {
-      await api.put(`/settings/api-keys/${renameTarget.id}`, { name });
+      await api.put(`/settings/api-keys/${renameTarget.id}`, { name, scopes: editScopes });
       setKeys((prev) =>
-        prev.map((k) => (k.id === renameTarget.id ? { ...k, name } : k)),
+        prev.map((k) => (k.id === renameTarget.id ? { ...k, name, scopes: editScopes } : k)),
       );
       setRenameTarget(null);
     } catch (err) {
@@ -188,7 +203,7 @@ export default function ApiSettingsPage() {
             {/* Header */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr 120px 70px", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--line-soft)", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)" }}>
               <span>{t("settingsApi.colName")}</span>
-              <span>{t("settingsApi.colKey")}</span>
+              <span>{t("settingsApi.colScopes")}</span>
               <span>{t("settingsApi.colCreated")}</span>
               <span />
             </div>
@@ -197,14 +212,14 @@ export default function ApiSettingsPage() {
             {keys.map((k) => (
               <div key={k.id} style={{ display: "grid", gridTemplateColumns: "1fr 2fr 120px 70px", gap: 10, padding: "12px 0", borderBottom: "1px solid rgb(var(--tint) / 0.04)", fontSize: 13, alignItems: "center" }}>
                 <span style={{ fontWeight: 500 }}>{k.name}</span>
-                <span style={{ fontFamily: "monospace", fontSize: 12, color: "var(--muted)" }}>
-                  {maskKey(k.key)}
+                <span style={{ fontFamily: "monospace", fontSize: 11, color: "var(--muted)", lineHeight: 1.5 }}>
+                  {Array.isArray(k.scopes) ? k.scopes.join(", ") : ""}
                 </span>
                 <span style={{ fontSize: 12, color: "var(--muted)" }}>
                   {new Date(k.createdAt).toLocaleDateString(locale, { year: "numeric", month: "short", day: "numeric" })}
                 </span>
                 <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                  <IconBtn onClick={() => { setRenameTarget({ id: k.id, name: k.name }); setRenameValue(k.name); }} title={t("settingsApi.rename")}>
+                  <IconBtn onClick={() => { setRenameTarget({ id: k.id, name: k.name, scopes: k.scopes ?? [] }); setRenameValue(k.name); setEditScopes(k.scopes ?? []); }} title={t("settingsApi.rename")}>
                     <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M11.5 1.5l3 3L5 14H2v-3l9.5-9.5Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" /></svg>
                   </IconBtn>
                   <IconBtn onClick={() => setDeleteTarget({ id: k.id, name: k.name })} title={t("settingsApi.revoke")} danger>
@@ -220,7 +235,7 @@ export default function ApiSettingsPage() {
         {/* Create */}
         <div style={{ marginTop: 16 }}>
           {showCreate ? (
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <input
                 type="text"
                 value={newName}
@@ -229,14 +244,31 @@ export default function ApiSettingsPage() {
                 autoFocus
                 onKeyDown={(e) => { if (e.key === "Enter") void onCreate(); }}
                 className={s.input}
-                style={{ flex: 1 }}
               />
-              <button type="button" className={s.btnPrimary} onClick={onCreate} disabled={creating} style={{ whiteSpace: "nowrap" }}>
-                {creating ? t("settingsApi.creating") : t("common.create")}
-              </button>
-              <button type="button" className={s.btnGhost} onClick={() => { setShowCreate(false); setNewName(""); }}>
-                {t("common.cancel")}
-              </button>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 8 }}>
+                {API_SCOPES.map((scope) => (
+                  <label key={scope} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontFamily: "monospace", color: "var(--muted)" }}>
+                    <input
+                      type="checkbox"
+                      checked={newScopes.includes(scope)}
+                      onChange={(event) => setNewScopes((current) =>
+                        event.target.checked
+                          ? [...current, scope]
+                          : current.filter((item) => item !== scope),
+                      )}
+                    />
+                    {scope}
+                  </label>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                <button type="button" className={s.btnPrimary} onClick={onCreate} disabled={creating || !newName.trim() || newScopes.length === 0} style={{ whiteSpace: "nowrap" }}>
+                  {creating ? t("settingsApi.creating") : t("common.create")}
+                </button>
+                <button type="button" className={s.btnGhost} onClick={() => { setShowCreate(false); setNewName(""); setNewScopes([...API_SCOPES]); }}>
+                  {t("common.cancel")}
+                </button>
+              </div>
             </div>
           ) : (
             <button type="button" className={s.btnSecondary} onClick={() => setShowCreate(true)}>
@@ -308,11 +340,27 @@ export default function ApiSettingsPage() {
               placeholder={t("settingsApi.renamePlaceholder")}
               style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line-soft)", fontSize: 14, background: "var(--bg)", color: "var(--fg)" }}
             />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
+              {API_SCOPES.map((scope) => (
+                <label key={scope} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, fontFamily: "monospace", color: "var(--muted)" }}>
+                  <input
+                    type="checkbox"
+                    checked={editScopes.includes(scope)}
+                    onChange={(event) => setEditScopes((current) =>
+                      event.target.checked
+                        ? [...current, scope]
+                        : current.filter((item) => item !== scope),
+                    )}
+                  />
+                  {scope}
+                </label>
+              ))}
+            </div>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <button type="button" className={s.btnGhost} onClick={() => setRenameTarget(null)} disabled={renameBusy}>
                 {t("common.cancel")}
               </button>
-              <button type="button" className={s.btnPrimary} onClick={() => void onRename()} disabled={renameBusy || !renameValue.trim()} style={{ opacity: renameValue.trim() ? 1 : 0.5 }}>
+              <button type="button" className={s.btnPrimary} onClick={() => void onRename()} disabled={renameBusy || !renameValue.trim() || editScopes.length === 0} style={{ opacity: renameValue.trim() && editScopes.length > 0 ? 1 : 0.5 }}>
                 {renameBusy ? t("settingsApi.savingRename") : t("common.save")}
               </button>
             </div>

@@ -492,6 +492,7 @@ const zh = {
     creating: "创建中…",
     colName: "名称",
     colKey: "密钥",
+    colScopes: "权限范围",
     colCreated: "创建时间",
     revoke: "撤销",
     rename: "重命名",
