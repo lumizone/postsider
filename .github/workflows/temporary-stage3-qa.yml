@@ -37,10 +37,11 @@ jobs:
           cd /tmp/postsider-stage3-qa
           npm init -y
           npm install playwright@1.56.1
-          npx playwright install --with-deps chromium
+          node /tmp/postsider-stage3-qa/node_modules/playwright/cli.js install --with-deps chromium
       - name: Test onboarding behavior in Chromium
         env:
           NODE_PATH: /tmp/postsider-stage3-qa/node_modules
+          QA_PLAYWRIGHT_DIR: /tmp/postsider-stage3-qa/node_modules/playwright
         run: |
           pnpm --filter ./apps/frontend exec next start -p 4200 > /tmp/stage3-next.log 2>&1 &
           for i in $(seq 1 75); do
