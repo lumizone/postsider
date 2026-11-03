@@ -10,6 +10,7 @@ import { listChannels } from "@/lib/integrations";
 import { fetchPostsList } from "@/lib/posts";
 import { API_URL, MCP_URL } from "@/lib/developer-endpoints";
 import { markOnboardingCompleted } from "@/lib/onboarding-progress";
+import { isVerifiedOnboardingDraft } from "@/lib/onboarding-draft-verification";
 import styles from "./onboarding.module.css";
 
 type ConnectionMode = "hosted" | "local" | "rest";
@@ -151,14 +152,10 @@ export function AgentOnboarding({ onBack }: { onBack: () => void }) {
     try {
       // GET /posts/:id is already used by the dashboard. It is scoped by the
       // authenticated organization and includes each stored post's state.
-      const result = await api.get<{
-        posts?: Array<{ id: string; state: string; integrationId: string }>;
-      }>("/posts/" + encodeURIComponent(id), undefined, { silent: true });
-      const verified = Array.isArray(result?.posts) && result.posts.some(
-        (post) => post.id === id &&
-          post.state === "DRAFT" &&
-          channelIds.includes(post.integrationId)
+      const result = await api.get<unknown>(
+        "/posts/" + encodeURIComponent(id), undefined, { silent: true }
       );
+      const verified = isVerifiedOnboardingDraft(result, id, channelIds);
       if (verified) setVerifiedDraftId(id);
       else setDraftVerificationFailed(true);
     } catch {
