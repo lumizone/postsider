@@ -6,7 +6,7 @@ jest.mock('isomorphic-dompurify', () => ({
 import { PostActivity } from './post.activity';
 import { SYSTEM_ACTOR } from '@postsider/nestjs-libraries/actor/post-actor';
 
-function create(auditImpl?: () => Promise<void>) {
+function create(auditImpl?: () => Promise<void>, legacy: any[] = []) {
   const posts = {
     changeState: jest.fn().mockResolvedValue(undefined),
     getPostByForWebhookId: jest
@@ -20,7 +20,7 @@ function create(auditImpl?: () => Promise<void>) {
     {} as any,
     {} as any,
     {} as any,
-    { getWebhooksForDelivery: jest.fn().mockResolvedValue([]) } as any,
+    { getWebhooksForDelivery: jest.fn().mockResolvedValue(legacy) } as any,
     { deliver: jest.fn().mockResolvedValue(undefined) } as any,
     {} as any,
     {} as any,
@@ -43,6 +43,15 @@ describe('PostActivity audit hooks', () => {
       actor: SYSTEM_ACTOR,
       metadata: { integrationId: 'int1', releaseUrl: 'https://x.test/1' },
     });
+  });
+
+  it('sendWebhooks writes no post.published row when delivery throws (retry-safe)', async () => {
+    const { activity, audit } = create(undefined, [
+      { url: 'https://hook.test', secret: null, integrations: [] },
+    ]);
+    (activity as any)._webhookService.getWebhooksForDelivery.mockRejectedValue(new Error('db'));
+    await expect(activity.sendWebhooks('p1', 'o1', 'int1')).rejects.toThrow('db');
+    expect(audit.logResourceEvent).not.toHaveBeenCalled();
   });
 
   it('markPublishFailed emits post.failed once with status error', async () => {

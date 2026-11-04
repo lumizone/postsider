@@ -140,12 +140,19 @@ describe('PostsService audit hooks', () => {
     });
   });
 
-  it('changeDate emits status_changed for schedule and updated for update', async () => {
+  it('changeDate schedule on a draft emits no status_changed (it stays DRAFT)', async () => {
     const { svc, audit } = build();
+    await svc.changeDate('o1', 'p1', '2030-01-01T00:00:00.000Z', 'schedule');
+    expect(audit.logResourceEvent).not.toHaveBeenCalled();
+  });
+
+  it('changeDate schedule on an ERROR post emits status_changed to QUEUE, update emits updated', async () => {
+    const { svc, audit, repo } = build();
+    repo.getPostById.mockResolvedValue({ id: 'p1', state: 'ERROR', integration: { providerIdentifier: 'x' } });
     await svc.changeDate('o1', 'p1', '2030-01-01T00:00:00.000Z', 'schedule');
     expect(audit.logResourceEvent.mock.calls[0][0]).toMatchObject({
       event: 'post.status_changed',
-      metadata: { from: 'DRAFT', to: 'QUEUE' },
+      metadata: { from: 'ERROR', to: 'QUEUE' },
     });
     audit.logResourceEvent.mockClear();
     await svc.changeDate('o1', 'p1', '2030-01-01T00:00:00.000Z', 'update');
@@ -162,6 +169,20 @@ describe('PostsService audit hooks', () => {
       event: 'post.status_changed',
       metadata: { from: 'DRAFT', to: 'APPROVAL' },
     });
+  });
+
+  it('status hooks skip no-op transitions and creationMethod is omitted when absent', async () => {
+    const { svc, audit, repo } = build();
+    await svc.setPostState('o1', 'p1', 'DRAFT' as any);
+    repo.getPostById.mockResolvedValue({ id: 'p1', state: 'QUEUE', integration: { providerIdentifier: 'x' } });
+    await svc.changePostStatus('o1', 'p1', 'schedule');
+    expect(audit.logResourceEvent).not.toHaveBeenCalled();
+    repo.createOrUpdatePost.mockResolvedValue({
+      posts: [{ id: 'p1', state: 'DRAFT', group: 'g1', publishDate: new Date() }],
+      createdIds: ['p1'],
+    });
+    await svc.createPost('o1', body(), undefined as any);
+    expect(audit.logResourceEvent.mock.calls[0][0].metadata).not.toHaveProperty('creationMethod');
   });
 
   it('retryFailedByGroup emits exactly one retry_requested for the requeued row', async () => {

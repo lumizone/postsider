@@ -1520,7 +1520,9 @@ export class PostsService {
             publishDate: posts[0].publishDate
               ? new Date(posts[0].publishDate).toISOString()
               : null,
-            ...(wasCreated ? { creationMethod: String(creationMethod) } : {}),
+            ...(wasCreated && creationMethod != null
+              ? { creationMethod: String(creationMethod) }
+              : {}),
           },
         });
 
@@ -1928,13 +1930,15 @@ export class PostsService {
       );
     }
 
-    await recordPostEvent(this._audit, {
-      organizationId: orgId,
-      event: 'post.status_changed',
-      targetType: 'post',
-      targetId: id,
-      metadata: { from: getPostById.state, to: state },
-    });
+    if (getPostById.state !== state) {
+      await recordPostEvent(this._audit, {
+        organizationId: orgId,
+        event: 'post.status_changed',
+        targetType: 'post',
+        targetId: id,
+        metadata: { from: getPostById.state, to: state },
+      });
+    }
     return { id, state };
   }
 
@@ -1949,13 +1953,15 @@ export class PostsService {
       undefined,
       orgId
     );
-    await recordPostEvent(this._audit, {
-      organizationId: orgId,
-      event: 'post.status_changed',
-      targetType: 'post',
-      targetId: postId,
-      metadata: { from: post.state, to: state },
-    });
+    if (post.state !== state) {
+      await recordPostEvent(this._audit, {
+        organizationId: orgId,
+        event: 'post.status_changed',
+        targetType: 'post',
+        targetId: postId,
+        metadata: { from: post.state, to: state },
+      });
+    }
     return { id: postId, state };
   }
 
@@ -2015,13 +2021,17 @@ export class PostsService {
     }
 
     if (action === 'schedule') {
-      await recordPostEvent(this._audit, {
-        organizationId: orgId,
-        event: 'post.status_changed',
-        targetType: 'post',
-        targetId: id,
-        metadata: { from: getPostById.state, to: 'QUEUE' },
-      });
+      // A draft stays a draft when rescheduled; record the real result.
+      const resultingState = getPostById.state === 'DRAFT' ? 'DRAFT' : 'QUEUE';
+      if (getPostById.state !== resultingState) {
+        await recordPostEvent(this._audit, {
+          organizationId: orgId,
+          event: 'post.status_changed',
+          targetType: 'post',
+          targetId: id,
+          metadata: { from: getPostById.state, to: resultingState },
+        });
+      }
     } else {
       await recordPostEvent(this._audit, {
         organizationId: orgId,

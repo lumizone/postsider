@@ -506,6 +506,25 @@ export class PostActivity {
 
   @ActivityMethod()
   async sendWebhooks(postId: string, orgId: string, integrationId: string) {
+    const post = await this._deliverPublishedWebhooks(postId, orgId, integrationId);
+    // Audited only after delivery completed without throwing: the activity is
+    // retried on failure, so writing earlier could record one publish twice.
+    const postRow: any = Array.isArray(post) ? post[0] : post;
+    await recordPostEvent(this._audit, {
+      organizationId: orgId,
+      event: 'post.published',
+      targetType: 'post',
+      targetId: postId,
+      actor: SYSTEM_ACTOR,
+      metadata: { integrationId, releaseUrl: postRow?.releaseURL ?? null },
+    });
+  }
+
+  private async _deliverPublishedWebhooks(
+    postId: string,
+    orgId: string,
+    integrationId: string
+  ) {
     const webhooks = (
       await this._webhookService.getWebhooksForDelivery(orgId)
     ).filter((f) => {
@@ -526,19 +545,9 @@ export class PostActivity {
         );
       });
 
-    const postRow: any = Array.isArray(post) ? post[0] : post;
-    await recordPostEvent(this._audit, {
-      organizationId: orgId,
-      event: 'post.published',
-      targetType: 'post',
-      targetId: postId,
-      actor: SYSTEM_ACTOR,
-      metadata: { integrationId, releaseUrl: postRow?.releaseURL ?? null },
-    });
-
     // Nothing left to deliver through the legacy webhook surface.
     if (webhooks.length === 0) {
-      return;
+      return post;
     }
 
     // Re-validate egress at fire time. The stored URL was only checked for
@@ -611,6 +620,7 @@ export class PostActivity {
         );
       })
     );
+    return post;
   }
   @ActivityMethod()
   async processPlug(data: {
