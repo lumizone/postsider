@@ -1,0 +1,1 @@
+ALTER TYPE "PublishErrorCategory" ADD VALUE 'POLICY_BLOCKED';

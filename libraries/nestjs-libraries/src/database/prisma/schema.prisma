@@ -56,6 +56,7 @@ model Organization {
   oauthApp             OAuthApp[]
   oauthAuthorizations  OAuthAuthorization[]
   apiKeys              ApiKey[]
+  policyRules          PolicyRule[]
   providerCredentials  ProviderCredentials[]
   auditLogs            AuditLog[]
   inboundSubscriptions InboundEventSubscription[]
@@ -722,6 +723,7 @@ enum PublishErrorCategory {
   PROVIDER_UNAVAILABLE
   UNKNOWN_OUTCOME
   UNKNOWN
+  POLICY_BLOCKED
 }
 
 model PublicApiIdempotency {
@@ -1032,6 +1034,27 @@ enum PostActorType {
   SYSTEM
 }
 
+enum PostAction {
+  DRAFT
+  SCHEDULE
+  PUBLISH_NOW
+}
+
+enum PolicyCondition {
+  ALWAYS
+  CONTAINS_LINK
+  CONTAINS_WORDS
+  OUTSIDE_WINDOW
+  DAILY_CAP_EXCEEDED
+  PUBLISH_NOW
+  HAS_VIDEO
+}
+
+enum PolicyEffect {
+  REQUIRE_APPROVAL
+  BLOCK
+}
+
 enum CreationMethod {
   UNKNOWN
   WEB
@@ -1080,6 +1103,9 @@ model ApiKey {
   // Existing keys retain pre-webhook permissions; explicit key scopes may
   // opt in to webhook read/write after the owner reviews access.
   scopes         String[]     @default(["organization:read", "channels:read", "channels:write", "posts:read", "posts:write", "media:write", "approvals:read", "approvals:write", "analytics:read", "notifications:read", "publishing:read", "publishing:write"])
+  // Empty lists mean unrestricted, so existing keys keep their access.
+  allowedActions        PostAction[] @default([])
+  allowedIntegrationIds String[]     @default([])
   createdAt      DateTime     @default(now())
   deletedAt      DateTime?
   organization   Organization @relation(fields: [organizationId], references: [id])
@@ -1087,6 +1113,27 @@ model ApiKey {
   @@index([organizationId])
   @@index([key])
   @@index([deletedAt])
+}
+
+model PolicyRule {
+  id                    String          @id @default(uuid())
+  organizationId        String
+  name                  String          @db.VarChar(120)
+  enabled               Boolean         @default(true)
+  priority              Int             @default(100)
+  appliesToActorTypes   PostActorType[] @default([])
+  appliesToApiKeyIds    String[]        @default([])
+  appliesToIntegrationIds String[]      @default([])
+  appliesToProviders    String[]        @default([])
+  condition             PolicyCondition
+  conditionParams       Json            @default("{}")
+  effect                PolicyEffect
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  deletedAt             DateTime?
+  organization          Organization    @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, deletedAt, enabled])
 }
 
 model ProviderCredentials {
