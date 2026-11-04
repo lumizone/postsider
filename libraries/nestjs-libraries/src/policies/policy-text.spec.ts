@@ -1,4 +1,10 @@
-import { htmlToPolicyText, containsLink, containsAnyWord } from './policy-text';
+import {
+  htmlToPolicyText,
+  containsLink,
+  containsAnyWord,
+  POLICY_MAX_INPUT_CHARS,
+  PolicyInputTooLargeError,
+} from './policy-text';
 
 describe('htmlToPolicyText', () => {
   it('strips tags, decodes entities, collapses whitespace', () => {
@@ -105,5 +111,34 @@ describe('parser-based html handling', () => {
   });
   it('still distinguishes cafe from cafe with accent', () => {
     expect(containsAnyWord('un café', ['cafe'])).toBe(false);
+  });
+});
+
+describe('robustness', () => {
+  it('survives very deep nesting', () => {
+    expect(containsAnyWord(htmlToPolicyText('<b>'.repeat(10000) + 'free'), ['free'])).toBe(true);
+    expect(containsAnyWord(htmlToPolicyText('<div>'.repeat(10000) + 'free'), ['free'])).toBe(true);
+  });
+  it('keeps document order and spacing with the iterative walk', () => {
+    expect(htmlToPolicyText('<p>a<b>b</b></p><p>c</p>d')).toBe('ab c d');
+  });
+  it('accepts input exactly at the cap and rejects cap + 1', () => {
+    expect(() => htmlToPolicyText('a'.repeat(POLICY_MAX_INPUT_CHARS))).not.toThrow();
+    let err: unknown;
+    try {
+      htmlToPolicyText('a'.repeat(POLICY_MAX_INPUT_CHARS + 1));
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(PolicyInputTooLargeError);
+    expect((err as PolicyInputTooLargeError).code).toBe('policy_input_too_large');
+  });
+  it('handles a 1 MB realistic input quickly', () => {
+    const html = '<p>Hello <b>world</b> <a href="https://x.com/a">link</a></p>'.repeat(
+      Math.floor(POLICY_MAX_INPUT_CHARS / 60)
+    );
+    const t0 = Date.now();
+    htmlToPolicyText(html);
+    expect(Date.now() - t0).toBeLessThan(3000);
   });
 });

@@ -16,32 +16,53 @@ type HtmlNode = {
   content?: { childNodes?: HtmlNode[] };
 };
 
+export const POLICY_MAX_INPUT_CHARS = 1_000_000;
+
+export class PolicyInputTooLargeError extends Error {
+  readonly code = 'policy_input_too_large';
+  constructor(public readonly length: number) {
+    super(`Policy text input is ${length} characters, the limit is ${POLICY_MAX_INPUT_CHARS}`);
+    this.name = 'PolicyInputTooLargeError';
+  }
+}
+
 /**
  * Reduces post HTML to the text a reader would see, plus every href and src
  * value so links hidden in attributes are still detected. Parsing and entity
- * decoding are delegated to parse5 so they match a browser.
+ * decoding are delegated to parse5 so they match a browser. Traversal is
+ * iterative so deeply nested markup cannot overflow the call stack.
+ * Throws PolicyInputTooLargeError above POLICY_MAX_INPUT_CHARS.
  */
 export const htmlToPolicyText = (html: string): string => {
+  const input = html || '';
+  if (input.length > POLICY_MAX_INPUT_CHARS) throw new PolicyInputTooLargeError(input.length);
+
   const out: string[] = [];
-  const walk = (node: HtmlNode) => {
-    if (node.nodeName === '#comment') return;
-    if (node.nodeName === '#text') {
-      out.push(node.value ?? '');
-      return;
+  const stack: Array<HtmlNode | string> = [parseFragment(input) as unknown as HtmlNode];
+  while (stack.length) {
+    const item = stack.pop() as HtmlNode | string;
+    if (typeof item === 'string') {
+      out.push(item);
+      continue;
     }
-    const isElement = node.attrs !== undefined;
-    const separates = isElement && !INLINE_TAGS.has(node.nodeName);
+    if (item.nodeName === '#comment') continue;
+    if (item.nodeName === '#text') {
+      out.push(item.value ?? '');
+      continue;
+    }
+    const isElement = item.attrs !== undefined;
+    const separates = isElement && !INLINE_TAGS.has(item.nodeName);
     if (separates) out.push(' ');
     if (isElement) {
-      for (const attr of node.attrs ?? []) {
+      for (const attr of item.attrs ?? []) {
         if (attr.name === 'href' || attr.name === 'src') out.push(` ${attr.value} `);
       }
     }
-    for (const child of node.childNodes ?? []) walk(child);
-    for (const child of node.content?.childNodes ?? []) walk(child);
-    if (separates) out.push(' ');
-  };
-  walk(parseFragment(html || '') as unknown as HtmlNode);
+    // Pushed in reverse so children pop in document order, the closing space last.
+    if (separates) stack.push(' ');
+    const kids = [...(item.childNodes ?? []), ...(item.content?.childNodes ?? [])];
+    for (let i = kids.length - 1; i >= 0; i--) stack.push(kids[i]);
+  }
   return out.join('').replace(/\s+/g, ' ').trim().normalize('NFC');
 };
 
