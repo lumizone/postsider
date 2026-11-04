@@ -781,8 +781,16 @@ export class PostActivity {
     posts: Post[]
   ): Promise<PublishAttemptResult> {
     let integration: Integration;
+    // Best-effort: first comments use a synthetic id with no row, and attempt
+    // bookkeeping must never block a real provider call.
     try {
       await this._postService.recordPublishAttempt(orgId, posts[0].id);
+    } catch (e: any) {
+      this._logger.warn(
+        `publishCommentById: could not record attempt for ${posts[0]?.id}: ${e?.message}`
+      );
+    }
+    try {
       integration = await this._loadIntegration(orgId, integrationId);
     } catch (e: any) {
       return this._startFailure(e);

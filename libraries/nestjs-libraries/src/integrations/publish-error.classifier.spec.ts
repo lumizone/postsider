@@ -8,6 +8,7 @@ import {
   PrePublishError,
 } from './publish-error.classifier';
 import { PublishErrorCategory } from '@prisma/client';
+import { ActivityFailure, TimeoutFailure, TimeoutType } from '@temporalio/common';
 
 const wrapped = (cause: unknown) => ({
   name: 'ActivityFailure',
@@ -132,5 +133,27 @@ describe('classifyPublishError', () => {
     expect([...PUBLISH_ERROR_CATEGORIES].sort()).toEqual(
       Object.values(PublishErrorCategory).sort()
     );
+  });
+});
+
+describe('classifyPublishError with real Temporal failures', () => {
+  it('treats an activity START_TO_CLOSE timeout as UNKNOWN_OUTCOME', () => {
+    const err = new ActivityFailure(
+      'Activity task timed out',
+      'publishPostById',
+      'a1',
+      0 as any,
+      'worker',
+      new TimeoutFailure(
+        'timeout',
+        undefined,
+        TimeoutType.TIMEOUT_TYPE_START_TO_CLOSE
+      )
+    );
+    expect(classifyPublishError(err)).toMatchObject({
+      category: 'UNKNOWN_OUTCOME',
+      retryable: false,
+      autoRetry: 'none',
+    });
   });
 });

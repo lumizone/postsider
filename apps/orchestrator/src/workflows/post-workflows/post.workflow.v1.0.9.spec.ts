@@ -323,6 +323,26 @@ describe('postWorkflowV109', () => {
     expect(mockActivities.inAppNotification).toHaveBeenCalled();
   });
 
+  it('13b. first comment is published with the synthetic id after the main post', async () => {
+    mockActivities.getPostsListForPublish.mockResolvedValue([
+      row('p1', { firstComment: 'hello' }),
+    ]);
+    mockActivities.isCommentableById.mockResolvedValue(true);
+    mockActivities.publishCommentById.mockResolvedValue({
+      outcome: 'published',
+      results: [{ postId: 'c1', releaseURL: 'https://x/c', status: 'completed' }],
+    });
+    await run();
+    expect(mockActivities.publishCommentById).toHaveBeenCalledWith(
+      'org',
+      'int1',
+      'rel1',
+      undefined,
+      [expect.objectContaining({ id: 'p1_first_comment', content: 'hello' })]
+    );
+    expect(mockActivities.markPublishFailed).not.toHaveBeenCalled();
+  });
+
   it('14. never references the legacy retrying activities', async () => {
     await run();
     expect(mockActivities.postSocialById).toBeUndefined();

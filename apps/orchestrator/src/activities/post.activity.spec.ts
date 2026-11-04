@@ -226,6 +226,20 @@ describe('PostActivity classified publishing', () => {
     expect(bad.failure.category).toBe('UNKNOWN_OUTCOME');
   });
 
+  it('publishCommentById still publishes when recording the attempt fails', async () => {
+    const { activity, posts: repo, postComment } = setup();
+    repo.recordPublishAttempt.mockRejectedValueOnce(new Error('no row'));
+    const res = await activity.publishCommentById(
+      'org-1',
+      'c1',
+      'id',
+      undefined,
+      [{ id: 'p1_first_comment' }] as any
+    );
+    expect(res.outcome).toBe('published');
+    expect(postComment).toHaveBeenCalledTimes(1);
+  });
+
   it('markPublishFailed persists the failure and emits post.failed', async () => {
     const { activity, posts: repo, publicWebhooks } = setup();
     await activity.markPublishFailed('org-1', 'p1', {
