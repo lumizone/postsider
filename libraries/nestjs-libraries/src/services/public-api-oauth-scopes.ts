@@ -3,12 +3,15 @@ import { PUBLIC_API_SCOPES, type PublicApiScope } from './public-api-scopes';
 /**
  * Existing credentials predate public webhook subscriptions and the audit
  * trail. Preserve their ability to call every pre-existing Public API route,
- * but do not grant webhook administration or audit:read without an explicit
+ * but do not grant webhook administration, audit:read or policies:* without an explicit
  * opt-in. This list also feeds default-scoped new keys.
  */
 export const LEGACY_PUBLIC_API_SCOPES: PublicApiScope[] =
   PUBLIC_API_SCOPES.filter(
-    (scope) => !scope.startsWith('webhooks:') && scope !== 'audit:read'
+    (scope) =>
+      !scope.startsWith('webhooks:') &&
+      !scope.startsWith('policies:') &&
+      scope !== 'audit:read'
   );
 
 /**

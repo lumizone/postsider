@@ -56,6 +56,13 @@ describe('api key permissions: DTO', () => {
 });
 
 describe('api key permissions: SettingsController', () => {
+  it('stores no policies scope when scopes are omitted', async () => {
+    const { controller, organizations } = build();
+    await controller.createApiKey(org, user, { name: 'n' } as any);
+    const stored: string[] = organizations.createApiKey.mock.calls[0][2];
+    expect(stored.some((s) => s.startsWith('policies:'))).toBe(false);
+  });
+
   it('rejects duplicate actions with 400', async () => {
     const { controller, organizations } = build();
     await expect(

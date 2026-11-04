@@ -10,6 +10,7 @@ import { PublicWebhookSubscriptionsController } from './public-webhook-subscript
 import { PublicWebhookSubscriptionsService } from '@postsider/nestjs-libraries/database/prisma/webhooks/public-webhook-subscriptions.service';
 import { PublicWebhookDeliveriesService } from '@postsider/nestjs-libraries/database/prisma/webhooks/public-webhook-deliveries.service';
 import { PublicAuditController } from './public.audit.controller';
+import { PublicPoliciesController } from './public.policies.controller';
 import { PublicIntegrationsController } from './public.integrations.controller';
 import { PublicApiScopeGuard } from '@postsider/backend/services/auth/public-api-scope.guard';
 
@@ -88,6 +89,38 @@ describe('Public API OpenAPI contract', () => {
     expect(names).not.toContain('targetType');
     expect(names).not.toContain('targetId');
     expect(names).toContain('limit');
+    await app.close();
+  });
+
+  it('documents the policy management routes', async () => {
+    const module = await Test.createTestingModule({
+      controllers: [PublicPoliciesController],
+      providers: [PublicApiScopeGuard],
+    })
+      .useMocker(() => ({}))
+      .compile();
+    const app = module.createNestApplication();
+    await app.init();
+    const document: any = SwaggerModule.createDocument(app, new DocumentBuilder().setTitle('PostSider Public API').build());
+    const paths = document.paths;
+    expect(paths['/public/v1/policies']?.get).toBeDefined();
+    expect(paths['/public/v1/policies']?.post).toBeDefined();
+    expect(paths['/public/v1/policies/{id}']?.get).toBeDefined();
+    expect(paths['/public/v1/policies/{id}']?.put).toBeDefined();
+    expect(paths['/public/v1/policies/{id}']?.delete).toBeDefined();
+    for (const op of [paths['/public/v1/policies'].get, paths['/public/v1/policies/{id}'].get]) {
+      expect(op.description).toContain('policies:read');
+    }
+    for (const op of [paths['/public/v1/policies'].post, paths['/public/v1/policies/{id}'].put, paths['/public/v1/policies/{id}'].delete]) {
+      expect(op.description).toContain('policies:write');
+    }
+    expect(paths['/public/v1/policies'].post.responses['201']).toBeDefined();
+    expect(JSON.stringify(paths['/public/v1/policies'].post.responses['400'])).toContain('policy_limit_reached');
+    expect(document.components.schemas.PublicPolicyRuleDto).toBeDefined();
+    expect(Object.keys(document.components.schemas.PublicPolicyRuleDto.properties)).not.toEqual(
+      expect.arrayContaining(['organizationId'])
+    );
+    expect(Object.keys(document.components.schemas.PublicPolicyRuleDto.properties)).not.toContain('deletedAt');
     await app.close();
   });
 });
