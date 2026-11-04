@@ -118,10 +118,29 @@ describe('PostPolicyGateService', () => {
       expect(err.getResponse().error).toBe('policy_input_too_large');
     });
 
-    it('fails closed with 400 when evaluation itself reports too large', async () => {
+    it('schedule fails closed with 400 when evaluation itself reports too large', async () => {
       evaluation.evaluateTargets.mockRejectedValue(new PolicyInputTooLargeError(1, 'big'));
-      const err: any = await gate.preflightWrite('org', body('draft'), actor).catch((e) => e);
+      const err: any = await gate.preflightWrite('org', body('schedule'), actor).catch((e) => e);
       expect(err.getStatus()).toBe(400);
+    });
+
+    it('draft fails open: an evaluation error skips the report', async () => {
+      evaluation.evaluateTargets.mockRejectedValue(new Error('db down'));
+      const pre = await gate.preflightWrite('org', body('draft'), actor);
+      expect(pre.outcome.effect).toBe('ALLOW');
+      expect(pre.approvalIntegrationIds.size).toBe(0);
+    });
+
+    it('draft edit fails open when the stored post is too large to evaluate', async () => {
+      evaluation.targetFromStoredPost.mockRejectedValue(new PolicyInputTooLargeError(1, 'big'));
+      const pre = await gate.preflightWrite('org', body('draft'), actor, { editingPostId: 'p1' });
+      expect(pre.outcome.effect).toBe('ALLOW');
+    });
+
+    it('scheduled edit fails closed when the stored post is too large', async () => {
+      evaluation.targetFromStoredPost.mockRejectedValue(new PolicyInputTooLargeError(1, 'big'));
+      const err: any = await gate.preflightWrite('org', body('schedule'), actor, { editingPostId: 'p1' }).catch((e) => e);
+      expect(err.getResponse().error).toBe('policy_input_too_large');
     });
 
     it('other evaluation errors bubble (never ALLOW)', async () => {
@@ -188,6 +207,16 @@ describe('PostPolicyGateService', () => {
       expect(evaluation.recordOutcome.mock.calls[0][3]).toEqual({ postId: 'pb' });
     });
 
+    it('sanitizes rule names in the decorated policy', async () => {
+      const dirty = { ...match('REQUIRE_APPROVAL'), name: 'A\u2013B' };
+      const out = await gate.finishCreate(
+        'org',
+        [{ postId: 'pb', integration: 'b' }],
+        pre([{ integrationId: 'b', effect: 'REQUIRE_APPROVAL', matched: [dirty] }], []) as any
+      );
+      expect(out[0].policy.matched[0].name).toBe('A B');
+    });
+
     it('passes terminateWorkflow through for the edit path', async () => {
       await gate.finishCreate('org', [{ postId: 'pb', integration: 'b' }], pre(channels, ['b']) as any, {
         terminateWorkflow: true,
@@ -231,6 +260,33 @@ describe('PostPolicyGateService', () => {
       expect(out.approvalRequested).toBe(false);
       expect(router.route).not.toHaveBeenCalled();
       expect(evaluation.targetFromStoredPost.mock.calls[0][2]).toEqual({ action: 'DRAFT', approved: false });
+    });
+
+    it('draft status fails open on any evaluation error and never routes', async () => {
+      evaluation.targetFromStoredPost.mockRejectedValue(new PolicyInputTooLargeError(1, 'big'));
+      await expect(gate.gateStatus('org', 'p', 'draft')).resolves.toMatchObject({ proceed: true, approvalRequested: false });
+      evaluation.targetFromStoredPost.mockResolvedValue(storedTarget);
+      evaluation.evaluateTargets.mockRejectedValue(new Error('db down'));
+      await expect(gate.gateStatus('org', 'p', 'draft')).resolves.toMatchObject({ proceed: true });
+      expect(router.route).not.toHaveBeenCalled();
+    });
+
+    it('schedule status stays fail closed on evaluation errors', async () => {
+      evaluation.evaluateTargets.mockRejectedValue(new Error('db down'));
+      await expect(gate.gateStatus('org', 'p', 'schedule')).rejects.toThrow('db down');
+    });
+
+    it('exposes sanitized rule names but audits the stored ones', async () => {
+      const dirty = match('REQUIRE_APPROVAL', 'Bad\u2014name\u202e');
+      evaluation.evaluateTargets.mockResolvedValue({
+        effect: 'REQUIRE_APPROVAL',
+        matched: [dirty],
+        channels: [{ integrationId: 'a', effect: 'REQUIRE_APPROVAL', matched: [dirty] }],
+      });
+      const out = await gate.gateStatus('org', 'p', 'schedule');
+      expect(out.policy.matched[0].name).toBe('Bad name');
+      expect(out.policy.channels[0].matched[0].name).toBe('Bad name');
+      expect(evaluation.recordOutcome.mock.calls[0][1].matched[0].name).toBe('Bad\u2014name\u202e');
     });
 
     it('draft with BLOCK does not throw', async () => {

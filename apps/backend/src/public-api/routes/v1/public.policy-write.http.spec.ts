@@ -211,16 +211,18 @@ describe('write-time policy gate over HTTP', () => {
         },
       });
 
-    it('QUEUE post that now needs approval: edits, then routes with terminateWorkflow true', async () => {
-      stored('QUEUE');
+    it.each(['QUEUE', 'HELD', 'ERROR'])('%s post that now needs approval: written as draft via the forced set, approval requested, no 400', async (state) => {
+      stored(state);
       postsService.createPost.mockResolvedValue([{ postId: 'p1', integration: 'chA' }]);
       evaluation.targetFromStoredPost.mockResolvedValue({ actors: [] });
       evaluation.evaluateTargets.mockResolvedValue(outcomeFor('REQUIRE_APPROVAL', ['chA']));
       const res = await send('PUT', '/posts/p1', { content: 'see https://x.test' });
       expect(res.status).toBe(200);
       expect(postsService.createPost).toHaveBeenCalledTimes(1);
-      expect(postsService.createPost.mock.calls[0][3].forceDraftIntegrationIds).toBeUndefined();
-      expect(router.route).toHaveBeenCalledWith('org-1', 'p1', { terminateWorkflow: true });
+      expect([...postsService.createPost.mock.calls[0][3].forceDraftIntegrationIds]).toEqual(['chA']);
+      // The router only requests: no terminate, no race with a status change.
+      expect(router.route).toHaveBeenCalledWith('org-1', 'p1', { terminateWorkflow: false });
+      expect(postsService.changePostStatus).not.toHaveBeenCalled();
       const json = await res.json();
       expect(json[0]).toMatchObject({ postId: 'p1', approvalRequested: true });
     });
@@ -244,6 +246,15 @@ describe('write-time policy gate over HTTP', () => {
       const res = await send('PUT', '/posts/p1', { content: 'x' });
       expect(res.status).toBe(422);
       expect(postsService.createPost).not.toHaveBeenCalled();
+    });
+
+    it('DRAFT edit is saved even when the stored post is too large to evaluate', async () => {
+      stored('DRAFT');
+      evaluation.targetFromStoredPost.mockRejectedValue(new PolicyInputTooLargeError(1, 'big'));
+      postsService.createPost.mockResolvedValue([{ postId: 'p1', integration: 'chA' }]);
+      const res = await send('PUT', '/posts/p1', { content: 'x' });
+      expect(res.status).toBe(200);
+      expect(postsService.createPost).toHaveBeenCalledTimes(1);
     });
 
     it('DRAFT post: report only, no routing even on BLOCK', async () => {
@@ -291,6 +302,13 @@ describe('write-time policy gate over HTTP', () => {
         approvalRequested: false,
       });
       expect(postsService.changePostStatus).toHaveBeenCalledWith('org-1', 'p1', 'schedule');
+    });
+
+    it('draft is not blocked by an evaluation failure', async () => {
+      evaluation.targetFromStoredPost.mockRejectedValue(new PolicyInputTooLargeError(1, 'big'));
+      const res = await send('PUT', '/posts/p1/status', { status: 'draft' });
+      expect(res.status).toBe(200);
+      expect(postsService.changePostStatus).toHaveBeenCalledWith('org-1', 'p1', 'draft');
     });
 
     it('draft is report only', async () => {

@@ -636,14 +636,15 @@ export class PublicIntegrationsController {
       currentActor(),
       { editingPostId: id }
     );
+    // A channel that needs approval is written as a draft right away, so the
+    // edited content is never armed and nothing races the routing.
     const updated = await this._postsService.createPost(org.id, body, 'API', {
       provenance,
+      ...(pre?.approvalIntegrationIds.size
+        ? { forceDraftIntegrationIds: pre.approvalIntegrationIds }
+        : {}),
     });
-    return pre
-      ? this._policyGate!.finishCreate(org.id, updated, pre, {
-          terminateWorkflow: true,
-        })
-      : updated;
+    return pre ? this._policyGate!.finishCreate(org.id, updated, pre) : updated;
   }
 
   @Delete('/posts/:id')

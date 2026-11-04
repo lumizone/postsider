@@ -6,6 +6,7 @@ import {
 } from '@postsider/nestjs-libraries/policies/policy-errors';
 import { PolicyInputTooLargeError } from '@postsider/nestjs-libraries/policies/policy-text';
 import type { PolicyMatch } from '@postsider/nestjs-libraries/policies/policy-types';
+import { sanitizeMatches } from '@postsider/nestjs-libraries/policies/policy-errors';
 import { PolicyApprovalRouter } from './policy-approval-router';
 import {
   PolicyEvaluationService,
@@ -17,6 +18,8 @@ type CreateBodyLike = Parameters<PolicyEvaluationService['targetsFromDraftBody']
 type Effect = PolicyOutcome['effect'];
 type Pre = { outcome: PolicyOutcome; approvalIntegrationIds: Set<string> };
 type PolicyView = { effect: string; matched: PolicyMatch[] };
+
+const EMPTY_OUTCOME = (): PolicyOutcome => ({ effect: 'ALLOW', matched: [], channels: [] });
 
 const RANK: Record<Effect, number> = { ALLOW: 0, REQUIRE_APPROVAL: 1, BLOCK: 2 };
 
@@ -53,6 +56,11 @@ export class PostPolicyGateService {
       if (opts.editingPostId) await this.markAsEdit(orgId, opts.editingPostId, targets);
       outcome = await this._evaluation.evaluateTargets(orgId, targets, 'write');
     } catch (error) {
+      // Drafts are report only: a failing evaluation skips the report and
+      // never blocks saving. Scheduling and publishing fail closed.
+      if (body.type === 'draft') {
+        return { outcome: EMPTY_OUTCOME(), approvalIntegrationIds: new Set<string>() };
+      }
       return failClosed(error);
     }
 
@@ -124,18 +132,27 @@ export class PostPolicyGateService {
       });
       if (!target) {
         // The service reports the missing post itself.
-        return { proceed: true, policy: { effect: 'ALLOW', matched: [], channels: [] }, approvalRequested: false };
+        return { proceed: true, policy: EMPTY_OUTCOME(), approvalRequested: false };
       }
       outcome = await this._evaluation.evaluateTargets(orgId, [target], 'write');
     } catch (error) {
+      // Disarming (status draft) is never blocked by a policy evaluation failure.
+      if (status === 'draft') {
+        return { proceed: true, policy: EMPTY_OUTCOME(), approvalRequested: false };
+      }
       return failClosed(error);
     }
+    const exposed = (): PolicyOutcome => ({
+      ...outcome,
+      matched: sanitizeMatches(outcome.matched),
+      channels: outcome.channels.map((c) => ({ ...c, matched: sanitizeMatches(c.matched) })),
+    });
 
     if (status === 'draft' || outcome.effect === 'ALLOW') {
       if (outcome.effect !== 'ALLOW' && status === 'draft') {
         await this._evaluation.recordOutcome(orgId, outcome, 'write', { postId });
       }
-      return { proceed: true, policy: outcome, approvalRequested: false };
+      return { proceed: true, policy: exposed(), approvalRequested: false };
     }
     if (outcome.effect === 'BLOCK') {
       await this._evaluation.recordOutcome(orgId, outcome, 'write', { postId });
@@ -143,7 +160,7 @@ export class PostPolicyGateService {
     }
     const routed = await this._router.route(orgId, postId, { terminateWorkflow: true });
     await this._evaluation.recordOutcome(orgId, outcome, 'write', { postId });
-    return { proceed: false, policy: outcome, approvalRequested: routed.requested };
+    return { proceed: false, policy: exposed(), approvalRequested: routed.requested };
   }
 
   /**
@@ -173,6 +190,6 @@ export class PostPolicyGateService {
       if (RANK[c.effect] > RANK[effect]) effect = c.effect;
       for (const m of c.matched) if (!matched.some((x) => x.ruleId === m.ruleId)) matched.push(m);
     }
-    return { effect, matched };
+    return { effect, matched: sanitizeMatches(matched) };
   }
 }

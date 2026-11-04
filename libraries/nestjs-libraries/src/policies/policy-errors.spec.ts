@@ -39,6 +39,11 @@ describe('PolicyBlockedException', () => {
     expect(msg.length).toBeLessThan(400);
   });
 
+  it('sanitizes names inside policy.matched too', () => {
+    const body: any = new PolicyBlockedException(outcome(['A\u2014B\u202e'])).getResponse();
+    expect(body.policy.matched[0].name).toBe('A B');
+  });
+
   it('lists at most five names', () => {
     const names = ['n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7'];
     const msg = (new PolicyBlockedException(outcome(names)).getResponse() as any).msg as string;
@@ -48,6 +53,20 @@ describe('PolicyBlockedException', () => {
 });
 
 describe('sanitizePolicyName', () => {
+  it.each(['\u2010', '\u2011', '\u2012', '\u2013', '\u2014', '\u2015', '\u2212', '\ufe58', '\ufe63', '\uff0d'])(
+    'removes dash %j',
+    (d) => {
+      expect(sanitizePolicyName(`a${d}b`)).toBe('a b');
+    }
+  );
+
+  it.each(['\u0085', '\u009f', '\u202a', '\u202e', '\u2066', '\u2069', '\u200b', '\ufeff', '\u2028'])(
+    'removes control or bidi character %j',
+    (c) => {
+      expect(sanitizePolicyName(`a${c}b`)).toBe('a b');
+    }
+  );
+
   it('replaces dashes and collapses whitespace', () => {
     expect(sanitizePolicyName('  a \u2014  b  ')).toBe('a b');
   });

@@ -25,7 +25,10 @@ export class PolicyApprovalRouter {
     const post = await this._repo.getPostById(postId, orgId);
     if (!post) throw new NotFoundException({ msg: 'Post not found' });
 
-    if (post.state === 'QUEUE' || post.state === 'ERROR') {
+    if (post.state === 'HELD') {
+      // Held posts have no live workflow: only the state moves.
+      await this._posts.setPostState(orgId, postId, 'DRAFT');
+    } else if (post.state === 'QUEUE' || post.state === 'ERROR') {
       if (opts.terminateWorkflow) {
         // Also stops the armed publish workflow.
         await this._posts.changePostStatus(orgId, postId, 'draft');

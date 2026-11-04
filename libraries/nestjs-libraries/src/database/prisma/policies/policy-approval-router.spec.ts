@@ -70,6 +70,14 @@ describe('PolicyApprovalRouter', () => {
     expect(calls).toEqual(['changePostStatus']);
   });
 
+  it.each([true, false])('HELD post (terminateWorkflow %s): setPostState DRAFT, no changePostStatus, then request', async (t) => {
+    repo.getPostById.mockResolvedValue({ id: 'p', state: 'HELD' });
+    await router.route('org', 'p', { terminateWorkflow: t });
+    expect(posts.setPostState).toHaveBeenCalledWith('org', 'p', 'DRAFT');
+    expect(posts.changePostStatus).not.toHaveBeenCalled();
+    expect(calls).toEqual(['setPostState', 'request']);
+  });
+
   it('fails when the post does not exist', async () => {
     repo.getPostById.mockResolvedValue(null);
     await expect(router.route('org', 'p', { terminateWorkflow: true })).rejects.toThrow();
