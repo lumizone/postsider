@@ -14,6 +14,10 @@ import {
 const identityRequired = () =>
   process.env.GUEST_REVIEW_REQUIRE_IDENTITY !== 'false';
 
+// Even with the switch off, a half-supplied identity is a client bug: both or none.
+const identityValidated = (o: GuestReviewResolveDto) =>
+  identityRequired() || o.guestName !== undefined || o.guestEmail !== undefined;
+
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
 
@@ -26,13 +30,13 @@ export class GuestReviewResolveDto {
   @MaxLength(2000)
   note?: string;
 
-  @ValidateIf((o) => identityRequired() || o.guestName !== undefined)
+  @ValidateIf(identityValidated)
   @Transform(trim)
   @IsString()
   @Length(1, 120)
   guestName?: string;
 
-  @ValidateIf((o) => identityRequired() || o.guestEmail !== undefined)
+  @ValidateIf(identityValidated)
   @Transform(({ value }) =>
     typeof value === 'string' ? value.trim().toLowerCase() : value
   )

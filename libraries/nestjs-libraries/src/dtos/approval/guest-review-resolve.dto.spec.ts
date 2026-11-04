@@ -78,4 +78,17 @@ describe('GuestReviewResolveDto', () => {
       (await check({ action: 'approve', guestEmail: 'bad' })).props
     ).toContain('guestEmail');
   });
+
+  it('rejects exactly one supplied identity field even when the switch is false', async () => {
+    process.env.GUEST_REVIEW_REQUIRE_IDENTITY = 'false';
+    expect(
+      (await check({ action: 'approve', guestName: 'Ann' })).props
+    ).toContain('guestEmail');
+    expect(
+      (await check({ action: 'approve', guestEmail: 'a@b.co' })).props
+    ).toContain('guestName');
+    expect(
+      (await check({ action: 'approve', guestName: 'Ann', guestEmail: 'a@b.co' })).props
+    ).toEqual([]);
+  });
 });
