@@ -29,6 +29,39 @@ describe('requiredScopeFor', () => {
     expect(requiredScopeFor('DELETE', '/public/v1/integrations/c1?x=/posts')).toBe('channels:write');
   });
 
+  describe('policy dry run', () => {
+    it.each([
+      '/public/v1/policies/evaluate',
+      '/public/v1/policies/evaluate?x=/integrations',
+      '/public/v1/policies/evaluate/',
+      '/public/v1/Policies/EVALUATE',
+      '/PUBLIC/V1/policies/evaluate/?a=1#b',
+      '/public/v1//policies//evaluate',
+    ])('POST %s is a read', (url) => {
+      expect(requiredScopeFor('POST', url)).toBe('posts:read');
+    });
+
+    it('stays a write for every other policy route and verb', () => {
+      expect(requiredScopeFor('POST', '/public/v1/policies')).toBe('posts:write');
+      expect(requiredScopeFor('PUT', '/public/v1/policies/x')).toBe('posts:write');
+      expect(requiredScopeFor('DELETE', '/public/v1/policies/evaluate')).toBe('posts:write');
+      expect(requiredScopeFor('PUT', '/public/v1/policies/evaluate')).toBe('posts:write');
+      expect(requiredScopeFor('PATCH', '/public/v1/policies/evaluate')).toBe('posts:write');
+      expect(requiredScopeFor('POST', '/public/v1/policies/evaluate/extra')).toBe('posts:write');
+      expect(requiredScopeFor('POST', '/public/v1/policies/evaluatex')).toBe('posts:write');
+      expect(requiredScopeFor('POST', '/public/v1/policies/x/evaluate')).toBe('posts:write');
+      expect(requiredScopeFor('POST', '/public/v1/posts')).toBe('posts:write');
+    });
+
+    it('is only a read when every normalised form of the path is the dry run', () => {
+      // Express does not decode before matching a literal route, so an encoded
+      // spelling never reaches the dry run handler; it must not get the read scope.
+      expect(requiredScopeFor('POST', '/public/v1/policies%2Fevaluate')).toBe('posts:write');
+      expect(requiredScopeFor('POST', '/public/v1/policies/%65valuate')).toBe('posts:write');
+      expect(requiredScopeFor('POST', '/public/v1/policies/evaluate%2F..%2Fx')).toBe('posts:write');
+    });
+  });
+
   it('treats HEAD/OPTIONS as reads and PATCH as a write', () => {
     expect(requiredScopeFor('HEAD', '/public/v1/posts')).toBe('posts:read');
     expect(requiredScopeFor('PATCH', '/public/v1/posts/p1')).toBe('posts:write');
@@ -56,6 +89,23 @@ describe('tokenAllows', () => {
     });
     expect(tokenAllows([...scopes, 'channels:write'], 'POST', '/public/v1/integrations/c1/disable')).toEqual({
       allowed: true,
+    });
+  });
+
+  it('lets a read-only grant call the policy dry run, strictly', () => {
+    const url = '/public/v1/policies/evaluate?x=1';
+    expect(tokenAllows(['posts:read'], 'POST', url)).toEqual({ allowed: true });
+    expect(tokenAllows(['posts:write'], 'POST', url)).toEqual({
+      allowed: false,
+      required: 'posts:read',
+    });
+    expect(tokenAllows(['posts:read'], 'POST', '/public/v1/posts')).toEqual({
+      allowed: false,
+      required: 'posts:write',
+    });
+    expect(tokenAllows(['posts:read'], 'POST', '/public/v1/policies')).toEqual({
+      allowed: false,
+      required: 'posts:write',
     });
   });
 

@@ -37,6 +37,17 @@ export function isChannelAdminRequest(method: string, path: string): boolean {
   return /^\/integrations(\/|$)/.test(p);
 }
 
+/**
+ * `POST /policies/evaluate` is the policy dry run: it writes nothing, so it is a
+ * read and needs `posts:read`. Mirrors the exception in requiredScopeFor()
+ * (mcp-scope-policy.ts). Any other POST under `/policies` stays a write.
+ */
+export function isPolicyDryRunRequest(method: string, path: string): boolean {
+  if (method.toUpperCase() !== 'POST') return false;
+  const p = path.split('?')[0].split('#')[0].toLowerCase().replace(/\/{2,}/g, '/');
+  return /^\/policies\/evaluate\/?$/.test(p);
+}
+
 export class MissingScopeError extends Error {}
 
 export function scopeGuardedClient(
@@ -60,7 +71,13 @@ export function scopeGuardedClient(
       return client.get(path, query);
     },
     post: (path: string, body?: unknown, idempotencyKey?: string) => {
-      requireScope(isChannelAdminRequest('POST', path) ? CHANNELS_SCOPE : WRITE_SCOPE);
+      requireScope(
+        isChannelAdminRequest('POST', path)
+          ? CHANNELS_SCOPE
+          : isPolicyDryRunRequest('POST', path)
+          ? READ_SCOPE
+          : WRITE_SCOPE
+      );
       return client.post(path, body, idempotencyKey);
     },
     put: (path: string, body?: unknown) => {

@@ -1,6 +1,7 @@
 import { jest, describe, it, expect } from '@jest/globals';
 import {
   isChannelAdminRequest,
+  isPolicyDryRunRequest,
   scopeGuardedClient,
   MissingScopeError,
 } from '../http/scope-guard.js';
@@ -61,5 +62,40 @@ describe('scopeGuardedClient with channels:write', () => {
   it('does not let channels:write alone read the calendar', async () => {
     const guarded = scopeGuardedClient(inner(), new Set(['channels:write']));
     expect(() => guarded.get('/posts')).toThrow(MissingScopeError);
+  });
+});
+
+describe('policy dry run classification', () => {
+  it('treats only POST /policies/evaluate as the read-only dry run', () => {
+    expect(isPolicyDryRunRequest('POST', '/policies/evaluate')).toBe(true);
+    expect(isPolicyDryRunRequest('post', '/Policies/EVALUATE/')).toBe(true);
+    expect(isPolicyDryRunRequest('POST', '/policies/evaluate?x=1')).toBe(true);
+    expect(isPolicyDryRunRequest('POST', '//policies//evaluate')).toBe(true);
+    expect(isPolicyDryRunRequest('POST', '/policies')).toBe(false);
+    expect(isPolicyDryRunRequest('POST', '/policies/evaluate/extra')).toBe(false);
+    expect(isPolicyDryRunRequest('POST', '/policies%2Fevaluate')).toBe(false);
+    expect(isPolicyDryRunRequest('PUT', '/policies/evaluate')).toBe(false);
+    expect(isPolicyDryRunRequest('DELETE', '/policies/evaluate')).toBe(false);
+    expect(isPolicyDryRunRequest('POST', '/posts')).toBe(false);
+  });
+
+  it('lets a posts:read connection run the dry run but still refuses real writes', async () => {
+    const inner = {
+      post: jest.fn(async () => 'p'),
+      get: jest.fn(async () => 'g'),
+    } as unknown as PostsiderClient;
+    const guarded = scopeGuardedClient(inner, new Set(['posts:read']));
+    await expect(guarded.post('/policies/evaluate', {})).resolves.toBe('p');
+    expect(() => guarded.post('/posts', {})).toThrow(MissingScopeError);
+    expect(() => guarded.post('/policies', {})).toThrow(MissingScopeError);
+    expect(() => guarded.post('/policies/evaluate/extra', {})).toThrow(MissingScopeError);
+  });
+
+  it('does not give the dry run to a write-only connection (strict mapping)', () => {
+    const guarded = scopeGuardedClient(
+      { post: jest.fn(async () => 'p') } as unknown as PostsiderClient,
+      new Set(['posts:write'])
+    );
+    expect(() => guarded.post('/policies/evaluate', {})).toThrow(/posts:read/);
   });
 });

@@ -89,8 +89,8 @@ describe('PublicPoliciesController scope contract', () => {
     .map((name) => ({ name, handler: (prototype as any)[name] }))
     .filter(({ handler }) => Reflect.hasMetadata(METHOD_METADATA, handler));
 
-  it('has five handlers, each with known scopes', () => {
-    expect(handlers).toHaveLength(5);
+  it('has six handlers, each with known scopes', () => {
+    expect(handlers).toHaveLength(6);
     for (const { handler } of handlers) {
       const scopes = Reflect.getMetadata(PUBLIC_API_SCOPES_KEY, handler);
       expect(scopes?.length).toBeGreaterThan(0);
@@ -104,6 +104,7 @@ describe('PublicPoliciesController scope contract', () => {
     ['create', ['policies:write']],
     ['update', ['policies:write']],
     ['remove', ['policies:write']],
+    ['evaluate', ['posts:read']],
   ])('authorizes %s only with %j', (name, expected) => {
     expect(Reflect.getMetadata(PUBLIC_API_SCOPES_KEY, (prototype as any)[name])).toEqual(expected);
   });

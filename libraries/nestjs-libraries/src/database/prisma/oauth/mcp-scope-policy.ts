@@ -10,7 +10,9 @@
  *   `/integrations`, and fetching a connect link (`GET /social/...`, which
  *   starts a connection).
  * - `posts:write`: every other mutation.
- * - `posts:read`: every read.
+ * - `posts:read`: every read, plus the policy dry run (`POST /policies/evaluate`),
+ *   the one POST that writes nothing. Keep `isPolicyDryRunRequest` in the MCP
+ *   scope guard in step with it.
  */
 export type McpRequiredScope = 'posts:read' | 'posts:write' | 'channels:write';
 
@@ -31,6 +33,9 @@ function pathsOf(rawUrl: string): string[] {
   });
 }
 
+/** The policy dry run: a POST that only reads. Exact path, every spelling must match. */
+const DRY_RUN_PATH = /^\/policies\/evaluate\/?$/;
+
 export function requiredScopeFor(method: string, rawUrl: string): McpRequiredScope {
   const verb = method.toUpperCase();
   const isRead = verb === 'GET' || verb === 'HEAD' || verb === 'OPTIONS';
@@ -43,6 +48,10 @@ export function requiredScopeFor(method: string, rawUrl: string): McpRequiredSco
     isRead ? /^\/social(\/|$)/.test(p) : /^\/integrations(\/|$)/.test(p)
   );
   if (channelAdmin) return 'channels:write';
+  // Strict: every normalised spelling must be the dry run. Express matches the
+  // literal route on the raw path, so an encoded spelling never reaches it and
+  // must not borrow the read scope.
+  if (verb === 'POST' && paths.every((p) => DRY_RUN_PATH.test(p))) return 'posts:read';
   return isRead ? 'posts:read' : 'posts:write';
 }
 

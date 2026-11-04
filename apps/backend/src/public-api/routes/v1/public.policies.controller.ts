@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Param,
   Post,
   Put,
@@ -33,7 +34,13 @@ import {
   PublicPolicyDeletedDto,
   PublicPolicyRuleDto,
 } from '@postsider/nestjs-libraries/dtos/policies/public-policy.dto';
-import { currentActor } from '@postsider/nestjs-libraries/actor/actor-context';
+import { currentActor, currentKeyPermissions } from '@postsider/nestjs-libraries/actor/actor-context';
+import { PolicyEvaluationService } from '@postsider/nestjs-libraries/database/prisma/policies/policy-evaluation.service';
+import { EvaluatePolicyDto } from '@postsider/nestjs-libraries/dtos/policies/evaluate-policy.dto';
+import { checkKeyPermission } from '@postsider/nestjs-libraries/policies/key-permissions';
+import { actionForCreateType } from '@postsider/nestjs-libraries/policies/key-permission.guard';
+import { policyInputTooLarge, sanitizeMatches } from '@postsider/nestjs-libraries/policies/policy-errors';
+import { PolicyInputTooLargeError } from '@postsider/nestjs-libraries/policies/policy-text';
 
 // The global ValidationPipe does not whitelist, so unknown body fields
 // (organizationId, id, deletedAt, ...) survive validation. Only these are
@@ -61,6 +68,25 @@ function pickRuleFields<T extends object>(body: T): T {
     if (value !== undefined) picked[key] = value;
   }
   return picked as T;
+}
+
+/**
+ * The global ValidationPipe does not whitelist, so the dry run body keeps any
+ * unknown keys it was sent. Evaluation only ever sees these fields.
+ */
+function pickEvaluateBody(body: EvaluatePolicyDto) {
+  return {
+    type: body.type,
+    ...(body.date === undefined ? {} : { date: body.date }),
+    posts: body.posts.map((p) => ({
+      integration: { id: p.integration.id },
+      value: p.value.map((v) => ({
+        content: v.content,
+        ...(v.image === undefined ? {} : { image: v.image.map((i) => ({ path: i.path })) }),
+      })),
+      ...(p.firstComment === undefined ? {} : { firstComment: p.firstComment }),
+    })),
+  };
 }
 
 function auditActorUserId(): string | null {
@@ -121,8 +147,48 @@ async function auditPolicyChange(
 export class PublicPoliciesController {
   constructor(
     private _rules: PolicyRulesService,
-    private _audit: AuditLogger
+    private _audit: AuditLogger,
+    private _evaluation: PolicyEvaluationService
   ) {}
+
+  // Registered before the /policies/:id routes. It is a POST, so there is no
+  // overlap today, but the order keeps it safe if a POST :id route is added.
+  @Post('/policies/evaluate')
+  @HttpCode(200)
+  @RequirePublicApiScopes('posts:read')
+  @ApiOperation({
+    summary: 'Dry run the policy rules against a draft body',
+    description:
+      'Takes the same shape as a post create body (type, date, posts) and returns what the rules would decide for the calling credential, plus whether the credential key limits would allow the action. Writes nothing: no post, approval, audit entry or idempotency record. Requires posts:read.',
+  })
+  @ApiOkResponse({
+    description:
+      'effect (ALLOW, REQUIRE_APPROVAL or BLOCK), matched rules, per channel effect, and key: { allowed, code? }',
+  })
+  @ApiBadRequestResponse({ description: 'Invalid body, or error policy_input_too_large' })
+  @ApiNotFoundResponse({ description: 'A channel does not belong to this organization' })
+  async evaluate(@GetOrgFromRequest() org: Organization, @Body() body: EvaluatePolicyDto) {
+    const draft = pickEvaluateBody(body);
+    let outcome;
+    try {
+      const targets = await this._evaluation.targetsFromDraftBody(org.id, draft, currentActor());
+      outcome = await this._evaluation.evaluateTargets(org.id, targets, 'write');
+    } catch (error) {
+      if (error instanceof PolicyInputTooLargeError) throw policyInputTooLarge();
+      throw error;
+    }
+    const keyCheck = checkKeyPermission(
+      currentKeyPermissions(),
+      actionForCreateType(draft.type),
+      draft.posts.map((p) => p.integration.id)
+    );
+    return {
+      effect: outcome.effect,
+      matched: sanitizeMatches(outcome.matched),
+      channels: outcome.channels.map((c) => ({ integrationId: c.integrationId, effect: c.effect })),
+      key: keyCheck.allowed ? { allowed: true } : { allowed: false, code: keyCheck.code },
+    };
+  }
 
   @Get('/policies')
   @RequirePublicApiScopes('policies:read')

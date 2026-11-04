@@ -1,4 +1,6 @@
+import { ForbiddenException } from '@nestjs/common';
 import { PublicAuthMiddleware } from './public.auth.middleware';
+import { PublicApiScopeGuard } from './public-api-scope.guard';
 
 describe('PublicAuthMiddleware scope enforcement', () => {
   const org = { id: 'org-1', subscription: { subscriptionTier: 'PRO' } };
@@ -66,6 +68,41 @@ describe('PublicAuthMiddleware scope enforcement', () => {
     expect(res.statusCode).toBe(200);
     expect(next).toHaveBeenCalled();
     expect(req.org.users[0].role).toBe('ADMIN');
+  });
+
+  it('lets a posts:read MCP token reach the policy dry run, and nothing under policies:read', async () => {
+    const dry = await run(grant(['posts:read']), 'POST', '/public/v1/policies/evaluate');
+    expect(dry.res.statusCode).toBe(200);
+    expect(dry.next).toHaveBeenCalled();
+    expect(dry.req.publicApiScopes).toContain('posts:read');
+    expect(dry.req.publicApiScopes).not.toContain('policies:read');
+
+    // The middleware lets a GET through (posts:read); the route scope guard then refuses it.
+    const list = await run(grant(['posts:read']), 'GET', '/public/v1/policies');
+    expect(list.next).toHaveBeenCalled();
+    const reflector = { getAllAndOverride: jest.fn().mockReturnValue(['policies:read']) } as any;
+    const guard = new PublicApiScopeGuard(reflector);
+    const ctx: any = {
+      switchToHttp: () => ({ getRequest: () => list.req }),
+      getHandler: () => function handler() {},
+      getClass: () => class Controller {},
+    };
+    let thrown: any;
+    try {
+      guard.canActivate(ctx);
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBeInstanceOf(ForbiddenException);
+    expect(thrown.getStatus()).toBe(403);
+    expect(thrown.getResponse()).toMatchObject({ requiredScopes: ['policies:read'] });
+  });
+
+  it('keeps a write-only token (no posts:read) out of the policy dry run', async () => {
+    const { res, next } = await run(grant(['posts:write']), 'POST', '/public/v1/policies/evaluate');
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toMatchObject({ error: 'insufficient_scope', scope: 'posts:read' });
+    expect(next).not.toHaveBeenCalled();
   });
 
   it('does not restrict tokens that carry no scope list (legacy OAuth apps)', async () => {
