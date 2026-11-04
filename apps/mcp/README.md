@@ -136,7 +136,7 @@ written into the plugin directory.
 
 ## What the agent can do
 
-37 tools (38 on the local stdio server), all prefixed `postsider_`.
+38 tools (39 on the local stdio server), all prefixed `postsider_`.
 
 ### Read
 
@@ -168,6 +168,7 @@ written into the plugin directory.
 | `postsider_create_post` | Create a post as a draft, a scheduled post, or an immediate publish across channels. | Creates content and can publish |
 | `postsider_update_post` | Edit an existing post in place: text, media, date, settings, first comment. Not for published or pending-approval posts. | Changes content, re-arms a scheduled post |
 | `postsider_update_post_status` | Move a post between `draft` and `schedule`. | Reversible |
+| `postsider_retry_failed_posts` | Re-queue only the failed destinations of a post group; unknown-outcome rows need explicit confirmation. | Re-publishes failed rows |
 | `postsider_request_approval` | Send a draft into the human approval queue. | Reversible |
 | `postsider_upload_media_from_url` | Import media into the library from a public HTTPS URL. | Creates media |
 | `postsider_upload_media_base64` | Upload an image or MP4 you hold as bytes (base64: 25 MB on the local server, 2.5 MB over the remote connection). No public URL needed. | Creates media |

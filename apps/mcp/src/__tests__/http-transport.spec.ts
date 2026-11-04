@@ -215,7 +215,7 @@ describe('remote MCP transport', () => {
     try {
       const tools = await client.listTools();
       const names = tools.tools.map((tool) => tool.name).sort();
-      expect(names).toHaveLength(37);
+      expect(names).toHaveLength(38);
       expect(names).toContain('postsider_list_channels');
       expect(names).toContain('postsider_create_post');
       expect(names).toContain('postsider_delete_post');
