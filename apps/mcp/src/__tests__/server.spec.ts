@@ -909,6 +909,13 @@ describe('createPostSiderMcpServer', () => {
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
+    it('refuses more than 20 posts in a policy check', async () => {
+      const posts = Array.from({ length: 21 }, () => ({ channelId: 'c1', content: 'hi' }));
+      const r = await call('postsider_check_policy', { type: 'draft', posts });
+      expect(r.isError).toBe(true);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
     it('describes the policy tool as read only and mentions its outcomes, with no dashes', async () => {
       const c = await connect();
       const { tools } = await c.listTools();
@@ -930,7 +937,26 @@ describe('createPostSiderMcpServer', () => {
         const d = tools.find((t) => t.name === name)!.description!;
         expect(d).toContain('approvalRequested');
         expect(d).toContain('policy_blocked');
+        // One whole sentence at the very end; no splice into existing text.
+        expect(d.endsWith('Use postsider_check_policy to dry run first.')).toBe(true);
+        expect(d).not.toContain('  ');
+        expect(d).not.toMatch(/\.[A-Za-z]/);
+        expect(d.indexOf(' Workspace policies apply:')).toBeGreaterThan(d.lastIndexOf('. ', d.indexOf(' Workspace policies apply:') - 1) - 1);
       }
+      // Existing safety guidance stays contiguous.
+      const byName = (n: string) => tools.find((t) => t.name === n)!.description!;
+      expect(byName('postsider_update_post_status')).toContain(
+        'it may already be live on the channel: ask the user to check the channel and confirm before re-queuing it, and prefer postsider_retry_failed_posts for group retries. Workspace policies apply:'
+      );
+      expect(byName('postsider_retry_failed_posts')).toContain(
+        'Do not call this repeatedly; read the posts back to see the new state. Workspace policies apply:'
+      );
+      expect(byName('postsider_update_post')).toContain(
+        'Read the post with postsider_get_post first and verify the change afterwards. Workspace policies apply:'
+      );
+      expect(byName('postsider_create_post')).toContain(
+        'To change a post later use postsider_update_post. Workspace policies apply:'
+      );
     });
 
     it('limits platforms in a check to three', async () => {

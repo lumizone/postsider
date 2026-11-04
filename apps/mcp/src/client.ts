@@ -162,6 +162,17 @@ function cleanRuleName(name: unknown): string {
     : clean;
 }
 
+const ACTION_WORDS: Record<string, string> = {
+  DRAFT: 'create drafts',
+  SCHEDULE: 'schedule',
+  PUBLISH_NOW: 'publish now',
+};
+
+/** Plain words for a known post action; an unknown token is shown as is, an empty one as a generic phrase. */
+function actionWords(token: string): string {
+  return token ? ACTION_WORDS[token] ?? token : 'do this';
+}
+
 /** A closed token such as an action name or a channel id; anything else is dropped. */
 function cleanToken(value: unknown): string {
   return typeof value === 'string' && /^[A-Za-z0-9_.:]{1,64}$/.test(value) ? value : '';
@@ -181,8 +192,8 @@ function describePolicyError(status: number, data: unknown): string | undefined 
   if (!data || typeof data !== 'object') return undefined;
   const body = data as Record<string, unknown>;
   if (status === 403 && body.error === 'key_action_not_allowed') {
-    const action = cleanToken(body.action) || 'do this';
-    const allowed = cleanTokenList(body.allowedActions);
+    const action = actionWords(cleanToken(body.action));
+    const allowed = cleanTokenList(body.allowedActions).map(actionWords);
     return (
       `This API key may not ${action}.` +
       (allowed.length ? ` Allowed actions: ${allowed.join(', ')}.` : '') +

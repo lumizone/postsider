@@ -553,7 +553,7 @@ describe('PostsiderClient', () => {
           allowedActions: ['DRAFT', 'SCHEDULE'],
         });
         expect(e.message).toBe(
-          'This API key may not PUBLISH_NOW. Allowed actions: DRAFT, SCHEDULE. Ask the owner to change the key limits in Settings, API.'
+          'This API key may not publish now. Allowed actions: create drafts, schedule. Ask the owner to change the key limits in Settings, API.'
         );
       });
 
