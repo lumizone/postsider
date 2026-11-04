@@ -140,10 +140,34 @@ describe('PostsService audit hooks', () => {
     });
   });
 
-  it('changeDate schedule on a draft emits no status_changed (it stays DRAFT)', async () => {
+  it('changeDate schedule on a draft emits post.updated with publishDate (it stays DRAFT)', async () => {
     const { svc, audit } = build();
     await svc.changeDate('o1', 'p1', '2030-01-01T00:00:00.000Z', 'schedule');
-    expect(audit.logResourceEvent).not.toHaveBeenCalled();
+    expect(audit.logResourceEvent).toHaveBeenCalledTimes(1);
+    expect(audit.logResourceEvent.mock.calls[0][0]).toMatchObject({
+      event: 'post.updated',
+      targetId: 'p1',
+      metadata: { publishDate: '2030-01-01T00:00:00.000Z' },
+    });
+  });
+
+  it('changeDate schedule on a QUEUE post emits post.updated, not status_changed', async () => {
+    const { svc, audit, repo } = build();
+    repo.getPostById.mockResolvedValue({ id: 'p1', state: 'QUEUE', integration: { providerIdentifier: 'x' } });
+    await svc.changeDate('o1', 'p1', '2030-01-01T00:00:00.000Z', 'schedule');
+    expect(audit.logResourceEvent).toHaveBeenCalledTimes(1);
+    expect(audit.logResourceEvent.mock.calls[0][0]).toMatchObject({
+      event: 'post.updated',
+      metadata: { publishDate: '2030-01-01T00:00:00.000Z' },
+    });
+  });
+
+  it('changeDate with a dayjs-only date string does not throw after the write', async () => {
+    const { svc, audit } = build();
+    await expect(svc.changeDate('o1', 'p1', '20261104', 'update')).resolves.toBeDefined();
+    expect(audit.logResourceEvent.mock.calls[0][0]).toMatchObject({ event: 'post.updated' });
+    await expect(svc.changeDate('o1', 'p1', 'not-a-date', 'update')).resolves.toBeDefined();
+    expect(audit.logResourceEvent.mock.calls[1][0].metadata.publishDate).toBeNull();
   });
 
   it('changeDate schedule on an ERROR post emits status_changed to QUEUE, update emits updated', async () => {

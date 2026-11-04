@@ -1,3 +1,4 @@
+import dayjs from 'dayjs';
 import type { AuditLogger } from './audit.logger';
 import type { ResourceAuditEntry } from './audit-events';
 
@@ -14,5 +15,21 @@ export async function recordPostEvent(
     await audit.logResourceEvent(entry);
   } catch {
     // swallowed on purpose
+  }
+}
+
+/**
+ * Never-throwing ISO string for audit metadata. Accepts anything dayjs or Date
+ * can parse; returns null for invalid input instead of raising a RangeError
+ * outside the best-effort wrapper.
+ */
+export function safeIsoDate(value: unknown): string | null {
+  try {
+    if (value === null || value === undefined) return null;
+    const d = value instanceof Date ? value : dayjs(value as any).toDate();
+    const t = d.getTime();
+    return Number.isNaN(t) ? null : d.toISOString();
+  } catch {
+    return null;
   }
 }

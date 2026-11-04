@@ -1,5 +1,8 @@
 import { AuditLogger } from '@postsider/nestjs-libraries/database/prisma/audit/audit.logger';
-import { recordPostEvent } from '@postsider/nestjs-libraries/database/prisma/audit/post-audit';
+import {
+  recordPostEvent,
+  safeIsoDate,
+} from '@postsider/nestjs-libraries/database/prisma/audit/post-audit';
 import {
   BadRequestException,
   HttpException,
@@ -1540,9 +1543,7 @@ export class PostsService {
             state: posts[0].state,
             integrationId: post.integration.id,
             group: posts[0].group,
-            publishDate: posts[0].publishDate
-              ? new Date(posts[0].publishDate).toISOString()
-              : null,
+            publishDate: safeIsoDate(posts[0].publishDate),
             ...(wasCreated && creationMethod != null
               ? { creationMethod: String(creationMethod) }
               : {}),
@@ -2047,25 +2048,29 @@ export class PostsService {
       );
     }
 
-    if (action === 'schedule') {
-      // A draft stays a draft when rescheduled; record the real result.
-      const resultingState = getPostById.state === 'DRAFT' ? 'DRAFT' : 'QUEUE';
-      if (getPostById.state !== resultingState) {
-        await recordPostEvent(this._audit, {
-          organizationId: orgId,
-          event: 'post.status_changed',
-          targetType: 'post',
-          targetId: id,
-          metadata: { from: getPostById.state, to: resultingState },
-        });
-      }
+    const resultingState =
+      action === 'schedule'
+        ? getPostById.state === 'DRAFT'
+          ? 'DRAFT'
+          : 'QUEUE'
+        : getPostById.state;
+    if (action === 'schedule' && getPostById.state !== resultingState) {
+      await recordPostEvent(this._audit, {
+        organizationId: orgId,
+        event: 'post.status_changed',
+        targetType: 'post',
+        targetId: id,
+        metadata: { from: getPostById.state, to: resultingState },
+      });
     } else {
+      // The state did not change (drag-reschedule of a QUEUE or DRAFT post,
+      // or an explicit 'update'): record the date change itself.
       await recordPostEvent(this._audit, {
         organizationId: orgId,
         event: 'post.updated',
         targetType: 'post',
         targetId: id,
-        metadata: { publishDate: new Date(date).toISOString() },
+        metadata: { publishDate: safeIsoDate(date) },
       });
     }
 
