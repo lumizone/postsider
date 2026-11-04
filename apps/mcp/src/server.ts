@@ -882,7 +882,7 @@ export function createPostSiderMcpServer(
     {
       title: 'Update post status',
       description:
-        'Move an existing post between draft and scheduled queue. Switching to "schedule" makes the post eligible for automatic publication at its saved date; do so only after the user explicitly authorized the content, channels and timing. Read the stored post before and after the change.',
+        'Move an existing post between draft and scheduled queue. Switching to "schedule" makes the post eligible for automatic publication at its saved date; do so only after the user explicitly authorized the content, channels and timing. Read the stored post before and after the change. If the post is in ERROR with errorCategory UNKNOWN_OUTCOME, it may already be live on the channel: ask the user to check the channel and confirm before re-queuing it, and prefer postsider_retry_failed_posts for group retries.',
       inputSchema: {
         postId: nonEmptyId.describe('Post id.'),
         status: z
