@@ -338,6 +338,10 @@ export class PostsRepository {
         group: true,
         creationMethod: true,
         image: true,
+        errorCategory: true,
+        errorRetryable: true,
+        publishAttempts: true,
+        lastPublishAttemptAt: true,
         tags: {
           select: {
             tag: true,

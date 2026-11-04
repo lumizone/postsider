@@ -22,6 +22,8 @@ export const PUBLIC_WEBHOOK_EVENT_SAMPLES: Record<
     postId: 'post_example',
     error: 'Provider rejected the post',
     post: { id: 'post_example', state: 'ERROR' },
+    errorCategory: 'RATE_LIMITED',
+    errorRetryable: true,
   },
   'approval.requested': {
     approvalId: 'approval_example',

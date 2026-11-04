@@ -15,7 +15,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { CustomFileValidationPipe } from '@postsider/nestjs-libraries/upload/custom.upload.validation';
-import { ApiHeader, ApiTags } from '@nestjs/swagger';
+import {
+  ApiExtraModels,
+  ApiHeader,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
+import { PublicPostFailureFieldsDto } from '@postsider/nestjs-libraries/dtos/posts/public-post-failure.dto';
 import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
 import { Organization } from '@prisma/client';
 import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
@@ -75,6 +81,7 @@ import {
 } from '@postsider/nestjs-libraries/upload/remote.response';
 
 @ApiTags('Public API')
+@ApiExtraModels(PublicPostFailureFieldsDto)
 @ApiHeader({
   name: 'Authorization',
   required: true,
@@ -270,6 +277,11 @@ export class PublicIntegrationsController {
 
   @Get('/posts')
   @RequirePublicApiScopes('posts:read')
+  @ApiOperation({
+    summary: 'List posts',
+    description:
+      'Returns posts in a date range. Each post row includes errorCategory, errorRetryable, publishAttempts and lastPublishAttemptAt. UNKNOWN_OUTCOME means the platform may have published the post: check the channel before retrying.',
+  })
   async getPosts(
     @GetOrgFromRequest() org: Organization,
     @Query() query: GetPostsDto,
@@ -343,6 +355,11 @@ export class PublicIntegrationsController {
 
   @Get('/posts/:id')
   @RequirePublicApiScopes('posts:read')
+  @ApiOperation({
+    summary: 'Get a post',
+    description:
+      'Returns the post group. Each post row includes errorCategory (AUTH_EXPIRED, PERMISSION_MISSING, RATE_LIMITED, INVALID_CONTENT, PROVIDER_UNAVAILABLE, UNKNOWN_OUTCOME, UNKNOWN or null), errorRetryable, publishAttempts and lastPublishAttemptAt. UNKNOWN_OUTCOME means the platform may have published the post: check the channel before retrying.',
+  })
   async getPost(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string
