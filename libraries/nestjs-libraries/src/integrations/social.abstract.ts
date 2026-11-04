@@ -3,6 +3,7 @@ import { Integration } from '@prisma/client';
 import { ApplicationFailure } from '@temporalio/activity';
 import { readOrFetch } from '@postsider/helpers/utils/read.or.fetch';
 import sharp from 'sharp';
+import { BadBodyKind, isPreConnectionError } from './publish-error.classifier';
 
 export type ValidityMedia = {
   path: string;
@@ -29,12 +30,19 @@ export class RefreshToken extends ApplicationFailure {
 }
 
 export class BadBody extends ApplicationFailure {
-  constructor(identifier: string, json: string, body: BodyInit, message = '') {
+  constructor(
+    identifier: string,
+    json: string,
+    body: BodyInit,
+    message = '',
+    kind?: BadBodyKind
+  ) {
     super(message, 'bad_body', true, [
       {
         identifier,
         json,
         body,
+        ...(kind ? { kind } : {}),
       },
     ]);
   }
@@ -164,11 +172,12 @@ export abstract class SocialAbstract {
     ignoreConcurrency?: boolean
   ) {
     let globalErr = {};
+    let handle: ReturnType<SocialAbstract['handleErrors']>;
     let value: any;
     try {
       value = await func();
     } catch (err) {
-      const handle = this.handleErrors(safeStringify(err), 200);
+      handle = this.handleErrors(safeStringify(err), 200);
       value = { err: true, value: 'Unknown Error', ...(handle || {}) };
       globalErr = err as any;
     }
@@ -182,7 +191,23 @@ export abstract class SocialAbstract {
           value.value || ''
         );
       }
-      throw new BadBody('', safeStringify(globalErr), {} as any, value.value || '');
+      const innerKind = (globalErr as any)?.details?.[0]?.kind as
+        | BadBodyKind
+        | undefined;
+      const kind =
+        innerKind ??
+        (isPreConnectionError(globalErr)
+          ? 'pre_connection'
+          : !handle && typeof (globalErr as any)?.type !== 'string'
+          ? 'unknown_outcome'
+          : undefined);
+      throw new BadBody(
+        '',
+        safeStringify(globalErr),
+        {} as any,
+        value.value || '',
+        kind
+      );
     }
 
     return value;
@@ -193,7 +218,8 @@ export abstract class SocialAbstract {
     options: RequestInit = {},
     identifier = '',
     totalRetries = 0,
-    ignoreConcurrency = false
+    ignoreConcurrency = false,
+    lastRetry?: 'rate_limit' | 'server_error'
   ): Promise<Response> {
     const request = await fetch(url, options);
 
@@ -202,7 +228,17 @@ export abstract class SocialAbstract {
     }
 
     if (totalRetries > 2) {
-      throw new BadBody(identifier, '{}', options.body || '{}');
+      throw new BadBody(
+        identifier,
+        '{}',
+        options.body || '{}',
+        '',
+        lastRetry === 'rate_limit'
+          ? 'rate_limited'
+          : lastRetry === 'server_error'
+          ? 'provider_unavailable'
+          : undefined
+      );
     }
 
     let json = '{}';
@@ -220,13 +256,18 @@ export abstract class SocialAbstract {
       json.includes('rate_limit_exceeded') ||
       json.includes('Rate limit')
     ) {
+      const isRateLimit =
+        request.status === 429 ||
+        json.includes('rate_limit_exceeded') ||
+        json.includes('Rate limit');
       await timer(5000);
       return this.fetch(
         url,
         options,
         identifier,
         totalRetries + 1,
-        ignoreConcurrency
+        ignoreConcurrency,
+        isRateLimit ? 'rate_limit' : 'server_error'
       );
     }
 
@@ -237,7 +278,8 @@ export abstract class SocialAbstract {
         options,
         identifier,
         totalRetries + 1,
-        ignoreConcurrency
+        ignoreConcurrency,
+        undefined
       );
     }
 
@@ -258,7 +300,8 @@ export abstract class SocialAbstract {
       identifier,
       json,
       options.body!,
-      handleError?.value || 'Unknown Error'
+      handleError?.value || 'Unknown Error',
+      request.status >= 500 ? 'provider_unavailable' : undefined
     );
   }
 
