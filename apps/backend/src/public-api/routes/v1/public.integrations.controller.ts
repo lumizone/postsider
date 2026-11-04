@@ -397,7 +397,7 @@ export class PublicIntegrationsController {
   @ApiOperation({
     summary: 'List post activity',
     description:
-      'Audit trail of a post group, newest first, including after deletion. Events: post.created, post.updated, post.deleted, post.status_changed, post.approval_requested, post.approval_resolved, post.published, post.failed, post.retry_requested. Metadata never contains post content.',
+      'Audit trail of a post group, newest first, including after deletion. Events: post.created, post.updated, post.deleted, post.status_changed, post.approval_requested, post.approval_resolved, post.published, post.failed, post.retry_requested, post.policy_evaluated. Metadata never contains post content.',
   })
   @ApiOkResponse({ type: PublicAuditEventsResponseDto })
   async getPostActivity(

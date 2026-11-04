@@ -13,7 +13,7 @@ import {
 } from '@postsider/nestjs-libraries/actor/post-actor';
 import { AUTOMATION_ACTOR_TYPES, evaluatePolicies, ruleApplies } from '@postsider/nestjs-libraries/policies/policy-evaluator';
 import { validateConditionParams } from '@postsider/nestjs-libraries/policies/policy-params';
-import { deriveMediaTypeFromPath, htmlToPolicyText } from '@postsider/nestjs-libraries/policies/policy-text';
+import { PolicyInputTooLargeError, deriveMediaTypeFromPath, htmlToPolicyText } from '@postsider/nestjs-libraries/policies/policy-text';
 import type {
   CapParams,
   PolicyContext,
@@ -57,6 +57,9 @@ type DraftBody = {
 };
 
 const MAX_AUDITED_RULES = 5;
+const MAX_AUDITED_NAMES_CHARS = 190;
+/** Longest thread chain evaluated; longer chains fail closed. */
+export const MAX_THREAD_DEPTH = 100;
 const EFFECT_RANK = { ALLOW: 0, REQUIRE_APPROVAL: 1, BLOCK: 2 } as const;
 
 const ACTION_BY_TYPE: Record<DraftBody['type'], PostActionName> = {
@@ -83,6 +86,20 @@ const pathsOfStoredImage = (image: unknown): string[] => {
   } catch {
     return [];
   }
+};
+
+/** Whole names only, within the audit metadata string limit; an ellipsis marks omissions. */
+const joinNames = (names: string[]): string => {
+  let out = '';
+  for (let i = 0; i < names.length; i++) {
+    const next = out ? `${out} | ${names[i]}` : names[i];
+    if (next.length > MAX_AUDITED_NAMES_CHARS) {
+      if (!out) return `${names[i].slice(0, MAX_AUDITED_NAMES_CHARS - 3)}...`;
+      return `${out} | ...`;
+    }
+    out = next;
+  }
+  return out;
 };
 
 const uniqueMediaTypes = (paths: string[]) => [...new Set(paths.map(deriveMediaTypeFromPath))];
@@ -169,7 +186,7 @@ export class PolicyEvaluationService {
     const targets: PolicyTarget[] = [];
     for (const post of body.posts) {
       const integration = await this._integrations.getIntegrationById(orgId, post.integration.id);
-      if (!integration) throw new NotFoundException({ msg: 'Channel not found' });
+      if (!integration || integration.deletedAt) throw new NotFoundException({ msg: 'Channel not found' });
       const values = post.value ?? [];
       targets.push({
         integrationId: integration.id,
@@ -197,7 +214,7 @@ export class PolicyEvaluationService {
   ): Promise<PolicyTarget | null> {
     const post: any = await this._posts.getPost(postId, true, orgId);
     if (!post || !post.integration) return null;
-    const children: any[] = (post.childrenPost ?? []).filter((c: any) => !c.deletedAt);
+    const children = await this.threadAfter(orgId, post);
 
     const actors: ActorView[] = [];
     for (const prefix of ['createdBy', 'lastModifiedBy'] as const) {
@@ -244,9 +261,32 @@ export class PolicyEvaluationService {
         phase,
         matchedCount: outcome.matched.length,
         ruleIds: listed.map((m) => m.ruleId).join(','),
-        ruleNames: listed.map((m) => m.name).join(' | '),
+        ruleNames: joinNames(listed.map((m) => m.name)),
       },
     });
+  }
+
+  /**
+   * Threads are stored as a chain (value N's parent is value N-1), so the whole
+   * chain is walked, like PostsService.getPostsRecursively. Deleted rows end the walk.
+   */
+  private async threadAfter(orgId: string, root: any): Promise<any[]> {
+    const chain: any[] = [];
+    let current = root;
+    for (;;) {
+      const next = (current.childrenPost ?? []).find((c: any) => !c.deletedAt);
+      if (!next) return chain;
+      if (chain.length >= MAX_THREAD_DEPTH) {
+        throw new PolicyInputTooLargeError(
+          chain.length,
+          `Thread longer than ${MAX_THREAD_DEPTH} values`
+        );
+      }
+      const loaded: any = await this._posts.getPost(next.id, false, orgId);
+      if (!loaded) return chain;
+      chain.push(loaded);
+      current = loaded;
+    }
   }
 
   private resolveDate(body: DraftBody): Date {

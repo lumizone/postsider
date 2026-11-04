@@ -142,6 +142,21 @@ describe('PolicyEvaluationService.evaluateTargets', () => {
       expect(out.effect).toBe('ALLOW');
     });
 
+    it('ignores earlier DRAFT and USER targets of the request', async () => {
+      const { service, posts } = make([cap()]);
+      posts.countAutomationPostsInRange.mockResolvedValue(1);
+      const out = await service.evaluateTargets(
+        'org',
+        [
+          target({ action: 'DRAFT' }),
+          target({ actors: [{ type: 'USER', userId: 'u1' }] }),
+          target(),
+        ],
+        'write'
+      );
+      expect(out.channels[2].effect).toBe('ALLOW');
+    });
+
     it('skips counting for a cap rule that does not apply to the target', async () => {
       const { service, posts } = make([
         { ...cap(), appliesToIntegrationIds: ['other'] },
@@ -244,6 +259,20 @@ describe('PolicyEvaluationService.targetsFromDraftBody', () => {
     );
   });
 
+  it('rejects a soft-deleted channel with 404', async () => {
+    const { service, integrations } = make();
+    integrations.getIntegrationById.mockResolvedValue({ id: 'i1', providerIdentifier: 'x', deletedAt: new Date() });
+    await expect(service.targetsFromDraftBody('org', body(), actor)).rejects.toBeInstanceOf(
+      NotFoundException
+    );
+  });
+
+  it('uses an explicit draft date', async () => {
+    const { service } = make();
+    const [t] = await service.targetsFromDraftBody('org', body({ type: 'draft' }), actor);
+    expect(t.scheduledAt.toISOString()).toBe('2026-03-10T12:00:00.000Z');
+  });
+
   it('rejects an invalid date with 400', async () => {
     const { service } = make();
     await expect(
@@ -275,7 +304,7 @@ describe('PolicyEvaluationService.targetFromStoredPost', () => {
     firstComment: null,
     image: JSON.stringify([{ id: 'm', path: 'https://c/v.mov' }]),
     publishDate: new Date('2026-03-10T12:00:00Z'),
-    childrenPost: [{ content: '<p>child</p>', image: null, deletedAt: null }],
+    childrenPost: [],
     createdByType: 'API_KEY',
     createdByApiKeyId: 'k1',
     createdByUserId: null,
@@ -289,7 +318,11 @@ describe('PolicyEvaluationService.targetFromStoredPost', () => {
 
   it('builds two actor views for two different actors', async () => {
     const { service, posts } = make();
-    posts.getPost.mockResolvedValue(stored());
+    posts.getPost.mockImplementation(async (id: string) =>
+      id === 'p1'
+        ? stored({ childrenPost: [{ id: 'c1', deletedAt: null }] })
+        : { id: 'c1', content: '<p>child</p>', image: null, childrenPost: [] }
+    );
     const t = await service.targetFromStoredPost('org', 'p1', { action: 'PUBLISH_NOW', approved: true });
     expect(posts.getPost).toHaveBeenCalledWith('p1', true, 'org');
     expect(t!.actors).toEqual([
@@ -317,6 +350,64 @@ describe('PolicyEvaluationService.targetFromStoredPost', () => {
     );
     const t = await service.targetFromStoredPost('org', 'p1', { action: 'SCHEDULE', approved: false });
     expect(t!.actors).toEqual([{ type: 'API_KEY', apiKeyId: 'k1' }]);
+  });
+
+  it('walks a chained thread to the last value', async () => {
+    const { service, posts } = make();
+    const root = stored({ childrenPost: [{ id: 'c2', deletedAt: null }] });
+    const c2 = { id: 'c2', content: '<p>two</p>', image: null, childrenPost: [{ id: 'c3', deletedAt: null }] };
+    const c3 = {
+      id: 'c3',
+      content: '<p>badword https://l.com</p>',
+      image: JSON.stringify([{ path: 'x.mp4' }]),
+      childrenPost: [],
+    };
+    posts.getPost.mockImplementation(async (id: string) => ({ p1: root, c2, c3 })[id] ?? null);
+    const t = await service.targetFromStoredPost('org', 'p1', { action: 'SCHEDULE', approved: false });
+    expect(t!.text).toContain('two');
+    expect(t!.text).toContain('badword');
+    expect(t!.text).toContain('https://l.com');
+    expect(t!.mediaTypes.sort()).toEqual(['video']);
+    expect(posts.getPost).toHaveBeenCalledWith('c3', false, 'org');
+  });
+
+  it('ignores deleted children and stops when a child cannot be loaded', async () => {
+    const { service, posts } = make();
+    posts.getPost.mockImplementation(async (id: string) =>
+      id === 'p1'
+        ? stored({
+            childrenPost: [
+              { id: 'gone', deletedAt: new Date() },
+              { id: 'c2', deletedAt: null },
+            ],
+          })
+        : id === 'c2'
+          ? { id: 'c2', content: 'live child', image: null, childrenPost: [{ id: 'c3', deletedAt: null }] }
+          : null
+    );
+    const t = await service.targetFromStoredPost('org', 'p1', { action: 'SCHEDULE', approved: false });
+    expect(t!.text).toContain('live child');
+    expect(posts.getPost).not.toHaveBeenCalledWith('gone', false, 'org');
+  });
+
+  it('fails closed on an endless or oversized chain', async () => {
+    const { service, posts } = make();
+    posts.getPost.mockImplementation(async (id: string) =>
+      id === 'p1'
+        ? stored({ childrenPost: [{ id: 'n', deletedAt: null }] })
+        : { id: 'n', content: 'a', image: null, childrenPost: [{ id: 'n', deletedAt: null }] }
+    );
+    await expect(
+      service.targetFromStoredPost('org', 'p1', { action: 'SCHEDULE', approved: false })
+    ).rejects.toBeInstanceOf(PolicyInputTooLargeError);
+  });
+
+  it('returns null when the integration is missing', async () => {
+    const { service, posts } = make();
+    posts.getPost.mockResolvedValue(stored({ integration: null }));
+    expect(
+      await service.targetFromStoredPost('org', 'p1', { action: 'SCHEDULE', approved: false })
+    ).toBeNull();
   });
 
   it('returns null for a missing post', async () => {
@@ -378,6 +469,16 @@ describe('PolicyEvaluationService.recordOutcome', () => {
     const md = audit.logResourceEvent.mock.calls[0][0].metadata;
     expect(md.matchedCount).toBe(7);
     expect(md.ruleIds.split(',')).toEqual(['r1', 'r2', 'r3', 'r4', 'r5']);
+  });
+
+  it('keeps whole rule names within the metadata limit', async () => {
+    const { service, audit } = make();
+    const o = outcome(5);
+    o.matched.forEach((m) => (m.name = 'N'.repeat(120)));
+    await service.recordOutcome('org', o, 'write', { postId: 'p1' });
+    const names: string = audit.logResourceEvent.mock.calls[0][0].metadata.ruleNames;
+    expect(names.length).toBeLessThanOrEqual(200);
+    expect(names).toBe(`${'N'.repeat(120)} | ...`);
   });
 
   it('never throws when the audit write fails', async () => {
