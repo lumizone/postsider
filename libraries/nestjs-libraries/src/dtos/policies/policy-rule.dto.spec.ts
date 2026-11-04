@@ -22,6 +22,7 @@ describe('CreatePolicyRuleDto', () => {
     expect(await errorsFor({ name: '' })).toContain('name');
     expect(await errorsFor({ name: 'a'.repeat(121) })).toContain('name');
     expect(await errorsFor({ name: 'a'.repeat(120) })).toEqual([]);
+    expect(await errorsFor({ name: '   ' })).toContain('name');
   });
 
   it('rejects priority outside 0..1000 and non integers, allows omission', async () => {

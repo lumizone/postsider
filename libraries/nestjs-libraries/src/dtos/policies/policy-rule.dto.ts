@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayUnique,
@@ -27,6 +28,7 @@ import {
 
 export class CreatePolicyRuleDto {
   @ApiProperty({ example: 'Links need approval' })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @Length(1, 120)
   name: string;

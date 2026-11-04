@@ -194,7 +194,7 @@ describe('PolicyRulesService.update', () => {
     expect(repo.update).not.toHaveBeenCalled();
   });
 
-  it('revalidates existing params when only the name changes', async () => {
+  it('writes only the changed field when just the name changes', async () => {
     const { service, repo } = make();
     repo.getById.mockResolvedValue(
       row({ condition: 'CONTAINS_WORDS', conditionParams: { words: ['a'] } })
@@ -231,6 +231,70 @@ describe('PolicyRulesService.update', () => {
     repo.getById.mockResolvedValue(row());
     repo.update.mockResolvedValue(null);
     await expect(service.update('org-1', 'r1', { name: 'n' } as any)).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('PolicyRulesService.update edge cases', () => {
+  it('lets a rule naming a deleted channel and key be disabled', async () => {
+    const { service, repo, integrations, orgRepo } = make();
+    repo.getById.mockResolvedValue(
+      row({ appliesToIntegrationIds: ['gone'], appliesToApiKeyIds: ['revoked'] })
+    );
+    await service.update('org-1', 'r1', { enabled: false } as any);
+    expect(repo.update).toHaveBeenCalledWith('org-1', 'r1', { enabled: false });
+    expect(integrations.getIntegrationsList).not.toHaveBeenCalled();
+    expect(orgRepo.listApiKeys).not.toHaveBeenCalled();
+  });
+
+  it('still verifies newly added ids only', async () => {
+    const { service, repo } = make();
+    repo.getById.mockResolvedValue(row({ appliesToIntegrationIds: ['gone'] }));
+    const res = await badRequest(
+      service.update('org-1', 'r1', { appliesToIntegrationIds: ['gone', 'foreign'] } as any)
+    );
+    expect(JSON.stringify(res)).toContain('foreign');
+    expect(JSON.stringify(res)).not.toContain('gone');
+  });
+
+  it('rejects explicit null fields with 400 before writing', async () => {
+    const { service, repo } = make();
+    repo.getById.mockResolvedValue(row());
+    for (const key of ['name', 'enabled', 'priority', 'effect', 'condition', 'appliesToActorTypes']) {
+      const res = await badRequest(service.update('org-1', 'r1', { [key]: null } as any));
+      expect(res.field).toBe(key);
+    }
+    expect(repo.update).not.toHaveBeenCalled();
+  });
+
+  it('resets params to {} when the condition changes to a param-less one', async () => {
+    const { service, repo } = make();
+    repo.getById.mockResolvedValue(
+      row({ condition: 'CONTAINS_WORDS', conditionParams: { words: ['a'] } })
+    );
+    await service.update('org-1', 'r1', { condition: 'ALWAYS' } as any);
+    expect(repo.update).toHaveBeenCalledWith('org-1', 'r1', { condition: 'ALWAYS', conditionParams: {} });
+  });
+
+  it('validates conditionParams-only updates against the existing condition', async () => {
+    const { service, repo } = make();
+    repo.getById.mockResolvedValue(
+      row({ condition: 'CONTAINS_WORDS', conditionParams: { words: ['a'] } })
+    );
+    const res = await badRequest(
+      service.update('org-1', 'r1', { conditionParams: { words: [] } } as any)
+    );
+    expect(res.field).toBe('conditionParams.words');
+    await service.update('org-1', 'r1', { conditionParams: { words: [' b '] } } as any);
+    expect(repo.update).toHaveBeenCalledWith('org-1', 'r1', {
+      condition: 'CONTAINS_WORDS',
+      conditionParams: { words: ['b'] },
+    });
+  });
+
+  it('drops providers that are empty after trimming', async () => {
+    const { service, repo } = make();
+    await service.create('org-1', input({ appliesToProviders: ['  ', 'X'] }) as any);
+    expect(repo.create.mock.calls[0][1].appliesToProviders).toEqual(['x']);
   });
 });
 

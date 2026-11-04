@@ -51,12 +51,14 @@ export class PolicyRulesService {
     const enabled = dto.enabled ?? true;
 
     const conditionParams = this.checkParams(dto.condition, dto.conditionParams);
-    await this.checkFilters(orgId, {
-      appliesToActorTypes,
-      appliesToApiKeyIds,
-      appliesToIntegrationIds,
-    });
+    await this.checkFilters(
+      orgId,
+      { appliesToActorTypes, appliesToApiKeyIds, appliesToIntegrationIds },
+      { integrationIds: appliesToIntegrationIds, apiKeyIds: appliesToApiKeyIds }
+    );
 
+    // Soft caps: count-then-write is not atomic, so concurrent requests may
+    // overshoot by the number of requests in flight. Accepted for admin-only writes.
     if ((await this._rules.countNonDeleted(orgId)) >= MAX_STORED_RULES) throw limitReached();
     if (enabled && (await this._rules.countEnabled(orgId)) >= MAX_ENABLED_RULES) {
       throw limitReached();
@@ -79,6 +81,11 @@ export class PolicyRulesService {
 
   async update(orgId: string, id: string, dto: UpdatePolicyRuleDto): Promise<PublicPolicyRule> {
     const existing = await this.mustGet(orgId, id);
+    for (const [key, value] of Object.entries(dto)) {
+      if (value === null) {
+        throw new BadRequestException({ msg: `${key} must not be null`, field: key });
+      }
+    }
     const data: Record<string, unknown> = {};
 
     for (const key of [
@@ -109,11 +116,22 @@ export class PolicyRulesService {
       data.conditionParams = this.checkParams(condition, rawParams);
     }
 
-    await this.checkFilters(orgId, {
-      appliesToActorTypes: (dto.appliesToActorTypes ?? existing.appliesToActorTypes) as PostActorType[],
-      appliesToApiKeyIds: dto.appliesToApiKeyIds ?? existing.appliesToApiKeyIds,
-      appliesToIntegrationIds: dto.appliesToIntegrationIds ?? existing.appliesToIntegrationIds,
-    });
+    // Ownership is only checked for ids this request adds, so a rule that names
+    // a since-deleted channel or revoked key can still be edited or disabled.
+    const added = (next: string[] | undefined, old: string[]) =>
+      (next ?? []).filter((x) => !old.includes(x));
+    await this.checkFilters(
+      orgId,
+      {
+        appliesToActorTypes: (dto.appliesToActorTypes ?? existing.appliesToActorTypes) as PostActorType[],
+        appliesToApiKeyIds: dto.appliesToApiKeyIds ?? existing.appliesToApiKeyIds,
+        appliesToIntegrationIds: dto.appliesToIntegrationIds ?? existing.appliesToIntegrationIds,
+      },
+      {
+        integrationIds: added(dto.appliesToIntegrationIds, existing.appliesToIntegrationIds),
+        apiKeyIds: added(dto.appliesToApiKeyIds, existing.appliesToApiKeyIds),
+      }
+    );
 
     if (
       dto.enabled === true &&
@@ -182,7 +200,8 @@ export class PolicyRulesService {
       appliesToActorTypes: PostActorType[];
       appliesToApiKeyIds: string[];
       appliesToIntegrationIds: string[];
-    }
+    },
+    toVerify: { integrationIds: string[]; apiKeyIds: string[] }
   ) {
     if (
       f.appliesToApiKeyIds.length > 0 &&
@@ -195,9 +214,9 @@ export class PolicyRulesService {
       });
     }
 
-    if (f.appliesToIntegrationIds.length > 0) {
+    if (toVerify.integrationIds.length > 0) {
       const own = new Set((await this._integrations.getIntegrationsList(orgId)).map((i) => i.id));
-      const foreign = f.appliesToIntegrationIds.filter((id) => !own.has(id));
+      const foreign = toVerify.integrationIds.filter((id) => !own.has(id));
       if (foreign.length > 0) {
         throw new BadRequestException({
           msg: `Unknown channel id(s) for this organization: ${foreign.join(', ')}`,
@@ -206,11 +225,11 @@ export class PolicyRulesService {
       }
     }
 
-    if (f.appliesToApiKeyIds.length > 0) {
+    if (toVerify.apiKeyIds.length > 0) {
       const own = new Set(
         ((await this._organizations.listApiKeys(orgId)) as Array<{ id: string }>).map((k) => k.id)
       );
-      const foreign = f.appliesToApiKeyIds.filter((id) => !own.has(id));
+      const foreign = toVerify.apiKeyIds.filter((id) => !own.has(id));
       if (foreign.length > 0) {
         throw new BadRequestException({
           msg: `Unknown API key id(s) for this organization: ${foreign.join(', ')}`,
