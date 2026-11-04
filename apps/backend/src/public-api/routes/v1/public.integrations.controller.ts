@@ -74,6 +74,7 @@ import { PostValidationException } from '@postsider/backend/api/routes/posts.val
 import { timer } from '@postsider/helpers/utils/timer';
 import { ioRedis } from '@postsider/nestjs-libraries/redis/redis.service';
 import { PublicApiIdempotencyService } from '@postsider/nestjs-libraries/database/prisma/idempotency/public-api-idempotency.service';
+import { parseProvenance } from '@postsider/nestjs-libraries/actor/post-provenance';
 import { AgencyOverviewService } from '@postsider/nestjs-libraries/database/prisma/agency/agency-overview.service';
 import { CustomerReportService } from '@postsider/nestjs-libraries/database/prisma/agency/customer-report.service';
 import {
@@ -375,9 +376,13 @@ export class PublicIntegrationsController {
   async createPost(
     @GetOrgFromRequest() org: Organization,
     @Body() rawBody: any,
+    @Headers() headers: Record<string, unknown>,
     @Headers('idempotency-key') idempotencyKey?: string
   ) {
     Sentry.metrics.count('public_api-request', 1);
+
+    // Claimed provenance is validated before any work or idempotency claim.
+    const provenance = parseProvenance(rawBody?.provenance, headers);
 
     const body = await this._postsService.mapTypeToPost(
       rawBody,
@@ -403,7 +408,9 @@ export class PublicIntegrationsController {
     if (claim?.kind === 'replay') return claim.response;
 
     try {
-      const result = await this._postsService.createPost(org.id, body, creationMethod);
+      const result = await this._postsService.createPost(org.id, body, creationMethod, {
+        provenance,
+      });
       if (claim?.kind === 'new') await this._idempotency.complete(claim.id, result);
       return result;
     } catch (error) {
@@ -491,9 +498,12 @@ export class PublicIntegrationsController {
   async updatePost(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string,
-    @Body() rawBody: any
+    @Body() rawBody: any,
+    @Headers() headers: Record<string, unknown>
   ) {
     Sentry.metrics.count('public_api-request', 1);
+
+    const provenance = parseProvenance(rawBody?.provenance, headers);
 
     const patch = {
       content:
@@ -535,7 +545,7 @@ export class PublicIntegrationsController {
       state === 'DRAFT' ? 'draft' : 'update'
     );
 
-    return this._postsService.createPost(org.id, body, 'API');
+    return this._postsService.createPost(org.id, body, 'API', { provenance });
   }
 
   @Delete('/posts/:id')

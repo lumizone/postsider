@@ -74,6 +74,7 @@ import { OrganizationRepository } from '@postsider/nestjs-libraries/database/pri
 import { PublishingPausedException } from '@postsider/nestjs-libraries/services/publishing.paused.exception';
 import { NotificationService } from '@postsider/nestjs-libraries/database/prisma/notifications/notification.service';
 import { FunnelAttributionService } from '@postsider/nestjs-libraries/database/prisma/attribution/funnel-attribution.service';
+import { PostProvenance } from '@postsider/nestjs-libraries/actor/post-provenance';
 
 type PostWithConditionals = Post & {
   integration?: Integration;
@@ -1343,7 +1344,8 @@ export class PostsService {
   async createPost(
     orgId: string,
     body: CreatePostDto,
-    creationMethod: CreationMethod
+    creationMethod: CreationMethod,
+    options: { provenance?: PostProvenance } = {}
   ): Promise<any[]> {
     if (
       body.type === 'schedule' &&
@@ -1450,7 +1452,8 @@ export class PostsService {
           post,
           body.tags,
           creationMethod,
-          body.inter
+          body.inter,
+          options.provenance
         );
 
         if (!posts?.length) {

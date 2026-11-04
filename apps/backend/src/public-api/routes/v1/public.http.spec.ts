@@ -159,7 +159,7 @@ describe('Public API over HTTP', () => {
       });
       // The type stays what buildPostUpdate chose (draft) rather than being forced.
       expect(postsService.validatePosts.mock.calls[0][2]).toBe('draft');
-      expect(postsService.createPost).toHaveBeenCalledWith('org-1', dto, 'API');
+      expect(postsService.createPost).toHaveBeenCalledWith('org-1', dto, 'API', { provenance: {} });
     });
 
     it('reports a per-channel validation failure with its text', async () => {

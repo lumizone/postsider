@@ -27,32 +27,15 @@ import {
   SYSTEM_ACTOR,
 } from '@postsider/nestjs-libraries/actor/post-actor';
 import { currentActor } from '@postsider/nestjs-libraries/actor/actor-context';
+import {
+  PostProvenance,
+  provenanceToColumns,
+} from '@postsider/nestjs-libraries/actor/post-provenance';
 import { PublishErrorCategoryName } from '@postsider/nestjs-libraries/integrations/publish-error.classifier';
 
 export interface PostErrorMeta {
   category: PublishErrorCategoryName;
   retryable: boolean;
-}
-
-const PROVENANCE_KEYS = [
-  'agentName',
-  'workflowId',
-  'runId',
-  'externalRef',
-  'source',
-] as const;
-
-// Only the five known provenance names, string values only; nothing else can
-// reach the row data. Task 5 replaces this with provenanceToColumns.
-function pickProvenance(input?: Partial<Record<string, unknown>>) {
-  const out: Partial<Record<(typeof PROVENANCE_KEYS)[number], string>> = {};
-  for (const key of PROVENANCE_KEYS) {
-    const v = input?.[key];
-    if (typeof v === 'string') {
-      out[key] = v;
-    }
-  }
-  return out;
 }
 
 const CLEARED_ERROR_FIELDS = {
@@ -831,16 +814,11 @@ export class PostsRepository {
     tags: { value: string; label: string }[],
     creationMethod: CreationMethod,
     inter?: number,
-    provenance?: Partial<
-      Record<
-        'agentName' | 'workflowId' | 'runId' | 'externalRef' | 'source',
-        string
-      >
-    >
+    provenance?: PostProvenance
   ) {
     const actor = currentActor();
     const createdIds: string[] = [];
-    const provenanceColumns = pickProvenance(provenance);
+    const provenanceColumns = provenanceToColumns(provenance);
     const posts: Post[] = [];
     const uuid = uuidv4();
 
