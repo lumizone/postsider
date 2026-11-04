@@ -7,6 +7,12 @@ import {
   resolveGuestReview,
   type GuestReviewPost,
 } from "@/lib/guest-review-api";
+import {
+  GUEST_EMAIL_MAX,
+  GUEST_NAME_MAX,
+  validateGuestIdentity,
+  type GuestIdentityError,
+} from "@/lib/guest-review-identity";
 
 const primaryBtn: React.CSSProperties = {
   padding: "10px 18px",
@@ -18,6 +24,24 @@ const primaryBtn: React.CSSProperties = {
   fontWeight: 600,
   cursor: "pointer",
 };
+const inputStyle: React.CSSProperties = {
+  borderRadius: 8,
+  border: "1px solid var(--line-soft)",
+  background: "var(--bg)",
+  color: "var(--fg)",
+  padding: "9px 10px",
+  fontSize: 14,
+};
+const fieldLabel: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 600,
+  color: "var(--fg)",
+};
+const fieldError: React.CSSProperties = {
+  fontSize: 12,
+  color: "var(--danger)",
+};
+
 const ghostBtn: React.CSSProperties = {
   padding: "10px 18px",
   borderRadius: 8,
@@ -48,6 +72,9 @@ export function GuestReviewView({ token }: { token: string }) {
   const [note, setNote] = useState("");
   const [rejecting, setRejecting] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [guestName, setGuestName] = useState("");
+  const [guestEmail, setGuestEmail] = useState("");
+  const [identityError, setIdentityError] = useState<GuestIdentityError | null>(null);
 
   useEffect(() => {
     getGuestReview(token)
@@ -60,10 +87,21 @@ export function GuestReviewView({ token }: { token: string }) {
 
   const act = async (action: "approve" | "reject") => {
     if (busy) return;
+    const identity = validateGuestIdentity(guestName, guestEmail);
+    if (!identity.ok) {
+      setIdentityError(identity.error);
+      return;
+    }
+    setIdentityError(null);
     setBusy(true);
     setError(null);
     try {
-      await resolveGuestReview(token, action, action === "reject" ? note : undefined);
+      await resolveGuestReview(
+        token,
+        action,
+        { name: identity.name, email: identity.email },
+        action === "reject" ? note : undefined,
+      );
       setResolved(action);
     } catch (e) {
       setError(e instanceof Error ? e.message : t("guestReview.actionError"));
@@ -73,6 +111,14 @@ export function GuestReviewView({ token }: { token: string }) {
   };
 
   const mediaUrls = parseMediaUrls(post?.image);
+  const nameError =
+    identityError === "nameRequired" || identityError === "nameTooLong" ? identityError : null;
+  const emailError =
+    identityError === "emailRequired" ||
+    identityError === "emailInvalid" ||
+    identityError === "emailTooLong"
+      ? identityError
+      : null;
 
   return (
     <div style={{ maxWidth: 560, margin: "0 auto", padding: "48px 20px" }}>
@@ -133,6 +179,54 @@ export function GuestReviewView({ token }: { token: string }) {
               {error}
             </div>
           )}
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <label htmlFor="guest-review-name" style={fieldLabel}>
+                {t("guestReview.nameLabel")}
+              </label>
+              <input
+                id="guest-review-name"
+                type="text"
+                required
+                autoComplete="name"
+                maxLength={GUEST_NAME_MAX + 40}
+                value={guestName}
+                onChange={(e) => setGuestName(e.target.value)}
+                aria-invalid={nameError ? true : undefined}
+                aria-describedby={nameError ? "guest-review-name-error" : undefined}
+                style={inputStyle}
+              />
+              {nameError && (
+                <div id="guest-review-name-error" role="alert" style={fieldError}>
+                  {t(`guestReview.${nameError}`)}
+                </div>
+              )}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <label htmlFor="guest-review-email" style={fieldLabel}>
+                {t("guestReview.emailLabel")}
+              </label>
+              <input
+                id="guest-review-email"
+                type="email"
+                required
+                autoComplete="email"
+                maxLength={GUEST_EMAIL_MAX + 40}
+                value={guestEmail}
+                onChange={(e) => setGuestEmail(e.target.value)}
+                aria-invalid={emailError ? true : undefined}
+                aria-describedby={emailError ? "guest-review-email-error" : undefined}
+                style={inputStyle}
+              />
+              {emailError && (
+                <div id="guest-review-email-error" role="alert" style={fieldError}>
+                  {t(`guestReview.${emailError}`)}
+                </div>
+              )}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--muted)" }}>{t("guestReview.identityHint")}</div>
+          </div>
 
           {rejecting ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

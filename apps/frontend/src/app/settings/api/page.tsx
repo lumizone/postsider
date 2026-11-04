@@ -34,6 +34,7 @@ const API_SCOPES = [
   "publishing:write",
   "webhooks:read",
   "webhooks:write",
+  "audit:read",
 ] as const;
 
 // Least-privilege defaults for new UI-generated credentials. Existing keys

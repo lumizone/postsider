@@ -1509,6 +1509,14 @@ const pl = {
     reject: "Odrzuć",
     approvedThanks: "Zaakceptowano, dziękujemy. Post jest już zaplanowany.",
     rejectedThanks: "Odrzucono, dziękujemy za informację zwrotną.",
+    nameLabel: "Twoje imię i nazwisko",
+    emailLabel: "Twój adres e-mail",
+    identityHint: "Zapisujemy, kto podjął tę decyzję.",
+    nameRequired: "Podaj swoje imię i nazwisko.",
+    nameTooLong: "Imię i nazwisko może mieć maksymalnie 120 znaków.",
+    emailRequired: "Podaj swój adres e-mail.",
+    emailInvalid: "Podaj poprawny adres e-mail.",
+    emailTooLong: "Adres e-mail może mieć maksymalnie 254 znaki.",
   },
 };
 
