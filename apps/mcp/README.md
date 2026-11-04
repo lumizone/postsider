@@ -136,7 +136,7 @@ written into the plugin directory.
 
 ## What the agent can do
 
-38 tools (39 on the local stdio server), all prefixed `postsider_`.
+39 tools (40 on the local stdio server), all prefixed `postsider_`.
 
 ### Read
 
@@ -154,6 +154,7 @@ written into the plugin directory.
 | `postsider_find_slot` | Next free queue slot for a channel, in UTC. |
 | `postsider_list_posts` | List posts in a date range, filterable by `state` (e.g. `ERROR`) and channel, paged. |
 | `postsider_get_post` | Full post details, including the publish error if any. |
+| `postsider_get_post_activity` | Who did what to a post and when (verified actor, approvals, publish and retry events), newest first. |
 | `postsider_get_post_missing_fields` | Per-channel validation problems, so they can be fixed before publishing. |
 | `postsider_get_post_analytics` | Analytics for a single post. |
 | `postsider_get_channel_analytics` | Account-level analytics for a channel. |

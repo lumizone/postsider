@@ -349,6 +349,49 @@ describe('PostsiderClient', () => {
       ).toBeUndefined();
     });
 
+    it('identifies itself with X-Postsider-Source: mcp and no agent by default', async () => {
+      fetchMock.mockResolvedValue(mockResponse({ text: '{}' }));
+      const client = new PostsiderClient(apiKey, 'https://api.postsider.com');
+      await client.get('/integrations');
+      const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
+      expect(headers['X-Postsider-Source']).toBe('mcp');
+      expect(headers['X-Postsider-Agent']).toBeUndefined();
+    });
+
+    it.each([
+      ['Claude Desktop', 'Claude Desktop'],
+      ['bad\nnameé', 'badname'],
+      ['  a \t b   c  ', 'a b c'],
+      ['x'.repeat(300), 'x'.repeat(255)],
+    ])('sends a sanitized agent name %j', async (input, expected) => {
+      fetchMock.mockResolvedValue(mockResponse({ text: '{}' }));
+      const client = new PostsiderClient(apiKey, 'https://api.postsider.com');
+      client.setAgentName(input);
+      await client.get('/integrations');
+      const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
+      expect(headers['X-Postsider-Agent']).toBe(expected);
+      expect(headers['X-Postsider-Agent']!.length).toBeLessThanOrEqual(255);
+    });
+
+    it.each([[undefined], ['   '], ['é\n']])('omits the agent header for %j', async (input) => {
+      fetchMock.mockResolvedValue(mockResponse({ text: '{}' }));
+      const client = new PostsiderClient(apiKey, 'https://api.postsider.com');
+      client.setAgentName('first');
+      client.setAgentName(input as string | undefined);
+      await client.get('/integrations');
+      const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
+      expect(headers['X-Postsider-Agent']).toBeUndefined();
+    });
+
+    it('never throws when given a non-string agent name', async () => {
+      fetchMock.mockResolvedValue(mockResponse({ text: '{}' }));
+      const client = new PostsiderClient(apiKey, 'https://api.postsider.com');
+      expect(() => client.setAgentName(42 as unknown as string)).not.toThrow();
+      await client.get('/integrations');
+      const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
+      expect(headers['X-Postsider-Agent']).toBeUndefined();
+    });
+
     it('adds Content-Type and JSON body for write requests', async () => {
       fetchMock.mockResolvedValue(mockResponse({ text: '{"id":"p1"}' }));
       const client = new PostsiderClient(apiKey, 'https://api.postsider.com');

@@ -178,6 +178,15 @@ export function createPostSiderMcpServer(
     }
   );
 
+  // The stdio transport sees `initialize`, so the MCP client name is known. The
+  // scope-guarded HTTP client has no setAgentName: that transport is stateless
+  // and never sees `initialize`, so no agent name is sent there.
+  server.server.oninitialized = () => {
+    const name = server.server.getClientVersion()?.name;
+    const c = client as unknown as { setAgentName?: (n: string | undefined) => void };
+    if (typeof c.setAgentName === 'function') c.setAgentName(name);
+  };
+
   registerPostSiderSkills(server);
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -432,6 +441,35 @@ export function createPostSiderMcpServer(
     async ({ postId }) => {
       try {
         return ok(await client.get(`/posts/${encodeURIComponent(postId)}`));
+      } catch (e) {
+        return fail(e);
+      }
+    }
+  );
+
+  server.registerTool(
+    'postsider_get_post_activity',
+    {
+      title: 'Get post activity',
+      description:
+        'List who did what to a post and when: created, edited, approval requested or decided, published, failed, retried or deleted. Each event shows the verified actor (user, API key, OAuth client or system) and a small metadata object, never post content. Newest first; pass nextCursor back as cursor for older events. Use it to explain how a post reached its current state.',
+      inputSchema: {
+        postId: nonEmptyId.describe('Post id returned by postsider_create_post.'),
+        limit: z.number().int().min(1).max(100).optional().describe('Events per page, 1 to 100.'),
+        cursor: z.string().min(1).max(200).optional().describe('nextCursor from a previous call, for older events.'),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async ({ postId, limit, cursor }) => {
+      try {
+        return ok(
+          await client.get(`/posts/${encodeURIComponent(postId)}/activity`, { limit, cursor })
+        );
       } catch (e) {
         return fail(e);
       }

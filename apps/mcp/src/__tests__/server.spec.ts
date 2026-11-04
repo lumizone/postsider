@@ -210,6 +210,49 @@ describe('createPostSiderMcpServer', () => {
       await mcpClient.close();
     });
 
+    it('sends the MCP client name as X-Postsider-Agent on stdio-style clients', async () => {
+      fetchMock.mockImplementation(async () => new Response('{}', { status: 200 }));
+      const server = createPostSiderMcpServer(new PostsiderClient(apiKey, baseUrl));
+      const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+      const mcpClient = new Client({ name: 'test-agent', version: '1.0.0' });
+      await Promise.all([server.connect(serverTransport), mcpClient.connect(clientTransport)]);
+      await mcpClient.callTool({ name: 'postsider_get_post', arguments: { postId: 'p1' } });
+      const init = fetchMock.mock.calls[0][1] as RequestInit;
+      const headers = init.headers as Record<string, string>;
+      expect(headers['X-Postsider-Agent']).toBe('test-agent');
+      expect(headers['X-Postsider-Source']).toBe('mcp');
+      await mcpClient.close();
+    });
+
+    it('postsider_get_post_activity requests the encoded activity URL with paging', async () => {
+      fetchMock.mockImplementation(async () => new Response('{"events":[]}', { status: 200 }));
+      const mcpClient = await connect();
+      const result = await mcpClient.callTool({
+        name: 'postsider_get_post_activity',
+        arguments: { postId: 'p 1', limit: 10, cursor: 'abc' },
+      });
+      expect(result.isError).toBeFalsy();
+      const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
+      expect(String(url)).toContain('/posts/p%201/activity?limit=10&cursor=abc');
+      expect(init.method).toBe('GET');
+      await mcpClient.close();
+    });
+
+    it.each([0, 101])('postsider_get_post_activity rejects limit %i locally', async (limit) => {
+      const mcpClient = await connect();
+      await expectRefusedLocally(mcpClient, 'postsider_get_post_activity', { postId: 'p1', limit }, 'limit');
+      await mcpClient.close();
+    });
+
+    it('postsider_get_post_activity annotations match the frozen entry and use no dashes', async () => {
+      const mcpClient = await connect();
+      const { tools } = await mcpClient.listTools();
+      const tool = tools.find((t) => t.name === 'postsider_get_post_activity');
+      expect({ ...tool?.annotations }).toMatchObject({ ...EXPECTED_TOOL_ANNOTATIONS['postsider_get_post_activity'] });
+      expect(tool?.description).not.toMatch(/[\u2013\u2014]/);
+      await mcpClient.close();
+    });
+
     it('retries failed posts via POST retry-failed with encoded group, body and idempotency key', async () => {
       fetchMock.mockImplementation(async () => new Response('{"group":"g 1","results":[]}', { status: 200 }));
       const mcpClient = await connect();

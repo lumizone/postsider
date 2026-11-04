@@ -18,6 +18,7 @@ export const EXPECTED_TOOL_NAMES = [
   'postsider_get_customer_report',
   'postsider_get_notifications',
   'postsider_get_post',
+  'postsider_get_post_activity',
   'postsider_get_post_analytics',
   'postsider_get_post_missing_fields',
   'postsider_get_publishing_state',
@@ -48,7 +49,7 @@ export const EXPECTED_TOOL_NAMES = [
   'postsider_set_queue_plan',
 ] as const;
 
-export const EXPECTED_TOOL_COUNT = 38;
+export const EXPECTED_TOOL_COUNT = 39;
 
 /**
  * The expected risk annotations of every tool.
@@ -169,6 +170,7 @@ export const EXPECTED_TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   postsider_list_posts: read,
   postsider_get_post_missing_fields: read,
   postsider_get_post: read,
+  postsider_get_post_activity: read,
   postsider_get_post_analytics: read,
   postsider_get_channel_analytics: read,
   postsider_get_channel_rules: read,
