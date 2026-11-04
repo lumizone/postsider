@@ -1,4 +1,5 @@
 import { PublicAuthMiddleware } from './public.auth.middleware';
+import { currentActor } from '@postsider/nestjs-libraries/actor/actor-context';
 import { LEGACY_PUBLIC_API_SCOPES } from '@postsider/nestjs-libraries/services/public-api-oauth-scopes';
 
 describe('PublicAuthMiddleware credentials', () => {
@@ -158,5 +159,116 @@ describe('PublicAuthMiddleware credentials', () => {
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.json).toHaveBeenCalledWith({ msg: 'Invalid OAuth token' });
     expect(next).not.toHaveBeenCalled();
+  });
+  describe('actor binding', () => {
+    const recordingNext = () => {
+      const seen: any[] = [];
+      const next = jest.fn(() => {
+        seen.push(currentActor());
+      });
+      return { seen, next };
+    };
+
+    it('binds an API key actor', async () => {
+      const organizations = {
+        resolvePublicApiCredential: jest.fn().mockResolvedValue({
+          organization: { id: 'org-1', subscription: null },
+          scopes: ['posts:read'],
+          credentialType: 'api-key',
+          apiKeyId: 'k1',
+        }),
+      };
+      const middleware = new PublicAuthMiddleware(organizations as any, {} as any);
+      const { seen, next } = recordingNext();
+      await middleware.use({ headers: { authorization: 'key' } } as any, response() as any, next);
+      expect(seen).toEqual([{ type: 'API_KEY', apiKeyId: 'k1' }]);
+    });
+
+    it('binds a legacy org key as an API_KEY actor without an id', async () => {
+      const organizations = {
+        resolvePublicApiCredential: jest.fn().mockResolvedValue({
+          organization: { id: 'org-1', subscription: null },
+          scopes: ['*'],
+          credentialType: 'legacy',
+        }),
+      };
+      const middleware = new PublicAuthMiddleware(organizations as any, {} as any);
+      const { seen, next } = recordingNext();
+      await middleware.use({ headers: { authorization: 'legacy' } } as any, response() as any, next);
+      expect(seen).toEqual([{ type: 'API_KEY', apiKeyId: null }]);
+    });
+
+    it('binds an MCP OAuth token to its client and authorizing user', async () => {
+      const oauth = {
+        getOrgByOAuthToken: jest.fn().mockResolvedValue({
+          organization: { id: 'org-1', subscription: null },
+          membership: { userId: 'u7', role: 'USER', disabled: false },
+          scopes: ['posts:read'],
+          mcpOAuthClientId: 'mc1',
+          userId: 'u7',
+        }),
+      };
+      const middleware = new PublicAuthMiddleware({} as any, oauth as any);
+      const { seen, next } = recordingNext();
+      const req = { headers: { authorization: 'Bearer pos_mcp' }, method: 'GET', originalUrl: '/public/v1/posts' } as any;
+      await middleware.use(req, response() as any, next);
+      expect(req.publicApiCredential).toEqual({ type: 'oauth', oauthClientId: 'mc1', oauthUserId: 'u7' });
+      expect(seen).toEqual([{ type: 'OAUTH_CLIENT', oauthClientId: 'mc1', userId: 'u7' }]);
+    });
+
+    it('binds a legacy OAuth app authorization', async () => {
+      const oauth = {
+        getOrgByOAuthToken: jest.fn().mockResolvedValue({
+          organization: { id: 'org-1', subscription: null },
+          membership: { userId: 'u2', role: 'USER', disabled: false },
+          oauthAppId: 'app1',
+          userId: 'u2',
+        }),
+      };
+      const middleware = new PublicAuthMiddleware({} as any, oauth as any);
+      const { seen, next } = recordingNext();
+      const req = { headers: { authorization: 'Bearer pos_legacy' } } as any;
+      await middleware.use(req, response() as any, next);
+      expect(req.publicApiCredential).toEqual({ type: 'oauth', oauthClientId: 'app1', oauthUserId: 'u2' });
+      expect(seen).toEqual([{ type: 'OAUTH_CLIENT', oauthClientId: 'app1', userId: 'u2' }]);
+    });
+
+    it('ignores spoofed actor headers and body fields', async () => {
+      const organizations = {
+        resolvePublicApiCredential: jest.fn().mockResolvedValue({
+          organization: { id: 'org-1', subscription: null },
+          scopes: ['posts:write'],
+          credentialType: 'api-key',
+          apiKeyId: 'k1',
+        }),
+      };
+      const middleware = new PublicAuthMiddleware(organizations as any, {} as any);
+      const { seen, next } = recordingNext();
+      const req = {
+        headers: {
+          authorization: 'key',
+          'x-postsider-actor-type': 'USER',
+          'x-postsider-agent': 'admin',
+        },
+        body: {
+          creationMethod: 'WEB',
+          createdByType: 'USER',
+          actor: { type: 'USER', userId: 'victim' },
+        },
+      } as any;
+      await middleware.use(req, response() as any, next);
+      expect(seen).toEqual([{ type: 'API_KEY', apiKeyId: 'k1' }]);
+    });
+
+    it('never calls next for a rejected credential and leaves the actor SYSTEM', async () => {
+      const organizations = { resolvePublicApiCredential: jest.fn().mockResolvedValue(null) };
+      const middleware = new PublicAuthMiddleware(organizations as any, {} as any);
+      const res = response();
+      const { next } = recordingNext();
+      await middleware.use({ headers: { authorization: 'bad' } } as any, res as any, next);
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(next).not.toHaveBeenCalled();
+      expect(currentActor()).toEqual({ type: 'SYSTEM' });
+    });
   });
 });

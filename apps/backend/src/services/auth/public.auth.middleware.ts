@@ -7,6 +7,8 @@ import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.f
 import { tokenAllows } from '@postsider/nestjs-libraries/database/prisma/oauth/mcp-scope-policy';
 import { grantedScopesForOAuth } from '@postsider/nestjs-libraries/services/public-api-oauth-scopes';
 import { pricing } from '@postsider/nestjs-libraries/database/prisma/subscriptions/pricing';
+import { runWithActor } from '@postsider/nestjs-libraries/actor/actor-context';
+import { actorFromPublicCredential } from '@postsider/nestjs-libraries/actor/post-actor';
 import { FunnelAttributionService } from '@postsider/nestjs-libraries/database/prisma/attribution/funnel-attribution.service';
 
 @Injectable()
@@ -96,8 +98,21 @@ export class PublicAuthMiddleware implements NestMiddleware {
         // enforce the actual consented grants for MCP OAuth.
         // @ts-ignore
         req.publicApiScopes = grantedScopesForOAuth((authorization as { scopes?: string[] }).scopes);
+        const oauthAuthorization = authorization as {
+          mcpOAuthClientId?: string;
+          oauthAppId?: string;
+          userId?: string;
+        };
+        const oauthClientId =
+          oauthAuthorization.mcpOAuthClientId ?? oauthAuthorization.oauthAppId;
         // @ts-ignore
-        req.publicApiCredential = { type: 'oauth' };
+        req.publicApiCredential = {
+          type: 'oauth',
+          ...(oauthClientId ? { oauthClientId } : {}),
+          ...(oauthAuthorization.userId
+            ? { oauthUserId: oauthAuthorization.userId }
+            : {}),
+        };
       } else {
         const credential = await this._organizationService.resolvePublicApiCredential(auth);
         if (!credential) {
@@ -135,6 +150,12 @@ export class PublicAuthMiddleware implements NestMiddleware {
     } catch (err) {
       throw new HttpForbiddenException();
     }
-    next();
+    // The actor comes only from the credential verified above, never from the
+    // body or headers. Everything downstream of next() runs inside this context.
+    runWithActor(
+      // @ts-ignore
+      actorFromPublicCredential(req.publicApiCredential),
+      () => next()
+    );
   }
 }
