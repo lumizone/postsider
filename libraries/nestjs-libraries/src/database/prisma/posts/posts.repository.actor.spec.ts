@@ -172,6 +172,40 @@ describe('PostsRepository actor columns', () => {
     });
   });
 
+  it('provenance cannot override actor or row fields', async () => {
+    const { repo, p } = build();
+    await runWithActor({ type: 'API_KEY', apiKeyId: 'k1' }, () =>
+      repo.createOrUpdatePost(
+        'schedule',
+        'org',
+        '2030-01-01',
+        body(),
+        [],
+        'API' as any,
+        undefined,
+        {
+          createdByType: 'USER',
+          lastModifiedByType: 'USER',
+          state: 'PUBLISHED',
+          organizationId: 'evil',
+          agentName: 'x',
+        } as any
+      )
+    );
+    const arg = p.upsert.mock.calls[0][0];
+    for (const d of [arg.create, arg.update]) {
+      expect(d).toMatchObject({
+        agentName: 'x',
+        lastModifiedByType: 'API_KEY',
+        lastModifiedByApiKeyId: 'k1',
+        state: 'QUEUE',
+        organization: { connect: { id: 'org' } },
+      });
+      expect(d.organizationId).toBeUndefined();
+    }
+    expect(arg.create).toMatchObject({ createdByType: 'API_KEY' });
+  });
+
   it('changeState, changeDate, claimErrorForRetry, updateReleaseId, deletePost stamp lastModifiedBy', async () => {
     const { repo, p } = build();
     await runWithActor(USER, async () => {

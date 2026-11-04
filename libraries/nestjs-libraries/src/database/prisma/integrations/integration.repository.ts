@@ -2,9 +2,7 @@ import {
   PrismaRepository,
   PrismaTransaction,
 } from '@postsider/nestjs-libraries/database/prisma/prisma.service';
-import {
-  actorToColumns,
-} from '@postsider/nestjs-libraries/actor/post-actor';
+import { actorToColumns } from '@postsider/nestjs-libraries/actor/post-actor';
 import { currentActor } from '@postsider/nestjs-libraries/actor/actor-context';
 import { Injectable } from '@nestjs/common';
 import dayjs from 'dayjs';
@@ -282,13 +280,13 @@ export class IntegrationRepository {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${org}:channel-capacity`}))`;
         const [existing, subscription] = await Promise.all([
           tx.integration.findUnique({
-          where: {
-            organizationId_internalId: {
-              internalId,
-              organizationId: org,
+            where: {
+              organizationId_internalId: {
+                internalId,
+                organizationId: org,
+              },
             },
-          },
-          select: { deletedAt: true, disabled: true },
+            select: { deletedAt: true, disabled: true },
           }),
           // The caller may have read the plan before waiting for this lock.
           // Always use the entitlement that was persisted under the lock.
@@ -529,7 +527,8 @@ export class IntegrationRepository {
       expiresIn?: number;
     }
   ) {
-    if (!rootInternalId || !previousRefreshToken || siblings.length === 0) return;
+    if (!rootInternalId || !previousRefreshToken || siblings.length === 0)
+      return;
 
     await this._integration.model.integration.updateMany({
       where: {
@@ -566,25 +565,27 @@ export class IntegrationRepository {
   ) {
     if (!rootInternalId || !refreshToken) return [];
 
-    return this._integration.model.integration.findMany({
-      where: {
-        id: { not: id },
-        organizationId: org,
-        rootInternalId,
-        disabled: false,
-        deletedAt: null,
-        inBetweenSteps: false,
-        refreshNeeded: false,
-      },
-      // Integration secrets use randomized encryption, so a database equality
-      // condition on refreshToken can never match its plaintext value. The
-      // Prisma extension decrypts this result; revision is the write-side CAS.
-      select: { id: true, revision: true, refreshToken: true },
-    }).then((siblings) =>
-      siblings
-        .filter((sibling) => sibling.refreshToken === refreshToken)
-        .map(({ id: siblingId, revision }) => ({ id: siblingId, revision }))
-    );
+    return this._integration.model.integration
+      .findMany({
+        where: {
+          id: { not: id },
+          organizationId: org,
+          rootInternalId,
+          disabled: false,
+          deletedAt: null,
+          inBetweenSteps: false,
+          refreshNeeded: false,
+        },
+        // Integration secrets use randomized encryption, so a database equality
+        // condition on refreshToken can never match its plaintext value. The
+        // Prisma extension decrypts this result; revision is the write-side CAS.
+        select: { id: true, revision: true, refreshToken: true },
+      })
+      .then((siblings) =>
+        siblings
+          .filter((sibling) => sibling.refreshToken === refreshToken)
+          .map(({ id: siblingId, revision }) => ({ id: siblingId, revision }))
+      );
   }
 
   /** Mark a token unusable only if no newer channel lifecycle superseded it. */
@@ -907,11 +908,7 @@ export class IntegrationRepository {
     });
   }
 
-  async enableChannel(
-    org: string,
-    id: string,
-    activeChannelLimit?: number
-  ) {
+  async enableChannel(org: string, id: string, activeChannelLimit?: number) {
     if (activeChannelLimit === undefined) {
       return this._integration.model.integration.update({
         where: { id, organizationId: org },
@@ -923,8 +920,8 @@ export class IntegrationRepository {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${org}:channel-capacity`}))`;
       const [integration, subscription] = await Promise.all([
         tx.integration.findFirst({
-        where: { id, organizationId: org },
-        select: { deletedAt: true, disabled: true },
+          where: { id, organizationId: org },
+          select: { deletedAt: true, disabled: true },
         }),
         // Do not trust an entitlement calculated before waiting for this lock.
         tx.subscription.findFirst({

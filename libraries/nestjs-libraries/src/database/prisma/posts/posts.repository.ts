@@ -34,6 +34,27 @@ export interface PostErrorMeta {
   retryable: boolean;
 }
 
+const PROVENANCE_KEYS = [
+  'agentName',
+  'workflowId',
+  'runId',
+  'externalRef',
+  'source',
+] as const;
+
+// Only the five known provenance names, string values only; nothing else can
+// reach the row data. Task 5 replaces this with provenanceToColumns.
+function pickProvenance(input?: Partial<Record<string, unknown>>) {
+  const out: Partial<Record<(typeof PROVENANCE_KEYS)[number], string>> = {};
+  for (const key of PROVENANCE_KEYS) {
+    const v = input?.[key];
+    if (typeof v === 'string') {
+      out[key] = v;
+    }
+  }
+  return out;
+}
+
 const CLEARED_ERROR_FIELDS = {
   error: null,
   errorCategory: null,
@@ -811,11 +832,15 @@ export class PostsRepository {
     creationMethod: CreationMethod,
     inter?: number,
     provenance?: Partial<
-      Record<'agentName' | 'workflowId' | 'runId' | 'externalRef' | 'source', string>
+      Record<
+        'agentName' | 'workflowId' | 'runId' | 'externalRef' | 'source',
+        string
+      >
     >
   ) {
     const actor = currentActor();
     const createdIds: string[] = [];
+    const provenanceColumns = pickProvenance(provenance);
     const posts: Post[] = [];
     const uuid = uuidv4();
 
@@ -832,10 +857,10 @@ export class PostsRepository {
       // Never clear release ids of an already published row (at-most-once).
       const keepRelease = existing?.state === 'PUBLISHED';
       const updateData = (type: 'create' | 'update') => ({
+        ...provenanceColumns,
         publishDate: dayjs(date).toDate(),
         ...(type === 'create' ? actorToColumns(actor, 'createdBy') : {}),
         ...actorToColumns(actor, 'lastModifiedBy'),
-        ...(provenance ?? {}),
         integration: {
           connect: {
             id: body.integration.id,
@@ -893,25 +918,25 @@ export class PostsRepository {
       });
 
       const upserted = await this._post.model.post.upsert({
-          where: {
-            // Scope by organizationId so a client-supplied `value.id` can only
-            // ever match a post the caller already owns. Without this, passing
-            // another org's post id would let an attacker reassign/overwrite it
-            // (the update branch reconnects org + integration to the caller).
-            id: value.id || uuidv4(),
-            organizationId: orgId,
+        where: {
+          // Scope by organizationId so a client-supplied `value.id` can only
+          // ever match a post the caller already owns. Without this, passing
+          // another org's post id would let an attacker reassign/overwrite it
+          // (the update branch reconnects org + integration to the caller).
+          id: value.id || uuidv4(),
+          organizationId: orgId,
+        },
+        create: { ...updateData('create') },
+        update: {
+          ...updateData('update'),
+          lastMessage: {
+            disconnect: true,
           },
-          create: { ...updateData('create') },
-          update: {
-            ...updateData('update'),
-            lastMessage: {
-              disconnect: true,
-            },
-            submittedForOrder: {
-              disconnect: true,
-            },
+          submittedForOrder: {
+            disconnect: true,
           },
-        });
+        },
+      });
       if (!existing) {
         createdIds.push(upserted.id);
       }
