@@ -8,6 +8,7 @@ import { PublicPoliciesController } from './public.policies.controller';
 import { PolicyRulesService } from '@postsider/nestjs-libraries/database/prisma/policies/policy-rules.service';
 import { AuditLogger } from '@postsider/nestjs-libraries/database/prisma/audit/audit.logger';
 import { HttpExceptionFilter } from '@postsider/nestjs-libraries/services/exception.filter';
+import { validateConditionParams } from '@postsider/nestjs-libraries/policies/policy-params';
 import { runWithActor } from '@postsider/nestjs-libraries/actor/actor-context';
 import type { PostActor } from '@postsider/nestjs-libraries/actor/post-actor';
 
@@ -35,14 +36,13 @@ describe('policy management API over HTTP', () => {
   let actor: PostActor = { type: 'API_KEY', apiKeyId: 'k1' };
 
   const rules = {
-    toPublicRule: PolicyRulesService.prototype.toPublicRule,
     list: jest.fn(),
     get: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
     remove: jest.fn(),
   };
-  const audit = { logSecurityEvent: jest.fn() };
+  const audit = { logSecurityEvent: jest.fn(), logResourceEvent: jest.fn() };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ controllers: [PublicPoliciesController] })
@@ -70,6 +70,7 @@ describe('policy management API over HTTP', () => {
     scopes = ['policies:read', 'policies:write'];
     actor = { type: 'API_KEY', apiKeyId: 'k1' };
     audit.logSecurityEvent.mockResolvedValue(undefined);
+    audit.logResourceEvent.mockResolvedValue(undefined);
   });
 
   const send = (method: string, path: string, body?: unknown) =>
@@ -126,16 +127,20 @@ describe('policy management API over HTTP', () => {
       expect((await send('GET', '/policies/other-org-rule')).status).toBe(404);
     });
 
-    it('never returns organizationId or deletedAt even if the service leaked them', async () => {
-      rules.get.mockResolvedValue({ ...publicRule(), organizationId: 'org-1', deletedAt: null });
+    it('returns exactly what the service returns, with no organization or deletion fields', async () => {
+      rules.get.mockResolvedValue(publicRule());
       const json = await (await send('GET', '/policies/r1')).json();
+      expect(json).toEqual(publicRule());
       expect(json).not.toHaveProperty('organizationId');
       expect(json).not.toHaveProperty('deletedAt');
-      rules.list.mockResolvedValue([{ ...publicRule(), organizationId: 'org-1', deletedAt: null }]);
-      const list = await (await send('GET', '/policies')).json();
-      expect(list.policies[0]).not.toHaveProperty('organizationId');
-      expect(list.policies[0]).not.toHaveProperty('deletedAt');
     });
+
+    it('returns rules in the order the service gives (repository orders by priority)', async () => {
+      rules.list.mockResolvedValue([publicRule({ id: 'a', priority: 1 }), publicRule({ id: 'b', priority: 1 }), publicRule({ id: 'c', priority: 7 })]);
+      const json = await (await send('GET', '/policies')).json();
+      expect(json.policies.map((p: any) => [p.id, p.priority])).toEqual([['a', 1], ['b', 1], ['c', 7]]);
+    });
+
   });
 
   describe('create', () => {
@@ -168,6 +173,43 @@ describe('policy management API over HTTP', () => {
       expect(actorId).toBeNull();
       expect(input).toEqual({ policyId: 'new', name: 'Secret' });
       expect(JSON.stringify(audit.logSecurityEvent.mock.calls[0])).not.toContain('topsecretword');
+    });
+
+    it('also writes a readable policy.changed resource event with the key actor, no conditionParams', async () => {
+      rules.create.mockResolvedValue(publicRule({ id: 'new', name: 'Secret', enabled: true, effect: 'BLOCK' }));
+      await send('POST', '/policies', body);
+      expect(audit.logResourceEvent).toHaveBeenCalledWith({
+        organizationId: 'org-1',
+        event: 'policy.changed',
+        targetType: 'organization',
+        targetId: 'org-1',
+        metadata: { operation: 'policy.create', policyId: 'new', name: 'Secret', enabled: true, effect: 'BLOCK' },
+      });
+      expect(JSON.stringify(audit.logResourceEvent.mock.calls)).not.toContain('topsecretword');
+    });
+
+    it('does not fail the request when auditing throws', async () => {
+      rules.create.mockResolvedValue(publicRule());
+      audit.logSecurityEvent.mockRejectedValue(new Error('db down'));
+      audit.logResourceEvent.mockRejectedValue(new Error('db down'));
+      expect((await send('POST', '/policies', body)).status).toBe(201);
+    });
+
+    it.each([
+      ['array element', { appliesToActorTypes: [null] }],
+      ['channel id element', { appliesToIntegrationIds: [null] }],
+    ])('does not accept a null %s as a valid rule', async (_n, extra) => {
+      rules.create.mockImplementation(async () => {
+        throw new Error('service must not be reached with invalid input');
+      });
+      const res = await send('POST', '/policies', { ...body, ...extra });
+      expect(res.status).toBeLessThan(500);
+      expect(res.status).toBeGreaterThanOrEqual(400);
+    });
+
+    it('rejects a null conditionParams word in the real params validator the service uses', () => {
+      const r = validateConditionParams('CONTAINS_WORDS' as never, { words: [null] });
+      expect(r.ok).toBe(false);
     });
 
     it('uses the user id of a USER actor and of an OAuth client grant', async () => {
@@ -205,12 +247,6 @@ describe('policy management API over HTTP', () => {
       expect(audit.logSecurityEvent).not.toHaveBeenCalled();
     });
 
-    it('does not echo conditionParams-derived data beyond the stored row', async () => {
-      rules.create.mockResolvedValue({ ...publicRule({ id: 'new' }), organizationId: 'org-1', deletedAt: null });
-      const json = await (await send('POST', '/policies', body)).json();
-      expect(json).not.toHaveProperty('organizationId');
-      expect(json).not.toHaveProperty('deletedAt');
-    });
   });
 
   describe('update', () => {
@@ -229,6 +265,20 @@ describe('policy management API over HTTP', () => {
         policyId: 'r1',
         name: 'Renamed',
       });
+      expect(audit.logResourceEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'policy.changed',
+          targetType: 'organization',
+          targetId: 'org-1',
+          metadata: expect.objectContaining({
+            operation: 'policy.update',
+            policyId: 'r1',
+            name: 'Renamed',
+            changed: 'name,conditionParams',
+          }),
+        })
+      );
+      expect(JSON.stringify(audit.logResourceEvent.mock.calls)).not.toContain('topsecretword');
       expect(JSON.stringify(audit.logSecurityEvent.mock.calls[0])).not.toContain('topsecretword');
     });
 
@@ -242,13 +292,6 @@ describe('policy management API over HTTP', () => {
       const res = await send('PUT', '/policies/r1', { enabled: null });
       expect(res.status).toBe(400);
       expect(rules.update).not.toHaveBeenCalled();
-    });
-
-    it('never returns organizationId or deletedAt', async () => {
-      rules.update.mockResolvedValue({ ...publicRule(), organizationId: 'org-1', deletedAt: null });
-      const json = await (await send('PUT', '/policies/r1', { name: 'x' })).json();
-      expect(json).not.toHaveProperty('organizationId');
-      expect(json).not.toHaveProperty('deletedAt');
     });
   });
 
@@ -264,6 +307,12 @@ describe('policy management API over HTTP', () => {
         policyId: 'r1',
         name: 'Gone',
       });
+      expect(audit.logResourceEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'policy.changed',
+          metadata: expect.objectContaining({ operation: 'policy.delete', policyId: 'r1', name: 'Gone' }),
+        })
+      );
     });
 
     it('answers 404 for a foreign id without deleting or auditing', async () => {

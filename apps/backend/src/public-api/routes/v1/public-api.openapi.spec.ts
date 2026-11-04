@@ -117,9 +117,7 @@ describe('Public API OpenAPI contract', () => {
     expect(paths['/public/v1/policies'].post.responses['201']).toBeDefined();
     expect(JSON.stringify(paths['/public/v1/policies'].post.responses['400'])).toContain('policy_limit_reached');
     expect(document.components.schemas.PublicPolicyRuleDto).toBeDefined();
-    expect(Object.keys(document.components.schemas.PublicPolicyRuleDto.properties)).not.toEqual(
-      expect.arrayContaining(['organizationId'])
-    );
+    expect(Object.keys(document.components.schemas.PublicPolicyRuleDto.properties)).not.toContain('organizationId');
     expect(Object.keys(document.components.schemas.PublicPolicyRuleDto.properties)).not.toContain('deletedAt');
     await app.close();
   });

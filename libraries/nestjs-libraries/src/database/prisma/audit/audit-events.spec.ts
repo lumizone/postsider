@@ -13,6 +13,7 @@ describe('audit events', () => {
       'post.failed',
       'post.retry_requested',
       'post.policy_evaluated',
+      'policy.changed',
     ]);
   });
 

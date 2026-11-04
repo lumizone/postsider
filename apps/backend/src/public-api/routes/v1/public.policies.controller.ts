@@ -70,6 +70,46 @@ function auditActorUserId(): string | null {
   return null;
 }
 
+/**
+ * Policy changes leave two entries: the hashed security entry and a readable
+ * resource entry (actor and key id recorded) visible in /audit-events. Metadata
+ * holds names and flags only, never conditionParams values. Best effort.
+ */
+async function auditPolicyChange(
+  audit: AuditLogger,
+  op: 'policy.create' | 'policy.update' | 'policy.delete',
+  orgId: string,
+  rule: { id: string; name: string; enabled?: boolean; effect?: string },
+  changed?: string[]
+) {
+  try {
+    await audit.logSecurityEvent(orgId, op, auditActorUserId(), {
+      policyId: rule.id,
+      name: rule.name,
+    });
+  } catch {
+    // never fails the request
+  }
+  try {
+    await audit.logResourceEvent({
+      organizationId: orgId,
+      event: 'policy.changed',
+      targetType: 'organization',
+      targetId: orgId,
+      metadata: {
+        operation: op,
+        policyId: rule.id,
+        name: rule.name,
+        ...(rule.enabled === undefined ? {} : { enabled: rule.enabled }),
+        ...(rule.effect === undefined ? {} : { effect: rule.effect }),
+        ...(changed ? { changed: changed.join(',') } : {}),
+      },
+    });
+  } catch {
+    // never fails the request
+  }
+}
+
 @ApiTags('Public API Policies')
 @ApiHeader({
   name: 'Authorization',
@@ -94,7 +134,7 @@ export class PublicPoliciesController {
   @ApiOkResponse({ type: PublicPoliciesResponseDto })
   async list(@GetOrgFromRequest() org: Organization) {
     const rows = await this._rules.list(org.id);
-    return { policies: rows.map((r) => this._rules.toPublicRule(r as never)) };
+    return { policies: rows };
   }
 
   @Get('/policies/:id')
@@ -106,7 +146,7 @@ export class PublicPoliciesController {
   @ApiOkResponse({ type: PublicPolicyRuleDto })
   @ApiNotFoundResponse({ description: 'Unknown rule id for this organization' })
   async get(@GetOrgFromRequest() org: Organization, @Param('id') id: string) {
-    return this._rules.toPublicRule((await this._rules.get(org.id, id)) as never);
+    return this._rules.get(org.id, id);
   }
 
   @Post('/policies')
@@ -123,11 +163,8 @@ export class PublicPoliciesController {
   })
   async create(@GetOrgFromRequest() org: Organization, @Body() body: CreatePolicyRuleDto) {
     const row = await this._rules.create(org.id, pickRuleFields(body));
-    await this._audit.logSecurityEvent(org.id, 'policy.create', auditActorUserId(), {
-      policyId: row.id,
-      name: row.name,
-    });
-    return this._rules.toPublicRule(row as never);
+    await auditPolicyChange(this._audit, 'policy.create', org.id, row);
+    return row;
   }
 
   @Put('/policies/:id')
@@ -148,12 +185,10 @@ export class PublicPoliciesController {
     @Param('id') id: string,
     @Body() body: UpdatePolicyRuleDto
   ) {
-    const row = await this._rules.update(org.id, id, pickRuleFields(body));
-    await this._audit.logSecurityEvent(org.id, 'policy.update', auditActorUserId(), {
-      policyId: row.id,
-      name: row.name,
-    });
-    return this._rules.toPublicRule(row as never);
+    const fields = pickRuleFields(body);
+    const row = await this._rules.update(org.id, id, fields);
+    await auditPolicyChange(this._audit, 'policy.update', org.id, row, Object.keys(fields));
+    return row;
   }
 
   @Delete('/policies/:id')
@@ -167,10 +202,7 @@ export class PublicPoliciesController {
   async remove(@GetOrgFromRequest() org: Organization, @Param('id') id: string) {
     const existing = await this._rules.get(org.id, id);
     const result = await this._rules.remove(org.id, id);
-    await this._audit.logSecurityEvent(org.id, 'policy.delete', auditActorUserId(), {
-      policyId: id,
-      name: existing.name,
-    });
+    await auditPolicyChange(this._audit, 'policy.delete', org.id, { ...existing, id });
     return result;
   }
 }

@@ -11,6 +11,7 @@ export const AUDIT_EVENT_TYPES = [
   'post.failed',
   'post.retry_requested',
   'post.policy_evaluated',
+  'policy.changed',
 ] as const;
 
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];

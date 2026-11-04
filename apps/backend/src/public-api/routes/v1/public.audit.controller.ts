@@ -27,7 +27,7 @@ export class PublicAuditController {
   @ApiOperation({
     summary: 'List audit events',
     description:
-      'Newest first, cursor paginated. Events: post.created, post.updated, post.deleted, post.status_changed, post.approval_requested, post.approval_resolved, post.published, post.failed, post.retry_requested, post.policy_evaluated. Metadata never contains post content. Requires the audit:read scope, which is never granted implicitly.',
+      'Newest first, cursor paginated. Events: post.created, post.updated, post.deleted, post.status_changed, post.approval_requested, post.approval_resolved, post.published, post.failed, post.retry_requested, post.policy_evaluated, policy.changed. Metadata never contains post content. Requires the audit:read scope, which is never granted implicitly.',
   })
   @ApiOkResponse({ type: PublicAuditEventsResponseDto })
   async list(
