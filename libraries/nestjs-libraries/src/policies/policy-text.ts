@@ -1,34 +1,48 @@
-const NAMED_ENTITIES: Record<string, string> = {
-  nbsp: ' ',
-  lt: '<',
-  gt: '>',
-  quot: '"',
-  apos: "'",
-  amp: '&',
+import { parseFragment } from 'parse5';
+
+// Phrasing elements that do not separate words: fr<b>ee</b> reads as "free".
+// Every other element (block, void like <hr>, custom) separates words.
+const INLINE_TAGS = new Set([
+  'a', 'abbr', 'b', 'bdi', 'bdo', 'big', 'cite', 'code', 'data', 'del', 'dfn', 'em', 'font',
+  'i', 'ins', 'kbd', 'mark', 'q', 's', 'samp', 'small', 'span', 'strike', 'strong', 'sub',
+  'sup', 'time', 'tt', 'u', 'var', 'wbr',
+]);
+
+type HtmlNode = {
+  nodeName: string;
+  value?: string;
+  attrs?: Array<{ name: string; value: string }>;
+  childNodes?: HtmlNode[];
+  content?: { childNodes?: HtmlNode[] };
 };
 
-const decodeEntities = (text: string): string =>
-  text.replace(/&(?:#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6})|([a-zA-Z]+));/g, (m, dec, hex, name) => {
-    if (name !== undefined) return NAMED_ENTITIES[name] ?? m;
-    const cp = dec !== undefined ? Number(dec) : parseInt(hex, 16);
-    if (cp === 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) return m;
-    return String.fromCodePoint(cp);
-  });
-
-const BLOCK_TAGS =
-  'p|div|li|ul|ol|h[1-6]|blockquote|pre|tr|td|th|section|article';
-
+/**
+ * Reduces post HTML to the text a reader would see, plus every href and src
+ * value so links hidden in attributes are still detected. Parsing and entity
+ * decoding are delegated to parse5 so they match a browser.
+ */
 export const htmlToPolicyText = (html: string): string => {
-  let text = (html || '').replace(
-    /<a\b[^>]*?\bhref\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*>/gi,
-    (_m, dq, sq) => ` ${dq ?? sq} `
-  );
-  // Block-level tags and <br> separate words; inline tags vanish so fr<b>ee</b> stays "free".
-  text = text.replace(new RegExp(`</?(?:${BLOCK_TAGS})\\b[^>]*>|<br\\b[^>]*>`, 'gi'), ' ');
-  text = text.replace(/<[^>]*>/g, '');
-  // Decode once, after tags are gone, so an entity cannot smuggle in a tag.
-  text = decodeEntities(text);
-  return text.replace(/\s+/g, ' ').trim().normalize('NFC');
+  const out: string[] = [];
+  const walk = (node: HtmlNode) => {
+    if (node.nodeName === '#comment') return;
+    if (node.nodeName === '#text') {
+      out.push(node.value ?? '');
+      return;
+    }
+    const isElement = node.attrs !== undefined;
+    const separates = isElement && !INLINE_TAGS.has(node.nodeName);
+    if (separates) out.push(' ');
+    if (isElement) {
+      for (const attr of node.attrs ?? []) {
+        if (attr.name === 'href' || attr.name === 'src') out.push(` ${attr.value} `);
+      }
+    }
+    for (const child of node.childNodes ?? []) walk(child);
+    for (const child of node.content?.childNodes ?? []) walk(child);
+    if (separates) out.push(' ');
+  };
+  walk(parseFragment(html || '') as unknown as HtmlNode);
+  return out.join('').replace(/\s+/g, ' ').trim().normalize('NFC');
 };
 
 const TLDS =
@@ -58,6 +72,6 @@ export const containsAnyWord = (text: string, words: string[]): boolean => {
     const trimmed = word.trim().normalize('NFC');
     if (!trimmed) return false;
     const body = trimmed.split(/\s+/).map(escapeRegExp).join('\\s+');
-    return new RegExp(`(?<![\\p{L}\\p{M}\\p{N}_])${body}(?![\\p{L}\\p{M}\\p{N}_])`, 'iu').test(haystack);
+    return new RegExp(`(?<![\\p{L}\\p{N}_]\\p{M}*)${body}(?![\\p{L}\\p{M}\\p{N}_])`, 'iu').test(haystack);
   });
 };

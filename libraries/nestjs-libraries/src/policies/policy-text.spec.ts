@@ -55,8 +55,8 @@ describe('htmlToPolicyText hardening', () => {
     expect(containsLink(htmlToPolicyText('h&#x74;tps://x.com'))).toBe(true);
     expect(containsAnyWord(htmlToPolicyText('fr&#101;e'), ['free'])).toBe(true);
   });
-  it('leaves invalid code points as-is', () => {
-    expect(htmlToPolicyText('a&#0;b &#1114112; &#xD800;')).toBe('a&#0;b &#1114112; &#xD800;');
+  it('turns invalid code points into U+FFFD like a browser', () => {
+    expect(htmlToPolicyText('a&#0;b &#1114112; &#xD800;')).toBe('a\uFFFDb \uFFFD \uFFFD');
   });
   it('does not turn an entity into a tag that is then stripped', () => {
     expect(htmlToPolicyText('&lt;b&gt;x')).toBe('<b>x');
@@ -71,5 +71,39 @@ describe('unicode normalization', () => {
   it('does not match cafe inside cafe with accent', () => {
     expect(containsAnyWord('un caf\u00e9', ['cafe'])).toBe(false);
     expect(containsAnyWord('un caf\u0065\u0301', ['cafe'])).toBe(false);
+  });
+});
+
+describe('parser-based html handling', () => {
+  const has = (html: string, w: string) => containsAnyWord(htmlToPolicyText(html), [w]);
+  it('is not fooled by > inside attributes or comments', () => {
+    expect(has('fr<span title=">">ee</span>', 'free')).toBe(true);
+    expect(has('fr<!-- a > b -->ee', 'free')).toBe(true);
+  });
+  it('separates words at void and other block elements', () => {
+    expect(has('free<hr>money', 'free')).toBe(true);
+    expect(has('free<hr>money', 'money')).toBe(true);
+    expect(has('free<hr>money', 'freemoney')).toBe(false);
+    expect(has('free<dd>money</dd>', 'free')).toBe(true);
+    expect(has('free<dd>money</dd>', 'money')).toBe(true);
+  });
+  it('treats custom elements as separators', () => {
+    expect(has('fr<p-x>ee</p-x>', 'free')).toBe(false);
+    expect(has('fr<p-x>ee</p-x>', 'fr')).toBe(true);
+  });
+  it('detects links in unquoted attributes and src', () => {
+    expect(containsLink(htmlToPolicyText('<a href=https://evil.zz>click</a>'))).toBe(true);
+    expect(containsLink(htmlToPolicyText('<img src="https://evil.zz/a.png">'))).toBe(true);
+  });
+  it('decodes legacy and named entities like a browser', () => {
+    expect(containsLink(htmlToPolicyText('h&#116tps://evil.zz'))).toBe(true);
+    expect(containsLink(htmlToPolicyText('https&colon;//evil.zz'))).toBe(true);
+    expect(containsLink(htmlToPolicyText('example&period;com'))).toBe(true);
+  });
+  it('a leading combining mark does not block a match', () => {
+    expect(containsAnyWord('ok ́free stuff', ['free'])).toBe(true);
+  });
+  it('still distinguishes cafe from cafe with accent', () => {
+    expect(containsAnyWord('un café', ['cafe'])).toBe(false);
   });
 });
