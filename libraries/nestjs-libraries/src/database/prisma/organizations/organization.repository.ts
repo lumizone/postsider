@@ -134,7 +134,7 @@ export class OrganizationRepository {
       scopes: selfService.scopes ?? [],
       credentialType: 'api-key' as const,
       apiKeyId: selfService.id,
-      ...(keyPermissions ? { keyPermissions } : {}),
+      keyPermissions,
     };
   }
 

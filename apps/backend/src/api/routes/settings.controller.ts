@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, HttpException, Param, Post, Put } from '@nestjs/common';
+import { POST_ACTIONS } from '@postsider/nestjs-libraries/policies/policy-types';
 import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
 import {
   CreateApiKeyDto,
@@ -38,11 +39,24 @@ export class SettingsController {
   /** A key limit may only name channels of the caller's own organization. */
   private async assertOwnChannels(orgId: string, ids: string[]) {
     if (ids.length === 0) return;
+    if (new Set(ids).size !== ids.length) {
+      throw new HttpException({ msg: 'Duplicate channel ids' }, 400);
+    }
     const channels = await this._integrationService.getIntegrationsList(orgId);
     const known = new Set(channels.map((c: { id: string }) => c.id));
     const unknown = ids.find((id) => !known.has(id));
     if (unknown !== undefined) {
       throw new HttpException({ msg: `Unknown channel id: ${unknown}` }, 400);
+    }
+  }
+
+  /** Defence in depth behind the DTO: actions must be known and unique. */
+  private assertActions(actions: string[]) {
+    if (
+      new Set(actions).size !== actions.length ||
+      actions.some((a) => !(POST_ACTIONS as readonly string[]).includes(a))
+    ) {
+      throw new HttpException({ msg: 'Invalid allowedActions' }, 400);
     }
   }
 
@@ -222,6 +236,7 @@ export class SettingsController {
     const scopes = body.scopes ?? [...LEGACY_PUBLIC_API_SCOPES];
     const allowedActions = body.allowedActions ?? [];
     const allowedIntegrationIds = body.allowedIntegrationIds ?? [];
+    this.assertActions(allowedActions);
     await this.assertOwnChannels(org.id, allowedIntegrationIds);
     const created = await this._organizationService.createApiKey(
       org.id,
@@ -260,6 +275,9 @@ export class SettingsController {
         'Name, scopes or permissions are required',
         400
       );
+    }
+    if (body.allowedActions !== undefined) {
+      this.assertActions(body.allowedActions);
     }
     if (body.allowedIntegrationIds !== undefined) {
       await this.assertOwnChannels(org.id, body.allowedIntegrationIds);
