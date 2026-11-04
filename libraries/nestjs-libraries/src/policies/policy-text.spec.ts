@@ -135,6 +135,7 @@ describe('robustness', () => {
     }
     expect(err).toBeInstanceOf(PolicyInputTooLargeError);
     expect((err as PolicyInputTooLargeError).code).toBe('policy_input_too_large');
+    expect((err as PolicyInputTooLargeError).length).toBe(POLICY_MAX_INPUT_CHARS + 1);
     expect((err as Error).message).toContain('characters');
   });
   it('accepts exactly POLICY_MAX_TAGS "<" characters and rejects one more', () => {
@@ -148,5 +149,108 @@ describe('robustness', () => {
     const t0 = Date.now();
     htmlToPolicyText(html);
     expect(Date.now() - t0).toBeLessThan(3000);
+  });
+});
+
+describe('parser stack exhaustion fails closed', () => {
+  it('4999 nested <template> (within both caps) returns text or throws PolicyInputTooLargeError, never RangeError', () => {
+    const html = '<template>'.repeat(POLICY_MAX_TAGS - 1) + 'free';
+    let err: unknown;
+    try {
+      htmlToPolicyText(html);
+    } catch (e) {
+      err = e;
+    }
+    if (err !== undefined) {
+      expect(err).toBeInstanceOf(PolicyInputTooLargeError);
+      expect((err as PolicyInputTooLargeError).code).toBe('policy_input_too_large');
+      expect((err as PolicyInputTooLargeError).length).toBe(html.length);
+    }
+  });
+  it('converts a RangeError from the parser into PolicyInputTooLargeError and rethrows other errors', () => {
+    jest.isolateModules(() => {
+      jest.doMock('parse5', () => ({
+        parseFragment: () => {
+          throw new RangeError('Maximum call stack size exceeded');
+        },
+      }));
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const mod = require('./policy-text') as typeof import('./policy-text');
+      let err: unknown;
+      try {
+        mod.htmlToPolicyText('<template>x');
+      } catch (e) {
+        err = e;
+      }
+      expect(err).toBeInstanceOf(mod.PolicyInputTooLargeError);
+      expect((err as PolicyInputTooLargeError).code).toBe('policy_input_too_large');
+      expect((err as PolicyInputTooLargeError).length).toBe('<template>x'.length);
+      expect((err as Error).message).toContain(String(mod.POLICY_MAX_TAGS));
+    });
+    jest.isolateModules(() => {
+      jest.doMock('parse5', () => ({
+        parseFragment: () => {
+          throw new TypeError('boom');
+        },
+      }));
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const mod = require('./policy-text') as typeof import('./policy-text');
+      expect(() => mod.htmlToPolicyText('x')).toThrow(TypeError);
+    });
+    jest.dontMock('parse5');
+  });
+});
+
+describe('matching is linear on adversarial input at the size cap', () => {
+  const N = POLICY_MAX_INPUT_CHARS;
+  // 50 entries that occur everywhere in the inputs below but fail the word boundary
+  // check, so every candidate position is visited, plus long near-miss literals.
+  const words: string[] = [];
+  for (const c of ['a', 'ą', 'á', '1', '-', '.']) for (const k of [1, 2, 3, 8, 40, 99]) words.push(c.repeat(k) + (k === 99 ? 'z' : ''));
+  words.push('a a', 'ą ą', 'free money', 'casino', 'a.b', 'c++', 'bit.ly', 'x_', 'q́', 'ą-ą', 'a.com', 'www', 'http', 'łódź');
+  const cases: Array<[string, string]> = [
+    ['ą', 'ą'.repeat(N)],
+    ['á (NFD input)', 'á'.repeat(N / 2)],
+    ['á', 'á'.repeat(N)],
+    ['a', 'a'.repeat(N)],
+    ['.', '.'.repeat(N)],
+    ['a.', 'a.'.repeat(N / 2)],
+    ['-', '-'.repeat(N)],
+    ['mixed punctuation', '.,;:!?()[]{}-_/@#'.repeat(Math.floor(N / 17))],
+    ['combining marks', '́'.repeat(N)],
+    ['ą-', 'ą-'.repeat(N / 2)],
+    ['ą@', 'ą@'.repeat(N / 2)],
+    ['_ą', '_ą'.repeat(N / 2)],
+  ];
+  it('uses exactly 50 words', () => expect(words).toHaveLength(50));
+  it.each(cases)('%s: containsLink + containsAnyWord(50 words) < 1 s', (_name, text) => {
+    const t0 = Date.now();
+    expect(containsLink(text)).toBe(false);
+    containsAnyWord(text, words);
+    expect(Date.now() - t0).toBeLessThan(1000);
+  });
+});
+
+describe('word and link semantics after the linear rewrite', () => {
+  it('a mark after a word character still blocks a word start, a mark after a space does not', () => {
+    expect(containsAnyWord('x́free', ['free'])).toBe(false);
+    expect(containsAnyWord(' ́free', ['free'])).toBe(true);
+  });
+  it('finds a valid match after earlier candidates fail the boundary check', () => {
+    expect(containsAnyWord('freedom free', ['free'])).toBe(true);
+    expect(containsAnyWord('++c++', ['c++'])).toBe(true);
+    expect(containsAnyWord('ąąą ą', ['ą'])).toBe(true);
+    expect(containsAnyWord('😀free', ['free'])).toBe(true);
+  });
+  it('matches multi-word entries across any whitespace', () => {
+    expect(containsAnyWord('free\n\t money', ['free   money'])).toBe(true);
+    expect(containsAnyWord('freemoney', ['free money'])).toBe(false);
+  });
+  it('detects bare domains after non-ASCII text and punctuation but not inside words or emails', () => {
+    expect(containsLink('zobacz ąexample.com')).toBe(true);
+    expect(containsLink('(example.com)')).toBe(true);
+    expect(containsLink('ą example.pl')).toBe(true);
+    expect(containsLink('kontakt ą@example.com')).toBe(false);
+    expect(containsLink('ąąą'.repeat(1000) + ' bit.ly/x')).toBe(true);
   });
 });
