@@ -3,6 +3,7 @@ import {
   containsLink,
   containsAnyWord,
   POLICY_MAX_INPUT_CHARS,
+  POLICY_MAX_TAGS,
   PolicyInputTooLargeError,
 } from './policy-text';
 
@@ -115,14 +116,16 @@ describe('parser-based html handling', () => {
 });
 
 describe('robustness', () => {
-  it('survives very deep nesting', () => {
-    expect(containsAnyWord(htmlToPolicyText('<b>'.repeat(10000) + 'free'), ['free'])).toBe(true);
-    expect(containsAnyWord(htmlToPolicyText('<div>'.repeat(10000) + 'free'), ['free'])).toBe(true);
+  it('survives deep nesting up to the tag limit', () => {
+    expect(containsAnyWord(htmlToPolicyText('<b>'.repeat(5000) + 'free'), ['free'])).toBe(true);
+    const t0 = Date.now();
+    expect(containsAnyWord(htmlToPolicyText('<div>'.repeat(5000) + 'free'), ['free'])).toBe(true);
+    expect(Date.now() - t0).toBeLessThan(1500);
   });
   it('keeps document order and spacing with the iterative walk', () => {
     expect(htmlToPolicyText('<p>a<b>b</b></p><p>c</p>d')).toBe('ab c d');
   });
-  it('accepts input exactly at the cap and rejects cap + 1', () => {
+  it('accepts input exactly at the character cap and rejects cap + 1', () => {
     expect(() => htmlToPolicyText('a'.repeat(POLICY_MAX_INPUT_CHARS))).not.toThrow();
     let err: unknown;
     try {
@@ -132,11 +135,16 @@ describe('robustness', () => {
     }
     expect(err).toBeInstanceOf(PolicyInputTooLargeError);
     expect((err as PolicyInputTooLargeError).code).toBe('policy_input_too_large');
+    expect((err as Error).message).toContain('characters');
   });
-  it('handles a 1 MB realistic input quickly', () => {
-    const html = '<p>Hello <b>world</b> <a href="https://x.com/a">link</a></p>'.repeat(
-      Math.floor(POLICY_MAX_INPUT_CHARS / 60)
-    );
+  it('accepts exactly POLICY_MAX_TAGS "<" characters and rejects one more', () => {
+    expect(() => htmlToPolicyText('<b>'.repeat(POLICY_MAX_TAGS))).not.toThrow();
+    expect(() => htmlToPolicyText('<b>'.repeat(POLICY_MAX_TAGS + 1))).toThrow(PolicyInputTooLargeError);
+    expect(() => htmlToPolicyText('<'.repeat(POLICY_MAX_TAGS + 1))).toThrow(/tags/);
+  });
+  it('handles a realistic input near the cap quickly', () => {
+    const unit = '<p>' + 'Hello world, this is a normal paragraph of post text. '.repeat(3) + '</p>';
+    const html = unit.repeat(Math.floor(POLICY_MAX_INPUT_CHARS / unit.length));
     const t0 = Date.now();
     htmlToPolicyText(html);
     expect(Date.now() - t0).toBeLessThan(3000);

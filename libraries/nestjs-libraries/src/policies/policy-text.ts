@@ -16,12 +16,13 @@ type HtmlNode = {
   content?: { childNodes?: HtmlNode[] };
 };
 
-export const POLICY_MAX_INPUT_CHARS = 1_000_000;
+export const POLICY_MAX_INPUT_CHARS = 200_000;
+export const POLICY_MAX_TAGS = 5_000;
 
 export class PolicyInputTooLargeError extends Error {
   readonly code = 'policy_input_too_large';
-  constructor(public readonly length: number) {
-    super(`Policy text input is ${length} characters, the limit is ${POLICY_MAX_INPUT_CHARS}`);
+  constructor(message: string) {
+    super(message);
     this.name = 'PolicyInputTooLargeError';
   }
 }
@@ -31,11 +32,24 @@ export class PolicyInputTooLargeError extends Error {
  * value so links hidden in attributes are still detected. Parsing and entity
  * decoding are delegated to parse5 so they match a browser. Traversal is
  * iterative so deeply nested markup cannot overflow the call stack.
- * Throws PolicyInputTooLargeError above POLICY_MAX_INPUT_CHARS.
+ * Throws PolicyInputTooLargeError above POLICY_MAX_INPUT_CHARS characters or POLICY_MAX_TAGS '<' characters.
  */
 export const htmlToPolicyText = (html: string): string => {
   const input = html || '';
-  if (input.length > POLICY_MAX_INPUT_CHARS) throw new PolicyInputTooLargeError(input.length);
+  if (input.length > POLICY_MAX_INPUT_CHARS) {
+    throw new PolicyInputTooLargeError(
+      `Policy text input is ${input.length} characters, the limit is ${POLICY_MAX_INPUT_CHARS}`
+    );
+  }
+  // parse5 is quadratic in nesting depth, so bound the markup count with an O(n) pre-scan.
+  let tags = 0;
+  for (let i = input.indexOf('<'); i !== -1; i = input.indexOf('<', i + 1)) {
+    if (++tags > POLICY_MAX_TAGS) {
+      throw new PolicyInputTooLargeError(
+        `Policy text input has more than ${POLICY_MAX_TAGS} tags, the limit is ${POLICY_MAX_TAGS}`
+      );
+    }
+  }
 
   const out: string[] = [];
   const stack: Array<HtmlNode | string> = [parseFragment(input) as unknown as HtmlNode];
