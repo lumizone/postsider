@@ -22,6 +22,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { CreateTagDto } from '@postsider/nestjs-libraries/dtos/posts/create.tag.dto';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import { randomBytes } from 'crypto';
+import {
+  actorToColumns,
+  SYSTEM_ACTOR,
+} from '@postsider/nestjs-libraries/actor/post-actor';
+import { currentActor } from '@postsider/nestjs-libraries/actor/actor-context';
 import { PublishErrorCategoryName } from '@postsider/nestjs-libraries/integrations/publish-error.classifier';
 
 export interface PostErrorMeta {
@@ -131,7 +136,10 @@ export class PostsRepository {
       if (post.state === 'QUEUE') {
         await tx.post.update({
           where: { id: postId },
-          data: { state: 'HELD' },
+          data: {
+            state: 'HELD',
+            ...actorToColumns(SYSTEM_ACTOR, 'lastModifiedBy'),
+          },
         });
         return {
           outcome: 'held',
@@ -177,13 +185,17 @@ export class PostsRepository {
         },
       });
 
+      const actor = currentActor();
       const now = new Date();
       const requeued: { id: string; taskQueue: string }[] = [];
       for (const p of held) {
         const toQueue = behavior === 'auto_resume' && p.publishDate > now;
         await tx.post.update({
           where: { id: p.id },
-          data: { state: toQueue ? 'QUEUE' : 'DRAFT' },
+          data: {
+            state: toQueue ? 'QUEUE' : 'DRAFT',
+            ...actorToColumns(actor, 'lastModifiedBy'),
+          },
         });
         if (toQueue) {
           requeued.push({
@@ -512,6 +524,7 @@ export class PostsRepository {
       },
       data: {
         deletedAt: new Date(),
+        ...actorToColumns(currentActor(), 'lastModifiedBy'),
       },
     });
 
@@ -605,6 +618,7 @@ export class PostsRepository {
         releaseURL,
         releaseId: postId,
         ...CLEARED_ERROR_FIELDS,
+        ...actorToColumns(SYSTEM_ACTOR, 'lastModifiedBy'),
       },
     });
   }
@@ -622,7 +636,11 @@ export class PostsRepository {
   async claimErrorForRetry(orgId: string, id: string): Promise<boolean> {
     const res = await this._post.model.post.updateMany({
       where: { id, organizationId: orgId, state: 'ERROR', deletedAt: null },
-      data: { state: 'QUEUE', ...CLEARED_ERROR_FIELDS },
+      data: {
+        state: 'QUEUE',
+        ...CLEARED_ERROR_FIELDS,
+        ...actorToColumns(currentActor(), 'lastModifiedBy'),
+      },
     });
     return res.count === 1;
   }
@@ -655,6 +673,7 @@ export class PostsRepository {
       },
       data: {
         releaseId: String(releaseId),
+        ...actorToColumns(currentActor(), 'lastModifiedBy'),
       },
     });
   }
@@ -674,6 +693,7 @@ export class PostsRepository {
       },
       data: {
         state,
+        ...actorToColumns(currentActor(), 'lastModifiedBy'),
         ...(err
           ? { error: typeof err === 'string' ? err : JSON.stringify(err) }
           : {}),
@@ -746,6 +766,7 @@ export class PostsRepository {
       },
       data: {
         publishDate: dayjs(date).toDate(),
+        ...actorToColumns(currentActor(), 'lastModifiedBy'),
         // schedule: set state to QUEUE (or DRAFT if it was a draft)
         // update: don't change the state
         ...(action === 'schedule'
@@ -788,8 +809,13 @@ export class PostsRepository {
     body: PostBody,
     tags: { value: string; label: string }[],
     creationMethod: CreationMethod,
-    inter?: number
+    inter?: number,
+    provenance?: Partial<
+      Record<'agentName' | 'workflowId' | 'runId' | 'externalRef' | 'source', string>
+    >
   ) {
+    const actor = currentActor();
+    const createdIds: string[] = [];
     const posts: Post[] = [];
     const uuid = uuidv4();
 
@@ -807,6 +833,9 @@ export class PostsRepository {
       const keepRelease = existing?.state === 'PUBLISHED';
       const updateData = (type: 'create' | 'update') => ({
         publishDate: dayjs(date).toDate(),
+        ...(type === 'create' ? actorToColumns(actor, 'createdBy') : {}),
+        ...actorToColumns(actor, 'lastModifiedBy'),
+        ...(provenance ?? {}),
         integration: {
           connect: {
             id: body.integration.id,
@@ -863,8 +892,7 @@ export class PostsRepository {
           : {}),
       });
 
-      posts.push(
-        await this._post.model.post.upsert({
+      const upserted = await this._post.model.post.upsert({
           where: {
             // Scope by organizationId so a client-supplied `value.id` can only
             // ever match a post the caller already owns. Without this, passing
@@ -883,8 +911,11 @@ export class PostsRepository {
               disconnect: true,
             },
           },
-        })
-      );
+        });
+      if (!existing) {
+        createdIds.push(upserted.id);
+      }
+      posts.push(upserted);
 
       if (posts.length === 1) {
         await this._tagsPosts.model.tagsPosts.deleteMany({
@@ -958,7 +989,7 @@ export class PostsRepository {
       });
     }
 
-    return { previousPost, posts };
+    return { previousPost, posts, createdIds };
   }
 
   async submit(id: string, order: string, buyerOrganizationId: string) {

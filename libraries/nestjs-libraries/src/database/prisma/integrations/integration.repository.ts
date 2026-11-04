@@ -2,6 +2,10 @@ import {
   PrismaRepository,
   PrismaTransaction,
 } from '@postsider/nestjs-libraries/database/prisma/prisma.service';
+import {
+  actorToColumns,
+} from '@postsider/nestjs-libraries/actor/post-actor';
+import { currentActor } from '@postsider/nestjs-libraries/actor/actor-context';
 import { Injectable } from '@nestjs/common';
 import dayjs from 'dayjs';
 import { Integration } from '@prisma/client';
@@ -978,6 +982,7 @@ export class IntegrationRepository {
       },
       data: {
         state: 'DRAFT',
+        ...actorToColumns(currentActor(), 'lastModifiedBy'),
       },
     });
   }
