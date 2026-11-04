@@ -422,6 +422,10 @@ model Post {
   lastMessageId              String?
   intervalInDays             Int?
   error                      String?
+  errorCategory              PublishErrorCategory?
+  errorRetryable             Boolean?
+  publishAttempts            Int                       @default(0)
+  lastPublishAttemptAt       DateTime?
   evergreen                  Boolean                   @default(false)
   lastRecycledAt             DateTime?
   firstComment               String?
@@ -664,9 +668,47 @@ model PublicWebhookSubscription {
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
   organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deliveries          PublicWebhookDelivery[]
 
   @@index([organizationId, active])
   @@index([organizationId, createdAt])
+}
+
+model PublicWebhookDelivery {
+  id             String                      @id @default(uuid())
+  organizationId String
+  subscriptionId String
+  eventId        String
+  event          String
+  payload        Json
+  status         PublicWebhookDeliveryStatus @default(PENDING)
+  attempts       Int                         @default(0)
+  nextAttemptAt  DateTime?
+  lastStatusCode Int?
+  lastError      String?
+  createdAt      DateTime                    @default(now())
+  deliveredAt    DateTime?
+  subscription   PublicWebhookSubscription   @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
+  @@index([subscriptionId, createdAt])
+  @@index([createdAt])
+}
+
+enum PublicWebhookDeliveryStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+enum PublishErrorCategory {
+  AUTH_EXPIRED
+  PERMISSION_MISSING
+  RATE_LIMITED
+  INVALID_CONTENT
+  PROVIDER_UNAVAILABLE
+  UNKNOWN_OUTCOME
+  UNKNOWN
 }
 
 model PublicApiIdempotency {
