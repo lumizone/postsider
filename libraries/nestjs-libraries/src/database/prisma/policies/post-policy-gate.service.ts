@@ -16,7 +16,12 @@ import {
 
 type CreateBodyLike = Parameters<PolicyEvaluationService['targetsFromDraftBody']>[1];
 type Effect = PolicyOutcome['effect'];
-type Pre = { outcome: PolicyOutcome; approvalIntegrationIds: Set<string> };
+type Pre = {
+  outcome: PolicyOutcome;
+  approvalIntegrationIds: Set<string>;
+  /** False when a draft report was skipped because the evaluation failed. */
+  evaluated?: boolean;
+};
 type PolicyView = { effect: string; matched: PolicyMatch[] };
 
 const EMPTY_OUTCOME = (): PolicyOutcome => ({ effect: 'ALLOW', matched: [], channels: [] });
@@ -59,7 +64,7 @@ export class PostPolicyGateService {
       // Drafts are report only: a failing evaluation skips the report and
       // never blocks saving. Scheduling and publishing fail closed.
       if (body.type === 'draft') {
-        return { outcome: EMPTY_OUTCOME(), approvalIntegrationIds: new Set<string>() };
+        return { outcome: EMPTY_OUTCOME(), approvalIntegrationIds: new Set<string>(), evaluated: false };
       }
       return failClosed(error);
     }
@@ -173,8 +178,13 @@ export class PostPolicyGateService {
     orgId: string,
     group: string,
     opts: { includeUnknownOutcome: boolean }
-  ): Promise<{ policy: PolicyOutcome; approvalPostIds: Set<string> }> {
+  ): Promise<{
+    policy: PolicyOutcome;
+    approvalPostIds: Set<string>;
+    evaluatedPostIds: Set<string>;
+  }> {
     const approvalPostIds = new Set<string>();
+    const evaluatedPostIds = new Set<string>();
     let outcome: PolicyOutcome;
     let candidates: Array<{ id: string; integrationId: string }>;
     try {
@@ -191,9 +201,12 @@ export class PostPolicyGateService {
           action: 'SCHEDULE',
           approved: false,
         });
-        if (target) targets.push(target);
+        if (target) {
+          targets.push(target);
+          evaluatedPostIds.add(row.id);
+        }
       }
-      if (!targets.length) return { policy: EMPTY_OUTCOME(), approvalPostIds };
+      if (!targets.length) return { policy: EMPTY_OUTCOME(), approvalPostIds, evaluatedPostIds };
       outcome = await this._evaluation.evaluateTargets(orgId, targets, 'write');
     } catch (error) {
       // Retry re-arms publishing: an evaluation failure fails closed.
@@ -208,7 +221,9 @@ export class PostPolicyGateService {
       outcome.channels.filter((c) => c.effect === 'REQUIRE_APPROVAL').map((c) => c.integrationId)
     );
     for (const row of candidates) {
-      if (approvalChannels.has(row.integrationId)) approvalPostIds.add(row.id);
+      if (evaluatedPostIds.has(row.id) && approvalChannels.has(row.integrationId)) {
+        approvalPostIds.add(row.id);
+      }
     }
     if (outcome.effect !== 'ALLOW') await this._evaluation.recordOutcome(orgId, outcome, 'write', {});
     return {
@@ -218,6 +233,7 @@ export class PostPolicyGateService {
         channels: outcome.channels.map((c) => ({ ...c, matched: sanitizeMatches(c.matched) })),
       },
       approvalPostIds,
+      evaluatedPostIds,
     };
   }
 
@@ -227,7 +243,10 @@ export class PostPolicyGateService {
    * counts as routed.
    */
   async routeRetry(orgId: string, postId: string): Promise<boolean> {
-    const routed = await this._router.route(orgId, postId, { terminateWorkflow: false });
+    const routed = await this._router.route(orgId, postId, {
+      terminateWorkflow: false,
+      onlyFromState: 'ERROR',
+    });
     return routed.requested || routed.approvalId !== null;
   }
 

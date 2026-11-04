@@ -63,6 +63,7 @@ describe('POST /posts/group/:group/retry-failed', () => {
       includeUnknownOutcome: false,
       routeToApproval: expect.any(Function),
       approvalPostIds: new Set(),
+      evaluatedPostIds: new Set(),
     });
   });
 

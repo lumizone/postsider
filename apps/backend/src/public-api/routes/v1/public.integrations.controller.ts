@@ -714,6 +714,7 @@ export class PublicIntegrationsController {
         ...(gated
           ? {
               approvalPostIds: gated.approvalPostIds,
+              evaluatedPostIds: gated.evaluatedPostIds,
               routeToApproval: (postId: string) =>
                 this._policyGate!.routeRetry(org.id, postId),
             }

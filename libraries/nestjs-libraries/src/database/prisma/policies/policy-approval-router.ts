@@ -20,10 +20,15 @@ export class PolicyApprovalRouter {
   async route(
     orgId: string,
     postId: string,
-    opts: { terminateWorkflow: boolean }
+    opts: { terminateWorkflow: boolean; onlyFromState?: string }
   ): Promise<{ requested: boolean; approvalId: string | null }> {
     const post = await this._repo.getPostById(postId, orgId);
     if (!post) throw new NotFoundException({ msg: 'Post not found' });
+    // A caller that read the state earlier (retry) must not move a row that
+    // changed meanwhile, for example one a concurrent call already re-armed.
+    if (opts.onlyFromState && post.state !== opts.onlyFromState) {
+      return { requested: false, approvalId: null };
+    }
 
     if (post.state === 'HELD') {
       // Held posts have no live workflow: only the state moves.

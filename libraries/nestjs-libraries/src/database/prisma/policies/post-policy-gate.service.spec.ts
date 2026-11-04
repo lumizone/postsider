@@ -58,6 +58,13 @@ describe('PostPolicyGateService', () => {
   });
 
   describe('preflightWrite', () => {
+    it('marks a draft report as not evaluated when the evaluation fails', async () => {
+      evaluation.evaluateTargets.mockRejectedValue(new PolicyInputTooLargeError(1, 'big'));
+      const pre = await gate.preflightWrite('org', body('draft'), actor);
+      expect(pre.evaluated).toBe(false);
+      expect(pre.outcome.effect).toBe('ALLOW');
+    });
+
     it('reports a BLOCK for a draft without throwing or routing', async () => {
       const blocked = {
         effect: 'BLOCK' as const,
@@ -406,6 +413,7 @@ describe('PostPolicyGateService', () => {
       });
       const out = await gate.gateRetry('org', 'g', retryOpts);
       expect([...out.approvalPostIds]).toEqual(['B']);
+      expect([...out.evaluatedPostIds]).toEqual(['A', 'B']);
       expect(out.policy.effect).toBe('REQUIRE_APPROVAL');
       expect(out.policy.matched[0].name).toBe('Review me');
       expect(router.route).not.toHaveBeenCalled();
@@ -446,6 +454,21 @@ describe('PostPolicyGateService', () => {
       const out = await gate.gateRetry('org', 'g', retryOpts);
       expect(out.policy.effect).toBe('ALLOW');
       expect(out.approvalPostIds.size).toBe(0);
+    });
+
+    it('a row whose stored post is gone is not in evaluatedPostIds', async () => {
+      evaluation.topLevelRowsOfGroup.mockResolvedValue([row('A', 'a'), row('B', 'b')]);
+      evaluation.targetFromStoredPost.mockImplementation(async (_o: string, id: string) =>
+        id === 'A' ? null : target('b')
+      );
+      evaluation.evaluateTargets.mockResolvedValue(allow(['b']));
+      const out = await gate.gateRetry('org', 'g', retryOpts);
+      expect([...out.evaluatedPostIds]).toEqual(['B']);
+    });
+
+    it('routeRetry only routes a row that is still in ERROR', async () => {
+      await gate.routeRetry('org', 'A');
+      expect(router.route).toHaveBeenCalledWith('org', 'A', { terminateWorkflow: false, onlyFromState: 'ERROR' });
     });
 
     it('skips a row whose stored post is gone', async () => {

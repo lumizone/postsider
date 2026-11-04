@@ -48,6 +48,22 @@ describe('PolicyApprovalRouter', () => {
     expect(posts.changePostStatus).not.toHaveBeenCalled();
   });
 
+  it('onlyFromState: a row whose fresh state changed is left untouched and not routed', async () => {
+    repo.getPostById.mockResolvedValue({ id: 'p', state: 'QUEUE' });
+    const out = await router.route('org', 'p', { terminateWorkflow: false, onlyFromState: 'ERROR' });
+    expect(out).toEqual({ requested: false, approvalId: null });
+    expect(posts.setPostState).not.toHaveBeenCalled();
+    expect(posts.changePostStatus).not.toHaveBeenCalled();
+    expect(approvals.requestApprovalFromApi).not.toHaveBeenCalled();
+  });
+
+  it('onlyFromState: a row still in ERROR moves to DRAFT and is routed', async () => {
+    repo.getPostById.mockResolvedValue({ id: 'p', state: 'ERROR' });
+    const out = await router.route('org', 'p', { terminateWorkflow: false, onlyFromState: 'ERROR' });
+    expect(calls).toEqual(['setPostState', 'request']);
+    expect(out.requested).toBe(true);
+  });
+
   it('moves an ERROR post to DRAFT first', async () => {
     repo.getPostById.mockResolvedValue({ id: 'p', state: 'ERROR' });
     await router.route('org', 'p', { terminateWorkflow: true });

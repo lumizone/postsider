@@ -331,12 +331,18 @@ export class PublicWorkspaceController {
         (v): v is string => typeof v === 'string'
       )
     );
-    // Report only: the copy is a draft, so a policy never blocks it. The
-    // outcome tells the caller what will happen when the draft is scheduled.
-    const policy = await this.reportDuplicatePolicy(org.id, source, channelId, date);
     const result = await this._postsService.duplicatePost(
       org.id,
       source.group,
+      channelId,
+      date
+    );
+    // Report only: the copy is a draft, so a policy never blocks it. The
+    // report runs after the copy exists, so the audit row has a real target.
+    const policy = await this.reportDuplicatePolicy(
+      org.id,
+      source,
+      result?.target?.postId,
       channelId,
       date
     );
@@ -346,12 +352,12 @@ export class PublicWorkspaceController {
   private async reportDuplicatePolicy(
     orgId: string,
     source: Awaited<ReturnType<PostsService['getPost']>>,
+    createdPostId?: string,
     channelId?: string,
     date?: string
   ): Promise<{ effect: string; matched: unknown[] } | undefined> {
     if (!this._policyGate) return undefined;
     try {
-      const first: any = source.posts?.[0];
       const pre = await this._policyGate.preflightWrite(
         orgId,
         {
@@ -366,13 +372,15 @@ export class PublicWorkspaceController {
               })),
               firstComment:
                 (source.posts ?? []).find((p: any) => p.firstComment)?.firstComment ??
-                first?.firstComment ??
                 null,
             },
           ],
         },
-        currentActor()
+        currentActor(),
+        createdPostId ? { editingPostId: createdPostId } : {}
       );
+      // An evaluation that failed must not be reported as ALLOW.
+      if (pre.evaluated === false) return undefined;
       return {
         effect: pre.outcome.effect,
         matched: sanitizeMatches(pre.outcome.matched),

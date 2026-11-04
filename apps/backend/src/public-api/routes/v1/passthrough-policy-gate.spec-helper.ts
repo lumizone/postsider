@@ -20,6 +20,7 @@ export const passthroughPolicyGate = {
     return {
       policy: { effect: 'ALLOW', matched: [], channels: [] },
       approvalPostIds: new Set<string>(),
+      evaluatedPostIds: new Set<string>(),
     };
   },
   async routeRetry() {

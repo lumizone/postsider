@@ -151,6 +151,25 @@ describe('PostsService.retryFailedByGroup', () => {
       expect(stubs.startWorkflow).not.toHaveBeenCalled();
     });
 
+    it('skips an approval row when no router is given instead of re-arming it', async () => {
+      const res = await svc.retryFailedByGroup('o1', 'g1', {
+        includeUnknownOutcome: false,
+        approvalPostIds: new Set(['A']),
+      });
+      expect(byId(res, 'A')).toMatchObject({ action: 'skipped', reason: 'rearm_failed' });
+      expect(stubs.claimErrorForRetry.mock.calls.map((c) => c[1])).toEqual(['F']);
+    });
+
+    it('never re-arms a row the policy gate did not evaluate', async () => {
+      const res = await svc.retryFailedByGroup('o1', 'g1', {
+        includeUnknownOutcome: false,
+        evaluatedPostIds: new Set(['A']),
+      });
+      expect(byId(res, 'A').action).toBe('requeued');
+      expect(byId(res, 'F')).toMatchObject({ action: 'skipped', reason: 'not_evaluated' });
+      expect(stubs.claimErrorForRetry.mock.calls.map((c) => c[1])).toEqual(['A']);
+    });
+
     it('does not route rows that the existing skip checks reject', async () => {
       const routeToApproval = jest.fn().mockResolvedValue(true);
       const res = await svc.retryFailedByGroup('o1', 'g1', {

@@ -95,13 +95,16 @@ export type RetryFailedResult = {
     | 'not_in_error_state'
     | 'unknown_outcome_requires_confirmation'
     | 'already_published'
-    | 'rearm_failed';
+    | 'rearm_failed'
+    | 'not_evaluated';
 };
 
 export type RetryFailedOptions = {
   includeUnknownOutcome: boolean;
   /** Rows that a write-time policy sends to human review instead of re-arming. */
   approvalPostIds?: Set<string>;
+  /** When set, rows the policy gate did not evaluate are never re-armed. */
+  evaluatedPostIds?: Set<string>;
   routeToApproval?: (postId: string) => Promise<boolean>;
 };
 
@@ -1760,8 +1763,14 @@ export class PostsService {
     }
     if (row.releaseId && row.releaseId !== 'missing') return skip('already_published');
 
-    if (opts.approvalPostIds?.has(row.id) && opts.routeToApproval) {
+    if (opts.evaluatedPostIds && !opts.evaluatedPostIds.has(row.id)) {
+      // Became re-armable after the policy gate read the group.
+      return skip('not_evaluated');
+    }
+
+    if (opts.approvalPostIds?.has(row.id)) {
       // A policy asks for human review: the row is never re-armed here.
+      if (!opts.routeToApproval) return skip('rearm_failed');
       try {
         if (!(await opts.routeToApproval(row.id))) return skip('rearm_failed');
       } catch (err) {

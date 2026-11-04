@@ -422,7 +422,7 @@ describe('write-time policy gate over HTTP', () => {
       expect(res.status).toBe(201);
       const json = await res.json();
       expect(routed).toBe(true);
-      expect(router.route).toHaveBeenCalledWith('org-1', 'pb', { terminateWorkflow: false });
+      expect(router.route).toHaveBeenCalledWith('org-1', 'pb', { terminateWorkflow: false, onlyFromState: 'ERROR' });
       expect(json.policy.effect).toBe('REQUIRE_APPROVAL');
       expect(json.results[1].action).toBe('approval_requested');
     });
@@ -437,6 +437,14 @@ describe('write-time policy gate over HTTP', () => {
       });
       await send('POST', '/posts/group/g1/retry-failed', {});
       expect(routed).toBe(true);
+      expect(router.route).toHaveBeenCalledWith('org-1', 'pa', { terminateWorkflow: false, onlyFromState: 'ERROR' });
+    });
+
+    it('passes the evaluated ids to the service', async () => {
+      evaluation.evaluateTargets.mockResolvedValue(outcomeFor('ALLOW', ['chA', 'chB']));
+      await send('POST', '/posts/group/g1/retry-failed', {});
+      const opts = postsService.retryFailedByGroup.mock.calls[0][2];
+      expect([...opts.evaluatedPostIds]).toEqual(['pa', 'pb']);
     });
   });
 
@@ -482,7 +490,18 @@ describe('write-time policy gate over HTTP', () => {
       const res = await send('POST', '/posts/p1/duplicate', {});
       expect(res.status).toBe(201);
       expect(postsService.duplicatePost).toHaveBeenCalledTimes(1);
-      expect((await res.json()).duplicated).toBe(true);
+      const json = await res.json();
+      expect(json.duplicated).toBe(true);
+      expect(json).not.toHaveProperty('policy');
+    });
+
+    it('writes no policy audit when the duplicate itself fails', async () => {
+      evaluation.evaluateTargets.mockResolvedValue(outcomeFor('BLOCK', ['chA']));
+      postsService.duplicatePost.mockRejectedValue(new Error('Target channel not found'));
+      const res = await send('POST', '/posts/p1/duplicate', {});
+      expect(res.status).toBeGreaterThanOrEqual(400);
+      expect(evaluation.evaluateTargets).not.toHaveBeenCalled();
+      expect(evaluation.recordOutcome).not.toHaveBeenCalled();
     });
   });
 
