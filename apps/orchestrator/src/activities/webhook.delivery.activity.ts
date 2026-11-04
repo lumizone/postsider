@@ -5,6 +5,7 @@ import { PrismaService } from '@postsider/nestjs-libraries/database/prisma/prism
 
 export const DELIVERY_RETENTION_DAYS = 30;
 export const IDEMPOTENCY_RETENTION_DAYS = 7;
+export const AUDIT_RESOURCE_RETENTION_DAYS = 365;
 export const PURGE_BATCH = 5000;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -41,11 +42,18 @@ export class WebhookDeliveryActivity {
   /**
    * Deletes finished webhook deliveries older than 30 days and idempotency
    * keys older than 7 days. PENDING deliveries are never touched, however old.
+   * Also deletes audit rows of type 'resource' older than 365 days; security
+   * and sign-in audit rows are never matched. Order: deliveries, idempotency,
+   * audit, so an audit failure is rethrown (Temporal retries) after the others ran.
    */
   @ActivityMethod()
   async purgeExpiredPublicApiRecords(
     now: Date = new Date()
-  ): Promise<{ deliveries: number; idempotency: number }> {
+  ): Promise<{
+    deliveries: number;
+    idempotency: number;
+    auditEvents: number;
+  }> {
     const deliveries = await this.purgeInBatches(
       this._prisma.publicWebhookDelivery as unknown as PurgeDelegate,
       {
@@ -59,7 +67,16 @@ export class WebhookDeliveryActivity {
         createdAt: { lt: new Date(now.getTime() - IDEMPOTENCY_RETENTION_DAYS * DAY_MS) },
       }
     );
-    return { deliveries, idempotency };
+    const auditEvents = await this.purgeInBatches(
+      this._prisma.auditLog as unknown as PurgeDelegate,
+      {
+        type: 'resource',
+        createdAt: {
+          lt: new Date(now.getTime() - AUDIT_RESOURCE_RETENTION_DAYS * DAY_MS),
+        },
+      }
+    );
+    return { deliveries, idempotency, auditEvents };
   }
 
   private async purgeInBatches(
