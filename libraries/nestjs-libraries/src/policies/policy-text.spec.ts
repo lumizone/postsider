@@ -39,3 +39,37 @@ describe('containsAnyWord', () => {
     expect(containsAnyWord('see aXb here', ['a.b'])).toBe(false);
   });
 });
+
+describe('htmlToPolicyText hardening', () => {
+  it('removes inline tags without inserting a space', () => {
+    expect(htmlToPolicyText('<p>fr<b>ee</b> money</p>')).toBe('free money');
+    expect(containsAnyWord(htmlToPolicyText('fr<b>ee</b>'), ['free'])).toBe(true);
+  });
+  it('splits words at block tags and br', () => {
+    expect(htmlToPolicyText('<p>free</p><p>money</p>')).toBe('free money');
+    expect(htmlToPolicyText('free<br/>money')).toBe('free money');
+    expect(htmlToPolicyText('<li>a</li><li>b</li>')).toBe('a b');
+  });
+  it('decodes numeric entities', () => {
+    expect(containsLink(htmlToPolicyText('h&#116;tps://x.com'))).toBe(true);
+    expect(containsLink(htmlToPolicyText('h&#x74;tps://x.com'))).toBe(true);
+    expect(containsAnyWord(htmlToPolicyText('fr&#101;e'), ['free'])).toBe(true);
+  });
+  it('leaves invalid code points as-is', () => {
+    expect(htmlToPolicyText('a&#0;b &#1114112; &#xD800;')).toBe('a&#0;b &#1114112; &#xD800;');
+  });
+  it('does not turn an entity into a tag that is then stripped', () => {
+    expect(htmlToPolicyText('&lt;b&gt;x')).toBe('<b>x');
+  });
+});
+
+describe('unicode normalization', () => {
+  it('matches NFD text against NFC words and vice versa', () => {
+    expect(containsAnyWord('caf\u0065\u0301 open', ['caf\u00e9'])).toBe(true);
+    expect(containsAnyWord('caf\u00e9 open', ['caf\u0065\u0301'])).toBe(true);
+  });
+  it('does not match cafe inside cafe with accent', () => {
+    expect(containsAnyWord('un caf\u00e9', ['cafe'])).toBe(false);
+    expect(containsAnyWord('un caf\u0065\u0301', ['cafe'])).toBe(false);
+  });
+});

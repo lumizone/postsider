@@ -50,5 +50,14 @@ describe('validateConditionParams', () => {
   it('isValidTimezone', () => {
     expect(isValidTimezone('Europe/Warsaw')).toBe(true);
     expect(isValidTimezone('nope')).toBe(false);
+    expect(isValidTimezone('UTC')).toBe(true);
+    for (const bad of ['+01:00', 'utc', 'europe/warsaw', '']) expect(isValidTimezone(bad)).toBe(false);
+  });
+});
+
+describe('end 24:00', () => {
+  it('is rejected consistently with the HH:mm 00:00 to 23:59 rule', () => {
+    const r = validateConditionParams('OUTSIDE_WINDOW', { days: [1], start: '09:00', end: '24:00', timezone: 'UTC' });
+    expect(r).toMatchObject({ ok: false, field: 'end' });
   });
 });

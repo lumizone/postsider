@@ -7,10 +7,9 @@ export type ParamResult =
 const fail = (field: string, message: string): ParamResult => ({ ok: false, field, message });
 
 export const isValidTimezone = (tz: string): boolean => {
-  if (typeof tz !== 'string' || !tz) return false;
+  if (typeof tz !== 'string' || !/^[A-Za-z][A-Za-z0-9_+\-]*(\/[A-Za-z0-9_+\-]+)*$/.test(tz)) return false;
   try {
-    new Intl.DateTimeFormat('en-US', { timeZone: tz });
-    return true;
+    return new Intl.DateTimeFormat('en-US', { timeZone: tz }).resolvedOptions().timeZone === tz;
   } catch {
     return false;
   }

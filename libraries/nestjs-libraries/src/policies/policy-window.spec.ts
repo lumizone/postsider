@@ -57,3 +57,26 @@ describe('dayBounds', () => {
     expect(dayBounds(next, W).start.toISOString()).toBe('2026-11-02T23:00:00.000Z');
   });
 });
+
+describe('window edge cases', () => {
+  it('window ending at 00:00 is an overnight window to midnight', () => {
+    const w = { days: [1], start: '20:00', end: '00:00', timezone: 'UTC' };
+    expect(isInsideWindow(d('2026-11-02T23:59:00Z'), w)).toBe(true);
+    expect(isInsideWindow(d('2026-11-03T00:00:00Z'), w)).toBe(false);
+    expect(isInsideWindow(d('2026-11-02T19:59:00Z'), w)).toBe(false);
+  });
+  it('overnight window across the spring DST change (Warsaw 2026-03-28 to 29)', () => {
+    const w = { days: [6], start: '22:00', end: '06:00', timezone: W };
+    expect(isInsideWindow(d('2026-03-28T21:30:00Z'), w)).toBe(true); // 22:30 CET Sat
+    expect(isInsideWindow(d('2026-03-29T01:30:00Z'), w)).toBe(true); // 03:30 CEST Sun
+    expect(isInsideWindow(d('2026-03-29T03:59:00Z'), w)).toBe(true); // 05:59 CEST
+    expect(isInsideWindow(d('2026-03-29T04:00:00Z'), w)).toBe(false); // 06:00 CEST
+  });
+  it('overnight window across the autumn DST change (Warsaw 2026-10-24 to 25)', () => {
+    const w = { days: [6], start: '22:00', end: '06:00', timezone: W };
+    expect(isInsideWindow(d('2026-10-25T00:30:00Z'), w)).toBe(true);
+    expect(isInsideWindow(d('2026-10-25T01:30:00Z'), w)).toBe(true);
+    expect(isInsideWindow(d('2026-10-25T04:59:00Z'), w)).toBe(true); // 05:59 CET
+    expect(isInsideWindow(d('2026-10-25T05:00:00Z'), w)).toBe(false); // 06:00 CET
+  });
+});
