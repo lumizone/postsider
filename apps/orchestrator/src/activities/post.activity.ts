@@ -21,7 +21,9 @@ import {
   PrePublishError,
   PublishFailure,
   sanitizeFailureMessage,
+  UNKNOWN_OUTCOME_MESSAGE,
 } from '@postsider/nestjs-libraries/integrations/publish-error.classifier';
+import { runWithPublishSideEffectTracking } from '@postsider/nestjs-libraries/integrations/publish-side-effect.context';
 import { RefreshIntegrationService } from '@postsider/nestjs-libraries/integrations/refresh.integration.service';
 import { timer } from '@postsider/helpers/utils/timer';
 import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
@@ -736,6 +738,31 @@ export class PostActivity {
     };
   }
 
+  /**
+   * A provider call that already got a 2xx for a write request and then failed
+   * may have published, so whatever the classified category, it is not safe to
+   * auto-retry. Only requests made through SocialAbstract.fetch are observed.
+   */
+  private _failureAfterCall(
+    e: any,
+    sideEffectObserved: boolean
+  ): PublishFailure {
+    const failure = classifyPublishError(e);
+    if (!sideEffectObserved) return failure;
+    const original = sanitizeFailureMessage(failure.message, '');
+    return {
+      category: 'UNKNOWN_OUTCOME',
+      retryable: false,
+      autoRetry: 'none',
+      message: sanitizeFailureMessage(
+        original && original !== UNKNOWN_OUTCOME_MESSAGE
+          ? `${UNKNOWN_OUTCOME_MESSAGE} (${original})`
+          : UNKNOWN_OUTCOME_MESSAGE,
+        UNKNOWN_OUTCOME_MESSAGE
+      ),
+    };
+  }
+
   @ActivityMethod()
   async publishPostById(
     orgId: string,
@@ -762,13 +789,16 @@ export class PostActivity {
     } catch (e: any) {
       return this._startFailure(e);
     }
+    const tracked = runWithPublishSideEffectTracking(() =>
+      this.postSocial(integration, posts)
+    );
     try {
-      return {
-        outcome: 'published',
-        results: await this.postSocial(integration, posts),
-      };
+      return { outcome: 'published', results: await tracked.result };
     } catch (e) {
-      return { outcome: 'failed', failure: classifyPublishError(e) };
+      return {
+        outcome: 'failed',
+        failure: this._failureAfterCall(e, tracked.state.sideEffectObserved),
+      };
     }
   }
 
@@ -795,13 +825,16 @@ export class PostActivity {
     } catch (e: any) {
       return this._startFailure(e);
     }
+    const tracked = runWithPublishSideEffectTracking(() =>
+      this.postComment(id, postId, integration, posts)
+    );
     try {
-      return {
-        outcome: 'published',
-        results: await this.postComment(id, postId, integration, posts),
-      };
+      return { outcome: 'published', results: await tracked.result };
     } catch (e) {
-      return { outcome: 'failed', failure: classifyPublishError(e) };
+      return {
+        outcome: 'failed',
+        failure: this._failureAfterCall(e, tracked.state.sideEffectObserved),
+      };
     }
   }
 

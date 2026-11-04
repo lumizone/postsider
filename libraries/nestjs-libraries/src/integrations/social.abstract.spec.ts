@@ -2,6 +2,7 @@ jest.mock('@postsider/helpers/utils/timer', () => ({
   timer: jest.fn().mockResolvedValue(undefined),
 }));
 
+import { runWithPublishSideEffectTracking } from './publish-side-effect.context';
 import {
   assertRefreshedAccessToken,
   BadBody,
@@ -163,5 +164,46 @@ describe('SocialAbstract failure kinds', () => {
       throw { message: 'rejected' };
     });
     expect(await kindOf(p)).toBeUndefined();
+  });
+});
+
+describe('SocialAbstract side-effect tracking', () => {
+  const realFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = realFetch;
+  });
+
+  it('a 2xx POST inside the context sets the flag', async () => {
+    global.fetch = respond(200) as any;
+    const { state, result } = runWithPublishSideEffectTracking(() =>
+      new T().fetch('http://x', { method: 'POST' }, 't')
+    );
+    await result;
+    expect(state.sideEffectObserved).toBe(true);
+  });
+
+  it('a 2xx GET (or no method) does not set the flag', async () => {
+    global.fetch = respond(200) as any;
+    const { state, result } = runWithPublishSideEffectTracking(async () => {
+      await new T().fetch('http://x', { method: 'GET' }, 't');
+      await new T().fetch('http://x', {}, 't');
+    });
+    await result;
+    expect(state.sideEffectObserved).toBe(false);
+  });
+
+  it('a non-2xx POST does not set the flag', async () => {
+    global.fetch = respond(400) as any;
+    const { state, result } = runWithPublishSideEffectTracking(() =>
+      new T().fetch('http://x', { method: 'POST' }, 't')
+    );
+    await expect(result).rejects.toBeInstanceOf(BadBody);
+    expect(state.sideEffectObserved).toBe(false);
+  });
+
+  it('outside a context fetch behaves as before', async () => {
+    global.fetch = respond(200) as any;
+    const res = await new T().fetch('http://x', { method: 'POST' }, 't');
+    expect(res.status).toBe(200);
   });
 });

@@ -8,6 +8,7 @@ import {
   BadBody,
   RefreshToken,
 } from '@postsider/nestjs-libraries/integrations/social.abstract';
+import { markPublishSideEffect } from '@postsider/nestjs-libraries/integrations/publish-side-effect.context';
 
 function createActivity() {
   const posts = {
@@ -186,6 +187,72 @@ describe('PostActivity classified publishing', () => {
       false
     );
     expect(unknown.failure.category).toBe('UNKNOWN_OUTCOME');
+  });
+
+  describe('write already accepted by the provider in the same call', () => {
+    const rateLimited = () =>
+      new BadBody('x', '{}', '', 'Rate limit', 'rate_limited');
+
+    it('a 2xx write then a rate-limited failure is UNKNOWN_OUTCOME, no auto retry', async () => {
+      const { activity, postSocial } = setup();
+      postSocial.mockImplementationOnce(async () => {
+        markPublishSideEffect('POST');
+        throw rateLimited();
+      });
+      const res: any = await activity.publishPostById('org-1', 'c1', posts, false);
+      expect(res.failure).toEqual(
+        expect.objectContaining({
+          category: 'UNKNOWN_OUTCOME',
+          retryable: false,
+          autoRetry: 'none',
+        })
+      );
+      expect(res.failure.message).toContain('Rate limit');
+    });
+
+    it('the same failure without a prior write stays RATE_LIMITED', async () => {
+      const { activity, postSocial } = setup();
+      postSocial.mockImplementationOnce(async () => {
+        markPublishSideEffect('GET');
+        throw rateLimited();
+      });
+      const res: any = await activity.publishPostById('org-1', 'c1', posts, false);
+      expect(res.failure.category).toBe('RATE_LIMITED');
+      expect(res.failure.autoRetry).toBe('delay');
+    });
+
+    it('a RefreshToken after a 2xx write is UNKNOWN_OUTCOME', async () => {
+      const { activity, postSocial } = setup();
+      postSocial.mockImplementationOnce(async () => {
+        markPublishSideEffect('POST');
+        throw new RefreshToken('x', '{}', '', 'exp');
+      });
+      const res: any = await activity.publishPostById('org-1', 'c1', posts, false);
+      expect(res.failure).toEqual(
+        expect.objectContaining({
+          category: 'UNKNOWN_OUTCOME',
+          retryable: false,
+          autoRetry: 'none',
+        })
+      );
+    });
+
+    it('publishCommentById applies the same rule', async () => {
+      const { activity, postComment } = setup();
+      postComment.mockImplementationOnce(async () => {
+        markPublishSideEffect('POST');
+        throw rateLimited();
+      });
+      const res: any = await activity.publishCommentById(
+        'org-1',
+        'c1',
+        'id',
+        undefined,
+        posts
+      );
+      expect(res.failure.category).toBe('UNKNOWN_OUTCOME');
+      expect(res.failure.autoRetry).toBe('none');
+    });
   });
 
   it('turns a pre-call failure into UNKNOWN without calling the provider', async () => {

@@ -4,6 +4,7 @@ import { ApplicationFailure } from '@temporalio/activity';
 import { readOrFetch } from '@postsider/helpers/utils/read.or.fetch';
 import sharp from 'sharp';
 import { BadBodyKind, isPreConnectionError } from './publish-error.classifier';
+import { markPublishSideEffect } from './publish-side-effect.context';
 
 export type ValidityMedia = {
   path: string;
@@ -239,6 +240,7 @@ export abstract class SocialAbstract {
     const request = await fetch(url, options);
 
     if (request.status >= 200 && request.status < 300) {
+      markPublishSideEffect(options?.method);
       return request;
     }
 
