@@ -133,6 +133,46 @@ describe('api key permissions: SettingsController', () => {
     ).rejects.toMatchObject({ status: 400 });
   });
 
+  it.each(['allowedActions', 'allowedIntegrationIds'])(
+    'update with null %s is a 400, not a 500',
+    async (field) => {
+      const { controller, organizations } = build();
+      await expect(
+        controller.updateApiKey(org, user, 'k1', { [field]: null } as any)
+      ).rejects.toMatchObject({ status: 400 });
+      expect(organizations.updateNamedApiKey).not.toHaveBeenCalled();
+    }
+  );
+
+  it('names the offending action', async () => {
+    const { controller } = build();
+    const err: any = await controller
+      .createApiKey(org, user, { name: 'n', allowedActions: ['FOO'] } as any)
+      .catch((e) => e);
+    expect(JSON.stringify(err.getResponse())).toContain('FOO');
+  });
+
+  it('does not accept a disabled channel', async () => {
+    const { controller } = build([{ id: 'c1', disabled: true } as any]);
+    await expect(
+      controller.createApiKey(org, user, { name: 'n', allowedIntegrationIds: ['c1'] } as any)
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('update passes the lists to the service', async () => {
+    const { controller, organizations } = build();
+    await controller.updateApiKey(org, user, 'k1', {
+      allowedActions: ['SCHEDULE'],
+      allowedIntegrationIds: ['c2'],
+    } as any);
+    expect(organizations.updateNamedApiKey).toHaveBeenCalledWith('org-1', 'k1', {
+      name: undefined,
+      scopes: undefined,
+      allowedActions: ['SCHEDULE'],
+      allowedIntegrationIds: ['c2'],
+    });
+  });
+
   it('update with nothing is a 400', async () => {
     const { controller } = build();
     await expect(controller.updateApiKey(org, user, 'k1', {} as any)).rejects.toMatchObject({ status: 400 });

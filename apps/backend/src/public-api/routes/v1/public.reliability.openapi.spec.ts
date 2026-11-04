@@ -31,6 +31,7 @@ describe('public reliability OpenAPI', () => {
       'INVALID_CONTENT',
       'PROVIDER_UNAVAILABLE',
       'UNKNOWN_OUTCOME',
+      'POLICY_BLOCKED',
       'UNKNOWN',
     ]);
     expect(document.paths['/public/v1/posts/{id}'].get.description).toContain(

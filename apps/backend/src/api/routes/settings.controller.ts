@@ -43,7 +43,11 @@ export class SettingsController {
       throw new HttpException({ msg: 'Duplicate channel ids' }, 400);
     }
     const channels = await this._integrationService.getIntegrationsList(orgId);
-    const known = new Set(channels.map((c: { id: string }) => c.id));
+    const known = new Set(
+      channels
+        .filter((c: { disabled?: boolean }) => !c.disabled)
+        .map((c: { id: string }) => c.id)
+    );
     const unknown = ids.find((id) => !known.has(id));
     if (unknown !== undefined) {
       throw new HttpException({ msg: `Unknown channel id: ${unknown}` }, 400);
@@ -52,11 +56,14 @@ export class SettingsController {
 
   /** Defence in depth behind the DTO: actions must be known and unique. */
   private assertActions(actions: string[]) {
-    if (
-      new Set(actions).size !== actions.length ||
-      actions.some((a) => !(POST_ACTIONS as readonly string[]).includes(a))
-    ) {
-      throw new HttpException({ msg: 'Invalid allowedActions' }, 400);
+    const bad = actions.find(
+      (a) => !(POST_ACTIONS as readonly string[]).includes(a)
+    );
+    if (bad !== undefined) {
+      throw new HttpException({ msg: `Invalid allowedActions: ${bad}` }, 400);
+    }
+    if (new Set(actions).size !== actions.length) {
+      throw new HttpException({ msg: 'Invalid allowedActions: duplicates' }, 400);
     }
   }
 
@@ -273,6 +280,13 @@ export class SettingsController {
     ) {
       throw new HttpException(
         'Name, scopes or permissions are required',
+        400
+      );
+    }
+    // null passes @IsOptional(); [] clears, undefined leaves untouched.
+    if (body.allowedActions === null || body.allowedIntegrationIds === null) {
+      throw new HttpException(
+        { msg: 'allowedActions and allowedIntegrationIds cannot be null' },
         400
       );
     }
