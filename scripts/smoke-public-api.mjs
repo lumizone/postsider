@@ -4,21 +4,30 @@
  *
  *   POSTSIDER_API_KEY=... node scripts/smoke-public-api.mjs --yes
  *   POSTSIDER_API_URL=https://api.postsider.com  (default)
- *   --channel <id>   channel to use (default: first enabled one)
+ *   --channel <id>   REQUIRED: explicit, connected TEST channel ID
  *   --no-media-attach  upload media but do not attach it to posts. Needed when the
  *                    instance stores files on localhost (dev): media URLs must be
  *                    public HTTPS, so attaching would be refused by design.
- *   --schedule       also exercise a QUEUE post (scheduled 30 days ahead, then
- *                    deleted before it can publish) to check workflow re-arming
+ *   --schedule       NOT ALLOWED: never queue or publish in production smoke
  *
- * It NEVER publishes: every post is a draft, or a far-future scheduled post that
- * is deleted at the end. Everything it creates (media, library items, posts) is
- * removed again, also when a step fails. Run it against a test organization.
+ * This script NEVER schedules or publishes. Everything it creates is a DRAFT
+ * or test media/library object; cleanup failures are fatal. Use a dedicated test
+ * organization and explicit TEST channel: passing --yes alone is not enough.
  * Exit code 0 = all steps passed.
  */
 const args = process.argv.slice(2);
 const flag = (n) => args.includes(n);
 const opt = (n) => (args.includes(n) ? args[args.indexOf(n) + 1] : undefined);
+
+const testChannelId = opt('--channel');
+if (flag('--schedule')) {
+  console.error('--schedule is disabled for production smoke tests. Never queue a post merely to test a deploy.');
+  process.exit(2);
+}
+if (!testChannelId || testChannelId.startsWith('--')) {
+  console.error('Explicit --channel <TEST_CHANNEL_ID> required. Refusing to choose a live channel automatically.');
+  process.exit(2);
+}
 
 const key = process.env.POSTSIDER_API_KEY;
 const base = (process.env.POSTSIDER_API_URL || 'https://api.postsider.com').replace(/\/+$/, '') + '/public/v1';
@@ -77,12 +86,16 @@ await step('list channels, find a usable one', async () => {
   const r = await call('GET', '/integrations');
   expectStatus(r, 200);
   expect(Array.isArray(r.json) && r.json.length, 'no channels connected');
-  const wanted = opt('--channel');
-  channel = wanted ? r.json.find((c) => c.id === wanted) : r.json.find((c) => !c.disabled && !c.refreshNeeded);
-  expect(channel, 'no enabled channel without refreshNeeded (pass --channel)');
+  channel = r.json.find((c) => c.id === testChannelId && !c.disabled && !c.refreshNeeded);
+  expect(channel, 'explicit TEST channel was not found or is disabled/needs refresh');
   expect('refreshNeeded' in channel, 'integrations response lacks refreshNeeded');
   return `${channel.identifier} / ${channel.name}`;
 });
+
+if (!channel) {
+  console.error('No active explicit test channel. Aborting before creating media or drafts.');
+  process.exit(1);
+}
 
 await step('channel rules', async () => {
   const r = await call('GET', `/integration-settings/${channel.id}`);
@@ -188,30 +201,20 @@ await step('workspace endpoints answer for an owner key', async () => {
   expectStatus(r, 200);
 });
 
-if (flag('--schedule')) {
-  await step('QUEUE post: schedule 30 days ahead, edit it, delete it', async () => {
-    const when = new Date(Date.now() + 30 * 86400e3).toISOString();
-    const c = await call('POST', '/posts', {
-      type: 'schedule', date: when, shortLink: false, tags: [],
-      posts: [{ integration: { id: channel.id }, value: [{ content: 'PostSider smoke test (scheduled, deleted before it runs)', image: [] }], settings: settingsFor() }],
-    });
-    expectStatus(c, 200, 201);
-    const id = c.json[0].postId;
-    cleanups.push(() => call('DELETE', `/posts/${id}`));
-    const later = new Date(Date.now() + 31 * 86400e3).toISOString();
-    const e = await call('PUT', `/posts/${id}`, { date: later, content: 'smoke test, rescheduled' });
-    expectStatus(e, 200, 201);
-    const got = await call('GET', `/posts/${id}`);
-    expect(got.json.posts[0].publishDate?.startsWith(later.slice(0, 10)), 'new date not stored');
-    return 'check Temporal: post_<id> should be running with the new date';
-  });
-}
-
 console.log('\nCleaning up...');
+const cleanupFailures = [];
 for (const undo of cleanups.reverse()) {
-  try { await undo(); } catch (e) { console.log(`  cleanup failed: ${e.message}`); }
+  try {
+    const response = await undo();
+    if (![200, 202, 204, 404].includes(response?.status)) {
+      throw new Error(`Delete returned HTTP ${response?.status ?? 'unknown'}`);
+    }
+  } catch (e) {
+    cleanupFailures.push(String(e?.message || e));
+    console.error(`  CLEANUP FAILED: ${e?.message || e}. Inspect test organization for leftover data.`);
+  }
 }
 
 const failed = results.filter((r) => !r.ok);
-console.log(`\n${results.length - failed.length}/${results.length} steps passed.`);
-process.exit(failed.length ? 1 : 0);
+console.log(`\n${results.length - failed.length}/${results.length} steps passed. Cleanup failures: ${cleanupFailures.length}.`);
+process.exit(failed.length || cleanupFailures.length ? 1 : 0);

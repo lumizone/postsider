@@ -188,12 +188,16 @@ done
 # deletes test data, so it never runs by default. Non-fatal: a smoke failure
 # leaves the deploy up but warns loudly.
 if [[ -n "${POSTSIDER_SMOKE_API_KEY:-}" ]]; then
-  log "Running Public API / MCP smoke test"
-  if docker exec -e POSTSIDER_API_KEY="$POSTSIDER_SMOKE_API_KEY" postsider-app \
-      node scripts/smoke-public-api.mjs --yes --no-media-attach; then
-    ok "Smoke test passed"
+  if [[ -z "${POSTSIDER_SMOKE_CHANNEL_ID:-}" ]]; then
+    warn "Skipping mutating smoke: set POSTSIDER_SMOKE_CHANNEL_ID to an isolated TEST channel, never a customer channel"
   else
-    warn "Smoke test FAILED — deploy is up, but verify the Public API / MCP surface"
+    log "Running draft-only Public API smoke against an explicitly selected test channel"
+    if docker exec -e POSTSIDER_API_KEY="$POSTSIDER_SMOKE_API_KEY" postsider-app \
+        node scripts/smoke-public-api.mjs --yes --no-media-attach --channel "$POSTSIDER_SMOKE_CHANNEL_ID"; then
+      ok "Smoke test passed"
+    else
+      warn "Smoke test FAILED — inspect the test organization for cleanup failures; no real posts should be scheduled"
+    fi
   fi
 fi
 
