@@ -219,14 +219,6 @@ async function readBoundedBody(
   return { text: new TextDecoder().decode(bytes), truncated };
 }
 
-/**
- * Thin HTTP client for the PostSider public API (`/public/v1`).
- *
- * Auth is the RAW api key in the `Authorization` header (no `Bearer` prefix),
- * matching the platform's public API contract. This client has no dependency on
- * the backend; it talks to any PostSider instance (cloud or self-hosted) over
- * HTTP, so the MCP server works the same everywhere.
- */
 /** Header-safe agent name: printable ASCII only, whitespace collapsed, max 255. Never throws. */
 function sanitizeAgentName(name: unknown): string | undefined {
   if (typeof name !== 'string') return undefined;
@@ -239,6 +231,14 @@ function sanitizeAgentName(name: unknown): string | undefined {
   return cleaned || undefined;
 }
 
+/**
+ * Thin HTTP client for the PostSider public API (`/public/v1`).
+ *
+ * Auth is the RAW api key in the `Authorization` header (no `Bearer` prefix),
+ * matching the platform's public API contract. This client has no dependency on
+ * the backend; it talks to any PostSider instance (cloud or self-hosted) over
+ * HTTP, so the MCP server works the same everywhere.
+ */
 export class PostsiderClient {
   private readonly base: string;
   private agentName: string | undefined;
