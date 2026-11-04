@@ -6,6 +6,7 @@ jest.mock(
 );
 
 import { Logger } from '@nestjs/common';
+import { createHmac } from 'crypto';
 import {
   PublicWebhookDeliveryService,
   WEBHOOK_BACKOFF_MS,
@@ -180,6 +181,10 @@ describe('PublicWebhookDeliveryService', () => {
       })
     );
     expect(request.body).toBe(JSON.stringify(row.payload));
+    const ts = request.headers['X-Postsider-Timestamp'];
+    expect(request.headers['X-Postsider-Signature']).toBe(
+      `sha256=${createHmac('sha256', 'pwhsec_test').update(`${ts}.${request.body}`).digest('hex')}`
+    );
     expect(rowUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'del-1' },
@@ -378,5 +383,64 @@ describe('PublicWebhookDeliveryService', () => {
     await expect(
       missing.service.enqueue('org-1', 'webhook.test', {}, { subscriptionId: 'nope' })
     ).resolves.toMatchObject({ deliveryIds: [] });
+  });
+
+  it('does not throw when recording a permanent failure fails', async () => {
+    const subUpdate = jest.fn().mockRejectedValue(new Error('db down'));
+    const { service } = makeService({ subUpdate });
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 400 }) as any;
+
+    await expect(service.attempt(claimed())).resolves.toBe('FAILED');
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns RETRY instead of rejecting when the subscription lookup throws', async () => {
+    const { service, prisma } = makeService();
+    prisma.publicWebhookSubscription.findUnique.mockRejectedValue(new Error('db down'));
+    global.fetch = jest.fn() as any;
+
+    await expect(service.attempt(claimed())).resolves.toBe('RETRY');
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('returns RETRY without fetching when secret derivation throws', async () => {
+    const { service } = makeService();
+    (service as any).subscriptions.deriveSecret.mockImplementation(() => {
+      throw new Error('bad secret');
+    });
+    global.fetch = jest.fn() as any;
+
+    await expect(service.attempt(claimed())).resolves.toBe('RETRY');
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('processDue and deliver survive a crashing attempt', async () => {
+    const queryRaw = jest
+      .fn()
+      .mockResolvedValue([claimed({ id: 'a' }), claimed({ id: 'b' })]);
+    const { service, prisma } = makeService({
+      queryRaw,
+      findMany: jest.fn().mockResolvedValue([{ id: 'hook-1' }]),
+      createMany: jest.fn().mockResolvedValue({ count: 1 }),
+    });
+    prisma.publicWebhookSubscription.findUnique
+      .mockRejectedValueOnce(new Error('db down'))
+      .mockResolvedValue(SUB);
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200 }) as any;
+
+    await expect(service.processDue(10)).resolves.toEqual({
+      claimed: 2,
+      succeeded: 1,
+      retried: 1,
+      failed: 0,
+    });
+
+    prisma.publicWebhookSubscription.findUnique.mockRejectedValueOnce(new Error('x'));
+    queryRaw.mockResolvedValue([claimed()]);
+    await expect(service.deliver('org-1', 'post.published', {})).resolves.toMatchObject({
+      attempted: 1,
+      delivered: 0,
+      failed: 1,
+    });
   });
 });

@@ -117,8 +117,13 @@ export class PublicWebhookDeliveryService {
       WHERE d."id" IN (
         SELECT "id" FROM "PublicWebhookDelivery"
         WHERE "status" = 'PENDING'
-          AND "nextAttemptAt" <= (NOW() AT TIME ZONE 'UTC')
-          AND (${ids}::text[] IS NULL OR "id" = ANY(${ids}::text[]))
+          AND (
+            (${ids}::text[] IS NULL
+              AND "nextAttemptAt" <= (NOW() AT TIME ZONE 'UTC'))
+            OR (${ids}::text[] IS NOT NULL
+              AND "id" = ANY(${ids}::text[])
+              AND ("attempts" = 0 OR "nextAttemptAt" <= (NOW() AT TIME ZONE 'UTC')))
+          )
         ORDER BY "nextAttemptAt" ASC
         LIMIT ${opts.limit}
         FOR UPDATE SKIP LOCKED)
@@ -127,6 +132,20 @@ export class PublicWebhookDeliveryService {
   }
 
   async attempt(row: ClaimedDelivery): Promise<AttemptOutcome> {
+    try {
+      return await this.attemptOnce(row);
+    } catch (error) {
+      // Never reject: the lease expires and the worker retries the row.
+      const lastError = String(error).slice(0, MAX_ERROR_LENGTH);
+      this.logger.warn(
+        `Public webhook delivery ${row.id} attempt crashed: ${lastError}`
+      );
+      await this.updateRow(row.id, { lastError });
+      return 'RETRY';
+    }
+  }
+
+  private async attemptOnce(row: ClaimedDelivery): Promise<AttemptOutcome> {
     const isTest = row.event === PUBLIC_WEBHOOK_TEST_EVENT;
     const subscription =
       await this.prisma.publicWebhookSubscription.findUnique({
