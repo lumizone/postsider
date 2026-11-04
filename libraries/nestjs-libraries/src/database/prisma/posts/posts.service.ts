@@ -90,12 +90,19 @@ export type RetryFailedResult = {
   postId: string;
   integrationId: string;
   previousState: State;
-  action: 'requeued' | 'skipped';
+  action: 'requeued' | 'skipped' | 'approval_requested';
   reason?:
     | 'not_in_error_state'
     | 'unknown_outcome_requires_confirmation'
     | 'already_published'
     | 'rearm_failed';
+};
+
+export type RetryFailedOptions = {
+  includeUnknownOutcome: boolean;
+  /** Rows that a write-time policy sends to human review instead of re-arming. */
+  approvalPostIds?: Set<string>;
+  routeToApproval?: (postId: string) => Promise<boolean>;
 };
 
 import { actorViewFromColumns } from '@postsider/nestjs-libraries/actor/post-actor';
@@ -1715,7 +1722,7 @@ export class PostsService {
   async retryFailedByGroup(
     orgId: string,
     group: string,
-    opts: { includeUnknownOutcome: boolean }
+    opts: RetryFailedOptions
   ): Promise<{ group: string; results: RetryFailedResult[] }> {
     const rows = await this.getTopLevelPostsByGroup(orgId, group);
     if (!rows.length) {
@@ -1734,7 +1741,7 @@ export class PostsService {
   private async retryFailedRow(
     orgId: string,
     row: Awaited<ReturnType<PostsService['getTopLevelPostsByGroup']>>[number],
-    opts: { includeUnknownOutcome: boolean }
+    opts: RetryFailedOptions
   ): Promise<RetryFailedResult> {
     const base = {
       postId: row.id,
@@ -1752,6 +1759,17 @@ export class PostsService {
       return skip('unknown_outcome_requires_confirmation');
     }
     if (row.releaseId && row.releaseId !== 'missing') return skip('already_published');
+
+    if (opts.approvalPostIds?.has(row.id) && opts.routeToApproval) {
+      // A policy asks for human review: the row is never re-armed here.
+      try {
+        if (!(await opts.routeToApproval(row.id))) return skip('rearm_failed');
+      } catch (err) {
+        this._logger.error(`retryFailed: approval routing failed for post ${row.id}: ${err}`);
+        return skip('rearm_failed');
+      }
+      return { ...base, action: 'approval_requested' };
+    }
 
     const provider = row.integration.providerIdentifier;
     if (provider === 'tiktok') {

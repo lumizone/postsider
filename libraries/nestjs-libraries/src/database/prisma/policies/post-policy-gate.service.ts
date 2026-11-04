@@ -164,6 +164,74 @@ export class PostPolicyGateService {
   }
 
   /**
+   * Retry re-arms failed rows, so it is a schedule. Only rows the retry would
+   * really re-arm are evaluated. Any BLOCK refuses the whole call before a row
+   * is touched, which also stops a POLICY_BLOCKED row from being retried while
+   * its rule still matches. Rows of channels that need approval are returned.
+   */
+  async gateRetry(
+    orgId: string,
+    group: string,
+    opts: { includeUnknownOutcome: boolean }
+  ): Promise<{ policy: PolicyOutcome; approvalPostIds: Set<string> }> {
+    const approvalPostIds = new Set<string>();
+    let outcome: PolicyOutcome;
+    let candidates: Array<{ id: string; integrationId: string }>;
+    try {
+      const rows = await this._evaluation.topLevelRowsOfGroup(orgId, group);
+      candidates = rows.filter(
+        (r) =>
+          r.state === 'ERROR' &&
+          !(r.errorCategory === 'UNKNOWN_OUTCOME' && !opts.includeUnknownOutcome) &&
+          !(r.releaseId && r.releaseId !== 'missing')
+      );
+      const targets: PolicyTarget[] = [];
+      for (const row of candidates) {
+        const target = await this._evaluation.targetFromStoredPost(orgId, row.id, {
+          action: 'SCHEDULE',
+          approved: false,
+        });
+        if (target) targets.push(target);
+      }
+      if (!targets.length) return { policy: EMPTY_OUTCOME(), approvalPostIds };
+      outcome = await this._evaluation.evaluateTargets(orgId, targets, 'write');
+    } catch (error) {
+      // Retry re-arms publishing: an evaluation failure fails closed.
+      return failClosed(error);
+    }
+
+    if (outcome.effect === 'BLOCK') {
+      await this._evaluation.recordOutcome(orgId, outcome, 'write', {});
+      throw new PolicyBlockedException(outcome);
+    }
+    const approvalChannels = new Set(
+      outcome.channels.filter((c) => c.effect === 'REQUIRE_APPROVAL').map((c) => c.integrationId)
+    );
+    for (const row of candidates) {
+      if (approvalChannels.has(row.integrationId)) approvalPostIds.add(row.id);
+    }
+    if (outcome.effect !== 'ALLOW') await this._evaluation.recordOutcome(orgId, outcome, 'write', {});
+    return {
+      policy: {
+        ...outcome,
+        matched: sanitizeMatches(outcome.matched),
+        channels: outcome.channels.map((c) => ({ ...c, matched: sanitizeMatches(c.matched) })),
+      },
+      approvalPostIds,
+    };
+  }
+
+  /**
+   * Parks one failed row in the approval queue. An ERROR row has no live
+   * workflow, so nothing is terminated. An approval that is already open
+   * counts as routed.
+   */
+  async routeRetry(orgId: string, postId: string): Promise<boolean> {
+    const routed = await this._router.route(orgId, postId, { terminateWorkflow: false });
+    return routed.requested || routed.approvalId !== null;
+  }
+
+  /**
    * An edit must not count the post toward its own daily cap, and the original
    * author still counts as an actor, so an automation post edited by a human
    * keeps its rules.

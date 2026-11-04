@@ -16,4 +16,13 @@ export const passthroughPolicyGate = {
       approvalRequested: false,
     };
   },
+  async gateRetry() {
+    return {
+      policy: { effect: 'ALLOW', matched: [], channels: [] },
+      approvalPostIds: new Set<string>(),
+    };
+  },
+  async routeRetry() {
+    return true;
+  },
 };

@@ -36,6 +36,7 @@ describe('PostPolicyGateService', () => {
     targetFromStoredPost: jest.fn(),
     evaluateTargets: jest.fn(),
     recordOutcome: jest.fn(),
+    topLevelRowsOfGroup: jest.fn(),
   };
   const router = { route: jest.fn() };
   const gate = new PostPolicyGateService(evaluation as any, router as any);
@@ -351,6 +352,114 @@ describe('PostPolicyGateService', () => {
     it('fails closed with 400 policy_input_too_large', async () => {
       evaluation.targetFromStoredPost.mockRejectedValue(new PolicyInputTooLargeError(1, 'big'));
       const err: any = await gate.gateStatus('org', 'p', 'schedule').catch((e) => e);
+      expect(err.getStatus()).toBe(400);
+      expect(err.getResponse().error).toBe('policy_input_too_large');
+    });
+  });
+
+  describe('gateRetry', () => {
+    const row = (id: string, integrationId: string, extra: Record<string, unknown> = {}) => ({
+      id,
+      integrationId,
+      state: 'ERROR',
+      errorCategory: null,
+      releaseId: null,
+      ...extra,
+    });
+    const retryOpts = { includeUnknownOutcome: false };
+
+    beforeEach(() => {
+      evaluation.targetFromStoredPost.mockImplementation(async (_o: string, id: string) =>
+        target(id === 'A' ? 'a' : id === 'B' ? 'b' : 'c', { excludePostId: id })
+      );
+    });
+
+    it('throws 422 when any ERROR row is blocked and evaluates only ERROR rows', async () => {
+      evaluation.topLevelRowsOfGroup.mockResolvedValue([row('A', 'a'), row('B', 'b'), row('C', 'c', { state: 'PUBLISHED' })]);
+      evaluation.evaluateTargets.mockResolvedValue({
+        effect: 'BLOCK',
+        matched: [match('BLOCK')],
+        channels: [
+          { integrationId: 'a', effect: 'ALLOW', matched: [] },
+          { integrationId: 'b', effect: 'BLOCK', matched: [match('BLOCK')] },
+        ],
+      });
+      const err: any = await gate.gateRetry('org', 'g', retryOpts).catch((e) => e);
+      expect(err).toBeInstanceOf(PolicyBlockedException);
+      expect(err.getStatus()).toBe(422);
+      expect(evaluation.targetFromStoredPost.mock.calls.map((c) => c[1])).toEqual(['A', 'B']);
+      expect(evaluation.targetFromStoredPost).toHaveBeenCalledWith('org', 'A', { action: 'SCHEDULE', approved: false });
+      expect(evaluation.evaluateTargets).toHaveBeenCalledWith('org', expect.any(Array), 'write');
+      expect(evaluation.recordOutcome).toHaveBeenCalledTimes(1);
+      expect(router.route).not.toHaveBeenCalled();
+    });
+
+    it('collects REQUIRE_APPROVAL rows only', async () => {
+      evaluation.topLevelRowsOfGroup.mockResolvedValue([row('A', 'a'), row('B', 'b')]);
+      evaluation.evaluateTargets.mockResolvedValue({
+        effect: 'REQUIRE_APPROVAL',
+        matched: [match('REQUIRE_APPROVAL', 'Review\u2014me')],
+        channels: [
+          { integrationId: 'a', effect: 'ALLOW', matched: [] },
+          { integrationId: 'b', effect: 'REQUIRE_APPROVAL', matched: [match('REQUIRE_APPROVAL', 'Review\u2014me')] },
+        ],
+      });
+      const out = await gate.gateRetry('org', 'g', retryOpts);
+      expect([...out.approvalPostIds]).toEqual(['B']);
+      expect(out.policy.effect).toBe('REQUIRE_APPROVAL');
+      expect(out.policy.matched[0].name).toBe('Review me');
+      expect(router.route).not.toHaveBeenCalled();
+    });
+
+    it('does not evaluate rows the retry would skip', async () => {
+      evaluation.topLevelRowsOfGroup.mockResolvedValue([
+        row('A', 'a', { errorCategory: 'UNKNOWN_OUTCOME' }),
+        row('B', 'b', { releaseId: 'rel1' }),
+        row('C', 'c', { state: 'QUEUE' }),
+      ]);
+      const out = await gate.gateRetry('org', 'g', retryOpts);
+      expect(out.policy.effect).toBe('ALLOW');
+      expect(out.approvalPostIds.size).toBe(0);
+      expect(evaluation.evaluateTargets).not.toHaveBeenCalled();
+    });
+
+    it('evaluates an unknown outcome row when confirmed', async () => {
+      evaluation.topLevelRowsOfGroup.mockResolvedValue([row('A', 'a', { errorCategory: 'UNKNOWN_OUTCOME' })]);
+      evaluation.evaluateTargets.mockResolvedValue(allow(['a']));
+      await gate.gateRetry('org', 'g', { includeUnknownOutcome: true });
+      expect(evaluation.targetFromStoredPost).toHaveBeenCalledTimes(1);
+    });
+
+    it('a POLICY_BLOCKED row retried while the rule still blocks is refused (no bypass)', async () => {
+      evaluation.topLevelRowsOfGroup.mockResolvedValue([row('A', 'a', { errorCategory: 'POLICY_BLOCKED' })]);
+      evaluation.evaluateTargets.mockResolvedValue({
+        effect: 'BLOCK',
+        matched: [match('BLOCK')],
+        channels: [{ integrationId: 'a', effect: 'BLOCK', matched: [match('BLOCK')] }],
+      });
+      await expect(gate.gateRetry('org', 'g', retryOpts)).rejects.toBeInstanceOf(PolicyBlockedException);
+    });
+
+    it('a POLICY_BLOCKED row proceeds once the rule no longer matches', async () => {
+      evaluation.topLevelRowsOfGroup.mockResolvedValue([row('A', 'a', { errorCategory: 'POLICY_BLOCKED' })]);
+      evaluation.evaluateTargets.mockResolvedValue(allow(['a']));
+      const out = await gate.gateRetry('org', 'g', retryOpts);
+      expect(out.policy.effect).toBe('ALLOW');
+      expect(out.approvalPostIds.size).toBe(0);
+    });
+
+    it('skips a row whose stored post is gone', async () => {
+      evaluation.topLevelRowsOfGroup.mockResolvedValue([row('A', 'a')]);
+      evaluation.targetFromStoredPost.mockResolvedValue(null);
+      const out = await gate.gateRetry('org', 'g', retryOpts);
+      expect(out.policy.effect).toBe('ALLOW');
+      expect(evaluation.evaluateTargets).not.toHaveBeenCalled();
+    });
+
+    it('fails closed with 400 policy_input_too_large', async () => {
+      evaluation.topLevelRowsOfGroup.mockResolvedValue([row('A', 'a')]);
+      evaluation.targetFromStoredPost.mockRejectedValue(new PolicyInputTooLargeError(1, 'big'));
+      const err: any = await gate.gateRetry('org', 'g', retryOpts).catch((e) => e);
       expect(err.getStatus()).toBe(400);
       expect(err.getResponse().error).toBe('policy_input_too_large');
     });

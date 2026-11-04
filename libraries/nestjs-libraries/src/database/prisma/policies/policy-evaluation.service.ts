@@ -207,6 +207,11 @@ export class PolicyEvaluationService {
     return targets;
   }
 
+  /** Top level rows of a group, scoped to the organization (retry gate). */
+  topLevelRowsOfGroup(orgId: string, group: string) {
+    return this._posts.getTopLevelPostsByGroup(orgId, group);
+  }
+
   async targetFromStoredPost(
     orgId: string,
     postId: string,

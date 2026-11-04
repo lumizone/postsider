@@ -5,6 +5,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { AddressInfo } from 'net';
 import { PublicIntegrationsController } from './public.integrations.controller';
+import { PublicWorkspaceController } from './public.workspace.controller';
 import { PostsService } from '@postsider/nestjs-libraries/database/prisma/posts/posts.service';
 import { PublicApiIdempotencyService } from '@postsider/nestjs-libraries/database/prisma/idempotency/public-api-idempotency.service';
 import { ApprovalService } from '@postsider/nestjs-libraries/database/prisma/approval/approval.service';
@@ -44,6 +45,8 @@ describe('write-time policy gate over HTTP', () => {
     buildPostUpdate: jest.fn(),
     getPost: jest.fn(),
     changePostStatus: jest.fn(),
+    retryFailedByGroup: jest.fn(),
+    duplicatePost: jest.fn(),
   };
   const approvals = { requestApprovalFromApi: jest.fn() };
   const idempotency = { claim: jest.fn(), complete: jest.fn(), release: jest.fn() };
@@ -52,6 +55,7 @@ describe('write-time policy gate over HTTP', () => {
     targetFromStoredPost: jest.fn(),
     evaluateTargets: jest.fn(),
     recordOutcome: jest.fn(),
+    topLevelRowsOfGroup: jest.fn(),
   };
   const router = { route: jest.fn() };
 
@@ -63,7 +67,7 @@ describe('write-time policy gate over HTTP', () => {
       [ApprovalService, approvals],
       [PostPolicyGateService, gate],
     ]);
-    const moduleRef = await Test.createTestingModule({ controllers: [PublicIntegrationsController] })
+    const moduleRef = await Test.createTestingModule({ controllers: [PublicIntegrationsController, PublicWorkspaceController] })
       .useMocker((token) => tokens.get(token) ?? {})
       .compile();
     app = moduleRef.createNestApplication();
@@ -317,6 +321,168 @@ describe('write-time policy gate over HTTP', () => {
       expect(res.status).toBe(200);
       expect(postsService.changePostStatus).toHaveBeenCalledWith('org-1', 'p1', 'draft');
       expect(router.route).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /posts/group/:group/retry-failed', () => {
+    const errorRow = (id: string, integrationId: string, extra: Record<string, unknown> = {}) => ({
+      id,
+      integrationId,
+      state: 'ERROR',
+      errorCategory: null,
+      releaseId: null,
+      ...extra,
+    });
+
+    beforeEach(() => {
+      evaluation.topLevelRowsOfGroup.mockResolvedValue([errorRow('pa', 'chA'), errorRow('pb', 'chB')]);
+      evaluation.targetFromStoredPost.mockImplementation(async (_o: string, id: string) => ({
+        integrationId: id === 'pa' ? 'chA' : 'chB',
+        action: 'SCHEDULE',
+        actors: [{ type: 'API_KEY', userId: null, apiKeyId: 'k1', oauthClientId: null }],
+      }));
+      postsService.retryFailedByGroup.mockResolvedValue({
+        group: 'g1',
+        results: [
+          { postId: 'pa', integrationId: 'chA', previousState: 'ERROR', action: 'requeued' },
+          { postId: 'pb', integrationId: 'chB', previousState: 'ERROR', action: 'requeued' },
+        ],
+      });
+    });
+
+    it('BLOCK: 422, nothing re-armed, claim released', async () => {
+      idempotency.claim.mockResolvedValue({ kind: 'new', id: 'claim-r' });
+      evaluation.evaluateTargets.mockResolvedValue(outcomeFor('BLOCK', ['chA']));
+      const res = await send('POST', '/posts/group/g1/retry-failed', {}, { 'idempotency-key': 'k-r' });
+      expect(res.status).toBe(422);
+      expect((await res.json()).error).toBe('policy_blocked');
+      expect(postsService.retryFailedByGroup).not.toHaveBeenCalled();
+      expect(idempotency.release).toHaveBeenCalledWith('claim-r');
+      expect(idempotency.complete).not.toHaveBeenCalled();
+    });
+
+    it('a POLICY_BLOCKED row is refused while the rule still blocks', async () => {
+      evaluation.topLevelRowsOfGroup.mockResolvedValue([errorRow('pa', 'chA', { errorCategory: 'POLICY_BLOCKED' })]);
+      evaluation.evaluateTargets.mockResolvedValue(outcomeFor('BLOCK', ['chA']));
+      const res = await send('POST', '/posts/group/g1/retry-failed', {});
+      expect(res.status).toBe(422);
+      expect(postsService.retryFailedByGroup).not.toHaveBeenCalled();
+    });
+
+    it('a too large row fails closed with 400', async () => {
+      evaluation.targetFromStoredPost.mockRejectedValue(new PolicyInputTooLargeError(1, 'big'));
+      const res = await send('POST', '/posts/group/g1/retry-failed', {});
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toBe('policy_input_too_large');
+      expect(postsService.retryFailedByGroup).not.toHaveBeenCalled();
+    });
+
+    it('ALLOW: result carries a top level policy and is stored for replay', async () => {
+      idempotency.claim.mockResolvedValue({ kind: 'new', id: 'claim-r' });
+      evaluation.evaluateTargets.mockResolvedValue(outcomeFor('ALLOW', ['chA', 'chB']));
+      const res = await send('POST', '/posts/group/g1/retry-failed', {}, { 'idempotency-key': 'k-r' });
+      expect(res.status).toBe(201);
+      const json = await res.json();
+      expect(json.policy).toEqual({ effect: 'ALLOW', matched: [] });
+      expect(json.results).toHaveLength(2);
+      expect(idempotency.complete).toHaveBeenCalledWith('claim-r', json);
+    });
+
+    it('replay returns the stored policy without evaluating', async () => {
+      const stored = { group: 'g1', results: [], policy: { effect: 'ALLOW', matched: [] } };
+      idempotency.claim.mockResolvedValue({ kind: 'replay', response: stored });
+      const res = await send('POST', '/posts/group/g1/retry-failed', {}, { 'idempotency-key': 'k-r' });
+      expect(await res.json()).toEqual(stored);
+      expect(evaluation.evaluateTargets).not.toHaveBeenCalled();
+      expect(postsService.retryFailedByGroup).not.toHaveBeenCalled();
+    });
+
+    it('REQUIRE_APPROVAL: routes the row without terminating a workflow and reports policy', async () => {
+      evaluation.evaluateTargets.mockResolvedValue({
+        effect: 'REQUIRE_APPROVAL',
+        matched: [rule('REQUIRE_APPROVAL')],
+        channels: [
+          { integrationId: 'chA', effect: 'ALLOW', matched: [] },
+          { integrationId: 'chB', effect: 'REQUIRE_APPROVAL', matched: [rule('REQUIRE_APPROVAL')] },
+        ],
+      });
+      let routed: boolean | undefined;
+      postsService.retryFailedByGroup.mockImplementation(async (_o: string, _g: string, opts: any) => {
+        expect([...opts.approvalPostIds]).toEqual(['pb']);
+        routed = await opts.routeToApproval('pb');
+        return {
+          group: 'g1',
+          results: [
+            { postId: 'pa', integrationId: 'chA', previousState: 'ERROR', action: 'requeued' },
+            { postId: 'pb', integrationId: 'chB', previousState: 'ERROR', action: 'approval_requested' },
+          ],
+        };
+      });
+      const res = await send('POST', '/posts/group/g1/retry-failed', {});
+      expect(res.status).toBe(201);
+      const json = await res.json();
+      expect(routed).toBe(true);
+      expect(router.route).toHaveBeenCalledWith('org-1', 'pb', { terminateWorkflow: false });
+      expect(json.policy.effect).toBe('REQUIRE_APPROVAL');
+      expect(json.results[1].action).toBe('approval_requested');
+    });
+
+    it('routeToApproval accepts an approval that is already open', async () => {
+      evaluation.evaluateTargets.mockResolvedValue(outcomeFor('ALLOW', ['chA']));
+      router.route.mockResolvedValue({ requested: false, approvalId: 'ap-open' });
+      let routed: boolean | undefined;
+      postsService.retryFailedByGroup.mockImplementation(async (_o: string, _g: string, opts: any) => {
+        routed = await opts.routeToApproval('pa');
+        return { group: 'g1', results: [] };
+      });
+      await send('POST', '/posts/group/g1/retry-failed', {});
+      expect(routed).toBe(true);
+    });
+  });
+
+  describe('POST /posts/:id/duplicate', () => {
+    beforeEach(() => {
+      postsService.getPost.mockResolvedValue({
+        group: 'g1',
+        integration: 'chA',
+        posts: [{ content: '<p>see http://x.example</p>', image: [{ id: 'm1', path: 'https://cdn.example/a.png' }] }],
+      });
+      postsService.duplicatePost.mockResolvedValue({
+        duplicated: true,
+        source: { group: 'g1', integration: 'chA' },
+        target: { group: 'g2', postId: 'pn', integration: 'chA' },
+      });
+    });
+
+    it('reports a BLOCK but still creates the draft', async () => {
+      evaluation.evaluateTargets.mockResolvedValue(outcomeFor('BLOCK', ['chA']));
+      const res = await send('POST', '/posts/p1/duplicate', {});
+      expect(res.status).toBe(201);
+      const json = await res.json();
+      expect(json.duplicated).toBe(true);
+      expect(json.policy.effect).toBe('BLOCK');
+      expect(json.policy.matched[0].name).toBe('No links');
+      expect(postsService.duplicatePost).toHaveBeenCalledWith('org-1', 'g1', undefined, undefined);
+      expect(router.route).not.toHaveBeenCalled();
+      const [, body] = evaluation.targetsFromDraftBody.mock.calls[0];
+      expect(body.type).toBe('draft');
+      expect(body.posts[0].integration.id).toBe('chA');
+      expect(body.posts[0].value[0].content).toContain('http://x.example');
+    });
+
+    it('evaluates against the target channel', async () => {
+      evaluation.evaluateTargets.mockResolvedValue(outcomeFor('ALLOW', ['chB']));
+      await send('POST', '/posts/p1/duplicate', { channelId: 'chB', date: '2030-01-01T00:00:00.000Z' });
+      const [, body] = evaluation.targetsFromDraftBody.mock.calls[0];
+      expect(body.posts[0].integration.id).toBe('chB');
+    });
+
+    it('an evaluation failure never blocks the duplicate (report only)', async () => {
+      evaluation.evaluateTargets.mockRejectedValue(new PolicyInputTooLargeError(1, 'big'));
+      const res = await send('POST', '/posts/p1/duplicate', {});
+      expect(res.status).toBe(201);
+      expect(postsService.duplicatePost).toHaveBeenCalledTimes(1);
+      expect((await res.json()).duplicated).toBe(true);
     });
   });
 

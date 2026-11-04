@@ -5,6 +5,8 @@ import { Test } from '@nestjs/testing';
 import type { AddressInfo } from 'net';
 import { PublicIntegrationsController } from './public.integrations.controller';
 import { PostsService } from '@postsider/nestjs-libraries/database/prisma/posts/posts.service';
+import { PostPolicyGateService } from '@postsider/nestjs-libraries/database/prisma/policies/post-policy-gate.service';
+import { passthroughPolicyGate } from './passthrough-policy-gate.spec-helper';
 import { PublicApiIdempotencyService } from '@postsider/nestjs-libraries/database/prisma/idempotency/public-api-idempotency.service';
 import { HttpExceptionFilter } from '@postsider/nestjs-libraries/services/exception.filter';
 import { PUBLIC_API_SCOPES } from '@postsider/nestjs-libraries/services/public-api-scopes';
@@ -21,6 +23,7 @@ describe('POST /posts/group/:group/retry-failed', () => {
     const tokens = new Map<any, any>([
       [PostsService, postsService],
       [PublicApiIdempotencyService, idempotency],
+      [PostPolicyGateService, passthroughPolicyGate],
     ]);
     const moduleRef = await Test.createTestingModule({ controllers: [PublicIntegrationsController] })
       .useMocker((token) => tokens.get(token) ?? {})
@@ -55,8 +58,12 @@ describe('POST /posts/group/:group/retry-failed', () => {
   it('returns the service result and defaults includeUnknownOutcome to false', async () => {
     const res = await post();
     expect(res.status).toBe(201);
-    expect(await res.json()).toEqual(result);
-    expect(postsService.retryFailedByGroup).toHaveBeenCalledWith('org-1', 'g1', { includeUnknownOutcome: false });
+    expect(await res.json()).toEqual({ ...result, policy: { effect: 'ALLOW', matched: [] } });
+    expect(postsService.retryFailedByGroup).toHaveBeenCalledWith('org-1', 'g1', {
+      includeUnknownOutcome: false,
+      routeToApproval: expect.any(Function),
+      approvalPostIds: new Set(),
+    });
   });
 
   it('rejects a non-boolean includeUnknownOutcome', async () => {
@@ -82,7 +89,7 @@ describe('POST /posts/group/:group/retry-failed', () => {
   it('completes a new claim with the result', async () => {
     idempotency.claim.mockResolvedValue({ kind: 'new', id: 'c1' });
     await post({}, { 'Idempotency-Key': 'k1' });
-    expect(idempotency.complete).toHaveBeenCalledWith('c1', result);
+    expect(idempotency.complete).toHaveBeenCalledWith('c1', { ...result, policy: { effect: 'ALLOW', matched: [] } });
   });
 
   it('replays without calling the service', async () => {

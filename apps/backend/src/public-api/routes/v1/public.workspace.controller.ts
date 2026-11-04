@@ -6,6 +6,7 @@ import {
   HttpException,
   HttpStatus,
   Param,
+  Optional,
   Post,
   Put,
   Query,
@@ -43,6 +44,9 @@ import {
 } from '@postsider/nestjs-libraries/dtos/composer-helpers/composer-helpers.dto';
 import { CheckPostDto } from '@postsider/nestjs-libraries/dtos/post-checker/check.post.dto';
 import { RewritePostDto } from '@postsider/nestjs-libraries/dtos/post-checker/rewrite.post.dto';
+import { currentActor } from '@postsider/nestjs-libraries/actor/actor-context';
+import { PostPolicyGateService } from '@postsider/nestjs-libraries/database/prisma/policies/post-policy-gate.service';
+import { sanitizeMatches } from '@postsider/nestjs-libraries/policies/policy-errors';
 import { assertKeyAllowed } from '@postsider/nestjs-libraries/policies/key-permission.guard';
 import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
 
@@ -67,7 +71,8 @@ export class PublicWorkspaceController {
     private _composerHelpers: ComposerHelpersService,
     private _smartSlots: SmartSlotsService,
     private _postChecker: PostCheckerService,
-    private _permissionsService: PermissionsService
+    private _permissionsService: PermissionsService,
+    @Optional() private _policyGate?: PostPolicyGateService
   ) {}
 
   /** ADMIN or above. API keys act as SUPERADMIN; OAuth tokens carry the member's real role. */
@@ -326,7 +331,56 @@ export class PublicWorkspaceController {
         (v): v is string => typeof v === 'string'
       )
     );
-    return this._postsService.duplicatePost(org.id, source.group, channelId, date);
+    // Report only: the copy is a draft, so a policy never blocks it. The
+    // outcome tells the caller what will happen when the draft is scheduled.
+    const policy = await this.reportDuplicatePolicy(org.id, source, channelId, date);
+    const result = await this._postsService.duplicatePost(
+      org.id,
+      source.group,
+      channelId,
+      date
+    );
+    return policy ? { ...result, policy } : result;
+  }
+
+  private async reportDuplicatePolicy(
+    orgId: string,
+    source: Awaited<ReturnType<PostsService['getPost']>>,
+    channelId?: string,
+    date?: string
+  ): Promise<{ effect: string; matched: unknown[] } | undefined> {
+    if (!this._policyGate) return undefined;
+    try {
+      const first: any = source.posts?.[0];
+      const pre = await this._policyGate.preflightWrite(
+        orgId,
+        {
+          type: 'draft',
+          ...(date ? { date } : {}),
+          posts: [
+            {
+              integration: { id: channelId ?? source.integration },
+              value: (source.posts ?? []).map((p: any) => ({
+                content: p.content ?? '',
+                image: Array.isArray(p.image) ? p.image : [],
+              })),
+              firstComment:
+                (source.posts ?? []).find((p: any) => p.firstComment)?.firstComment ??
+                first?.firstComment ??
+                null,
+            },
+          ],
+        },
+        currentActor()
+      );
+      return {
+        effect: pre.outcome.effect,
+        matched: sanitizeMatches(pre.outcome.matched),
+      };
+    } catch {
+      // Report only: never fail the duplicate over a policy report.
+      return undefined;
+    }
   }
 
   @Post('/posts/check')

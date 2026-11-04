@@ -673,6 +673,11 @@ export class PublicIntegrationsController {
 
   @Post('/posts/group/:group/retry-failed')
   @RequirePublicApiScopes('posts:write')
+  @ApiOperation({
+    summary: 'Retry the failed destinations of a post group',
+    description:
+      'Re-queues the destinations of a post group that are in ERROR. The retry is evaluated against the organization policies like a schedule: when a BLOCK rule matches any failed destination the whole call is refused with 422 (policy_blocked) and nothing is re-armed, including rows that failed with POLICY_BLOCKED while the rule still matches. A destination that a REQUIRE_APPROVAL rule covers is not re-queued but sent to the approval queue and reported with action approval_requested. Each result row has action requeued, skipped or approval_requested. The response carries a top level policy object with the effect and the matched rules.',
+  })
   async retryFailedByGroup(
     @GetOrgFromRequest() org: Organization,
     @Param('group') group: string,
@@ -699,11 +704,29 @@ export class PublicIntegrationsController {
     if (claim?.kind === 'replay') return claim.response;
 
     try {
-      const result = await this._postsService.retryFailedByGroup(org.id, group, {
+      // Retry re-arms publishing, so it is gated like a schedule: a BLOCK
+      // refuses the whole call (422) before any row is touched.
+      const gated = await this._policyGate?.gateRetry(org.id, group, {
         includeUnknownOutcome,
       });
-      if (claim?.kind === 'new') await this._idempotency.complete(claim.id, result);
-      return result;
+      const result = await this._postsService.retryFailedByGroup(org.id, group, {
+        includeUnknownOutcome,
+        ...(gated
+          ? {
+              approvalPostIds: gated.approvalPostIds,
+              routeToApproval: (postId: string) =>
+                this._policyGate!.routeRetry(org.id, postId),
+            }
+          : {}),
+      });
+      const merged = gated
+        ? {
+            ...result,
+            policy: { effect: gated.policy.effect, matched: gated.policy.matched },
+          }
+        : result;
+      if (claim?.kind === 'new') await this._idempotency.complete(claim.id, merged);
+      return merged;
     } catch (error) {
       if (claim?.kind === 'new') await this._idempotency.release(claim.id);
       throw error;
