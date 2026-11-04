@@ -164,8 +164,11 @@ Two controls sit on top of scopes. Both are off until an owner sets them.
 `SCHEDULE`, `PUBLISH_NOW`) and `allowedIntegrationIds` (up to 100 channel ids),
 set through `POST /settings/api-keys` and `PUT /settings/api-keys/:id`. An empty
 list means unrestricted. A key limited to `DRAFT` cannot schedule or publish. A
-refused request answers `403` before anything is written. Legacy organization
-keys and OAuth or MCP tokens are not limited.
+key with channel limits can only create, edit, schedule, retry and duplicate
+posts on those channels; deleting posts, requesting approval, uploading media
+and channel administration are not limited. A refused request answers `403`
+before anything is written. Legacy organization keys and OAuth or MCP tokens are
+not limited.
 
 **Policy rules** (`/public/v1/policies`, scopes `policies:read` and
 `policies:write`, never granted by default and not grantable to OAuth or MCP
@@ -188,10 +191,16 @@ What this does not guarantee, in plain terms:
 - Dashboard edits are only caught at publish time. Workflows started before
   v1.0.9 skip the publish-time check until they run.
 - Approvals carry no content version, so an approval for older content is
-  honored at publish time after a dashboard edit. A human API edit or
-  re-schedule of an approved queued post goes back to approval.
+  honored at publish time after a dashboard edit. An API edit or
+  reschedule of an approved queued post goes back to approval.
 - A `BLOCK` rule that matches an already `PUBLISHED` repeat child post flips it
-  to `ERROR`.
+  to `ERROR` and its repeat schedule ends. When a `REQUIRE_APPROVAL` rule holds
+  the repeat of an already `PUBLISHED` post, the post stays `PUBLISHED`, no
+  approval is requested, nobody is notified and the repeat schedule stops for
+  good; only the `post.policy_evaluated` audit event records it.
+- A post is evaluated at the moment it will really go out: a stored date in the
+  past counts as now, so `OUTSIDE_WINDOW` and `DAILY_CAP_EXCEEDED` use the real
+  publish time and day for late approvals, retries and resumed pauses.
 - Scheduling a post that is already in `APPROVAL` answers `200` with state
   `APPROVAL` when a `REQUIRE_APPROVAL` rule matches, `422` on `BLOCK` and `400`
   otherwise. An edit to a channel that needs approval is written as a draft and
@@ -200,10 +209,19 @@ What this does not guarantee, in plain terms:
   duplicate drafts.
 - Daily caps are best effort and count only posts created by an API key or
   OAuth client. Rules read the text of the post and its link targets only.
-  `plug-<name>--integrations` entries in post settings are not covered by key
-  channel limits.
+- Internal plugs (for example `x-repost-post-users` and
+  `plug-<name>--integrations` entries in post settings) post to other channels
+  with no policy check and no key check, so channel or provider scoped rules and
+  key channel limits do not cover plug targets. This is a known limit of v1.
 - Do not give `policies:write` to a key that also publishes: a key with
-  `policies:write` can disable the rules that constrain it.
+  `policies:write` can disable the rules that constrain it, and can add a
+  `BLOCK` rule with condition `ALWAYS` that applies to `USER` and `SYSTEM` and
+  so stops every post in the workspace at publish time.
+- `policy.channels` has two shapes. The `422 policy_blocked` body lists channel
+  id strings, the dry run returns objects with `integrationId` and `effect`, and
+  status, retry and duplicate responses carry only `{ effect, matched }`. A
+  draft report that could not be evaluated carries no `policy` rather than a
+  false ALLOW.
 - The dry run needs `posts:read`, so any credential that can read posts can
   probe rule settings without an audit entry, and the global throttler is
   effectively open. Send the literal path `/public/v1/policies/evaluate`;

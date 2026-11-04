@@ -33,8 +33,7 @@ export class PolicyBlockedException extends HttpException {
     const names = outcome.matched
       .filter((m) => m.effect === 'BLOCK')
       .slice(0, MAX_NAMES_IN_MESSAGE)
-      .map((m) => sanitizePolicyName(m.name))
-      .filter(Boolean);
+      .map((m) => sanitizePolicyName(m.name) || 'unnamed rule');
     super(
       {
         error: 'policy_blocked',

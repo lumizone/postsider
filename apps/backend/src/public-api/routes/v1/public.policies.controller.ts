@@ -160,7 +160,7 @@ export class PublicPoliciesController {
   @ApiOperation({
     summary: 'Dry run the policy rules against a draft body',
     description:
-      'Takes the same shape as a post create body (type, date, posts) and returns what the rules would decide for the calling credential, plus whether the credential key limits would allow the action (key.code is key_action_not_allowed or key_channel_not_allowed). Writes nothing: no post, approval, audit entry or idempotency record. Requires posts:read, not policies:read, so any credential that can read posts can probe the rule settings through it. Send the literal path /public/v1/policies/evaluate: an encoded spelling is not classified as a read and needs posts:write. A draft is reported but never blocked at write time, while a BLOCK rule still stops it at publish time.',
+      'Takes the same shape as a post create body (type, date, posts) and returns what the rules would decide for the calling credential, plus whether the credential key limits would allow the action (key.code is key_action_not_allowed or key_channel_not_allowed). Writes nothing: no post, approval, audit entry or idempotency record. Requires posts:read, not policies:read, so any credential that can read posts can probe the rule settings through it. Send the literal path /public/v1/policies/evaluate: an encoded spelling is not classified as a read and needs posts:write. A draft is reported but never blocked at write time, while a BLOCK rule still stops it at publish time. In this response channels is a list of objects with integrationId and effect, while the 422 policy_blocked body lists channel id strings. A post is evaluated at the moment it will go out, so a past date counts as now. Internal plugs (for example x-repost-post-users) post to other channels without any policy check.',
   })
   @ApiOkResponse({
     type: PublicPolicyEvaluationDto,
@@ -222,7 +222,7 @@ export class PublicPoliciesController {
   @ApiOperation({
     summary: 'Create a policy rule',
     description:
-      'Conditions: ALWAYS, CONTAINS_LINK, CONTAINS_WORDS, OUTSIDE_WINDOW, DAILY_CAP_EXCEEDED, PUBLISH_NOW, HAS_VIDEO. Effects: REQUIRE_APPROVAL, BLOCK. An organization can have at most 50 enabled and 200 stored rules. Requires the policies:write scope, which is never granted implicitly. Do not give policies:write to a key that also publishes: a key that holds it can disable the rules that constrain it. Every change is recorded as the policy.changed audit event with the key id.',
+      'Conditions: ALWAYS, CONTAINS_LINK, CONTAINS_WORDS, OUTSIDE_WINDOW, DAILY_CAP_EXCEEDED, PUBLISH_NOW, HAS_VIDEO. Effects: REQUIRE_APPROVAL, BLOCK. An organization can have at most 50 enabled and 200 stored rules. Requires the policies:write scope, which is never granted implicitly. Do not give policies:write to a key that also publishes: a key that holds it can disable the rules that constrain it, and can add a BLOCK rule with condition ALWAYS that applies to USER and SYSTEM and so stops every post in the workspace at publish time. Every change is recorded as the policy.changed audit event with the key id.',
   })
   @ApiCreatedResponse({ type: PublicPolicyRuleDto })
   @ApiBadRequestResponse({

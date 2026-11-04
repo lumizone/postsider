@@ -311,7 +311,7 @@ Two separate controls limit what an automation can do. Both are off until an own
 **Key limits.** A named API key can carry two limits, set through the key settings (`allowedActions` and `allowedIntegrationIds` on `POST /settings/api-keys` and `PUT /settings/api-keys/:id`).
 
 - `allowedActions` is a list of `DRAFT`, `SCHEDULE` and `PUBLISH_NOW`. A key limited to `DRAFT` cannot schedule or publish.
-- `allowedIntegrationIds` is a list of channel ids (at most 100). The key can only write to those channels.
+- `allowedIntegrationIds` is a list of channel ids (at most 100). A key with channel limits can only create, edit, schedule, retry and duplicate posts on those channels. Limits do not cover deleting posts, requesting approval, uploading media, or channel administration (disabling, enabling, deleting or reassigning channels and running channel tools with `channels:write`): the key can still use those on other channels.
 - An empty list means unrestricted. Legacy organization keys and OAuth or MCP OAuth tokens are not limited by key limits.
 - A refused request answers `403` with `key_action_not_allowed` or `key_channel_not_allowed` before anything is written or an idempotency key is claimed. One forbidden channel refuses the whole request.
 
@@ -346,15 +346,18 @@ Who a rule applies to: with no actor filter a rule applies to automation only (`
 - Dashboard edits are not checked when saved. They are caught only at publish time.
 - Workflows started before v1.0.9 skip the publish-time check until they run.
 - Approvals carry no content version. An approval granted for older content is still honored at publish time after a dashboard edit.
-- A human edit or re-schedule made through the API of an approved queued post sends it back to approval.
-- A BLOCK rule that matches an already `PUBLISHED` repeat child post flips that post to `ERROR`.
+- An API edit or reschedule of an approved queued post sends it back to approval.
+- A BLOCK rule that matches an already `PUBLISHED` repeat child post flips that post to `ERROR`, and its repeat schedule ends.
+- When a `REQUIRE_APPROVAL` rule holds the repeat of an already `PUBLISHED` post, the post stays `PUBLISHED`, no approval is requested, no notification is sent and the repeat schedule stops for good. Only the `post.policy_evaluated` audit event records it.
+- Posts are evaluated at the moment they will really go out. A stored date in the past counts as now, so `OUTSIDE_WINDOW` and `DAILY_CAP_EXCEEDED` use the real publish time and day for late approvals, retries and resumed pauses.
 - Scheduling a post that is already in `APPROVAL` answers 200 with state `APPROVAL` when a `REQUIRE_APPROVAL` rule matches, 422 when a BLOCK rule matches, and 400 otherwise.
 - An edit to a channel that needs approval is written as a draft and waits for approval.
 - `retry-failed` sends matching rows to approval (result action `approval_requested`) instead of re-queuing them.
 - Repeating an idempotent create after a failure in the approval router can leave duplicate drafts.
 - Daily caps are best effort and count only posts created by an API key or OAuth client. Two simultaneous writes can both pass.
-- `plug-<name>--integrations` entries in post settings are not covered by key channel limits.
-- A key with `policies:write` can disable the rules that constrain it. Do not give `policies:write` to a key that also publishes; every change is recorded as the `policy.changed` audit event with the key id.
+- Internal plugs (for example `x-repost-post-users` and `plug-<name>--integrations` entries in post settings) post to other channels with no policy check and no key check. Channel or provider scoped rules and key channel limits do not cover plug targets. This is a known limit of v1, out of scope for now.
+- A key with `policies:write` can disable the rules that constrain it, and can add a `BLOCK` rule with condition `ALWAYS` that applies to `USER` and `SYSTEM` and so stops every post in the workspace at publish time. Do not give `policies:write` to a key that also publishes; every change is recorded as the `policy.changed` audit event with the key id.
+- The `policy` object is not the same everywhere. The `422 policy_blocked` body lists blocked channels as ids (`policy.channels` is an array of channel id strings), while the dry run returns `channels` as objects with `integrationId` and `effect`. Status change, retry and duplicate responses carry only `{ effect, matched }`. A draft report that could not be evaluated carries no `policy` at all, never a false ALLOW.
 - The dry run lets any credential with `posts:read` probe rule settings without an audit entry, and the global throttler is effectively open. Send the literal path `/public/v1/policies/evaluate`; encoded spellings are not classified as reads.
 - The MCP tool `postsider_check_policy` also needs `posts:read`.
 

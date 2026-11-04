@@ -51,6 +51,7 @@ const make = (rules: any[] = []) => {
     integrations as any,
     audit as any
   );
+  service.clock = () => new Date('2026-03-01T00:00:00Z');
   return { service, rulesRepo, posts, integrations, audit };
 };
 
@@ -243,7 +244,7 @@ describe('PolicyEvaluationService.targetsFromDraftBody', () => {
 
   it('maps the request type to an action', async () => {
     const { service } = make();
-    const before = Date.now();
+    const before = service.clock().getTime();
     const [now] = await service.targetsFromDraftBody('org', body({ type: 'now', date: undefined }), actor);
     expect(now.action).toBe('PUBLISH_NOW');
     expect(Math.abs(now.scheduledAt.getTime() - before)).toBeLessThan(5000);
@@ -265,6 +266,16 @@ describe('PolicyEvaluationService.targetsFromDraftBody', () => {
     await expect(service.targetsFromDraftBody('org', body(), actor)).rejects.toBeInstanceOf(
       NotFoundException
     );
+  });
+
+  it('schedules a past date at the current instant and keeps a future date', async () => {
+    const { service } = make();
+    service.clock = () => new Date('2026-03-11T00:00:00Z');
+    const [past] = await service.targetsFromDraftBody('org', body(), actor);
+    expect(past.scheduledAt.toISOString()).toBe('2026-03-11T00:00:00.000Z');
+    service.clock = () => new Date('2026-03-01T00:00:00Z');
+    const [future] = await service.targetsFromDraftBody('org', body(), actor);
+    expect(future.scheduledAt.toISOString()).toBe('2026-03-10T12:00:00.000Z');
   });
 
   it('uses an explicit draft date', async () => {
@@ -400,6 +411,41 @@ describe('PolicyEvaluationService.targetFromStoredPost', () => {
     await expect(
       service.targetFromStoredPost('org', 'p1', { action: 'SCHEDULE', approved: false })
     ).rejects.toBeInstanceOf(PolicyInputTooLargeError);
+  });
+
+  it('evaluates an overdue post at the current instant, not the stored date', async () => {
+    const { service, posts } = make();
+    service.clock = () => new Date('2026-03-12T23:00:00Z');
+    posts.getPost.mockResolvedValue(stored());
+    const t = await service.targetFromStoredPost('org', 'p1', { action: 'PUBLISH_NOW', approved: true });
+    expect(t!.scheduledAt).toEqual(new Date('2026-03-12T23:00:00Z'));
+    const retry = await service.targetFromStoredPost('org', 'p1', { action: 'SCHEDULE', approved: false });
+    expect(retry!.scheduledAt).toEqual(new Date('2026-03-12T23:00:00Z'));
+  });
+
+  it('keeps a future stored date and the stored date of a draft', async () => {
+    const { service, posts } = make();
+    service.clock = () => new Date('2026-03-01T00:00:00Z');
+    posts.getPost.mockResolvedValue(stored());
+    const t = await service.targetFromStoredPost('org', 'p1', { action: 'SCHEDULE', approved: false });
+    expect(t!.scheduledAt).toEqual(new Date('2026-03-10T12:00:00Z'));
+    service.clock = () => new Date('2026-03-20T00:00:00Z');
+    const d = await service.targetFromStoredPost('org', 'p1', { action: 'DRAFT', approved: false });
+    expect(d!.scheduledAt).toEqual(new Date('2026-03-10T12:00:00Z'));
+  });
+
+  it('applies an OUTSIDE_WINDOW rule to the real publish time of an overdue post', async () => {
+    const win = rule({
+      id: 'w',
+      condition: 'OUTSIDE_WINDOW',
+      conditionParams: { days: [0, 1, 2, 3, 4, 5, 6], start: '09:00', end: '17:00', timezone: 'UTC' },
+    });
+    const { service, posts } = make([win]);
+    service.clock = () => new Date('2026-03-12T23:00:00Z');
+    posts.getPost.mockResolvedValue(stored());
+    const t = await service.targetFromStoredPost('org', 'p1', { action: 'PUBLISH_NOW', approved: true });
+    const out = await service.evaluateTargets('org', [t!], 'publish');
+    expect(out.effect).toBe('BLOCK');
   });
 
   it('returns null when the integration is missing', async () => {

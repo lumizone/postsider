@@ -16,6 +16,13 @@ const outcome = (names: string[]) => ({
 });
 
 describe('PolicyBlockedException', () => {
+  it('names a rule whose name sanitizes to empty', () => {
+    const err = new PolicyBlockedException(outcome(['\u2014\u2014', 'Real']));
+    expect((err.getResponse() as any).msg).toBe(
+      'This post was blocked by a policy: unnamed rule, Real.'
+    );
+  });
+
   it('is a plain 422 HttpException with the documented body', () => {
     const err = new PolicyBlockedException(outcome(['No links']));
     expect(err).toBeInstanceOf(HttpException);

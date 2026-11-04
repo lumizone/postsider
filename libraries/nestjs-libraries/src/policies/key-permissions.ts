@@ -42,12 +42,16 @@ export function checkKeyPermission(
   }
   const channels = perms.allowedIntegrationIds ?? [];
   if (channels.length > 0) {
-    const offending = integrationIds.find((id) => !channels.includes(id));
-    if (offending !== undefined) {
+    // A missing or empty channel id never passes a channel limit.
+    const at = integrationIds.findIndex(
+      (id) => typeof id !== 'string' || id === '' || !channels.includes(id)
+    );
+    if (at !== -1) {
+      const offending = integrationIds[at];
       return {
         allowed: false,
         code: 'key_channel_not_allowed',
-        integrationId: offending,
+        integrationId: typeof offending === 'string' ? offending : '',
         allowedIntegrationIds: [...channels],
       };
     }

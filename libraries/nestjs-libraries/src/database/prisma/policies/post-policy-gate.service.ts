@@ -87,16 +87,16 @@ export class PostPolicyGateService {
 
   /**
    * Routes the created posts of approval channels and decorates every element.
-   * `terminateWorkflow` is true on the edit path, where the post may already be
-   * armed in QUEUE.
+   * `terminateWorkflow` asks the router to stop an already armed workflow. When a
+   * draft report could not be evaluated, `policy` is omitted rather than ALLOW.
    */
   async finishCreate<T extends { postId: string; integration: string }>(
     orgId: string,
     created: T[],
     pre: Pre,
     opts: { terminateWorkflow?: boolean } = {}
-  ): Promise<Array<T & { policy: PolicyView; approvalRequested: boolean }>> {
-    const out: Array<T & { policy: PolicyView; approvalRequested: boolean }> = [];
+  ): Promise<Array<T & { policy?: PolicyView; approvalRequested: boolean }>> {
+    const out: Array<T & { policy?: PolicyView; approvalRequested: boolean }> = [];
     for (const item of created) {
       const policy = this.viewFor(pre.outcome, item.integration);
       let approvalRequested = false;
@@ -118,7 +118,11 @@ export class PostPolicyGateService {
           { postId: item.postId }
         );
       }
-      out.push({ ...item, policy, approvalRequested });
+      out.push(
+        pre.evaluated === false
+          ? { ...item, approvalRequested }
+          : { ...item, policy, approvalRequested }
+      );
     }
     return out;
   }
@@ -127,7 +131,13 @@ export class PostPolicyGateService {
     orgId: string,
     postId: string,
     status: 'draft' | 'schedule'
-  ): Promise<{ proceed: boolean; policy: PolicyOutcome; approvalRequested: boolean }> {
+  ): Promise<{
+    proceed: boolean;
+    policy: PolicyOutcome;
+    approvalRequested: boolean;
+    /** False when a draft status report was skipped because the evaluation failed. */
+    evaluated?: boolean;
+  }> {
     const action = status === 'draft' ? 'DRAFT' : 'SCHEDULE';
     let outcome: PolicyOutcome;
     try {
@@ -143,7 +153,7 @@ export class PostPolicyGateService {
     } catch (error) {
       // Disarming (status draft) is never blocked by a policy evaluation failure.
       if (status === 'draft') {
-        return { proceed: true, policy: EMPTY_OUTCOME(), approvalRequested: false };
+        return { proceed: true, policy: EMPTY_OUTCOME(), approvalRequested: false, evaluated: false };
       }
       return failClosed(error);
     }

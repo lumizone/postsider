@@ -41,6 +41,23 @@ describe('checkKeyPermission', () => {
     });
   });
 
+  it('fails closed on a missing or empty channel id when a channel limit exists', () => {
+    for (const bad of [undefined, '', null]) {
+      const r = checkKeyPermission(
+        { allowedActions: [], allowedIntegrationIds: ['a'] },
+        'DRAFT',
+        ['a', bad as any]
+      );
+      expect(r).toMatchObject({ allowed: false, code: 'key_channel_not_allowed' });
+    }
+  });
+
+  it('does not require a channel id when the key has no channel limit', () => {
+    expect(
+      checkKeyPermission({ allowedActions: [], allowedIntegrationIds: [] }, 'DRAFT', [undefined as any])
+    ).toEqual({ allowed: true });
+  });
+
   it('checks the action before the channels', () => {
     const r = checkKeyPermission(
       { allowedActions: ['DRAFT'], allowedIntegrationIds: ['a'] },

@@ -209,10 +209,20 @@ describe('PostPolicyGateService', () => {
         approvalRequested: false,
       });
       expect(out[1].approvalRequested).toBe(true);
-      expect(out[1].policy.effect).toBe('REQUIRE_APPROVAL');
+      expect(out[1].policy!.effect).toBe('REQUIRE_APPROVAL');
       expect(out[1].policy.matched).toHaveLength(1);
       expect(evaluation.recordOutcome).toHaveBeenCalledTimes(1);
       expect(evaluation.recordOutcome.mock.calls[0][3]).toEqual({ postId: 'pb' });
+    });
+
+    it('omits policy when the draft evaluation failed', async () => {
+      const out = await gate.finishCreate(
+        'org',
+        [{ postId: 'pa', integration: 'a' }],
+        { outcome: { effect: 'ALLOW', matched: [], channels: [] }, approvalIntegrationIds: new Set(), evaluated: false } as any
+      );
+      expect(out[0]).toEqual({ postId: 'pa', integration: 'a', approvalRequested: false });
+      expect('policy' in out[0]).toBe(false);
     });
 
     it('sanitizes rule names in the decorated policy', async () => {
@@ -277,6 +287,12 @@ describe('PostPolicyGateService', () => {
       evaluation.evaluateTargets.mockRejectedValue(new Error('db down'));
       await expect(gate.gateStatus('org', 'p', 'draft')).resolves.toMatchObject({ proceed: true });
       expect(router.route).not.toHaveBeenCalled();
+    });
+
+    it('draft status reports evaluated false when the evaluation fails', async () => {
+      evaluation.targetFromStoredPost.mockRejectedValue(new Error('db down'));
+      const out = await gate.gateStatus('org', 'p', 'draft');
+      expect(out.evaluated).toBe(false);
     });
 
     it('schedule status stays fail closed on evaluation errors', async () => {

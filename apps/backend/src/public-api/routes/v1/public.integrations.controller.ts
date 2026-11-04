@@ -402,7 +402,7 @@ export class PublicIntegrationsController {
   @ApiOperation({
     summary: 'List post activity',
     description:
-      'Audit trail of a post group, newest first, including after deletion. Events: post.created, post.updated, post.deleted, post.status_changed, post.approval_requested, post.approval_resolved, post.published, post.failed, post.retry_requested, post.policy_evaluated, policy.changed. Metadata never contains post content.',
+      'Audit trail of a post group, newest first, including after deletion. Events: post.created, post.updated, post.deleted, post.status_changed, post.approval_requested, post.approval_resolved, post.published, post.failed, post.retry_requested, post.policy_evaluated. Metadata never contains post content.',
   })
   @ApiOkResponse({ type: PublicAuditEventsResponseDto })
   async getPostActivity(
@@ -432,7 +432,7 @@ export class PublicIntegrationsController {
   @ApiOperation({
     summary: 'Create posts',
     description:
-      'Creates one post per channel as a draft, a scheduled post or an immediate publish. Key limits and organization policy rules are checked before anything is written. Errors: 403 key_action_not_allowed or key_channel_not_allowed when the API key limits refuse the action or a channel, and 422 policy_blocked when a BLOCK rule matches a schedule or publish now write. Drafts are reported but never blocked at write time; a BLOCK rule still stops them when they are published. When a REQUIRE_APPROVAL rule matches a channel, that channel is written as a draft and an approval is requested. Each element of the response array carries policy: { effect, matched } and approvalRequested. If the approval request fails, the call returns the error and the draft stays; repeating it with the same Idempotency-Key after such a router failure can create duplicate drafts. Use POST /public/v1/policies/evaluate to dry run first.',
+      'Creates one post per channel as a draft, a scheduled post or an immediate publish. Key limits and organization policy rules are checked before anything is written. Errors: 403 key_action_not_allowed or key_channel_not_allowed when the API key limits refuse the action or a channel, and 422 policy_blocked when a BLOCK rule matches a schedule or publish now write. Drafts are reported but never blocked at write time; a BLOCK rule still stops them when they are published. When a REQUIRE_APPROVAL rule matches a channel, that channel is written as a draft and an approval is requested. Each element of the response array carries policy: { effect, matched } and approvalRequested. If the approval request fails, the call returns the error and the draft stays; repeating it with the same Idempotency-Key after such a router failure can create duplicate drafts. Use POST /public/v1/policies/evaluate to dry run first. Key channel limits cover creating, editing, scheduling, retrying and duplicating posts, not deleting posts or channel administration. Internal plugs (for example x-repost-post-users) post to other channels with no policy or key check.',
   })
   @ApiForbiddenResponse({
     description:
@@ -1081,7 +1081,11 @@ export class PublicIntegrationsController {
     }
     // Drafts are report only. Scheduling is blocked (422) or routed to approval.
     const gated = await this._policyGate.gateStatus(org.id, id, body.status);
-    const policy = { effect: gated.policy.effect, matched: gated.policy.matched };
+    // A draft report that could not be evaluated carries no policy rather than ALLOW.
+    const policy =
+      gated.evaluated === false
+        ? undefined
+        : { effect: gated.policy.effect, matched: gated.policy.matched };
     if (!gated.proceed) {
       return {
         id,

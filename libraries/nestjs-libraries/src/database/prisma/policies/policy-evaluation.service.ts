@@ -106,6 +106,9 @@ const uniqueMediaTypes = (paths: string[]) => [...new Set(paths.map(deriveMediaT
 
 @Injectable()
 export class PolicyEvaluationService {
+  /** Replaceable clock so tests can pin the publish instant. */
+  clock: () => Date = () => new Date();
+
   constructor(
     private _rules: PolicyRulesRepository,
     private _rulesService: PolicyRulesService,
@@ -246,7 +249,7 @@ export class PolicyEvaluationService {
         ...pathsOfStoredImage(post.image),
         ...children.flatMap((c) => pathsOfStoredImage(c.image)),
       ]),
-      scheduledAt: post.publishDate,
+      scheduledAt: this.effectiveInstant(post.publishDate, opts.action),
       approved: opts.approved,
       excludePostId: post.id,
     };
@@ -299,14 +302,25 @@ export class PolicyEvaluationService {
     }
   }
 
+  /**
+   * The instant a post will really go out: a stored date in the past publishes
+   * now (late approvals, retries, resumed pauses), so rules see max(date, now).
+   * Drafts are not published, so they keep their stored date.
+   */
+  private effectiveInstant(date: Date, action: PostActionName): Date {
+    if (action === 'DRAFT') return date;
+    const now = this.clock();
+    return date.getTime() < now.getTime() ? now : date;
+  }
+
   private resolveDate(body: DraftBody): Date {
-    if (body.type === 'now') return new Date();
-    if (body.type === 'draft' && !body.date) return new Date();
+    if (body.type === 'now') return this.clock();
+    if (body.type === 'draft' && !body.date) return this.clock();
     const date = body.date ? new Date(body.date) : new Date(NaN);
     if (Number.isNaN(date.getTime())) {
       throw new BadRequestException({ msg: 'A valid date is required' });
     }
-    return date;
+    return body.type === 'draft' ? date : this.effectiveInstant(date, ACTION_BY_TYPE[body.type]);
   }
 
   private async dailyCountsFor(
