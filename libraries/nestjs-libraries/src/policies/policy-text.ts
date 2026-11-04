@@ -177,3 +177,14 @@ export const containsAnyWord = (text: string, words: string[]): boolean => {
   }
   return false;
 };
+
+const VIDEO_EXTENSIONS = ['mp4', 'webm', 'mov', 'mkv', 'm4v', 'avi'];
+const AUDIO_EXTENSIONS = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'];
+
+/** Media type of an upload path by extension; anything unrecognised counts as an image. */
+export const deriveMediaTypeFromPath = (path: string): 'image' | 'video' | 'audio' => {
+  const p = (path || '').toLowerCase();
+  if (VIDEO_EXTENSIONS.some((ext) => p.includes(`.${ext}`))) return 'video';
+  if (AUDIO_EXTENSIONS.some((ext) => p.includes(`.${ext}`))) return 'audio';
+  return 'image';
+};

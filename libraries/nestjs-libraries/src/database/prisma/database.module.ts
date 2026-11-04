@@ -49,6 +49,7 @@ import { ComposerHelpersService } from '@postsider/nestjs-libraries/database/pri
 import { ApprovalRepository } from '@postsider/nestjs-libraries/database/prisma/approval/approval.repository';
 import { ApprovalService } from '@postsider/nestjs-libraries/database/prisma/approval/approval.service';
 import { PolicyRulesRepository } from '@postsider/nestjs-libraries/database/prisma/policies/policy-rules.repository';
+import { PolicyEvaluationService } from '@postsider/nestjs-libraries/database/prisma/policies/policy-evaluation.service';
 import { PolicyRulesService } from '@postsider/nestjs-libraries/database/prisma/policies/policy-rules.service';
 import { ProviderEnvHelper } from '@postsider/nestjs-libraries/integrations/provider-env.helper';
 import { AuditEventsService } from '@postsider/nestjs-libraries/database/prisma/audit/audit-events.service';
@@ -132,6 +133,7 @@ import { PostAnalyticsService } from '@postsider/nestjs-libraries/database/prism
     ApprovalService,
     PolicyRulesRepository,
     PolicyRulesService,
+    PolicyEvaluationService,
     ChannelAssignmentRepository,
     ChannelAssignmentService,
     PublicApiIdempotencyService,

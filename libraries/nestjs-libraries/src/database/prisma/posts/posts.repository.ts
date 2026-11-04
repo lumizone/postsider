@@ -830,6 +830,29 @@ export class PostsRepository {
     });
   }
 
+  /**
+   * Live top-level posts created by automation (API key or OAuth client) whose
+   * publish date falls in [start, end). Backs the DAILY_CAP_EXCEEDED policy.
+   */
+  countAutomationPostsInRange(
+    orgId: string,
+    range: { start: Date; end: Date },
+    opts: { integrationId?: string; excludePostId?: string }
+  ) {
+    return this._post.model.post.count({
+      where: {
+        organizationId: orgId,
+        parentPostId: null,
+        deletedAt: null,
+        state: { in: ['QUEUE', 'PUBLISHED'] },
+        publishDate: { gte: range.start, lt: range.end },
+        createdByType: { in: ['API_KEY', 'OAUTH_CLIENT'] },
+        ...(opts.integrationId ? { integrationId: opts.integrationId } : {}),
+        ...(opts.excludePostId ? { id: { not: opts.excludePostId } } : {}),
+      },
+    });
+  }
+
   countPostsFromDay(orgId: string, date: Date) {
     return this._post.model.post.count({
       where: {

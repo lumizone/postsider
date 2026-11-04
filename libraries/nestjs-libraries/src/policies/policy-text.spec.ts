@@ -5,6 +5,7 @@ import {
   POLICY_MAX_INPUT_CHARS,
   POLICY_MAX_TAGS,
   PolicyInputTooLargeError,
+  deriveMediaTypeFromPath,
 } from './policy-text';
 
 describe('htmlToPolicyText', () => {
@@ -252,5 +253,16 @@ describe('word and link semantics after the linear rewrite', () => {
     expect(containsLink('ą example.pl')).toBe(true);
     expect(containsLink('kontakt ą@example.com')).toBe(false);
     expect(containsLink('ąąą'.repeat(1000) + ' bit.ly/x')).toBe(true);
+  });
+});
+
+describe('deriveMediaTypeFromPath', () => {
+  it('maps extensions to media types and defaults to image', () => {
+    expect(deriveMediaTypeFromPath('a/b.MP4')).toBe('video');
+    expect(deriveMediaTypeFromPath('https://c/x.mov?sig=1')).toBe('video');
+    expect(deriveMediaTypeFromPath('s.mp3')).toBe('audio');
+    expect(deriveMediaTypeFromPath('p.png')).toBe('image');
+    expect(deriveMediaTypeFromPath('noext')).toBe('image');
+    expect(deriveMediaTypeFromPath('')).toBe('image');
   });
 });
