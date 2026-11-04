@@ -32,6 +32,15 @@ Ask only for a missing detail that changes the action. Never invent ids, dates, 
 7. Call `postsider_get_post` with the returned id. Verify the stored content, target channel, state, publish time, and media before reporting success.
 8. If the write fails, report a concise actionable error without exposing credentials, tokens, debug payloads, or internal telemetry. Do not retry a write blindly. A post that failed to publish (`ERROR`) can be fixed with `postsider_update_post` and then re-queued with `postsider_update_post_status` (`schedule`); do not delete and recreate it. If the post's `errorCategory` is `UNKNOWN_OUTCOME`, it may already be live: ask the user to check the channel and confirm before re-queuing it. To retry every failed post of a group at once, prefer `postsider_retry_failed_posts`; posts whose error category is `UNKNOWN_OUTCOME` may already be live on the provider, so they are skipped unless the user confirms and you pass `includeUnknownOutcome: true`.
 
+## Policy outcomes
+
+The workspace may have policies. Before you schedule or publish, call `postsider_check_policy` with the same `type`, `date` and `posts`; it writes nothing. Then act on the effect:
+- `ALLOW`: proceed with `postsider_create_post`.
+- `REQUIRE_APPROVAL`: tell the user the post will wait for a human. After creating it, the response has `approvalRequested: true` and the post is NOT scheduled; poll `postsider_get_approval_status` and do not report it as scheduled.
+- `BLOCK`: the write fails with `policy_blocked`. Never retry the same content, and never try another channel to dodge the rule. Change the content or ask the owner.
+
+A key with limits can be refused with `key_action_not_allowed` or `key_channel_not_allowed`. Do not look for a workaround: tell the user the owner must change the key limits in Settings, API.
+
 ## Consequential actions
 
 - A clear instruction to schedule a specific post at a specific time is authorization to schedule it.

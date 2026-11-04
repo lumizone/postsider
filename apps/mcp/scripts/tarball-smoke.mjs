@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 const PKG_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // Tools shared by the remote and local servers, plus the one tool only the local
 // stdio server adds (it reads a file from the user's own machine).
-const EXPECTED_TOOL_COUNT = 39;
+const EXPECTED_TOOL_COUNT = 40;
 const STDIO_ONLY_TOOLS = ['postsider_upload_media_from_file'];
 const EXPECTED_STDIO_TOOL_COUNT = EXPECTED_TOOL_COUNT + STDIO_ONLY_TOOLS.length;
 const EXPECTED_SERVER_NAME = 'postsider';

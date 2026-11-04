@@ -259,6 +259,18 @@
         "open_world_justification": "Reads the caller's own workspace data for content destined for external social platforms; nothing is published or sent.",
         "destructive_justification": "Deletes, overwrites, or revokes nothing."
       }
+    },
+    "postsider_check_policy": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Dry runs the workspace policies against a proposed post and returns the verdict; it creates no post, no approval request and changes nothing.",
+        "open_world_justification": "Evaluates only the caller's own workspace rules and API key limits; it does not send anything to external platforms.",
+        "destructive_justification": "Deletes, overwrites, or revokes nothing."
+      }
     }
   },
   "test_cases": [

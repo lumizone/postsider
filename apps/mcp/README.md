@@ -136,7 +136,7 @@ written into the plugin directory.
 
 ## What the agent can do
 
-39 tools (40 on the local stdio server), all prefixed `postsider_`.
+40 tools (41 on the local stdio server), all prefixed `postsider_`.
 
 ### Read
 
@@ -182,6 +182,7 @@ written into the plugin directory.
 | `postsider_save_library_item` | Create or update a hashtag group, caption template or UTM preset. | Creates content |
 | `postsider_delete_library_item` | Delete a library item. | Destructive |
 | `postsider_duplicate_post` | Copy a post as a new draft, optionally onto another channel. | Creates a draft |
+| `postsider_check_policy` | Dry run of the workspace policies for a post you are about to create: `effect` (ALLOW, REQUIRE_APPROVAL, BLOCK), matched rule names and whether this key may do it. Writes nothing. Needs `posts:read`. | Read only |
 | `postsider_check_post` | AI check of draft text for up to 3 platforms (uses the monthly AI allowance). | Uses AI quota |
 | `postsider_rewrite_post` | AI rewrites of a text in a chosen tone (uses the monthly AI allowance). | Uses AI quota |
 | `postsider_delete_media` | Delete a media file from the library and storage. | Destructive |

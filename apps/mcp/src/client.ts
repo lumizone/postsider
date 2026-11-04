@@ -139,6 +139,86 @@ export function describeApiError(data: unknown, fallback: string): string {
   return channel ? `${channel}: ${text}` : text;
 }
 
+const MAX_RULE_NAMES = 5;
+const MAX_RULE_NAME_CHARS = 60;
+const MAX_LISTED_ITEMS = 10;
+
+/**
+ * Rule names are free text written by an admin and arrive in an API error body.
+ * Strip control, zero width and bidi characters and every dash (including the
+ * ASCII hyphen), collapse whitespace and bound the length before the text is
+ * shown to an agent.
+ */
+function cleanRuleName(name: unknown): string {
+  if (typeof name !== 'string') return '';
+  const clean = name
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]+/g, ' ')
+    .replace(/[-\u058a\u05be\u1806\u2010-\u2015\u2212\u2e3a\u2e3b\ufe58\ufe63\uff0d]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return clean.length > MAX_RULE_NAME_CHARS
+    ? `${clean.slice(0, MAX_RULE_NAME_CHARS - 3)}...`
+    : clean;
+}
+
+/** A closed token such as an action name or a channel id; anything else is dropped. */
+function cleanToken(value: unknown): string {
+  return typeof value === 'string' && /^[A-Za-z0-9_.:]{1,64}$/.test(value) ? value : '';
+}
+
+function cleanTokenList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map(cleanToken).filter(Boolean).slice(0, MAX_LISTED_ITEMS);
+}
+
+/**
+ * Readable text for the key limit refusals (403) and the policy block (422).
+ * Returns undefined for any other body so the generic handling stays in charge.
+ * The raw response body is never echoed.
+ */
+function describePolicyError(status: number, data: unknown): string | undefined {
+  if (!data || typeof data !== 'object') return undefined;
+  const body = data as Record<string, unknown>;
+  if (status === 403 && body.error === 'key_action_not_allowed') {
+    const action = cleanToken(body.action) || 'do this';
+    const allowed = cleanTokenList(body.allowedActions);
+    return (
+      `This API key may not ${action}.` +
+      (allowed.length ? ` Allowed actions: ${allowed.join(', ')}.` : '') +
+      ' Ask the owner to change the key limits in Settings, API.'
+    );
+  }
+  if (status === 403 && body.error === 'key_channel_not_allowed') {
+    const channel = cleanToken(body.integrationId);
+    const allowed = cleanTokenList(body.allowedIntegrationIds);
+    return (
+      `This API key may not post to channel ${channel || 'this channel'}.` +
+      (allowed.length ? ` Allowed channels: ${allowed.join(', ')}.` : '') +
+      ' Ask the owner to change the key limits in Settings, API.'
+    );
+  }
+  if (status === 422 && body.error === 'policy_blocked') {
+    const policy = body.policy && typeof body.policy === 'object'
+      ? (body.policy as Record<string, unknown>)
+      : {};
+    const matched = Array.isArray(policy.matched) ? policy.matched : [];
+    const names = matched
+      .filter(
+        (m): m is Record<string, unknown> =>
+          !!m && typeof m === 'object' && (m as Record<string, unknown>).effect !== 'REQUIRE_APPROVAL'
+      )
+      .map((m) => cleanRuleName(m.name))
+      .filter(Boolean)
+      .slice(0, MAX_RULE_NAMES);
+    return (
+      `Blocked by policy: ${names.length ? names.join(', ') : 'a workspace rule'}. ` +
+      'Do not retry with the same content; change the content or ask the owner.'
+    );
+  }
+  return undefined;
+}
+
 /** Parse a JSON body, falling back to raw text when it is not JSON. */
 function parseBody(text: string): unknown {
   if (!text) {
@@ -367,6 +447,10 @@ export class PostsiderClient {
         throw new Error(
           'Unauthorized (401). The POSTSIDER_API_KEY is missing or invalid. Generate one in PostSider under Settings -> API; for OAuth, reconnect and sign in again.'
         );
+      }
+      const policyText = describePolicyError(res.status, data);
+      if (policyText) {
+        throw new Error(policyText);
       }
       if (res.status === 403) {
         const body = data && typeof data === 'object'
