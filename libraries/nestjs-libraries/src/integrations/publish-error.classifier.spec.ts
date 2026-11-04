@@ -129,6 +129,10 @@ describe('classifyPublishError', () => {
     expect(sanitizeFailureMessage('', 'fallback')).toBe('fallback');
     expect(UNKNOWN_OUTCOME_MESSAGE).not.toMatch(/[–—]/);
   });
+  it('includes POLICY_BLOCKED and still ends with UNKNOWN', () => {
+    expect(PUBLISH_ERROR_CATEGORIES).toContain('POLICY_BLOCKED');
+    expect(PUBLISH_ERROR_CATEGORIES[PUBLISH_ERROR_CATEGORIES.length - 1]).toBe('UNKNOWN');
+  });
   it('category list equals the Prisma enum', () => {
     expect([...PUBLISH_ERROR_CATEGORIES].sort()).toEqual(
       Object.values(PublishErrorCategory).sort()

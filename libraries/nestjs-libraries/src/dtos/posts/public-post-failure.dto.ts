@@ -10,7 +10,7 @@ export class PublicPostFailureFieldsDto {
     enum: [...PUBLISH_ERROR_CATEGORIES],
     nullable: true,
     description:
-      'Why the last publish attempt failed. UNKNOWN_OUTCOME means the platform may have published the post: check the channel before retrying.',
+      'Why the last publish attempt failed. UNKNOWN_OUTCOME means the platform may have published the post: check the channel before retrying. POLICY_BLOCKED means a publishing policy rule blocked the post.',
   })
   errorCategory?: string | null;
 
