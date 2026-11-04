@@ -17,7 +17,7 @@ Identify the draft from the user's description. If no unique post id is provided
 2. Call `postsider_get_post_missing_fields`.
 3. If required fields are missing, report them and stop. Do not claim the draft is ready and do not submit it for approval.
 4. If the user asked only for a readiness check, stop after reporting the validation result.
-5. If the user asked to send the validated draft for review, call `postsider_request_approval` once.
+5. If the user asked to send the validated draft for review, call `postsider_request_approval` once. It is idempotent: if an approval is already pending it returns it unchanged with `created: false`, without notifying reviewers again, so a retry after an error or timeout is safe.
 6. Call `postsider_get_approval_status` and report the stored approval state.
 7. If the request fails, report a concise actionable error without credentials, tokens, debug payloads, or internal telemetry. Do not retry the write blindly.
 
@@ -28,6 +28,6 @@ Requesting approval does not publish the post. Never describe `PENDING` or `APPR
 Report:
 - selected post id and channels;
 - validation result and any missing fields;
-- whether an approval request was created;
+- whether an approval request was created (report the `created` value);
 - verified approval status;
 - any fact that remains unverified.
