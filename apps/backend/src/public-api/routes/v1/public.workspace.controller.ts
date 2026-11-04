@@ -43,6 +43,7 @@ import {
 } from '@postsider/nestjs-libraries/dtos/composer-helpers/composer-helpers.dto';
 import { CheckPostDto } from '@postsider/nestjs-libraries/dtos/post-checker/check.post.dto';
 import { RewritePostDto } from '@postsider/nestjs-libraries/dtos/post-checker/rewrite.post.dto';
+import { assertKeyAllowed } from '@postsider/nestjs-libraries/policies/key-permission.guard';
 import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
 
 const LIBRARY_KINDS = ['hashtag-groups', 'caption-templates', 'utm-presets'] as const;
@@ -318,6 +319,13 @@ export class PublicWorkspaceController {
       throw new HttpException({ msg: 'channelId and date must be strings' }, 400);
     }
     const source = await this._postsService.getPost(org.id, id);
+    // The copy is always a draft, on the target channel or the source channel.
+    assertKeyAllowed(
+      'DRAFT',
+      [channelId ?? source.integration].filter(
+        (v): v is string => typeof v === 'string'
+      )
+    );
     return this._postsService.duplicatePost(org.id, source.group, channelId, date);
   }
 

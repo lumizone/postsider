@@ -89,6 +89,12 @@ import { PostValidationException } from '@postsider/backend/api/routes/posts.val
 import { timer } from '@postsider/helpers/utils/timer';
 import { ioRedis } from '@postsider/nestjs-libraries/redis/redis.service';
 import { PublicApiIdempotencyService } from '@postsider/nestjs-libraries/database/prisma/idempotency/public-api-idempotency.service';
+import {
+  actionForCreateType,
+  actionForStoredState,
+  assertKeyAllowed,
+} from '@postsider/nestjs-libraries/policies/key-permission.guard';
+import { currentKeyPermissions } from '@postsider/nestjs-libraries/actor/actor-context';
 import { parseProvenance } from '@postsider/nestjs-libraries/actor/post-provenance';
 import { AgencyOverviewService } from '@postsider/nestjs-libraries/database/prisma/agency/agency-overview.service';
 import { CustomerReportService } from '@postsider/nestjs-libraries/database/prisma/agency/customer-report.service';
@@ -438,6 +444,13 @@ export class PublicIntegrationsController {
     );
     body.type = rawBody.type;
 
+    // The key's limits are checked before any validation work, idempotency
+    // claim or write. An unknown type falls through to the DTO validation.
+    assertKeyAllowed(
+      actionForCreateType(rawBody.type),
+      body.posts.map((p) => p.integration.id)
+    );
+
     this.assertMediaDomains(body.posts);
 
     await this.assertPostsValid(org.id, body.posts, body.type);
@@ -581,6 +594,10 @@ export class PublicIntegrationsController {
       patch
     );
     const body = await this._postsService.mapTypeToPost(dto, org.id);
+    assertKeyAllowed(
+      actionForStoredState(state),
+      body.posts.map((p) => p.integration.id)
+    );
 
     this.assertMediaDomains(body.posts);
     // A draft may stay half-written, so it only gets the lenient checks.
@@ -627,6 +644,16 @@ export class PublicIntegrationsController {
   ) {
     Sentry.metrics.count('public_api-request', 1);
     const includeUnknownOutcome = body.includeUnknownOutcome === true;
+    if (currentKeyPermissions()) {
+      // Retrying re-arms the failed rows, so it counts as scheduling them.
+      const rows = await this._postsService.getTopLevelPostsByGroup(org.id, group);
+      const failed = rows.filter((r) => r.state === 'ERROR');
+      if (failed.length) {
+        assertKeyAllowed('SCHEDULE', [
+          ...new Set(failed.map((r) => r.integrationId)),
+        ]);
+      }
+    }
     const claim = await this._idempotency.claim(org.id, idempotencyKey, {
       route: 'retry-failed',
       group,
@@ -932,6 +959,13 @@ export class PublicIntegrationsController {
     @Body() body: ChangePostStatusDto
   ) {
     Sentry.metrics.count('public_api-request', 1);
+    if (currentKeyPermissions()) {
+      const stored = await this._postsService.getPost(org.id, id);
+      assertKeyAllowed(
+        body.status === 'draft' ? 'DRAFT' : 'SCHEDULE',
+        [stored.integration]
+      );
+    }
     return this._postsService.changePostStatus(org.id, id, body.status);
   }
 
