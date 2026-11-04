@@ -6,6 +6,7 @@ jest.mock('isomorphic-dompurify', () => ({
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { PublicIntegrationsController } from './public.integrations.controller';
 import { PublicWorkspaceController } from './public.workspace.controller';
+import { PublicAuditController } from './public.audit.controller';
 import { PUBLIC_API_SCOPES_KEY } from '@postsider/backend/services/auth/public-api-scope.decorator';
 import { isPublicApiScope } from '@postsider/nestjs-libraries/services/public-api-scopes';
 
@@ -31,6 +32,7 @@ describe('PublicIntegrationsController scope contract', () => {
   it.each([
     ['createPost', ['posts:write']],
     ['getPosts', ['posts:read']],
+    ['getPostActivity', ['posts:read']],
     ['uploadsFromUrl', ['media:write']],
     ['requestApproval', ['approvals:write']],
     ['pausePublishing', ['publishing:write']],
@@ -65,5 +67,17 @@ describe('PublicWorkspaceController scope contract', () => {
     ['deleteMedia', ['media:write']],
   ])('authorizes %s only with %j', (name, expected) => {
     expect(Reflect.getMetadata(PUBLIC_API_SCOPES_KEY, (prototype as any)[name])).toEqual(expected);
+  });
+});
+
+describe('PublicAuditController scope contract', () => {
+  const prototype = PublicAuditController.prototype;
+  const handlers = Object.getOwnPropertyNames(prototype)
+    .map((name) => ({ name, handler: (prototype as any)[name] }))
+    .filter(({ handler }) => Reflect.hasMetadata(METHOD_METADATA, handler));
+
+  it('has exactly one handler, guarded by audit:read', () => {
+    expect(handlers).toHaveLength(1);
+    expect(Reflect.getMetadata(PUBLIC_API_SCOPES_KEY, handlers[0].handler)).toEqual(['audit:read']);
   });
 });

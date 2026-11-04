@@ -19,6 +19,7 @@ import { CustomFileValidationPipe } from '@postsider/nestjs-libraries/upload/cus
 import {
   ApiExtraModels,
   ApiHeader,
+  ApiOkResponse,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
@@ -47,6 +48,12 @@ import { Readable } from 'stream';
 import { ssrfSafeDispatcher } from '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
 import { detectFileType } from '@postsider/nestjs-libraries/upload/detect-file-type';
 import { ApprovalService } from '@postsider/nestjs-libraries/database/prisma/approval/approval.service';
+import { AuditEventsService } from '@postsider/nestjs-libraries/database/prisma/audit/audit-events.service';
+import {
+  ListAuditEventsDto,
+  resolveAuditPaging,
+} from '@postsider/nestjs-libraries/dtos/audit/list-audit-events.dto';
+import { PublicAuditEventsResponseDto } from '@postsider/nestjs-libraries/dtos/audit/public-audit-event.dto';
 import { PublicApiScopeGuard } from '@postsider/backend/services/auth/public-api-scope.guard';
 import { RequirePublicApiScopes } from '@postsider/backend/services/auth/public-api-scope.decorator';
 
@@ -111,7 +118,8 @@ export class PublicIntegrationsController {
     private _approvalService: ApprovalService,
     private _idempotency: PublicApiIdempotencyService,
     private _agencyOverview: AgencyOverviewService,
-    private _customerReport: CustomerReportService
+    private _customerReport: CustomerReportService,
+    private _auditEvents: AuditEventsService
   ) {}
 
   @Post('/upload')
@@ -375,6 +383,35 @@ export class PublicIntegrationsController {
   ) {
     Sentry.metrics.count('public_api-request', 1);
     return this._postsService.getPost(org.id, id);
+  }
+
+  @Get('/posts/:id/activity')
+  @RequirePublicApiScopes('posts:read')
+  @ApiOperation({
+    summary: 'List post activity',
+    description:
+      'Audit trail of a post group, newest first, including after deletion. Events: post.created, post.updated, post.deleted, post.status_changed, post.approval_requested, post.approval_resolved, post.published, post.failed, post.retry_requested. Metadata never contains post content.',
+  })
+  @ApiOkResponse({ type: PublicAuditEventsResponseDto })
+  async getPostActivity(
+    @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string,
+    @Query() query: ListAuditEventsDto
+  ) {
+    Sentry.metrics.count('public_api-request', 1);
+    const paging = resolveAuditPaging(query);
+    const targetIds = await this._postsService.getPostIdsInGroupIncludingDeleted(
+      org.id,
+      id
+    );
+    if (!targetIds) {
+      throw new HttpException({ msg: 'Post not found' }, 404);
+    }
+    return this._auditEvents.list(org.id, {
+      targetType: 'post',
+      targetIds,
+      ...paging,
+    });
   }
 
   @Post('/posts')

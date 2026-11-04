@@ -1665,6 +1665,10 @@ export class PostsService {
     return this._postRepository.getTopLevelPostsByGroup(orgId, group);
   }
 
+  getPostIdsInGroupIncludingDeleted(orgId: string, postId: string) {
+    return this._postRepository.getPostIdsInGroupIncludingDeleted(orgId, postId);
+  }
+
   /**
    * Re-arms the failed destinations of a post group. Rows are claimed
    * ERROR -> QUEUE conditionally, so concurrent calls cannot double-start a

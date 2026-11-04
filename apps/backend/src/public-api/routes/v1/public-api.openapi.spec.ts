@@ -1,3 +1,5 @@
+jest.mock('isomorphic-dompurify', () => ({ sanitize: (v: string) => v }));
+
 import { Test } from '@nestjs/testing';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import {
@@ -7,6 +9,8 @@ import {
 import { PublicWebhookSubscriptionsController } from './public-webhook-subscriptions.controller';
 import { PublicWebhookSubscriptionsService } from '@postsider/nestjs-libraries/database/prisma/webhooks/public-webhook-subscriptions.service';
 import { PublicWebhookDeliveriesService } from '@postsider/nestjs-libraries/database/prisma/webhooks/public-webhook-deliveries.service';
+import { PublicAuditController } from './public.audit.controller';
+import { PublicIntegrationsController } from './public.integrations.controller';
 import { PublicApiScopeGuard } from '@postsider/backend/services/auth/public-api-scope.guard';
 
 describe('Public API OpenAPI contract', () => {
@@ -63,6 +67,23 @@ describe('Public API OpenAPI contract', () => {
       required: expect.arrayContaining(['name', 'url', 'events']),
     });
 
+    await app.close();
+  });
+
+  it('documents the audit read routes', async () => {
+    const tokens = new Map<any, any>();
+    const module = await Test.createTestingModule({
+      controllers: [PublicAuditController, PublicIntegrationsController],
+      providers: [PublicApiScopeGuard],
+    })
+      .useMocker((token) => tokens.get(token) ?? {})
+      .compile();
+    const app = module.createNestApplication();
+    await app.init();
+    const document = SwaggerModule.createDocument(app, new DocumentBuilder().setTitle('PostSider Public API').build());
+    expect(document.paths['/public/v1/audit-events']?.get).toBeDefined();
+    expect(document.paths['/public/v1/posts/{id}/activity']?.get).toBeDefined();
+    expect(document.components?.schemas?.PublicAuditEventDto).toBeDefined();
     await app.close();
   });
 });

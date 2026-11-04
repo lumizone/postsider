@@ -49,6 +49,7 @@ import { ComposerHelpersService } from '@postsider/nestjs-libraries/database/pri
 import { ApprovalRepository } from '@postsider/nestjs-libraries/database/prisma/approval/approval.repository';
 import { ApprovalService } from '@postsider/nestjs-libraries/database/prisma/approval/approval.service';
 import { ProviderEnvHelper } from '@postsider/nestjs-libraries/integrations/provider-env.helper';
+import { AuditEventsService } from '@postsider/nestjs-libraries/database/prisma/audit/audit-events.service';
 import { AuditLogger } from '@postsider/nestjs-libraries/database/prisma/audit/audit.logger';
 import { ConnectorCatalogService } from '@postsider/nestjs-libraries/integrations/connector.catalog';
 import { InboundSubscriptionRepository } from '@postsider/nestjs-libraries/database/prisma/inbound/inbound-subscription.repository';
@@ -116,6 +117,7 @@ import { PostAnalyticsService } from '@postsider/nestjs-libraries/database/prism
     ProviderCredentialsService,
     ProviderEnvHelper,
     AuditLogger,
+    AuditEventsService,
     ConnectorCatalogService,
     InboundSubscriptionRepository,
     InboundService,

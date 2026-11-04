@@ -544,6 +544,27 @@ export class PostsRepository {
     });
   }
 
+  /**
+   * Ids of every row in the post's group, soft-deleted and comments included,
+   * so the activity trail of a deleted post stays reachable. Null when the
+   * post does not exist in this organization.
+   */
+  async getPostIdsInGroupIncludingDeleted(
+    orgId: string,
+    postId: string
+  ): Promise<string[] | null> {
+    const post = await this._post.model.post.findFirst({
+      where: { id: postId, organizationId: orgId },
+      select: { group: true },
+    });
+    if (!post) return null;
+    const rows = await this._post.model.post.findMany({
+      where: { group: post.group, organizationId: orgId },
+      select: { id: true },
+    });
+    return rows.map((r) => r.id);
+  }
+
   getPostsByGroup(orgId: string, group: string) {
     return this._post.model.post.findMany({
       where: {
