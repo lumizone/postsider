@@ -48,6 +48,22 @@ export class BadBody extends ApplicationFailure {
   }
 }
 
+/** Failure kind from the response that ends a fetch, never from an earlier retry. */
+function kindForFinalResponse(
+  status: number,
+  bodyText: string
+): BadBodyKind | undefined {
+  if (status >= 500) return 'provider_unavailable';
+  if (
+    status === 429 ||
+    bodyText.includes('rate_limit_exceeded') ||
+    bodyText.includes('Rate limit')
+  ) {
+    return 'rate_limited';
+  }
+  return undefined;
+}
+
 export class NotEnoughScopes extends ApplicationFailure {
   constructor(
     message = 'Not enough scopes, when choosing a provider, please add all the scopes'
@@ -218,13 +234,19 @@ export abstract class SocialAbstract {
     options: RequestInit = {},
     identifier = '',
     totalRetries = 0,
-    ignoreConcurrency = false,
-    lastRetry?: 'rate_limit' | 'server_error'
+    ignoreConcurrency = false
   ): Promise<Response> {
     const request = await fetch(url, options);
 
     if (request.status >= 200 && request.status < 300) {
       return request;
+    }
+
+    let json = '{}';
+    try {
+      json = await request.text();
+    } catch (err) {
+      json = '{}';
     }
 
     if (totalRetries > 2) {
@@ -233,19 +255,8 @@ export abstract class SocialAbstract {
         '{}',
         options.body || '{}',
         '',
-        lastRetry === 'rate_limit'
-          ? 'rate_limited'
-          : lastRetry === 'server_error'
-          ? 'provider_unavailable'
-          : undefined
+        kindForFinalResponse(request.status, json)
       );
-    }
-
-    let json = '{}';
-    try {
-      json = await request.text();
-    } catch (err) {
-      json = '{}';
     }
 
     const handleError = this.handleErrors(json || '{}', request.status);
@@ -256,18 +267,13 @@ export abstract class SocialAbstract {
       json.includes('rate_limit_exceeded') ||
       json.includes('Rate limit')
     ) {
-      const isRateLimit =
-        request.status === 429 ||
-        json.includes('rate_limit_exceeded') ||
-        json.includes('Rate limit');
       await timer(5000);
       return this.fetch(
         url,
         options,
         identifier,
         totalRetries + 1,
-        ignoreConcurrency,
-        isRateLimit ? 'rate_limit' : 'server_error'
+        ignoreConcurrency
       );
     }
 
@@ -278,8 +284,7 @@ export abstract class SocialAbstract {
         options,
         identifier,
         totalRetries + 1,
-        ignoreConcurrency,
-        undefined
+        ignoreConcurrency
       );
     }
 
@@ -301,7 +306,7 @@ export abstract class SocialAbstract {
       json,
       options.body!,
       handleError?.value || 'Unknown Error',
-      request.status >= 500 ? 'provider_unavailable' : undefined
+      kindForFinalResponse(request.status, json)
     );
   }
 

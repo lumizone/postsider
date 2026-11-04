@@ -90,6 +90,39 @@ describe('SocialAbstract failure kinds', () => {
     expect(f).toHaveBeenCalledTimes(4);
   });
 
+  it('tags a 502 ending 429 retries as provider_unavailable', async () => {
+    const f = jest
+      .fn()
+      .mockResolvedValueOnce({ status: 429, text: async () => '{}' })
+      .mockResolvedValueOnce({ status: 429, text: async () => '{}' })
+      .mockResolvedValueOnce({ status: 429, text: async () => '{}' })
+      .mockResolvedValueOnce({ status: 502, text: async () => '{}' });
+    global.fetch = f as any;
+    expect(await kindOf(new T().fetch('http://x', {}, 't'))).toBe(
+      'provider_unavailable'
+    );
+    expect(f).toHaveBeenCalledTimes(4);
+  });
+
+  it('does not call a 500 with rate-limit text rate_limited', async () => {
+    global.fetch = respond(500, 'Rate limit') as any;
+    expect(await kindOf(new T().fetch('http://x', {}, 't'))).toBe(
+      'provider_unavailable'
+    );
+  });
+
+  it('leaves exhausted handler-requested retries untagged', async () => {
+    class R extends T {
+      handleErrors() {
+        return { type: 'retry' as const, value: 'again' };
+      }
+    }
+    const f = respond(400);
+    global.fetch = f as any;
+    expect(await kindOf(new R().fetch('http://x', {}, 't'))).toBeUndefined();
+    expect(f).toHaveBeenCalledTimes(4);
+  });
+
   it('tags a 502 as provider_unavailable without retrying', async () => {
     const f = respond(502);
     global.fetch = f as any;
