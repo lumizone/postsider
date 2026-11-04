@@ -20,3 +20,4 @@ export * from './refresh.token.workflow.v3';
 export * from './refresh.recovery.workflow';
 export * from './streak.workflow';
 export * from './webhook.delivery.workflow';
+export * from './public.api.retention.workflow';
