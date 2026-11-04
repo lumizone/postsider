@@ -86,6 +86,7 @@ export class AuditEventsService {
 
     const where: Record<string, unknown> = {
       organizationId: orgId,
+      type: 'resource',
       targetType: f.targetType ?? { not: null },
     };
     if (f.targetIds) where.targetId = { in: f.targetIds };

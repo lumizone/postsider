@@ -84,6 +84,10 @@ describe('Public API OpenAPI contract', () => {
     expect(document.paths['/public/v1/audit-events']?.get).toBeDefined();
     expect(document.paths['/public/v1/posts/{id}/activity']?.get).toBeDefined();
     expect(document.components?.schemas?.PublicAuditEventDto).toBeDefined();
+    const names = ((document.paths['/public/v1/posts/{id}/activity']!.get!.parameters ?? []) as any[]).map((p) => p.name);
+    expect(names).not.toContain('targetType');
+    expect(names).not.toContain('targetId');
+    expect(names).toContain('limit');
     await app.close();
   });
 });

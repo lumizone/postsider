@@ -50,7 +50,7 @@ import { detectFileType } from '@postsider/nestjs-libraries/upload/detect-file-t
 import { ApprovalService } from '@postsider/nestjs-libraries/database/prisma/approval/approval.service';
 import { AuditEventsService } from '@postsider/nestjs-libraries/database/prisma/audit/audit-events.service';
 import {
-  ListAuditEventsDto,
+  ListPostActivityDto,
   resolveAuditPaging,
 } from '@postsider/nestjs-libraries/dtos/audit/list-audit-events.dto';
 import { PublicAuditEventsResponseDto } from '@postsider/nestjs-libraries/dtos/audit/public-audit-event.dto';
@@ -396,7 +396,7 @@ export class PublicIntegrationsController {
   async getPostActivity(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string,
-    @Query() query: ListAuditEventsDto
+    @Query() query: ListPostActivityDto
   ) {
     Sentry.metrics.count('public_api-request', 1);
     const paging = resolveAuditPaging(query);

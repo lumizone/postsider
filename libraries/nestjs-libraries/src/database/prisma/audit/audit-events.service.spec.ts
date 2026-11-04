@@ -97,6 +97,20 @@ describe('AuditEventsService.list', () => {
   });
 });
 
+describe('AuditEventsService.list resource-only guard', () => {
+  it('always restricts to resource rows of the organization', async () => {
+    const plain = setup();
+    await plain.service.list('org-1', { limit: 5 });
+    expect(plain.findMany.mock.calls[0][0].where).toMatchObject({ organizationId: 'org-1', type: 'resource' });
+    const full = setup();
+    await full.service.list('org-1', {
+      limit: 5, targetType: 'post', targetIds: ['a'], type: 'post.failed',
+      cursor: AuditEventsService.encodeCursor(new Date('2026-01-01'), 'x'),
+    });
+    expect(full.findMany.mock.calls[0][0].where).toMatchObject({ organizationId: 'org-1', type: 'resource', operation: 'post.failed' });
+  });
+});
+
 describe('AuditEventsService.toItem', () => {
   it('maps an API key actor', () => {
     const item = AuditEventsService.toItem(row(1, { actorType: 'API_KEY', actorUserId: null, actorApiKeyId: 'k1' }));

@@ -1,4 +1,4 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiPropertyOptional, OmitType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsISO8601, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { HttpException } from '@nestjs/common';
@@ -52,8 +52,14 @@ export class ListAuditEventsDto {
   cursor?: string;
 }
 
+/** Activity route: the target is the path post, so no target filters. */
+export class ListPostActivityDto extends OmitType(ListAuditEventsDto, [
+  'targetType',
+  'targetId',
+] as const) {}
+
 /** Shared by both audit routes: default limit and a from <= to check. */
-export function resolveAuditPaging(query: ListAuditEventsDto): {
+export function resolveAuditPaging(query: Omit<ListAuditEventsDto, 'targetType' | 'targetId'>): {
   limit: number;
   cursor?: string;
   from?: Date;
