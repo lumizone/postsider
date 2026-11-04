@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { ApprovalRepository } from './approval.repository';
 import {
   assertCanApprove,
@@ -16,6 +16,8 @@ import {
 } from '@postsider/nestjs-libraries/actor/actor-context';
 import { PostActor } from '@postsider/nestjs-libraries/actor/post-actor';
 import { randomBytes } from 'crypto';
+import { AuditLogger } from '@postsider/nestjs-libraries/database/prisma/audit/audit.logger';
+import { recordPostEvent } from '@postsider/nestjs-libraries/database/prisma/audit/post-audit';
 
 export type ApprovalRequestResult = PostApproval & { created: boolean };
 
@@ -28,7 +30,8 @@ export class ApprovalService {
     private _posts: PostsService,
     private _notifications: NotificationService,
     private _organizations: OrganizationRepository,
-    private _publicWebhookDelivery: PublicWebhookDeliveryService
+    private _publicWebhookDelivery: PublicWebhookDeliveryService,
+    @Optional() private _audit?: AuditLogger
   ) {}
 
   /**
@@ -112,6 +115,14 @@ export class ApprovalService {
       postId,
       status: 'PENDING',
     });
+    await recordPostEvent(this._audit, {
+      organizationId: orgId,
+      event: 'post.approval_requested',
+      targetType: 'post',
+      targetId: postId,
+      actor,
+      metadata: { approvalId: approval.id },
+    });
     return { ...approval, created: true };
   }
 
@@ -156,6 +167,13 @@ export class ApprovalService {
       status: 'APPROVED',
       note: null,
     });
+    await recordPostEvent(this._audit, {
+      organizationId: orgId,
+      event: 'post.approval_resolved',
+      targetType: 'post',
+      targetId: approval!.postId,
+      metadata: { approvalId, decision: 'APPROVED' },
+    });
     return { approved: true, postId: approval!.postId };
   }
 
@@ -190,6 +208,13 @@ export class ApprovalService {
       postId: approval!.postId,
       status: 'REJECTED',
       note: note ?? null,
+    });
+    await recordPostEvent(this._audit, {
+      organizationId: orgId,
+      event: 'post.approval_resolved',
+      targetType: 'post',
+      targetId: approval!.postId,
+      metadata: { approvalId, decision: 'REJECTED' },
     });
     return { rejected: true, postId: approval!.postId };
   }
@@ -300,6 +325,14 @@ export class ApprovalService {
       postId: approval.post.id,
       status,
       note: note ?? null,
+    });
+    await recordPostEvent(this._audit, {
+      organizationId: approval.organizationId,
+      event: 'post.approval_resolved',
+      targetType: 'post',
+      targetId: approval.post.id,
+      actor: null,
+      metadata: { approvalId: approval.id, decision: status, by: 'guest' },
     });
     // `action + 'd'` produced "rejectd" for rejections (and only worked at all
     // for "approve"). Callers branch on this, so spell both keys out.

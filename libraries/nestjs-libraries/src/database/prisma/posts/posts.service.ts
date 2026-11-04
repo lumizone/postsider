@@ -1,3 +1,5 @@
+import { AuditLogger } from '@postsider/nestjs-libraries/database/prisma/audit/audit.logger';
+import { recordPostEvent } from '@postsider/nestjs-libraries/database/prisma/audit/post-audit';
 import {
   BadRequestException,
   HttpException,
@@ -110,7 +112,8 @@ export class PostsService {
     private _subscriptionService: SubscriptionService,
     private _organizationRepository: OrganizationRepository,
     private _notificationService: NotificationService,
-    @Optional() private _funnelAttribution?: FunnelAttributionService
+    @Optional() private _funnelAttribution?: FunnelAttributionService,
+    @Optional() private _audit?: AuditLogger
   ) {}
 
   searchForMissingThreeHoursPosts() {
@@ -920,7 +923,25 @@ export class PostsService {
   }
 
   async deletePost(orgId: string, group: string) {
+    // Read the rows first: after the delete they are no longer addressable.
+    let auditRows: Array<{ id: string; integrationId: string }> = [];
+    if (this._audit) {
+      try {
+        auditRows = await this.getTopLevelPostsByGroup(orgId, group);
+      } catch {
+        auditRows = [];
+      }
+    }
     const post = await this._postRepository.deletePost(orgId, group);
+    for (const row of auditRows) {
+      await recordPostEvent(this._audit, {
+        organizationId: orgId,
+        event: 'post.deleted',
+        targetType: 'post',
+        targetId: row.id,
+        metadata: { group, integrationId: row.integrationId },
+      });
+    }
 
     if (post?.id) {
       try {
@@ -1443,7 +1464,7 @@ export class PostsService {
             : updateContent[i],
         }));
 
-        const { posts } = await this._postRepository.createOrUpdatePost(
+        const { posts, createdIds } = await this._postRepository.createOrUpdatePost(
           body.type,
           orgId,
           body.type === 'now'
@@ -1485,6 +1506,23 @@ export class PostsService {
             )
           );
         }
+
+        const wasCreated = !!createdIds?.includes(posts[0].id);
+        await recordPostEvent(this._audit, {
+          organizationId: orgId,
+          event: wasCreated ? 'post.created' : 'post.updated',
+          targetType: 'post',
+          targetId: posts[0].id,
+          metadata: {
+            state: posts[0].state,
+            integrationId: post.integration.id,
+            group: posts[0].group,
+            publishDate: posts[0].publishDate
+              ? new Date(posts[0].publishDate).toISOString()
+              : null,
+            ...(wasCreated ? { creationMethod: String(creationMethod) } : {}),
+          },
+        });
 
         Sentry.metrics.count('post_created', 1);
         postList.push({
@@ -1698,6 +1736,16 @@ export class PostsService {
       this._logger.error(`retryFailed: could not re-arm post ${row.id}: ${err}`);
       return skip('rearm_failed');
     }
+    await recordPostEvent(this._audit, {
+      organizationId: orgId,
+      event: 'post.retry_requested',
+      targetType: 'post',
+      targetId: row.id,
+      metadata: {
+        includeUnknownOutcome: opts.includeUnknownOutcome,
+        previousErrorCategory: row.errorCategory ?? null,
+      },
+    });
     return { ...base, action: 'requeued' };
   }
 
@@ -1880,6 +1928,13 @@ export class PostsService {
       );
     }
 
+    await recordPostEvent(this._audit, {
+      organizationId: orgId,
+      event: 'post.status_changed',
+      targetType: 'post',
+      targetId: id,
+      metadata: { from: getPostById.state, to: state },
+    });
     return { id, state };
   }
 
@@ -1894,6 +1949,13 @@ export class PostsService {
       undefined,
       orgId
     );
+    await recordPostEvent(this._audit, {
+      organizationId: orgId,
+      event: 'post.status_changed',
+      targetType: 'post',
+      targetId: postId,
+      metadata: { from: post.state, to: state },
+    });
     return { id: postId, state };
   }
 
@@ -1950,6 +2012,24 @@ export class PostsService {
         orgId,
         getPostById.state === 'DRAFT' ? 'DRAFT' : 'QUEUE'
       );
+    }
+
+    if (action === 'schedule') {
+      await recordPostEvent(this._audit, {
+        organizationId: orgId,
+        event: 'post.status_changed',
+        targetType: 'post',
+        targetId: id,
+        metadata: { from: getPostById.state, to: 'QUEUE' },
+      });
+    } else {
+      await recordPostEvent(this._audit, {
+        organizationId: orgId,
+        event: 'post.updated',
+        targetType: 'post',
+        targetId: id,
+        metadata: { publishDate: new Date(date).toISOString() },
+      });
     }
 
     return newDate;

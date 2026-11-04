@@ -1,4 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { AuditLogger } from '@postsider/nestjs-libraries/database/prisma/audit/audit.logger';
+import { recordPostEvent } from '@postsider/nestjs-libraries/database/prisma/audit/post-audit';
+import { SYSTEM_ACTOR } from '@postsider/nestjs-libraries/actor/post-actor';
 import {
   Activity,
   ActivityMethod,
@@ -114,7 +117,8 @@ export class PostActivity {
     private _publicWebhookDelivery: PublicWebhookDeliveryService,
     private _temporalService: TemporalService,
     private _subscriptionService: SubscriptionService,
-    private _providerEnvHelper: ProviderEnvHelper
+    private _providerEnvHelper: ProviderEnvHelper,
+    @Optional() private _audit?: AuditLogger
   ) {}
 
   @ActivityMethod()
@@ -460,6 +464,15 @@ export class PostActivity {
           )}`
         );
       });
+    await recordPostEvent(this._audit, {
+      organizationId: orgId,
+      event: 'post.failed',
+      targetType: 'post',
+      targetId: postId,
+      actor: SYSTEM_ACTOR,
+      status: 'error',
+      metadata: { errorCategory: meta.category, errorRetryable: meta.retryable },
+    });
   }
 
   @ActivityMethod()
@@ -512,6 +525,16 @@ export class PostActivity {
           )}`
         );
       });
+
+    const postRow: any = Array.isArray(post) ? post[0] : post;
+    await recordPostEvent(this._audit, {
+      organizationId: orgId,
+      event: 'post.published',
+      targetType: 'post',
+      targetId: postId,
+      actor: SYSTEM_ACTOR,
+      metadata: { integrationId, releaseUrl: postRow?.releaseURL ?? null },
+    });
 
     // Nothing left to deliver through the legacy webhook surface.
     if (webhooks.length === 0) {

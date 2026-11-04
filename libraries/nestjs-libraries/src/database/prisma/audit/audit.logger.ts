@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { createHash, randomUUID } from 'crypto';
 import { PrismaRepository } from '@postsider/nestjs-libraries/database/prisma/prisma.service';
+import { currentActor, currentImpersonator } from '@postsider/nestjs-libraries/actor/actor-context';
+import { PostActor } from '@postsider/nestjs-libraries/actor/post-actor';
+import { ResourceAuditEntry, sanitizeAuditMetadata } from './audit-events';
 
 export interface AuditEntry {
   /** Null for authentication events, which happen outside any organization. */
@@ -84,6 +87,47 @@ export class AuditLogger {
       },
       type: 'security',
     });
+  }
+
+  /**
+   * Record a lifecycle event on a resource (a post). Best effort: never
+   * rejects. Metadata is sanitized to bounded primitives so content, prompts
+   * and secrets cannot reach the trail.
+   */
+  async logResourceEvent(entry: ResourceAuditEntry): Promise<void> {
+    try {
+      const actor: PostActor | null = entry.actor === undefined ? currentActor() : entry.actor;
+      const impersonatedBy = currentImpersonator();
+      const metadata = sanitizeAuditMetadata({
+        ...(entry.metadata ?? {}),
+        ...(impersonatedBy ? { impersonatedBy } : {}),
+      });
+      await this._auditLog.model.auditLog.create({
+        data: {
+          organizationId: entry.organizationId,
+          operation: entry.event,
+          type: 'resource',
+          targetType: entry.targetType,
+          targetId: entry.targetId,
+          actorType: actor?.type ?? null,
+          actorUserId:
+            actor?.type === 'USER'
+              ? actor.userId
+              : actor?.type === 'OAUTH_CLIENT'
+              ? actor.userId ?? null
+              : null,
+          actorApiKeyId: actor?.type === 'API_KEY' ? actor.apiKeyId : null,
+          actorOAuthClientId: actor?.type === 'OAUTH_CLIENT' ? actor.oauthClientId : null,
+          status: entry.status ?? 'ok',
+          correlationId: randomUUID(),
+          inputHash: null,
+          metadata,
+        },
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[audit] failed to persist resource audit entry', err);
+    }
   }
 
   async log(entry: AuditEntry): Promise<void> {
