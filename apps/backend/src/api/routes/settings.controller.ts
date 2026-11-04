@@ -35,6 +35,17 @@ export class SettingsController {
     private _audit: AuditLogger,
   ) {}
 
+  /** A key limit may only name channels of the caller's own organization. */
+  private async assertOwnChannels(orgId: string, ids: string[]) {
+    if (ids.length === 0) return;
+    const channels = await this._integrationService.getIntegrationsList(orgId);
+    const known = new Set(channels.map((c: { id: string }) => c.id));
+    const unknown = ids.find((id) => !known.has(id));
+    if (unknown !== undefined) {
+      throw new HttpException({ msg: `Unknown channel id: ${unknown}` }, 400);
+    }
+  }
+
   @Get('/post-checker')
   @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
   async getCheckerConfig(@GetOrgFromRequest() org: Organization) {
@@ -209,14 +220,20 @@ export class SettingsController {
     // Omitted scopes retain pre-existing API access without silently opting
     // legacy clients into newly added webhook/secret administration.
     const scopes = body.scopes ?? [...LEGACY_PUBLIC_API_SCOPES];
+    const allowedActions = body.allowedActions ?? [];
+    const allowedIntegrationIds = body.allowedIntegrationIds ?? [];
+    await this.assertOwnChannels(org.id, allowedIntegrationIds);
     const created = await this._organizationService.createApiKey(
       org.id,
       name,
-      scopes
+      scopes,
+      { allowedActions, allowedIntegrationIds }
     );
     await this._audit.logSecurityEvent(org.id, 'api_key.create', user.id, {
       name,
       scopes,
+      allowedActions,
+      allowedIntegrationIds,
     });
     return created;
   }
@@ -233,14 +250,27 @@ export class SettingsController {
     if (body.name !== undefined && !name) {
       throw new HttpException('Name cannot be empty', 400);
     }
-    if (name === undefined && body.scopes === undefined) {
-      throw new HttpException('Name or scopes are required', 400);
+    if (
+      name === undefined &&
+      body.scopes === undefined &&
+      body.allowedActions === undefined &&
+      body.allowedIntegrationIds === undefined
+    ) {
+      throw new HttpException(
+        'Name, scopes or permissions are required',
+        400
+      );
+    }
+    if (body.allowedIntegrationIds !== undefined) {
+      await this.assertOwnChannels(org.id, body.allowedIntegrationIds);
     }
     let updated: unknown;
     try {
       updated = await this._organizationService.updateNamedApiKey(org.id, id, {
         name,
         scopes: body.scopes,
+        allowedActions: body.allowedActions,
+        allowedIntegrationIds: body.allowedIntegrationIds,
       });
     } catch (error) {
       // Prisma P2025: no row matched (missing, revoked, or another org's key).
@@ -253,6 +283,12 @@ export class SettingsController {
       apiKeyId: id,
       ...(name === undefined ? {} : { name }),
       ...(body.scopes === undefined ? {} : { scopes: body.scopes }),
+      ...(body.allowedActions === undefined
+        ? {}
+        : { allowedActions: body.allowedActions }),
+      ...(body.allowedIntegrationIds === undefined
+        ? {}
+        : { allowedIntegrationIds: body.allowedIntegrationIds }),
     });
     return updated;
   }

@@ -2,6 +2,7 @@ import { SYSTEM_ACTOR, PostActor } from './post-actor';
 import {
   currentActor,
   currentImpersonator,
+  currentKeyPermissions,
   runAsSystem,
   runWithActor,
 } from './actor-context';
@@ -61,5 +62,29 @@ describe('actor-context', () => {
       { impersonatedBy: 'admin1' }
     );
     expect(currentImpersonator()).toBeUndefined();
+  });
+  describe('key permissions', () => {
+    const perms = { allowedActions: ['DRAFT' as const], allowedIntegrationIds: ['c1'] };
+
+    it('is null outside a run', () => {
+      expect(currentKeyPermissions()).toBeNull();
+    });
+
+    it('is null inside a run without limits', () => {
+      runWithActor(user, () => expect(currentKeyPermissions()).toBeNull());
+    });
+
+    it('returns the permissions, also after an await', async () => {
+      const got = await runWithActor(
+        key,
+        async () => {
+          await Promise.resolve();
+          await wait(1);
+          return currentKeyPermissions();
+        },
+        { keyPermissions: perms }
+      );
+      expect(got).toEqual(perms);
+    });
   });
 });

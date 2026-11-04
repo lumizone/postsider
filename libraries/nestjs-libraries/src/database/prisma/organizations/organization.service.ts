@@ -7,6 +7,8 @@ import { AuthService } from '@postsider/helpers/auth/auth.service';
 import dayjs from 'dayjs';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import { PublicApiScope } from '@postsider/nestjs-libraries/services/public-api-scopes';
+import type { KeyPermissions } from '@postsider/nestjs-libraries/policies/key-permissions';
+import type { PostActionName } from '@postsider/nestjs-libraries/policies/policy-types';
 import { Organization, ShortLinkPreference } from '@prisma/client';
 import { teamInviteEmail } from '@postsider/nestjs-libraries/emails/email.templates';
 
@@ -259,14 +261,24 @@ export class OrganizationService {
     return this._organizationRepository.listApiKeys(orgId);
   }
 
-  async createApiKey(orgId: string, name: string, scopes: PublicApiScope[]) {
-    return this._organizationRepository.createApiKey(orgId, name, scopes);
+  async createApiKey(
+    orgId: string,
+    name: string,
+    scopes: PublicApiScope[],
+    perms?: Partial<KeyPermissions>
+  ) {
+    return this._organizationRepository.createApiKey(orgId, name, scopes, perms);
   }
 
   async updateNamedApiKey(
     orgId: string,
     keyId: string,
-    input: { name?: string; scopes?: PublicApiScope[] }
+    input: {
+      name?: string;
+      scopes?: PublicApiScope[];
+      allowedActions?: PostActionName[];
+      allowedIntegrationIds?: string[];
+    }
   ) {
     return this._organizationRepository.updateNamedApiKey(orgId, keyId, input);
   }

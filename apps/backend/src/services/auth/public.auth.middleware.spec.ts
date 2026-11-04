@@ -1,5 +1,5 @@
 import { PublicAuthMiddleware } from './public.auth.middleware';
-import { currentActor } from '@postsider/nestjs-libraries/actor/actor-context';
+import { currentActor, currentKeyPermissions } from '@postsider/nestjs-libraries/actor/actor-context';
 import { LEGACY_PUBLIC_API_SCOPES } from '@postsider/nestjs-libraries/services/public-api-oauth-scopes';
 
 describe('PublicAuthMiddleware credentials', () => {
@@ -269,6 +269,69 @@ describe('PublicAuthMiddleware credentials', () => {
       expect(res.status).toHaveBeenCalledWith(401);
       expect(next).not.toHaveBeenCalled();
       expect(currentActor()).toEqual({ type: 'SYSTEM' });
+    });
+  });
+
+  describe('key permissions', () => {
+    const run = async (credential: Record<string, unknown>, authorization = 'named-api-key') => {
+      const organizations = {
+        resolvePublicApiCredential: jest.fn().mockResolvedValue({
+          organization: { id: 'org-1', subscription: null },
+          scopes: ['posts:write'],
+          ...credential,
+        }),
+      };
+      const middleware = new PublicAuthMiddleware(organizations as any, {} as any);
+      const req = { headers: { authorization } } as any;
+      let inside: unknown = 'unset';
+      await middleware.use(req, response() as any, () => {
+        inside = currentKeyPermissions();
+      });
+      return { req, inside };
+    };
+
+    it('attaches limits of an api-key to the request and the context', async () => {
+      const keyPermissions = { allowedActions: ['DRAFT'], allowedIntegrationIds: [] };
+      const { req, inside } = await run({
+        credentialType: 'api-key',
+        apiKeyId: 'key-1',
+        keyPermissions,
+      });
+      expect(req.publicApiCredential.permissions).toEqual(keyPermissions);
+      expect(inside).toEqual(keyPermissions);
+    });
+
+    it('sets nothing for an unrestricted key', async () => {
+      const { req, inside } = await run({ credentialType: 'api-key', apiKeyId: 'key-1' });
+      expect(req.publicApiCredential).not.toHaveProperty('permissions');
+      expect(inside).toBeNull();
+    });
+
+    it('ignores the fields on a legacy credential', async () => {
+      const { req, inside } = await run({
+        credentialType: 'legacy',
+        keyPermissions: { allowedActions: ['DRAFT'], allowedIntegrationIds: [] },
+      });
+      expect(req.publicApiCredential).not.toHaveProperty('permissions');
+      expect(inside).toBeNull();
+    });
+
+    it('ignores the fields on an oauth token', async () => {
+      const oauth = {
+        getOrgByOAuthToken: jest.fn().mockResolvedValue({
+          organization: { id: 'org-1', subscription: null },
+          membership: { userId: 'u1', role: 'USER', disabled: false },
+          keyPermissions: { allowedActions: ['DRAFT'], allowedIntegrationIds: [] },
+        }),
+      };
+      const middleware = new PublicAuthMiddleware({} as any, oauth as any);
+      const req = { headers: { authorization: 'Bearer pos_x' } } as any;
+      let inside: unknown = 'unset';
+      await middleware.use(req, response() as any, () => {
+        inside = currentKeyPermissions();
+      });
+      expect(req.publicApiCredential).not.toHaveProperty('permissions');
+      expect(inside).toBeNull();
     });
   });
 });
