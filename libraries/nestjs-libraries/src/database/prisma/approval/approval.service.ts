@@ -14,7 +14,15 @@ import { PostApproval } from '@prisma/client';
 import {
   currentActor,
 } from '@postsider/nestjs-libraries/actor/actor-context';
-import { PostActor } from '@postsider/nestjs-libraries/actor/post-actor';
+import {
+  PostActor,
+  actorViewFromColumns,
+} from '@postsider/nestjs-libraries/actor/post-actor';
+import { approvalDecidedByView } from './approval.projection';
+import {
+  PostIdentity,
+  emptyPostIdentity,
+} from '@postsider/nestjs-libraries/actor/post-identity';
 import { randomBytes } from 'crypto';
 import { AuditLogger } from '@postsider/nestjs-libraries/database/prisma/audit/audit.logger';
 import { recordPostEvent } from '@postsider/nestjs-libraries/database/prisma/audit/post-audit';
@@ -110,11 +118,12 @@ export class ApprovalService {
       'A post has been submitted for approval and is waiting in the approval queue.',
       post?.integrationId
     );
-    await this.emitWebhook(orgId, 'approval.requested', {
-      approvalId: approval.id,
-      postId,
-      status: 'PENDING',
-    });
+    await this.emitWebhook(
+      orgId,
+      'approval.requested',
+      { approvalId: approval.id, postId, status: 'PENDING' },
+      approval
+    );
     await recordPostEvent(this._audit, {
       organizationId: orgId,
       event: 'post.approval_requested',
@@ -161,12 +170,17 @@ export class ApprovalService {
       approval!.postId,
       (approval as any)?.requestedBy?.email
     );
-    await this.emitWebhook(orgId, 'approval.resolved', {
-      approvalId,
-      postId: approval!.postId,
-      status: 'APPROVED',
-      note: null,
-    });
+    await this.emitWebhook(
+      orgId,
+      'approval.resolved',
+      {
+        approvalId,
+        postId: approval!.postId,
+        status: 'APPROVED',
+        note: null,
+      },
+      await this.reread(orgId, approvalId, approval)
+    );
     await recordPostEvent(this._audit, {
       organizationId: orgId,
       event: 'post.approval_resolved',
@@ -203,12 +217,17 @@ export class ApprovalService {
       note ?? null,
       (approval as any)?.requestedBy?.email
     );
-    await this.emitWebhook(orgId, 'approval.resolved', {
-      approvalId,
-      postId: approval!.postId,
-      status: 'REJECTED',
-      note: note ?? null,
-    });
+    await this.emitWebhook(
+      orgId,
+      'approval.resolved',
+      {
+        approvalId,
+        postId: approval!.postId,
+        status: 'REJECTED',
+        note: note ?? null,
+      },
+      await this.reread(orgId, approvalId, approval)
+    );
     await recordPostEvent(this._audit, {
       organizationId: orgId,
       event: 'post.approval_resolved',
@@ -320,12 +339,17 @@ export class ApprovalService {
         requesterEmail
       );
     }
-    await this.emitWebhook(approval.organizationId, 'approval.resolved', {
-      approvalId: approval.id,
-      postId: approval.post.id,
-      status,
-      note: note ?? null,
-    });
+    await this.emitWebhook(
+      approval.organizationId,
+      'approval.resolved',
+      {
+        approvalId: approval.id,
+        postId: approval.post.id,
+        status,
+        note: note ?? null,
+      },
+      await this.reread(approval.organizationId, approval.id, approval)
+    );
     await recordPostEvent(this._audit, {
       organizationId: approval.organizationId,
       event: 'post.approval_resolved',
@@ -385,13 +409,53 @@ export class ApprovalService {
     }
   }
 
+  /** Org scoped re-read so decidedBy reflects the resolved row; best effort. */
+  private async reread(
+    orgId: string,
+    approvalId: string,
+    fallback: Record<string, any> | null | undefined
+  ): Promise<Record<string, any> | null | undefined> {
+    try {
+      return (await this._repo.getById(orgId, approvalId)) ?? fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
   private async emitWebhook(
     organizationId: string,
     event: PublicWebhookEvent,
-    data: Record<string, unknown>
+    data: Record<string, unknown>,
+    approvalRow?: Record<string, any> | null
   ) {
     try {
-      await this._publicWebhookDelivery.deliver(organizationId, event, data);
+      const postId = typeof data.postId === 'string' ? data.postId : null;
+      let identity: PostIdentity = emptyPostIdentity();
+      if (postId) {
+        try {
+          identity = await this._posts.getPostIdentity(organizationId, postId);
+        } catch {
+          // identity is best effort and must never block an event
+        }
+      }
+      let approval: Record<string, unknown> = {
+        requestedBy: null,
+        decidedBy: null,
+      };
+      try {
+        approval = {
+          requestedBy: actorViewFromColumns(approvalRow, 'requestedBy'),
+          decidedBy: approvalRow ? approvalDecidedByView(approvalRow) : null,
+        };
+      } catch {
+        // keep the empty shape
+      }
+      await this._publicWebhookDelivery.deliver(organizationId, event, {
+        ...data,
+        actor: identity.actor,
+        provenance: identity.provenance,
+        approval,
+      });
     } catch {
       // User callbacks are secondary and must never roll back approval state.
     }

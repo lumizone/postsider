@@ -1,6 +1,7 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { AuditLogger } from '@postsider/nestjs-libraries/database/prisma/audit/audit.logger';
 import { recordPostEvent } from '@postsider/nestjs-libraries/database/prisma/audit/post-audit';
+import { emptyPostIdentity } from '@postsider/nestjs-libraries/actor/post-identity';
 import { SYSTEM_ACTOR } from '@postsider/nestjs-libraries/actor/post-actor';
 import {
   Activity,
@@ -440,6 +441,15 @@ export class PostActivity {
     }
   }
 
+  /** Best effort: identity can never block or fail an event. */
+  private async _identityFor(orgId: string, postId: string) {
+    try {
+      return await this._postService.getPostIdentity(orgId, postId);
+    } catch {
+      return emptyPostIdentity();
+    }
+  }
+
   private async _emitPostFailed(
     orgId: string,
     postId: string,
@@ -449,6 +459,7 @@ export class PostActivity {
     const post = await this._postService
       .getPostByForWebhookId(postId, orgId)
       .catch(() => null);
+    const identity = await this._identityFor(orgId, postId);
     await this._publicWebhookDelivery
       .deliver(orgId, 'post.failed', {
         postId,
@@ -456,6 +467,8 @@ export class PostActivity {
         errorCategory: meta.category,
         errorRetryable: meta.retryable,
         post,
+        actor: identity.actor,
+        provenance: identity.provenance,
       })
       .catch((error) => {
         this._logger.warn(
@@ -535,8 +548,13 @@ export class PostActivity {
     });
 
     const post = await this._postService.getPostByForWebhookId(postId, orgId);
+    const identity = await this._identityFor(orgId, postId);
     await this._publicWebhookDelivery
-      .deliver(orgId, 'post.published', { post })
+      .deliver(orgId, 'post.published', {
+        post,
+        actor: identity.actor,
+        provenance: identity.provenance,
+      })
       .catch((error) => {
         this._logger.warn(
           `Public webhook delivery failed without blocking publish: ${String(

@@ -198,11 +198,11 @@ describe('ApprovalService public webhook events', () => {
     expect(delivery.deliver).toHaveBeenCalledWith(
       'org-1',
       'approval.requested',
-      {
+      expect.objectContaining({
         approvalId: 'approval-1',
         postId: 'post-1',
         status: 'PENDING',
-      }
+      })
     );
   });
 

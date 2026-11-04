@@ -49,6 +49,22 @@ dayjs.extend(weekOfYear);
 dayjs.extend(isSameOrAfter);
 dayjs.extend(utc);
 
+const POST_IDENTITY_SELECT = {
+  createdByType: true,
+  createdByUserId: true,
+  createdByApiKeyId: true,
+  createdByOAuthClientId: true,
+  lastModifiedByType: true,
+  lastModifiedByUserId: true,
+  lastModifiedByApiKeyId: true,
+  lastModifiedByOAuthClientId: true,
+  agentName: true,
+  workflowId: true,
+  runId: true,
+  externalRef: true,
+  source: true,
+} as const;
+
 @Injectable()
 export class PostsRepository {
   constructor(
@@ -304,6 +320,14 @@ export class PostsRepository {
     });
   }
 
+  /** Verified actor and claimed provenance columns; deleted rows included. */
+  getPostIdentity(orgId: string, postId: string) {
+    return this._post.model.post.findFirst({
+      where: { id: postId, organizationId: orgId },
+      select: POST_IDENTITY_SELECT,
+    });
+  }
+
   async getPosts(orgId: string, query: GetPostsDto) {
     // Use the provided start and end dates directly
     const startDate = dayjs.utc(query.startDate).toDate();
@@ -358,6 +382,7 @@ export class PostsRepository {
         errorRetryable: true,
         publishAttempts: true,
         lastPublishAttemptAt: true,
+        ...POST_IDENTITY_SELECT,
         tags: {
           select: {
             tag: true,

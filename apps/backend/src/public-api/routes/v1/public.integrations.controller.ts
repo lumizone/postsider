@@ -23,6 +23,7 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { PublicPostIdentityFieldsDto } from '@postsider/nestjs-libraries/dtos/posts/public-post-identity.dto';
 import { PublicPostFailureFieldsDto } from '@postsider/nestjs-libraries/dtos/posts/public-post-failure.dto';
 import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
 import { Organization } from '@prisma/client';
@@ -97,7 +98,7 @@ import {
 } from '@postsider/nestjs-libraries/upload/remote.response';
 
 @ApiTags('Public API')
-@ApiExtraModels(PublicPostFailureFieldsDto)
+@ApiExtraModels(PublicPostFailureFieldsDto, PublicPostIdentityFieldsDto)
 @ApiHeader({
   name: 'Authorization',
   required: true,
@@ -297,7 +298,7 @@ export class PublicIntegrationsController {
   @ApiOperation({
     summary: 'List posts',
     description:
-      'Returns posts in a date range. Each post row includes errorCategory, errorRetryable, publishAttempts and lastPublishAttemptAt. UNKNOWN_OUTCOME means the platform may have published the post: check the channel before retrying.',
+      'Returns posts in a date range. Each post row includes errorCategory, errorRetryable, publishAttempts and lastPublishAttemptAt. UNKNOWN_OUTCOME means the platform may have published the post: check the channel before retrying. Each post row also carries the verified actor columns (createdBy* and lastModifiedBy*: Type, UserId, ApiKeyId, OAuthClientId) and the claimed provenance columns (agentName, workflowId, runId, externalRef, source); provenance is a claim, never proof of identity.',
   })
   async getPosts(
     @GetOrgFromRequest() org: Organization,
@@ -375,7 +376,7 @@ export class PublicIntegrationsController {
   @ApiOperation({
     summary: 'Get a post',
     description:
-      'Returns the post group. Each post row includes errorCategory (AUTH_EXPIRED, PERMISSION_MISSING, RATE_LIMITED, INVALID_CONTENT, PROVIDER_UNAVAILABLE, UNKNOWN_OUTCOME, UNKNOWN or null), errorRetryable, publishAttempts and lastPublishAttemptAt. UNKNOWN_OUTCOME means the platform may have published the post: check the channel before retrying.',
+      'Returns the post group. Each post row includes errorCategory (AUTH_EXPIRED, PERMISSION_MISSING, RATE_LIMITED, INVALID_CONTENT, PROVIDER_UNAVAILABLE, UNKNOWN_OUTCOME, UNKNOWN or null), errorRetryable, publishAttempts and lastPublishAttemptAt. UNKNOWN_OUTCOME means the platform may have published the post: check the channel before retrying. Each post row also carries the verified actor columns (createdBy* and lastModifiedBy*: Type, UserId, ApiKeyId, OAuthClientId) and the claimed provenance columns (agentName, workflowId, runId, externalRef, source); provenance is a claim, never proof of identity.',
   })
   async getPost(
     @GetOrgFromRequest() org: Organization,

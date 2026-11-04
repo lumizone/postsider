@@ -95,6 +95,13 @@ export type RetryFailedResult = {
     | 'rearm_failed';
 };
 
+import { actorViewFromColumns } from '@postsider/nestjs-libraries/actor/post-actor';
+import { provenanceView } from '@postsider/nestjs-libraries/actor/post-provenance';
+import {
+  PostIdentity,
+  emptyPostIdentity,
+} from '@postsider/nestjs-libraries/actor/post-identity';
+
 @Injectable()
 export class PostsService {
   private _logger = new Logger(PostsService.name);
@@ -973,6 +980,22 @@ export class PostsService {
 
   async countPostsFromDay(orgId: string, date: Date) {
     return this._postRepository.countPostsFromDay(orgId, date);
+  }
+
+  /** Actor and provenance of a post; best effort, all-null shape on any miss. */
+  async getPostIdentity(orgId: string, postId: string): Promise<PostIdentity> {
+    try {
+      const row = await this._postRepository.getPostIdentity(orgId, postId);
+      return {
+        actor: {
+          createdBy: actorViewFromColumns(row, 'createdBy'),
+          lastModifiedBy: actorViewFromColumns(row, 'lastModifiedBy'),
+        },
+        provenance: provenanceView(row),
+      };
+    } catch {
+      return emptyPostIdentity();
+    }
   }
 
   getPostByForWebhookId(id: string, orgId?: string) {
