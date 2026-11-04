@@ -10,7 +10,14 @@ import { NotificationService } from '@postsider/nestjs-libraries/database/prisma
 import { OrganizationRepository } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.repository';
 import { PublicWebhookDeliveryService } from '@postsider/nestjs-libraries/database/prisma/webhooks/public-webhook-delivery.service';
 import { PublicWebhookEvent } from '@postsider/nestjs-libraries/services/public-webhook-events';
+import { PostApproval } from '@prisma/client';
+import {
+  currentActor,
+} from '@postsider/nestjs-libraries/actor/actor-context';
+import { PostActor } from '@postsider/nestjs-libraries/actor/post-actor';
 import { randomBytes } from 'crypto';
+
+export type ApprovalRequestResult = PostApproval & { created: boolean };
 
 const GUEST_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -30,7 +37,10 @@ export class ApprovalService {
    * the org's own SUPERADMIN (falling back to any ADMIN, then any member) —
    * "the org itself, via API" rather than a specific human.
    */
-  async requestApprovalFromApi(orgId: string, postId: string) {
+  async requestApprovalFromApi(
+    orgId: string,
+    postId: string
+  ): Promise<ApprovalRequestResult> {
     const requestedById = await this.resolveApiRequester(orgId);
     return this.requestApproval(orgId, postId, requestedById);
   }
@@ -53,14 +63,28 @@ export class ApprovalService {
     return chosen.user.id;
   }
 
-  async requestApproval(orgId: string, postId: string, requestedById: string) {
+  async requestApproval(
+    orgId: string,
+    postId: string,
+    requestedById: string,
+    actor: PostActor = currentActor()
+  ): Promise<ApprovalRequestResult> {
     const post = await this._repo.getPost(orgId, postId);
     assertRequestable(post);
-    const approval = await this._repo.upsertRequest(
+    const { approval, created } = await this._repo.openRequest(
       orgId,
       postId,
-      requestedById
+      requestedById,
+      actor
     );
+    if (!created) {
+      // Retried request on an already open approval: change nothing and send
+      // nothing. Only heal a post that fell back to DRAFT while still pending.
+      if (post?.state === 'DRAFT' && approval.status === 'PENDING') {
+        await this._posts.setPostState(orgId, postId, 'APPROVAL' as any);
+      }
+      return { ...approval, created: false };
+    }
     // Distinguish pending-approval posts from plain drafts in the calendar and
     // filters. The State.APPROVAL enum was unused before — now it means "draft
     // that is waiting for approval" so calendars and lists can surface them.
@@ -88,7 +112,7 @@ export class ApprovalService {
       postId,
       status: 'PENDING',
     });
-    return approval;
+    return { ...approval, created: true };
   }
 
   getPending(orgId: string) {
@@ -224,7 +248,8 @@ export class ApprovalService {
   async resolveGuestReview(
     token: string,
     action: 'approve' | 'reject',
-    note?: string
+    note?: string,
+    guest?: { name: string; email: string } | null
   ) {
     const approval = await this._repo.getByGuestToken(token);
     if (!approval) {
@@ -236,7 +261,8 @@ export class ApprovalService {
     const count = await this._repo.resolveByGuestToken(
       token,
       status,
-      note ?? null
+      note ?? null,
+      guest ?? null
     );
     if (!count) {
       // Lost a race with the admin resolving it in-app, or the link was

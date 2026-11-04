@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
@@ -26,6 +25,7 @@ import { OnlyURL } from '@postsider/nestjs-libraries/dtos/webhooks/webhooks.dto'
 import { isSafePublicHttpsUrl } from '@postsider/nestjs-libraries/dtos/webhooks/webhook.url.validator';
 import { ssrfSafeDispatcher } from '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
 import { ApprovalService } from '@postsider/nestjs-libraries/database/prisma/approval/approval.service';
+import { GuestReviewResolveDto } from '@postsider/nestjs-libraries/dtos/approval/guest-review-resolve.dto';
 import { AuthRateLimitGuard } from '@postsider/nestjs-libraries/services/auth-rate-limit.guard';
 import { HttpForbiddenException } from '@postsider/nestjs-libraries/services/exception.filter';
 
@@ -53,15 +53,17 @@ export class PublicController {
   @UseGuards(AuthRateLimitGuard)
   async resolveGuestReview(
     @Param('token') token: string,
-    @Body() body: { action: 'approve' | 'reject'; note?: string }
+    @Body() body: GuestReviewResolveDto
   ) {
-    if (body.action !== 'approve' && body.action !== 'reject') {
-      throw new BadRequestException('action must be "approve" or "reject"');
-    }
+    const guest =
+      body.guestName && body.guestEmail
+        ? { name: body.guestName, email: body.guestEmail }
+        : null;
     return this._approvalService.resolveGuestReview(
       token,
       body.action,
-      body.note
+      body.note,
+      guest
     );
   }
 

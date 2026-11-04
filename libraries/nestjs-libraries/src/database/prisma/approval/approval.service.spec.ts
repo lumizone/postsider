@@ -18,6 +18,7 @@ import {
   assertRequestable,
 } from './approval.rules';
 import { ApprovalService } from './approval.service';
+import { runWithActor } from '@postsider/nestjs-libraries/actor/actor-context';
 
 describe('assertRequestable', () => {
   it('throws when the post does not exist', () => {
@@ -148,6 +149,7 @@ describe('ApprovalService approval compensation', () => {
     expect(repo.resolveByGuestToken).toHaveBeenCalledWith(
       'guest-token',
       'APPROVED',
+      null,
       null
     );
     expect(repo.revertGuestApproval).toHaveBeenCalledWith(
@@ -168,7 +170,9 @@ describe('ApprovalService public webhook events', () => {
         parentPostId: null,
         integrationId: 'channel-1',
       }),
-      upsertRequest: jest.fn().mockResolvedValue({ id: 'approval-1' }),
+      openRequest: jest
+        .fn()
+        .mockResolvedValue({ approval: { id: 'approval-1' }, created: true }),
     };
     const posts = { setPostState: jest.fn().mockResolvedValue(undefined) };
     const notifications = {
@@ -209,7 +213,9 @@ describe('ApprovalService public webhook events', () => {
         parentPostId: null,
         integrationId: 'channel-1',
       }),
-      upsertRequest: jest.fn().mockResolvedValue({ id: 'approval-1' }),
+      openRequest: jest
+        .fn()
+        .mockResolvedValue({ approval: { id: 'approval-1' }, created: true }),
     };
     const service = new ApprovalService(
       repo as any,
@@ -226,6 +232,125 @@ describe('ApprovalService public webhook events', () => {
 
     await expect(
       service.requestApproval('org-1', 'post-1', 'user-1')
-    ).resolves.toEqual({ id: 'approval-1' });
+    ).resolves.toEqual({ id: 'approval-1', created: true });
+  });
+});
+
+describe('ApprovalService attribution and idempotent request', () => {
+  const build = (opening: { approval: any; created: boolean }, postState = 'DRAFT') => {
+    const repo = {
+      getPost: jest.fn().mockResolvedValue({
+        state: postState,
+        parentPostId: null,
+        integrationId: 'channel-1',
+      }),
+      openRequest: jest.fn().mockResolvedValue(opening),
+      resolveByGuestToken: jest.fn().mockResolvedValue(1),
+      getByGuestToken: jest.fn().mockResolvedValue({
+        id: 'approval-1',
+        organizationId: 'org-1',
+        guestTokenExpiresAt: new Date(),
+        requestedBy: { email: 'a@b.co' },
+        post: { id: 'post-1' },
+      }),
+      resolve: jest.fn().mockResolvedValue(1),
+      getById: jest.fn().mockResolvedValue({
+        id: 'approval-1',
+        postId: 'post-1',
+        status: 'PENDING',
+      }),
+    };
+    const posts = {
+      setPostState: jest.fn().mockResolvedValue(undefined),
+      changePostStatus: jest.fn().mockResolvedValue(undefined),
+    };
+    const notifications = {
+      inAppNotification: jest.fn().mockResolvedValue(undefined),
+      notifyApprovers: jest.fn().mockResolvedValue(undefined),
+      sendEmail: jest.fn().mockResolvedValue(undefined),
+    };
+    const organizations = {
+      getAllUsersOrgs: jest.fn().mockResolvedValue({
+        users: [
+          { role: 'USER', user: { id: 'u-plain' } },
+          { role: 'SUPERADMIN', user: { id: 'u-super' } },
+        ],
+      }),
+    };
+    const delivery = { deliver: jest.fn().mockResolvedValue(undefined) };
+    const service = new ApprovalService(
+      repo as any,
+      posts as any,
+      notifications as any,
+      organizations as any,
+      delivery as any
+    );
+    return { service, repo, posts, notifications, delivery };
+  };
+
+  it('passes the OAuth actor (with the authorizing user) to openRequest', async () => {
+    const { service, repo } = build({ approval: { id: 'a1' }, created: true });
+    const actor = { type: 'OAUTH_CLIENT', oauthClientId: 'c1', userId: 'u7' } as const;
+    await runWithActor(actor, () => service.requestApproval('org-1', 'post-1', 'u7'));
+    expect(repo.openRequest).toHaveBeenCalledWith('org-1', 'post-1', 'u7', actor);
+  });
+
+  it('API request keeps the SUPERADMIN for routing but attributes the API key', async () => {
+    const { service, repo } = build({ approval: { id: 'a1' }, created: true });
+    const actor = { type: 'API_KEY', apiKeyId: 'k1' } as const;
+    await runWithActor(actor, () => service.requestApprovalFromApi('org-1', 'post-1'));
+    expect(repo.openRequest).toHaveBeenCalledWith('org-1', 'post-1', 'u-super', actor);
+  });
+
+  it('a retried request on an open approval has no side effects', async () => {
+    const { service, posts, notifications, delivery } = build(
+      { approval: { id: 'a1', status: 'PENDING' }, created: false },
+      'APPROVAL'
+    );
+    const result = await service.requestApproval('org-1', 'post-1', 'u1');
+    expect(result).toMatchObject({ id: 'a1', created: false });
+    expect(posts.setPostState).not.toHaveBeenCalled();
+    expect(notifications.inAppNotification).not.toHaveBeenCalled();
+    expect(notifications.notifyApprovers).not.toHaveBeenCalled();
+    expect(delivery.deliver).not.toHaveBeenCalled();
+  });
+
+  it('heals a DRAFT post under a pending approval without notifying', async () => {
+    const { service, posts, notifications, delivery } = build(
+      { approval: { id: 'a1', status: 'PENDING' }, created: false },
+      'DRAFT'
+    );
+    await service.requestApproval('org-1', 'post-1', 'u1');
+    expect(posts.setPostState).toHaveBeenCalledTimes(1);
+    expect(posts.setPostState).toHaveBeenCalledWith('org-1', 'post-1', 'APPROVAL');
+    expect(notifications.inAppNotification).not.toHaveBeenCalled();
+    expect(delivery.deliver).not.toHaveBeenCalled();
+  });
+
+  it('a new request runs every side effect once', async () => {
+    const { service, posts, notifications, delivery } = build({
+      approval: { id: 'a1', status: 'PENDING' },
+      created: true,
+    });
+    const result = await service.requestApproval('org-1', 'post-1', 'u1');
+    expect(result.created).toBe(true);
+    expect(posts.setPostState).toHaveBeenCalledTimes(1);
+    expect(notifications.inAppNotification).toHaveBeenCalledTimes(1);
+    expect(notifications.notifyApprovers).toHaveBeenCalledTimes(1);
+    expect(delivery.deliver).toHaveBeenCalledTimes(1);
+  });
+
+  it('forwards the guest identity to resolveByGuestToken', async () => {
+    const { service, repo } = build({ approval: { id: 'a1' }, created: true });
+    const guest = { name: 'Ann', email: 'a@b.co' };
+    await service.resolveGuestReview('tok', 'reject', 'no', guest);
+    expect(repo.resolveByGuestToken).toHaveBeenCalledWith('tok', 'REJECTED', 'no', guest);
+  });
+
+  it('approve still resolves and emits the webhook', async () => {
+    const { service, repo, delivery } = build({ approval: { id: 'a1' }, created: true });
+    await service.approve('org-1', 'approval-1', 'u9', 'ADMIN');
+    expect(repo.resolve).toHaveBeenCalledWith('org-1', 'approval-1', 'u9', 'APPROVED', null);
+    expect(delivery.deliver).toHaveBeenCalledWith('org-1', 'approval.resolved', expect.objectContaining({ status: 'APPROVED' }));
   });
 });

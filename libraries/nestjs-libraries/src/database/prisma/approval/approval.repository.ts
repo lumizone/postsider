@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { PostApproval } from '@prisma/client';
+import { actorToColumns, PostActor } from '@postsider/nestjs-libraries/actor/post-actor';
 import { PrismaRepository } from '@postsider/nestjs-libraries/database/prisma/prisma.service';
 
 type ResolveStatus = 'APPROVED' | 'REJECTED';
@@ -37,30 +39,70 @@ export class ApprovalRepository {
     });
   }
 
-  // Upsert so a previously rejected post can be re-submitted without piling up
-  // duplicate rows (postId is unique).
-  upsertRequest(orgId: string, postId: string, requestedById: string) {
-    return this._approval.model.postApproval.upsert({
-      where: { postId },
-      update: {
+  /**
+   * Opens (or re-opens) the single approval row of a post. Idempotent: a
+   * retried request on a PENDING approval changes nothing and reports
+   * `created: false`. Concurrent first requests are settled by the unique
+   * postId constraint (P2002), so exactly one caller sees `created: true`.
+   */
+  async openRequest(
+    orgId: string,
+    postId: string,
+    requestedById: string,
+    actor: PostActor
+  ): Promise<{ approval: PostApproval; created: boolean }> {
+    const model = this._approval.model.postApproval;
+    const requester = {
+      requestedById,
+      ...actorToColumns(actor, 'requestedBy'),
+    };
+    // A resolved approval starts a fresh round: any guest link from the prior
+    // round pointed at now-stale content and must stop working.
+    const reopened = await model.updateMany({
+      where: {
+        postId,
+        organizationId: orgId,
+        status: { in: ['APPROVED', 'REJECTED'] },
+      },
+      data: {
         status: 'PENDING',
-        requestedById,
-        approverId: null,
-        note: null,
+        ...requester,
         requestedAt: new Date(),
+        approverId: null,
+        decidedByType: null,
+        note: null,
+        guestName: null,
+        guestEmail: null,
         resolvedAt: null,
-        // A resubmit is a fresh round — any link from a prior round pointed
-        // at now-stale content/decision and must stop working.
         guestToken: null,
         guestTokenExpiresAt: null,
       },
-      create: {
-        postId,
-        organizationId: orgId,
-        requestedById,
-        status: 'PENDING',
-      },
     });
+    if (reopened.count === 1) {
+      const approval = await model.findFirst({
+        where: { postId, organizationId: orgId },
+      });
+      return { approval: approval!, created: true };
+    }
+    try {
+      const approval = await model.create({
+        data: {
+          postId,
+          organizationId: orgId,
+          status: 'PENDING',
+          ...requester,
+        },
+      });
+      return { approval, created: true };
+    } catch (error) {
+      if ((error as { code?: string })?.code !== 'P2002') {
+        throw error;
+      }
+      const approval = await model.findFirst({
+        where: { postId, organizationId: orgId },
+      });
+      return { approval: approval!, created: false };
+    }
   }
 
   getPending(orgId: string) {
@@ -103,7 +145,13 @@ export class ApprovalRepository {
   ) {
     const res = await this._approval.model.postApproval.updateMany({
       where: { id, organizationId, status: 'PENDING' },
-      data: { status, approverId, note, resolvedAt: new Date() },
+      data: {
+        status,
+        approverId,
+        decidedByType: approverId ? 'USER' : null,
+        note,
+        resolvedAt: new Date(),
+      },
     });
     return res.count;
   }
@@ -114,6 +162,7 @@ export class ApprovalRepository {
       data: {
         status: 'PENDING',
         approverId: null,
+        decidedByType: null,
         note: null,
         resolvedAt: null,
       },
@@ -182,7 +231,8 @@ export class ApprovalRepository {
   async resolveByGuestToken(
     token: string,
     status: ResolveStatus,
-    note: string | null
+    note: string | null,
+    guest: { name: string; email: string } | null = null
   ) {
     const res = await this._approval.model.postApproval.updateMany({
       where: {
@@ -193,6 +243,9 @@ export class ApprovalRepository {
       data: {
         status,
         approverId: null,
+        decidedByType: null,
+        guestName: guest?.name ?? null,
+        guestEmail: guest?.email ?? null,
         note,
         resolvedAt: new Date(),
         guestToken: null,
@@ -220,6 +273,8 @@ export class ApprovalRepository {
         status: 'PENDING',
         note: null,
         resolvedAt: null,
+        guestName: null,
+        guestEmail: null,
         guestToken: token,
         guestTokenExpiresAt: expiresAt,
       },

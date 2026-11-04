@@ -8,6 +8,7 @@ import {
   Post,
   Put,
   Query,
+  Res,
   Headers,
   UploadedFile,
   UseInterceptors,
@@ -62,6 +63,12 @@ const PUBLIC_API_ALLOWED_MIME = new Set<string>([
 // Inline base64 uploads travel through the JSON body parser (50 MB) and the
 // model context, so they are capped well below the multipart limit.
 const BASE64_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
+import type { Response } from 'express';
+import {
+  approvalDecidedByView,
+  toPublicApproval,
+} from '@postsider/nestjs-libraries/database/prisma/approval/approval.projection';
+import { actorViewFromColumns } from '@postsider/nestjs-libraries/actor/post-actor';
 import * as Sentry from '@sentry/nestjs';
 import {
   socialIntegrationList,
@@ -610,10 +617,15 @@ export class PublicIntegrationsController {
   @RequirePublicApiScopes('approvals:write')
   async requestApproval(
     @GetOrgFromRequest() org: Organization,
-    @Param('id') id: string
+    @Param('id') id: string,
+    @Res({ passthrough: true }) res: Response
   ) {
     Sentry.metrics.count('public_api-request', 1);
-    return this._approvalService.requestApprovalFromApi(org.id, id);
+    const result = await this._approvalService.requestApprovalFromApi(org.id, id);
+    // A retry on an already open approval is a no-op: 200, not 201.
+    if (!result.created) res.status(200);
+    // Explicit projection: never expose guestToken or the routing requester id.
+    return toPublicApproval(result, result.created);
   }
 
   // Read-side counterpart to request-approval: lets a pipeline that pushed a
@@ -636,6 +648,8 @@ export class PublicIntegrationsController {
       note: approval.note,
       requestedAt: approval.requestedAt,
       resolvedAt: approval.resolvedAt,
+      requestedBy: actorViewFromColumns(approval, 'requestedBy'),
+      decidedBy: approvalDecidedByView(approval),
     };
   }
 
