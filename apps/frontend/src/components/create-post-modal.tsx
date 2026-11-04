@@ -1764,48 +1764,6 @@ export function CreatePostModal({
               rows={8}
             />
 
-            {anySelectedSupportsComment && (
-              <div className={styles.field}>
-                <label className={styles.fieldLabel}>
-                  {t("firstComment.label")}
-                  <InfoTip textKey="infoTip.firstComment" />
-                </label>
-                <textarea
-                  value={firstComment}
-                  onChange={(e) => setFirstComment(e.target.value)}
-                  placeholder={t("firstComment.placeholder")}
-                  className={styles.fieldTextarea}
-                  rows={2}
-                />
-                <span className={styles.fieldHelp}>
-                  {t("firstComment.hint")}
-                </span>
-              </div>
-            )}
-
-            {/*
-              Provider-specific requirements & settings. In per-channel mode we
-              show the active channel's panel; in global mode we show a panel
-              for every selected channel that has settings or warnings.
-            */}
-            {(mode === "per-channel"
-              ? selectedChannels.filter((c) => c.id === activeTarget)
-              : selectedChannels
-            ).map((c) => (
-              <ProviderSettingsPanel
-                key={c.id}
-                channel={c}
-                requirement={requirementFor(c)}
-                settings={channelSettings[c.id] ?? {}}
-                problems={channelProblems[c.id] ?? []}
-                remoteOptions={remoteOptions}
-                creatorInfo={tiktokCreators[c.id]}
-                media={mediaLike}
-                bodyLength={bodyForChannel(c.id).length}
-                onChange={(key, value) => setChannelSetting(c.id, key, value)}
-              />
-            ))}
-
             {media.length > 0 && (
               <div className={styles.mediaList}>
                 {media.map((m, i) => (
@@ -1908,6 +1866,24 @@ export function CreatePostModal({
               >
                 # {t("createPost.snippets")}
               </button>
+              {/* AI helpers act on the text, so they sit with the editing
+                  tools; the footer is left for publishing decisions. */}
+              <button
+                type="button"
+                className={styles.toolBtn}
+                disabled={submitting !== null || checkerPlatforms.length === 0}
+                onClick={() => { setShowSnippets(false); setShowRewrite(false); setShowChecker(true); }}
+              >
+                ✦ {t("postChecker.checkPost")}
+              </button>
+              <button
+                type="button"
+                className={styles.toolBtn}
+                disabled={submitting !== null || currentBody.trim().length === 0}
+                onClick={openRewrite}
+              >
+                ✎ {t("createPost.rewrite")}
+              </button>
             </div>
 
             {threadParts.length > 0 && (
@@ -1934,6 +1910,53 @@ export function CreatePostModal({
                 ))}
               </div>
             )}
+
+            {/* Media and the editing toolbar now sit right under the text;
+                first comment and per-platform settings follow. They used to
+                come first, so adding an image meant scrolling past every
+                platform's settings panel. */}
+            {anySelectedSupportsComment && (
+              <div className={styles.field}>
+                <label className={styles.fieldLabel}>
+                  {t("firstComment.label")}
+                  <InfoTip textKey="infoTip.firstComment" />
+                </label>
+                <textarea
+                  value={firstComment}
+                  onChange={(e) => setFirstComment(e.target.value)}
+                  placeholder={t("firstComment.placeholder")}
+                  className={styles.fieldTextarea}
+                  rows={2}
+                />
+                <span className={styles.fieldHelp}>
+                  {t("firstComment.hint")}
+                </span>
+              </div>
+            )}
+
+            {/*
+              Provider-specific requirements & settings. In per-channel mode we
+              show the active channel's panel; in global mode we show a panel
+              for every selected channel that has settings or warnings.
+            */}
+            {(mode === "per-channel"
+              ? selectedChannels.filter((c) => c.id === activeTarget)
+              : selectedChannels
+            ).map((c) => (
+              <ProviderSettingsPanel
+                key={c.id}
+                channel={c}
+                requirement={requirementFor(c)}
+                settings={channelSettings[c.id] ?? {}}
+                problems={channelProblems[c.id] ?? []}
+                remoteOptions={remoteOptions}
+                creatorInfo={tiktokCreators[c.id]}
+                media={mediaLike}
+                bodyLength={bodyForChannel(c.id).length}
+                onChange={(key, value) => setChannelSetting(c.id, key, value)}
+              />
+            ))}
+
           </section>
 
           <aside className={styles.preview}>
@@ -2078,22 +2101,6 @@ export function CreatePostModal({
                   : t("createPost.publishNow")}
               </button>
             )}
-            <button
-              type="button"
-              className={styles.btnSecondary}
-              disabled={submitting !== null || checkerPlatforms.length === 0}
-              onClick={() => { setShowSnippets(false); setShowRewrite(false); setShowChecker(true); }}
-            >
-              ✦ {t("postChecker.checkPost")}
-            </button>
-            <button
-              type="button"
-              className={styles.btnSecondary}
-              disabled={submitting !== null || currentBody.trim().length === 0}
-              onClick={openRewrite}
-            >
-              ✎ {t("createPost.rewrite")}
-            </button>
             {selectedChannels.length === 1 && (
               <button
                 type="button"

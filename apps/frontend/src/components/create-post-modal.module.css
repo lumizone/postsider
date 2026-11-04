@@ -483,19 +483,25 @@
   flex-wrap: wrap;
 }
 
+/* Date and time pickers are pills already; a second pill around them read as
+ * a box inside a box. */
 .footLeft {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--line-soft);
-  background: var(--bg);
 }
 
 .footRight {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
+  /* Stays on the right when the footer wraps onto two rows (tablets). */
+  margin-left: auto;
+}
+
+.footRight > button {
+  white-space: nowrap;
 }
 
 .smartSlots {
@@ -924,4 +930,43 @@
 @media (max-width: 520px) {
   .tiktokPostingAs { flex-wrap: wrap; }
   .tiktokDuration { width: 100%; margin-left: 26px; }
+}
+
+.toolBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Phones: six actions in one row wrapped mid-label ("Save / draft") and the
+ * last ones ran off screen. Two per row, primary action full width last. */
+@media (max-width: 600px) {
+  .foot {
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    gap: 10px;
+  }
+
+  .footLeft {
+    width: 100%;
+  }
+
+  .footLeft > * {
+    flex: 1;
+  }
+
+  .smartSlots {
+    width: 100%;
+  }
+
+  .footRight {
+    width: 100%;
+  }
+
+  .footRight > button {
+    flex: 1 1 calc(50% - 4px);
+  }
+
+  .footRight > .btnPrimary {
+    flex-basis: 100%;
+    order: 10;
+  }
 }
