@@ -139,23 +139,23 @@ export async function postWorkflowV109({
 
   if (!postNow && firstPost.state !== 'QUEUE') {
     // Deliberate user action (unscheduled draft, held by pause, or already
-    // published by a replacement workflow) — stop silently, not an error.
+    // published by a replacement workflow) - stop silently, not an error.
     return;
   }
 
-  // Emergency Pause gate — atomic with the DB: a paused org parks a QUEUE post
+  // Emergency Pause gate - atomic with the DB: a paused org parks a QUEUE post
   // to HELD (inside a single transaction with the state read), so this check
   // cannot race a pause landing in the same millisecond. Runs regardless of
   // `postNow` (repeat-post children skip the QUEUE check above but must also
   // never publish into a paused org).
   const claim = await claimPostForPublish(organizationId, postId);
   if (claim.outcome === 'held') {
-    // Post already flipped to HELD inside the transaction — nothing more to do.
+    // Post already flipped to HELD inside the transaction - nothing more to do.
     return;
   }
   if (claim.outcome === 'abort') {
     // Paused but post not QUEUE (e.g. repeat-post of an already-published
-    // post) — simply don't publish, don't touch state.
+    // post) - simply don't publish, don't touch state.
     return;
   }
 
@@ -200,7 +200,7 @@ export async function postWorkflowV109({
     return;
   }
 
-  // Channel was deleted while this post sat in QUEUE — never publish to it.
+  // Channel was deleted while this post sat in QUEUE - never publish to it.
   // `deleteChannel` only soft-deletes the Integration (deletedAt) and leaves
   // the token intact, and the post-deletion sweep that accompanies it is
   // best-effort, so a surviving QUEUE post would otherwise sail past the
