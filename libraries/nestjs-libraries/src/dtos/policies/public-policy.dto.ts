@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   POLICY_CONDITIONS,
   POLICY_EFFECTS,
@@ -28,4 +28,30 @@ export class PublicPoliciesResponseDto {
 export class PublicPolicyDeletedDto {
   @ApiProperty() id: string;
   @ApiProperty({ example: true }) deleted: true;
+}
+
+export class PublicPolicyMatchDto {
+  @ApiProperty() ruleId: string;
+  @ApiProperty() name: string;
+  @ApiProperty({ enum: POLICY_EFFECTS }) effect: string;
+  @ApiProperty({ enum: POLICY_CONDITIONS }) condition: string;
+}
+
+export class PublicPolicyChannelEffectDto {
+  @ApiProperty() integrationId: string;
+  @ApiProperty({ enum: ['ALLOW', 'REQUIRE_APPROVAL', 'BLOCK'] }) effect: string;
+}
+
+export class PublicPolicyKeyCheckDto {
+  @ApiProperty({ description: 'False when the key limits refuse the action or a channel.' })
+  allowed: boolean;
+  @ApiPropertyOptional({ enum: ['key_action_not_allowed', 'key_channel_not_allowed'] })
+  code?: string;
+}
+
+export class PublicPolicyEvaluationDto {
+  @ApiProperty({ enum: ['ALLOW', 'REQUIRE_APPROVAL', 'BLOCK'] }) effect: string;
+  @ApiProperty({ type: [PublicPolicyMatchDto] }) matched: PublicPolicyMatchDto[];
+  @ApiProperty({ type: [PublicPolicyChannelEffectDto] }) channels: PublicPolicyChannelEffectDto[];
+  @ApiProperty({ type: PublicPolicyKeyCheckDto }) key: PublicPolicyKeyCheckDto;
 }

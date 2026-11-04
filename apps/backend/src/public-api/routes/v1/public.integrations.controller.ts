@@ -19,10 +19,12 @@ import {
 import { CustomFileValidationPipe } from '@postsider/nestjs-libraries/upload/custom.upload.validation';
 import {
   ApiExtraModels,
+  ApiForbiddenResponse,
   ApiHeader,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { PublicPostIdentityFieldsDto } from '@postsider/nestjs-libraries/dtos/posts/public-post-identity.dto';
 import { PublicPostFailureFieldsDto } from '@postsider/nestjs-libraries/dtos/posts/public-post-failure.dto';
@@ -427,6 +429,19 @@ export class PublicIntegrationsController {
   @Post('/posts')
   @RequirePublicApiScopes('posts:write')
   @CheckPolicies([AuthorizationActions.Create, Sections.POSTS_PER_MONTH])
+  @ApiOperation({
+    summary: 'Create posts',
+    description:
+      'Creates one post per channel as a draft, a scheduled post or an immediate publish. Key limits and organization policy rules are checked before anything is written. Errors: 403 key_action_not_allowed or key_channel_not_allowed when the API key limits refuse the action or a channel, and 422 policy_blocked when a BLOCK rule matches a schedule or publish now write. Drafts are reported but never blocked at write time; a BLOCK rule still stops them when they are published. When a REQUIRE_APPROVAL rule matches a channel, that channel is written as a draft and an approval is requested. Each element of the response array carries policy: { effect, matched } and approvalRequested. If the approval request fails, the call returns the error and the draft stays; repeating it with the same Idempotency-Key after such a router failure can create duplicate drafts. Use POST /public/v1/policies/evaluate to dry run first.',
+  })
+  @ApiForbiddenResponse({
+    description:
+      'Scope missing, or the key limits refuse the request: error key_action_not_allowed (the key may not draft, schedule or publish now) or key_channel_not_allowed (a channel is outside the key allowed channels). Nothing is written.',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'error policy_blocked: a BLOCK rule matches. The body carries policy: { effect, matched, channels }. Nothing is written.',
+  })
   async createPost(
     @GetOrgFromRequest() org: Organization,
     @Body() rawBody: any,
@@ -569,6 +584,19 @@ export class PublicIntegrationsController {
    */
   @Put('/posts/:id')
   @RequirePublicApiScopes('posts:write')
+  @ApiOperation({
+    summary: 'Update a post',
+    description:
+      'Edits a post in place; only the fields sent change. The edited content is checked against the API key limits and the organization policy rules like a new write. Errors: 403 key_action_not_allowed or key_channel_not_allowed, and 422 policy_blocked when a BLOCK rule matches a scheduled post. A channel that a REQUIRE_APPROVAL rule covers is written as a draft and an approval is requested, and an edit of an already approved queued post goes back to approval. Each element of the response array carries policy: { effect, matched } and approvalRequested.',
+  })
+  @ApiForbiddenResponse({
+    description:
+      'Scope missing, or the key limits refuse the request: error key_action_not_allowed (the key may not draft, schedule or publish now) or key_channel_not_allowed (a channel is outside the key allowed channels). Nothing is written.',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'error policy_blocked: a BLOCK rule matches. The body carries policy: { effect, matched, channels }. Nothing is written.',
+  })
   async updatePost(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string,
@@ -676,7 +704,15 @@ export class PublicIntegrationsController {
   @ApiOperation({
     summary: 'Retry the failed destinations of a post group',
     description:
-      'Re-queues the destinations of a post group that are in ERROR. The retry is evaluated against the organization policies like a schedule: when a BLOCK rule matches any failed destination the whole call is refused with 422 (policy_blocked) and nothing is re-armed, including rows that failed with POLICY_BLOCKED while the rule still matches. A destination that a REQUIRE_APPROVAL rule covers is not re-queued but sent to the approval queue and reported with action approval_requested. Each result row has action requeued, skipped or approval_requested. The response carries a top level policy object with the effect and the matched rules.',
+      'Re-queues the destinations of a post group that are in ERROR. The retry is evaluated against the organization policies like a schedule: when a BLOCK rule matches any failed destination the whole call is refused with 422 (policy_blocked) and nothing is re-armed, including rows that failed with POLICY_BLOCKED while the rule still matches. A destination that a REQUIRE_APPROVAL rule covers is not re-queued but sent to the approval queue and reported with action approval_requested. Each result row has action requeued, skipped or approval_requested. The response carries a top level policy object with the effect and the matched rules. Also answers 403 key_action_not_allowed or key_channel_not_allowed when the key limits refuse scheduling on a failed channel.',
+  })
+  @ApiForbiddenResponse({
+    description:
+      'Scope missing, or the key limits refuse the request: error key_action_not_allowed (the key may not draft, schedule or publish now) or key_channel_not_allowed (a channel is outside the key allowed channels). Nothing is written.',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'error policy_blocked: a BLOCK rule matches. The body carries policy: { effect, matched, channels }. Nothing is written.',
   })
   async retryFailedByGroup(
     @GetOrgFromRequest() org: Organization,
@@ -1014,6 +1050,19 @@ export class PublicIntegrationsController {
 
   @Put('/posts/:id/status')
   @RequirePublicApiScopes('posts:write')
+  @ApiOperation({
+    summary: 'Change a post status between draft and queued',
+    description:
+      'Moves a post to draft or schedules it. Moving to draft is reported but never blocked. Scheduling is checked against the API key limits and the organization policy rules. Errors: 403 key_action_not_allowed or key_channel_not_allowed, and 422 policy_blocked when a BLOCK rule matches. A post that is already in APPROVAL and is scheduled again answers 200 with state APPROVAL when a REQUIRE_APPROVAL rule matches, 422 policy_blocked on a BLOCK rule, and 400 when no rule matches. The response carries policy: { effect, matched } and approvalRequested.',
+  })
+  @ApiForbiddenResponse({
+    description:
+      'Scope missing, or the key limits refuse the request: error key_action_not_allowed (the key may not draft, schedule or publish now) or key_channel_not_allowed (a channel is outside the key allowed channels). Nothing is written.',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'error policy_blocked: a BLOCK rule matches. The body carries policy: { effect, matched, channels }. Nothing is written.',
+  })
   async changePostStatus(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string,

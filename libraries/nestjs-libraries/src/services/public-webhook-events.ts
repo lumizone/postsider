@@ -38,6 +38,10 @@ export const PUBLIC_WEBHOOK_EVENT_SAMPLES: Record<
     actor: SAMPLE_ACTOR,
     provenance: SAMPLE_PROVENANCE,
   },
+  // errorCategory is one of AUTH_EXPIRED, PERMISSION_MISSING, RATE_LIMITED,
+  // INVALID_CONTENT, PROVIDER_UNAVAILABLE, UNKNOWN_OUTCOME, POLICY_BLOCKED or
+  // UNKNOWN. POLICY_BLOCKED means a policy BLOCK rule stopped the post at
+  // publish time (errorRetryable is false). The sample payload shows RATE_LIMITED.
   'post.failed': {
     postId: 'post_example',
     error: 'Provider rejected the post',

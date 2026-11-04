@@ -273,7 +273,7 @@ Every delivery is a JSON POST with this envelope:
 { "id": "...", "event": "post.failed", "createdAt": "...", "organizationId": "...", "data": {} }
 ```
 
-For `post.failed`, `data` contains `postId`, `error`, `errorCategory`, `errorRetryable` and `post`.
+For `post.failed`, `data` contains `postId`, `error`, `errorCategory`, `errorRetryable` and `post`. `errorCategory` can be `POLICY_BLOCKED`, which means a policy rule stopped the post at publish time (see "Policies and key limits").
 
 Each request carries these headers: `X-Postsider-Event`, `X-Postsider-Event-Id`, `X-Postsider-Timestamp`, `X-Postsider-Signature` and `X-Webhook-Attempt`. The signature is `HMAC-SHA256` over `<timestamp>.<raw body>` computed with the subscription secret, sent as `sha256=<hex>`. Verify it against the raw request body before parsing.
 
@@ -296,13 +296,67 @@ Every post records two different things about who touched it.
 - **Verified actor.** The server sets `createdBy*` and `lastModifiedBy*` (type plus `UserId`, `ApiKeyId` or `OAuthClientId`) from the credential that made the call. The type is one of `USER`, `API_KEY`, `OAUTH_CLIENT` or `SYSTEM`. An OAuth client actor also records the user who authorized it. The actor cannot be supplied in a request, and `creationMethod` is a hint only: it never changes the actor. Rows created before this feature have null actor columns. New writes made with a legacy organization key record an `API_KEY` actor without an id.
 - **Claimed provenance.** Callers may describe their own run with the `provenance` body object on `POST /public/v1/posts` and `PUT /public/v1/posts/:id`, using `agentName`, `workflowId`, `runId`, `externalRef` and `source`, or with the headers `X-Postsider-Agent`, `X-Postsider-Workflow-Id`, `X-Postsider-Run-Id`, `X-Postsider-External-Ref` and `X-Postsider-Source`. Each value is at most 255 characters, and a body field wins over its header. Never put prompts or post content in it. Treat it as untrusted text: it is a claim, never proof of identity.
 
-`GET /public/v1/audit-events` lists audit events for the organization, newest first (scope `audit:read`, which is never granted by default, so add it to a key on purpose). Filters are `targetType`, `targetId`, `type`, `from` and `to`; `limit` is 1 to 100 (default 25) and `nextCursor` from a page goes back in as `cursor`. `GET /public/v1/posts/:id/activity` returns the same events for one post group, including after deletion (scope `posts:read`; the MCP tool `postsider_get_post_activity` wraps it). The nine event names are `post.created`, `post.updated`, `post.deleted`, `post.status_changed`, `post.approval_requested`, `post.approval_resolved`, `post.published`, `post.failed` and `post.retry_requested`. Event metadata holds small facts and never post content. The `post.published`, `post.failed`, `approval.requested` and `approval.resolved` webhook payloads carry `actor` and `provenance` fields.
+`GET /public/v1/audit-events` lists audit events for the organization, newest first (scope `audit:read`, which is never granted by default, so add it to a key on purpose). Filters are `targetType`, `targetId`, `type`, `from` and `to`; `limit` is 1 to 100 (default 25) and `nextCursor` from a page goes back in as `cursor`. `GET /public/v1/posts/:id/activity` returns the same events for one post group, including after deletion (scope `posts:read`; the MCP tool `postsider_get_post_activity` wraps it). The eleven event names are `post.created`, `post.updated`, `post.deleted`, `post.status_changed`, `post.approval_requested`, `post.approval_resolved`, `post.published`, `post.failed`, `post.retry_requested`, `post.policy_evaluated` and `policy.changed`. Event metadata holds small facts and never post content. The `post.published`, `post.failed`, `approval.requested` and `approval.resolved` webhook payloads carry `actor` and `provenance` fields.
 
 Retention and impersonation: resource audit events are kept for 365 days, and the daily retention job never purges security or sign-in rows. When a super admin impersonates a user (only possible where impersonation is enabled with `ALLOW_SUPERADMIN_IMPERSONATION=true`), the recorded actor is the impersonated user, and the events carry `metadata.impersonatedBy` with the super admin id. This is a known residual, documented rather than fixed.
 
 ### Approval requests
 
 `POST /public/v1/posts/:id/request-approval` (MCP tool `postsider_request_approval`) is idempotent. A new request returns HTTP 201 with `created: true`. If an approval is already pending, it returns that approval with HTTP 200 and `created: false`, and reviewers are not notified again. The response never includes the `guestToken`. Approvals record who requested and who decided them. Guest reviewers give a name and email, so the guest review page asks for both. These are self-asserted, not verified: anyone holding the guest link can type any identity, so treat `decidedBy.type = GUEST` as a claim. The `GUEST_REVIEW_REQUIRE_IDENTITY` environment variable exists only to order a deploy (backend and frontend ship separately): it defaults to on, and `false` lets decisions without identity through while an old page is still served.
+
+### Policies and key limits
+
+Two separate controls limit what an automation can do. Both are off until an owner sets them, so existing keys and workspaces behave as before.
+
+**Key limits.** A named API key can carry two limits, set through the key settings (`allowedActions` and `allowedIntegrationIds` on `POST /settings/api-keys` and `PUT /settings/api-keys/:id`).
+
+- `allowedActions` is a list of `DRAFT`, `SCHEDULE` and `PUBLISH_NOW`. A key limited to `DRAFT` cannot schedule or publish.
+- `allowedIntegrationIds` is a list of channel ids (at most 100). The key can only write to those channels.
+- An empty list means unrestricted. Legacy organization keys and OAuth or MCP OAuth tokens are not limited by key limits.
+- A refused request answers `403` with `key_action_not_allowed` or `key_channel_not_allowed` before anything is written or an idempotency key is claimed. One forbidden channel refuses the whole request.
+
+**Policy rules.** An organization can define rules under `/public/v1/policies`. A rule has a condition, an effect (`REQUIRE_APPROVAL` or `BLOCK`), a priority (0 to 1000, lower runs first) and optional filters by actor type, API key, channel or provider. An organization can have at most 50 enabled and 200 stored rules (`policy_limit_reached` when exceeded). Rule names are 1 to 120 characters.
+
+| Condition | Params | Matches when |
+| --- | --- | --- |
+| `ALWAYS` | none | every evaluated post |
+| `CONTAINS_LINK` | none | the text holds an http or https URL, a `www.` host, a bare domain with a common TLD, or a link target |
+| `CONTAINS_WORDS` | `words`: 1 to 100 entries of 1 to 100 characters | any whole word or phrase appears, ignoring case |
+| `OUTSIDE_WINDOW` | `days` (0 is Sunday to 6), `start` and `end` as `HH:MM`, `timezone` (canonical IANA name) | the scheduled time is outside the window on a listed day; an `end` before `start` crosses midnight |
+| `DAILY_CAP_EXCEEDED` | `max` (1 to 10000), `scope` (`organization` or `channel`), optional `timezone` (default UTC) | this post would be more than `max` posts that day |
+| `PUBLISH_NOW` | none | the write publishes immediately |
+| `HAS_VIDEO` | none | the post carries a video file (mp4, webm, mov, mkv, m4v, avi) |
+
+Effects: `REQUIRE_APPROVAL` writes the post as a draft and requests a human approval. `BLOCK` refuses the write with `422 policy_blocked` and, at publish time, fails the post with `errorCategory: POLICY_BLOCKED` (not retryable). BLOCK beats REQUIRE_APPROVAL. A post that already has an approved approval satisfies `REQUIRE_APPROVAL` rules, but never a `BLOCK` rule.
+
+Who a rule applies to: with no actor filter a rule applies to automation only (`API_KEY` and `OAUTH_CLIENT`). `USER` and `SYSTEM` are covered only when listed. Because the dashboard is not checked at write time, a rule that lists `USER` acts at publish time only.
+
+**Write time and publish time.** Rules are checked when the public API or MCP creates, edits, schedules or retries a post, and again just before a post is sent to the platform. Responses to create, update, status change and retry carry `policy: { effect, matched }` (create and update add it to every array element, together with `approvalRequested`). Each non-ALLOW outcome is recorded as the `post.policy_evaluated` audit event, and each rule change as `policy.changed`.
+
+**Dry run.** `POST /public/v1/policies/evaluate` takes the create body shape and returns `{ effect, matched, channels, key }` for the calling credential, and writes nothing. MCP exposes it as `postsider_check_policy`.
+
+**Scopes.** `policies:read` lists and reads rules and `policies:write` creates, changes and deletes them. Neither is granted by default, and neither can be granted to OAuth or MCP tokens. The dry run needs only `posts:read`.
+
+**Error codes.** `key_action_not_allowed` and `key_channel_not_allowed` (403), `policy_blocked` (422), `policy_input_too_large` (400, content too large to evaluate; at publish time it blocks the post) and `policy_limit_reached` (400, rule limit).
+
+**Honest limits.** Read these before relying on rules as a control.
+
+- Drafts are reported, not enforced, at write time. The same rules still apply when the draft is scheduled or published, and a BLOCK rule stops it at publish time.
+- Rules read the text of the post (and link targets). They do not look inside images or video, follow redirects, or understand meaning.
+- Dashboard edits are not checked when saved. They are caught only at publish time.
+- Workflows started before v1.0.9 skip the publish-time check until they run.
+- Approvals carry no content version. An approval granted for older content is still honored at publish time after a dashboard edit.
+- A human edit or re-schedule made through the API of an approved queued post sends it back to approval.
+- A BLOCK rule that matches an already `PUBLISHED` repeat child post flips that post to `ERROR`.
+- Scheduling a post that is already in `APPROVAL` answers 200 with state `APPROVAL` when a `REQUIRE_APPROVAL` rule matches, 422 when a BLOCK rule matches, and 400 otherwise.
+- An edit to a channel that needs approval is written as a draft and waits for approval.
+- `retry-failed` sends matching rows to approval (result action `approval_requested`) instead of re-queuing them.
+- Repeating an idempotent create after a failure in the approval router can leave duplicate drafts.
+- Daily caps are best effort and count only posts created by an API key or OAuth client. Two simultaneous writes can both pass.
+- `plug-<name>--integrations` entries in post settings are not covered by key channel limits.
+- A key with `policies:write` can disable the rules that constrain it. Do not give `policies:write` to a key that also publishes; every change is recorded as the `policy.changed` audit event with the key id.
+- The dry run lets any credential with `posts:read` probe rule settings without an audit entry, and the global throttler is effectively open. Send the literal path `/public/v1/policies/evaluate`; encoded spellings are not classified as reads.
+- The MCP tool `postsider_check_policy` also needs `posts:read`.
 
 ---
 

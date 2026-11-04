@@ -32,6 +32,7 @@ import {
 import {
   PublicPoliciesResponseDto,
   PublicPolicyDeletedDto,
+  PublicPolicyEvaluationDto,
   PublicPolicyRuleDto,
 } from '@postsider/nestjs-libraries/dtos/policies/public-policy.dto';
 import { currentActor, currentKeyPermissions } from '@postsider/nestjs-libraries/actor/actor-context';
@@ -159,9 +160,10 @@ export class PublicPoliciesController {
   @ApiOperation({
     summary: 'Dry run the policy rules against a draft body',
     description:
-      'Takes the same shape as a post create body (type, date, posts) and returns what the rules would decide for the calling credential, plus whether the credential key limits would allow the action. Writes nothing: no post, approval, audit entry or idempotency record. Requires posts:read.',
+      'Takes the same shape as a post create body (type, date, posts) and returns what the rules would decide for the calling credential, plus whether the credential key limits would allow the action (key.code is key_action_not_allowed or key_channel_not_allowed). Writes nothing: no post, approval, audit entry or idempotency record. Requires posts:read, not policies:read, so any credential that can read posts can probe the rule settings through it. Send the literal path /public/v1/policies/evaluate: an encoded spelling is not classified as a read and needs posts:write. A draft is reported but never blocked at write time, while a BLOCK rule still stops it at publish time.',
   })
   @ApiOkResponse({
+    type: PublicPolicyEvaluationDto,
     description:
       'effect (ALLOW, REQUIRE_APPROVAL or BLOCK), matched rules, per channel effect, and key: { allowed, code? }',
   })
@@ -220,7 +222,7 @@ export class PublicPoliciesController {
   @ApiOperation({
     summary: 'Create a policy rule',
     description:
-      'Conditions: ALWAYS, CONTAINS_LINK, CONTAINS_WORDS, OUTSIDE_WINDOW, DAILY_CAP_EXCEEDED, PUBLISH_NOW, HAS_VIDEO. Effects: REQUIRE_APPROVAL, BLOCK. An organization can have at most 50 enabled and 200 stored rules. Requires the policies:write scope, which is never granted implicitly.',
+      'Conditions: ALWAYS, CONTAINS_LINK, CONTAINS_WORDS, OUTSIDE_WINDOW, DAILY_CAP_EXCEEDED, PUBLISH_NOW, HAS_VIDEO. Effects: REQUIRE_APPROVAL, BLOCK. An organization can have at most 50 enabled and 200 stored rules. Requires the policies:write scope, which is never granted implicitly. Do not give policies:write to a key that also publishes: a key that holds it can disable the rules that constrain it. Every change is recorded as the policy.changed audit event with the key id.',
   })
   @ApiCreatedResponse({ type: PublicPolicyRuleDto })
   @ApiBadRequestResponse({
