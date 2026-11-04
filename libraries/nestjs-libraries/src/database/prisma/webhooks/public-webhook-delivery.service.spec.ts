@@ -403,6 +403,43 @@ describe('PublicWebhookDeliveryService', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it('marks the row FAILED when a crash happens on the last attempt', async () => {
+    const rowUpdate = jest.fn().mockResolvedValue({});
+    const subUpdate = jest.fn().mockResolvedValue({});
+    const { service, prisma } = makeService({ rowUpdate, subUpdate });
+    prisma.publicWebhookSubscription.findUnique.mockRejectedValue(
+      new Error('db down')
+    );
+    global.fetch = jest.fn() as any;
+
+    await expect(
+      service.attempt(claimed({ attempts: WEBHOOK_MAX_ATTEMPTS }))
+    ).resolves.toBe('FAILED');
+    expect(rowUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'FAILED',
+          nextAttemptAt: null,
+          lastError: expect.stringContaining('db down'),
+        }),
+      })
+    );
+    expect(subUpdate).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps the row retrying when a crash happens before the last attempt', async () => {
+    const rowUpdate = jest.fn().mockResolvedValue({});
+    const { service, prisma } = makeService({ rowUpdate });
+    prisma.publicWebhookSubscription.findUnique.mockRejectedValue(
+      new Error('db down')
+    );
+    await expect(
+      service.attempt(claimed({ attempts: WEBHOOK_MAX_ATTEMPTS - 1 }))
+    ).resolves.toBe('RETRY');
+    expect(rowUpdate.mock.calls[0][0].data.status).toBeUndefined();
+  });
+
   it('returns RETRY without fetching when secret derivation throws', async () => {
     const { service } = makeService();
     (service as any).subscriptions.deriveSecret.mockImplementation(() => {

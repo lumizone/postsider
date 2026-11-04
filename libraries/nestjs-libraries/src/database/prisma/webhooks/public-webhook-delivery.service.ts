@@ -140,6 +140,15 @@ export class PublicWebhookDeliveryService {
       this.logger.warn(
         `Public webhook delivery ${row.id} attempt crashed: ${lastError}`
       );
+      if (row.attempts >= WEBHOOK_MAX_ATTEMPTS) {
+        // Out of attempts: end the row (no subscription counters on this path).
+        await this.updateRow(row.id, {
+          status: 'FAILED',
+          nextAttemptAt: null,
+          lastError,
+        });
+        return 'FAILED';
+      }
       await this.updateRow(row.id, { lastError });
       return 'RETRY';
     }
