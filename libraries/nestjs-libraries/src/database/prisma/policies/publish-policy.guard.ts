@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ApprovalService } from '@postsider/nestjs-libraries/database/prisma/approval/approval.service';
 import {
   PublishFailure,
   sanitizeFailureMessage,
 } from '@postsider/nestjs-libraries/integrations/publish-error.classifier';
+import { PostsRepository } from '@postsider/nestjs-libraries/database/prisma/posts/posts.repository';
 import { sanitizeMatches } from '@postsider/nestjs-libraries/policies/policy-errors';
 import { PolicyInputTooLargeError } from '@postsider/nestjs-libraries/policies/policy-text';
 import { PolicyApprovalRouter } from './policy-approval-router';
@@ -42,11 +43,17 @@ export class PublishPolicyGuard {
   constructor(
     private _evaluation: PolicyEvaluationService,
     private _router: PolicyApprovalRouter,
-    private _approvals: ApprovalService
+    private _approvals: ApprovalService,
+    private _posts: PostsRepository
   ) {}
+
+  private _logger = new Logger(PublishPolicyGuard.name);
 
   async checkBeforePublish(orgId: string, postId: string): Promise<PublishPolicyDecision> {
     try {
+      // An organization without enabled rules never loads the post or its thread.
+      if (!(await this._evaluation.hasEnabledRules(orgId))) return { kind: 'allow' };
+
       let outcome = await this._evaluate(orgId, postId, false);
       if (!outcome) return this._error('the stored post could not be loaded');
 
@@ -64,10 +71,22 @@ export class PublishPolicyGuard {
       await this._record(orgId, postId, outcome);
       if (outcome.effect === 'BLOCK') return this._blockedFor(outcome);
 
+      // A repeat child runs on a post that is already PUBLISHED. It cannot be
+      // sent for approval and must not be flipped to ERROR: hold this repeat
+      // without any state change (the workflow exits, the post stays PUBLISHED).
+      const stored = await this._posts.getPostById(postId, orgId);
+      if (stored?.state === 'PUBLISHED') {
+        this._logger.warn(
+          `Repeat publish of already published post ${postId} withheld: a policy requires approval. No state was changed.`
+        );
+        return { kind: 'approval_requested' };
+      }
+
       await this._router.route(orgId, postId, { terminateWorkflow: false });
       return { kind: 'approval_requested' };
     } catch (error) {
       if (error instanceof PolicyInputTooLargeError) {
+        await this._record(orgId, postId, { effect: 'BLOCK', matched: [], channels: [] });
         return blocked('Blocked by policy: the post is too large to check against the workspace policies.');
       }
       return this._error(error);

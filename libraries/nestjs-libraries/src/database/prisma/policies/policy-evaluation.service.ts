@@ -114,6 +114,11 @@ export class PolicyEvaluationService {
     @Optional() private _audit?: AuditLogger
   ) {}
 
+  /** True when the organization has at least one enabled rule. */
+  async hasEnabledRules(orgId: string): Promise<boolean> {
+    return (await this._rules.listEnabled(orgId)).length > 0;
+  }
+
   /**
    * Evaluates every target against the organization's enabled rules. Errors,
    * including PolicyInputTooLargeError, propagate so callers fail closed.

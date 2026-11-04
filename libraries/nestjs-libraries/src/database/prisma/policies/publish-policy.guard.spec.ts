@@ -33,13 +33,15 @@ const storedTarget = (extra: Record<string, unknown> = {}) => ({
 
 describe('PublishPolicyGuard', () => {
   const evaluation = {
+    hasEnabledRules: jest.fn(),
     targetFromStoredPost: jest.fn(),
     evaluateTargets: jest.fn(),
     recordOutcome: jest.fn(),
   };
   const router = { route: jest.fn() };
   const approvals = { getForPost: jest.fn() };
-  const guard = new PublishPolicyGuard(evaluation as any, router as any, approvals as any);
+  const posts = { getPostById: jest.fn() };
+  const guard = new PublishPolicyGuard(evaluation as any, router as any, approvals as any, posts as any);
 
   beforeEach(() => {
     jest.resetAllMocks();
@@ -49,6 +51,31 @@ describe('PublishPolicyGuard', () => {
     );
     router.route.mockResolvedValue({ requested: true, approvalId: 'ap1' });
     approvals.getForPost.mockResolvedValue(null);
+    evaluation.hasEnabledRules.mockResolvedValue(true);
+    posts.getPostById.mockResolvedValue({ id: 'p1', state: 'QUEUE' });
+  });
+
+  it('an organization without enabled rules is allowed without loading the post', async () => {
+    evaluation.hasEnabledRules.mockResolvedValue(false);
+    await expect(guard.checkBeforePublish('org', 'p1')).resolves.toEqual({ kind: 'allow' });
+    expect(evaluation.targetFromStoredPost).not.toHaveBeenCalled();
+    expect(evaluation.evaluateTargets).not.toHaveBeenCalled();
+  });
+
+  it('REQUIRE_APPROVAL on an already PUBLISHED post (repeat child) is withheld with no state change', async () => {
+    posts.getPostById.mockResolvedValue({ id: 'p1', state: 'PUBLISHED' });
+    const out = outcomeOf('REQUIRE_APPROVAL', ['Needs review']);
+    evaluation.evaluateTargets.mockResolvedValue(out);
+    await expect(guard.checkBeforePublish('org', 'p1')).resolves.toEqual({ kind: 'approval_requested' });
+    expect(router.route).not.toHaveBeenCalled();
+    expect(evaluation.recordOutcome).toHaveBeenCalledWith('org', out, 'publish', { postId: 'p1' });
+  });
+
+  it('BLOCK on an already PUBLISHED post stays blocked', async () => {
+    posts.getPostById.mockResolvedValue({ id: 'p1', state: 'PUBLISHED' });
+    evaluation.evaluateTargets.mockResolvedValue(outcomeOf('BLOCK', ['No links']));
+    const decision: any = await guard.checkBeforePublish('org', 'p1');
+    expect(decision.kind).toBe('blocked');
   });
 
   it('allows when no rule matches and does not look up an approval', async () => {
@@ -138,7 +165,7 @@ describe('PublishPolicyGuard', () => {
     expect(decision.failure.message).toBe('Blocked by policy: Daily cap.');
   });
 
-  it('evaluates the stored post with both actors (API_KEY creator, USER editor) so automation rules still block', async () => {
+  it('passes the stored target (API_KEY creator, USER editor actors) through to the evaluation', async () => {
     evaluation.evaluateTargets.mockImplementation(async (_o: string, targets: any[]) => {
       const automation = targets[0].actors.some((a: any) => a.type === 'API_KEY');
       return automation ? outcomeOf('BLOCK', ['Automation only']) : outcomeOf('ALLOW');
@@ -196,6 +223,12 @@ describe('PublishPolicyGuard', () => {
     expect(decision.failure.category).toBe('POLICY_BLOCKED');
     expect(decision.failure.retryable).toBe(false);
     expect(decision.failure.message).toMatch(/too large/);
+    expect(evaluation.recordOutcome).toHaveBeenCalledWith(
+      'org',
+      expect.objectContaining({ effect: 'BLOCK' }),
+      'publish',
+      { postId: 'p1' }
+    );
   });
 
   it('a failing audit write never changes the decision', async () => {
