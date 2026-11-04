@@ -1,6 +1,9 @@
 .page {
   min-height: 100vh;
   display: grid;
+  /* minmax(0, 1fr): an implicit auto track can't shrink below the card's
+   * min-content, which pushed the card 22px off a 320px screen. */
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   padding: 72px 16px 32px;
   background: var(--bg);
@@ -313,4 +316,11 @@
 
 .legal a:hover {
   color: var(--fg);
+}
+
+/* Small phones (320-360px): the 32px card padding left a 256px column. */
+@media (max-width: 360px) {
+  .card {
+    padding: 24px 20px;
+  }
 }

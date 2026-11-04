@@ -272,7 +272,10 @@ export default function ApprovalPage() {
       {loading ? (
         <div style={{ padding: "30px 0", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>{t("common.loading")}</div>
       ) : items.length === 0 ? (
-        <div style={{ padding: "40px 0", textAlign: "center", color: "var(--muted)", fontSize: 14 }}>{t("approval.empty")}</div>
+        <div style={{ padding: "40px 0", textAlign: "center", color: "var(--muted)", fontSize: 14 }}>
+          <div>{t("approval.empty")}</div>
+          <div style={{ marginTop: 6, fontSize: 13, maxWidth: 440, marginInline: "auto" }}>{t("approval.emptyHint")}</div>
+        </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {items.map((a) => {

@@ -440,6 +440,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           )}
           <button
             type="button"
+            className="touch-target"
             onClick={toggleCollapsed}
             aria-label={
               isCollapsed ? t("calendar.expand") : t("calendar.collapse")
@@ -473,6 +474,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         {isCollapsed && (
           <button
             type="button"
+            className="touch-target"
             onClick={toggleCollapsed}
             aria-label={t("calendar.expand")}
             style={{
@@ -581,6 +583,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                 </span>
                 <button
                   type="button"
+                  className="touch-target"
                   onClick={() => logout()}
                   style={{
                     marginTop: 6,
@@ -910,6 +913,7 @@ function TrialBanner({ daysLeft }: { daysLeft: number }) {
     <div
       style={{
         display: "flex",
+        flexWrap: "wrap",
         alignItems: "center",
         gap: 12,
         padding: "12px 16px",
@@ -945,7 +949,9 @@ function TrialBanner({ daysLeft }: { daysLeft: number }) {
           />
         </svg>
       </span>
-      <div style={{ flex: 1, minWidth: 0 }}>
+      {/* flex-basis 220px: on a phone the CTA wraps under the text instead
+          of squeezing it into a five-line column beside the button. */}
+      <div style={{ flex: "1 1 220px", minWidth: 0 }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: urgent ? "var(--warning)" : "var(--fg)" }}>
           {label}
         </div>

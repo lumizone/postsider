@@ -386,3 +386,20 @@ ul {
     height: 29px;
   }
 }
+
+/* Touch hit areas for small icon controls (sidebar collapse, sign out,
+ * channel panel collapse, theme toggle). On a touch tablet the sidebar is
+ * visible and these measured 17-28px. A transparent pseudo-element grows the
+ * tap area to about 44px without moving anything. */
+@media (pointer: coarse) {
+  .touch-target,
+  .theme-toggle {
+    position: relative;
+  }
+  .touch-target::after,
+  .theme-toggle::after {
+    content: "";
+    position: absolute;
+    inset: -8px;
+  }
+}

@@ -1389,6 +1389,7 @@ settingsStorage: {
     loadError: "Could not load approvals",
     actionError: "Action failed",
     empty: "No posts pending approval.",
+    emptyHint: "Drafts land here when someone clicks Send for approval in the composer, or when an agent or automation requests approval through MCP or the API.",
     channelFallback: "Channel",
     requestedBy: "by {name}",
     someone: "someone",

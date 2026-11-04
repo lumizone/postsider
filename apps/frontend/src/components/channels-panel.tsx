@@ -99,7 +99,7 @@ export function ChannelsPanel({
         )}
         <button
           type="button"
-          className={styles.collapseBtn}
+          className={`${styles.collapseBtn} touch-target`}
           onClick={onToggleCollapse}
           aria-label={collapsed ? "Expand channels" : "Collapse channels"}
         >

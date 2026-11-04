@@ -268,7 +268,7 @@ export default function QueuePlanPage() {
                         value={minutesToHHMM(slot.time)}
                         onChange={(e) => setTime(c.id, i, e.target.value)}
                       />
-                      <div style={{ display: "flex", gap: 4 }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, minWidth: 0 }}>
                         {dayLabels.map((lbl, d) => (
                           <button
                             key={d}

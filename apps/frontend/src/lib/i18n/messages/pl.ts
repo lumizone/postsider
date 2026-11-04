@@ -1244,6 +1244,7 @@ const pl = {
     loadError: "Nie udało się wczytać akceptacji",
     actionError: "Działanie nie powiodło się",
     empty: "Brak postów oczekujących na akceptację.",
+    emptyHint: "Szkice trafiają tutaj, gdy ktoś kliknie Wyślij do akceptacji w kompozytorze albo gdy agent lub automatyzacja poprosi o akceptację przez MCP lub API.",
     channelFallback: "Kanał",
     requestedBy: "od {name}",
     someone: "ktoś",
