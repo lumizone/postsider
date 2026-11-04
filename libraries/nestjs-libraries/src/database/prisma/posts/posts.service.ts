@@ -1392,8 +1392,19 @@ export class PostsService {
     orgId: string,
     body: CreatePostDto,
     creationMethod: CreationMethod,
-    options: { provenance?: PostProvenance } = {}
+    options: {
+      provenance?: PostProvenance;
+      /**
+       * Channels a policy sent to approval: their posts are created as drafts
+       * (no workflow, no monthly slot) whatever `body.type` says.
+       */
+      forceDraftIntegrationIds?: ReadonlySet<string>;
+    } = {}
   ): Promise<any[]> {
+    const isForcedDraft = (post: { integration?: { id?: string } }) =>
+      !!post.integration?.id &&
+      !!options.forceDraftIntegrationIds?.has(post.integration.id);
+
     if (
       body.type === 'schedule' &&
       dayjs(body.date).isBefore(dayjs().subtract(1, 'minute'))
@@ -1414,7 +1425,9 @@ export class PostsService {
         : body.posts.reduce(
             (total, post) =>
               total +
-              (body.type === 'update'
+              (isForcedDraft(post)
+                ? 0
+                : body.type === 'update'
                 ? post.value.filter((value) => !value.id).length
                 : post.value?.length || 0),
             0
@@ -1491,7 +1504,7 @@ export class PostsService {
         }));
 
         const { posts, createdIds } = await this._postRepository.createOrUpdatePost(
-          body.type,
+          isForcedDraft(post) ? 'draft' : body.type,
           orgId,
           body.type === 'now'
             ? dayjs().format('YYYY-MM-DDTHH:mm:00')

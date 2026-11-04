@@ -4,6 +4,8 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { AddressInfo } from 'net';
 import { PublicIntegrationsController } from './public.integrations.controller';
+import { passthroughPolicyGate } from './passthrough-policy-gate.spec-helper';
+import { PostPolicyGateService } from '@postsider/nestjs-libraries/database/prisma/policies/post-policy-gate.service';
 import { PublicWorkspaceController } from './public.workspace.controller';
 import { PostsService } from '@postsider/nestjs-libraries/database/prisma/posts/posts.service';
 import { PublicApiIdempotencyService } from '@postsider/nestjs-libraries/database/prisma/idempotency/public-api-idempotency.service';
@@ -37,6 +39,7 @@ describe('API key permissions on public write paths', () => {
   beforeAll(async () => {
     const tokens = new Map<any, any>([
       [PostsService, postsService],
+      [PostPolicyGateService, passthroughPolicyGate],
       [PublicApiIdempotencyService, idempotency],
     ]);
     const { ApprovalService } = await import(

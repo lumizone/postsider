@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   HttpException,
+  Optional,
   Param,
   Post,
   Put,
@@ -94,7 +95,8 @@ import {
   actionForStoredState,
   assertKeyAllowed,
 } from '@postsider/nestjs-libraries/policies/key-permission.guard';
-import { currentKeyPermissions } from '@postsider/nestjs-libraries/actor/actor-context';
+import { currentActor, currentKeyPermissions } from '@postsider/nestjs-libraries/actor/actor-context';
+import { PostPolicyGateService } from '@postsider/nestjs-libraries/database/prisma/policies/post-policy-gate.service';
 import { parseProvenance } from '@postsider/nestjs-libraries/actor/post-provenance';
 import { AgencyOverviewService } from '@postsider/nestjs-libraries/database/prisma/agency/agency-overview.service';
 import { CustomerReportService } from '@postsider/nestjs-libraries/database/prisma/agency/customer-report.service';
@@ -126,7 +128,8 @@ export class PublicIntegrationsController {
     private _idempotency: PublicApiIdempotencyService,
     private _agencyOverview: AgencyOverviewService,
     private _customerReport: CustomerReportService,
-    private _auditEvents: AuditEventsService
+    private _auditEvents: AuditEventsService,
+    @Optional() private _policyGate?: PostPolicyGateService
   ) {}
 
   @Post('/upload')
@@ -466,9 +469,22 @@ export class PublicIntegrationsController {
     if (claim?.kind === 'replay') return claim.response;
 
     try {
-      const result = await this._postsService.createPost(org.id, body, creationMethod, {
+      // Write-time policy gate: BLOCK on schedule or now throws here and the
+      // claim is released. Channels that need approval are created as drafts.
+      const pre = await this._policyGate?.preflightWrite(
+        org.id,
+        body as any,
+        currentActor()
+      );
+      const created = await this._postsService.createPost(org.id, body, creationMethod, {
         provenance,
+        ...(pre?.approvalIntegrationIds.size
+          ? { forceDraftIntegrationIds: pre.approvalIntegrationIds }
+          : {}),
       });
+      const result = pre
+        ? await this._policyGate!.finishCreate(org.id, created, pre)
+        : created;
       if (claim?.kind === 'new') await this._idempotency.complete(claim.id, result);
       return result;
     } catch (error) {
@@ -607,7 +623,27 @@ export class PublicIntegrationsController {
       state === 'DRAFT' ? 'draft' : 'update'
     );
 
-    return this._postsService.createPost(org.id, body, 'API', { provenance });
+    // The patched content is evaluated like a new write. The stored post is
+    // excluded from its own daily cap, and an armed post that now needs
+    // approval is moved back to draft and sent to the approval queue.
+    const pre = await this._policyGate?.preflightWrite(
+      org.id,
+      {
+        type: state === 'DRAFT' ? 'draft' : 'schedule',
+        date: (dto as any).date ?? (body as any).date,
+        posts: body.posts,
+      } as any,
+      currentActor(),
+      { editingPostId: id }
+    );
+    const updated = await this._postsService.createPost(org.id, body, 'API', {
+      provenance,
+    });
+    return pre
+      ? this._policyGate!.finishCreate(org.id, updated, pre, {
+          terminateWorkflow: true,
+        })
+      : updated;
   }
 
   @Delete('/posts/:id')
@@ -966,7 +1002,26 @@ export class PublicIntegrationsController {
         [stored.integration]
       );
     }
-    return this._postsService.changePostStatus(org.id, id, body.status);
+    if (!this._policyGate) {
+      return this._postsService.changePostStatus(org.id, id, body.status);
+    }
+    // Drafts are report only. Scheduling is blocked (422) or routed to approval.
+    const gated = await this._policyGate.gateStatus(org.id, id, body.status);
+    const policy = { effect: gated.policy.effect, matched: gated.policy.matched };
+    if (!gated.proceed) {
+      return {
+        id,
+        state: 'APPROVAL',
+        policy,
+        approvalRequested: gated.approvalRequested,
+      };
+    }
+    const changed = await this._postsService.changePostStatus(
+      org.id,
+      id,
+      body.status
+    );
+    return { ...changed, policy, approvalRequested: false };
   }
 
   @Put('/posts/:id/release-id')

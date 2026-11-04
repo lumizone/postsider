@@ -1,0 +1,55 @@
+import { HttpException } from '@nestjs/common';
+import type { PolicyEffectName, PolicyMatch } from './policy-types';
+
+const MAX_NAMES_IN_MESSAGE = 5;
+const MAX_NAME_CHARS = 60;
+
+/** Rule names are admin text: strip control characters and dashes, bound the length. */
+export function sanitizePolicyName(name: string): string {
+  const clean = String(name ?? '')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+    .replace(/[‒-―−]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return clean.length > MAX_NAME_CHARS ? `${clean.slice(0, MAX_NAME_CHARS - 3)}...` : clean;
+}
+
+type BlockedOutcome = {
+  matched: PolicyMatch[];
+  channels: Array<{ integrationId: string; effect: 'ALLOW' | PolicyEffectName }>;
+};
+
+/** A write refused by a BLOCK rule. Plain HttpException so the global filter keeps the 422. */
+export class PolicyBlockedException extends HttpException {
+  constructor(outcome: BlockedOutcome) {
+    const names = outcome.matched
+      .filter((m) => m.effect === 'BLOCK')
+      .slice(0, MAX_NAMES_IN_MESSAGE)
+      .map((m) => sanitizePolicyName(m.name))
+      .filter(Boolean);
+    super(
+      {
+        error: 'policy_blocked',
+        msg: `This post was blocked by a policy: ${names.join(', ')}.`,
+        policy: {
+          effect: 'BLOCK',
+          matched: outcome.matched.filter((m) => m.effect === 'BLOCK'),
+          channels: outcome.channels.filter((c) => c.effect === 'BLOCK').map((c) => c.integrationId),
+        },
+      },
+      422
+    );
+  }
+}
+
+/** Write time fails closed when the content is too large to evaluate. */
+export function policyInputTooLarge(): HttpException {
+  return new HttpException(
+    {
+      error: 'policy_input_too_large',
+      msg: 'This post is too large to check against the policies of this workspace. Shorten it and try again.',
+    },
+    400
+  );
+}
