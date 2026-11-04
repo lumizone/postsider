@@ -4,6 +4,7 @@ import {
   HttpStatus,
   Injectable,
   Logger,
+  NotFoundException,
   Optional,
   ValidationPipe,
 } from '@nestjs/common';
@@ -77,6 +78,18 @@ import { FunnelAttributionService } from '@postsider/nestjs-libraries/database/p
 type PostWithConditionals = Post & {
   integration?: Integration;
   childrenPost: Post[];
+};
+
+export type RetryFailedResult = {
+  postId: string;
+  integrationId: string;
+  previousState: State;
+  action: 'requeued' | 'skipped';
+  reason?:
+    | 'not_in_error_state'
+    | 'unknown_outcome_requires_confirmation'
+    | 'already_published'
+    | 'rearm_failed';
 };
 
 @Injectable()
@@ -1607,6 +1620,82 @@ export class PostsService {
 
   getTopLevelPostsByGroup(orgId: string, group: string) {
     return this._postRepository.getTopLevelPostsByGroup(orgId, group);
+  }
+
+  /**
+   * Re-arms the failed destinations of a post group. Rows are claimed
+   * ERROR -> QUEUE conditionally, so concurrent calls cannot double-start a
+   * row, and rows that already carry a release id are never re-armed
+   * (at-most-once publishing).
+   */
+  async retryFailedByGroup(
+    orgId: string,
+    group: string,
+    opts: { includeUnknownOutcome: boolean }
+  ): Promise<{ group: string; results: RetryFailedResult[] }> {
+    const rows = await this.getTopLevelPostsByGroup(orgId, group);
+    if (!rows.length) {
+      throw new NotFoundException('Group not found');
+    }
+    if (rows.some((r) => r.state === 'ERROR')) {
+      await this.assertOrgNotPausedForSchedule(orgId);
+    }
+    const results: RetryFailedResult[] = [];
+    for (const row of rows) {
+      results.push(await this.retryFailedRow(orgId, row, opts));
+    }
+    return { group, results };
+  }
+
+  private async retryFailedRow(
+    orgId: string,
+    row: Awaited<ReturnType<PostsService['getTopLevelPostsByGroup']>>[number],
+    opts: { includeUnknownOutcome: boolean }
+  ): Promise<RetryFailedResult> {
+    const base = {
+      postId: row.id,
+      integrationId: row.integrationId,
+      previousState: row.state as State,
+    };
+    const skip = (reason: NonNullable<RetryFailedResult['reason']>): RetryFailedResult => ({
+      ...base,
+      action: 'skipped',
+      reason,
+    });
+
+    if (row.state !== 'ERROR') return skip('not_in_error_state');
+    if (row.errorCategory === 'UNKNOWN_OUTCOME' && !opts.includeUnknownOutcome) {
+      return skip('unknown_outcome_requires_confirmation');
+    }
+    if (row.releaseId && row.releaseId !== 'missing') return skip('already_published');
+
+    const provider = row.integration.providerIdentifier;
+    if (provider === 'tiktok') {
+      try {
+        const problems = await this.tiktokProblemsForStoredPost(orgId, row.id);
+        if (problems.length) return skip('rearm_failed');
+      } catch (err) {
+        this._logger.error(`retryFailed: TikTok check failed for post ${row.id}: ${err}`);
+        return skip('rearm_failed');
+      }
+    }
+
+    if (!(await this.claimErrorForRetry(orgId, row.id))) {
+      return skip('not_in_error_state');
+    }
+    try {
+      await this.startWorkflow(
+        provider.split('-')[0].toLowerCase(),
+        row.id,
+        orgId,
+        'QUEUE'
+      );
+    } catch (err) {
+      // startWorkflow already marked the row ERROR again.
+      this._logger.error(`retryFailed: could not re-arm post ${row.id}: ${err}`);
+      return skip('rearm_failed');
+    }
+    return { ...base, action: 'requeued' };
   }
 
   /**

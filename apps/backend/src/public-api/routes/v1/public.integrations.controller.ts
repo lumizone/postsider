@@ -33,6 +33,7 @@ import { UploadFactory } from '@postsider/nestjs-libraries/upload/upload.factory
 import { probeDimensions } from '@postsider/nestjs-libraries/upload/probe-dimensions';
 import { MediaService } from '@postsider/nestjs-libraries/database/prisma/media/media.service';
 import { GetPostsDto } from '@postsider/nestjs-libraries/dtos/posts/get.posts.dto';
+import { RetryFailedPostsDto } from '@postsider/nestjs-libraries/dtos/posts/retry-failed.dto';
 import { ChangePostStatusDto } from '@postsider/nestjs-libraries/dtos/posts/change.post.status.dto';
 import {
   AuthorizationActions,
@@ -559,6 +560,35 @@ export class PublicIntegrationsController {
   ) {
     Sentry.metrics.count('public_api-request', 1);
     return this._postsService.deletePost(org.id, group);
+  }
+
+  @Post('/posts/group/:group/retry-failed')
+  @RequirePublicApiScopes('posts:write')
+  async retryFailedByGroup(
+    @GetOrgFromRequest() org: Organization,
+    @Param('group') group: string,
+    @Body() body: RetryFailedPostsDto,
+    @Headers('idempotency-key') idempotencyKey?: string
+  ) {
+    Sentry.metrics.count('public_api-request', 1);
+    const includeUnknownOutcome = body.includeUnknownOutcome === true;
+    const claim = await this._idempotency.claim(org.id, idempotencyKey, {
+      route: 'retry-failed',
+      group,
+      includeUnknownOutcome,
+    });
+    if (claim?.kind === 'replay') return claim.response;
+
+    try {
+      const result = await this._postsService.retryFailedByGroup(org.id, group, {
+        includeUnknownOutcome,
+      });
+      if (claim?.kind === 'new') await this._idempotency.complete(claim.id, result);
+      return result;
+    } catch (error) {
+      if (claim?.kind === 'new') await this._idempotency.release(claim.id);
+      throw error;
+    }
   }
 
   // Lets an external content pipeline (agency's own generator, n8n, ...) push
