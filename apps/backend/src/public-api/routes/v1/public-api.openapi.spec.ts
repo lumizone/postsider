@@ -6,6 +6,7 @@ import {
 } from './public.organization.controller';
 import { PublicWebhookSubscriptionsController } from './public-webhook-subscriptions.controller';
 import { PublicWebhookSubscriptionsService } from '@postsider/nestjs-libraries/database/prisma/webhooks/public-webhook-subscriptions.service';
+import { PublicWebhookDeliveriesService } from '@postsider/nestjs-libraries/database/prisma/webhooks/public-webhook-deliveries.service';
 import { PublicApiScopeGuard } from '@postsider/backend/services/auth/public-api-scope.guard';
 
 describe('Public API OpenAPI contract', () => {
@@ -21,6 +22,7 @@ describe('Public API OpenAPI contract', () => {
           provide: PublicWebhookSubscriptionsService,
           useValue: {},
         },
+        { provide: PublicWebhookDeliveriesService, useValue: {} },
       ],
     }).compile();
     const app = module.createNestApplication();

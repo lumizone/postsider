@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiHeader, ApiTags } from '@nestjs/swagger';
@@ -16,6 +17,7 @@ import {
   UpdatePublicWebhookSubscriptionDto,
 } from '@postsider/nestjs-libraries/dtos/webhooks/public-webhook-subscription.dto';
 import { PublicWebhookSubscriptionsService } from '@postsider/nestjs-libraries/database/prisma/webhooks/public-webhook-subscriptions.service';
+import { PublicWebhookDeliveriesService } from '@postsider/nestjs-libraries/database/prisma/webhooks/public-webhook-deliveries.service';
 import { PublicApiScopeGuard } from '@postsider/backend/services/auth/public-api-scope.guard';
 import { RequirePublicApiScopes } from '@postsider/backend/services/auth/public-api-scope.decorator';
 import {
@@ -33,7 +35,8 @@ import {
 @UseGuards(PublicApiScopeGuard)
 export class PublicWebhookSubscriptionsController {
   constructor(
-    private readonly subscriptions: PublicWebhookSubscriptionsService
+    private readonly subscriptions: PublicWebhookSubscriptionsService,
+    private readonly deliveries: PublicWebhookDeliveriesService
   ) {}
 
   @Get()
@@ -92,6 +95,36 @@ export class PublicWebhookSubscriptionsController {
     @Param('id') id: string
   ) {
     return this.subscriptions.rotateSecret(organization.id, id);
+  }
+
+  @Get('/:id/deliveries')
+  @RequirePublicApiScopes('webhooks:read')
+  deliveriesList(
+    @GetOrgFromRequest() organization: Organization,
+    @Param('id') id: string,
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string
+  ) {
+    return this.deliveries.list(organization.id, id, { limit, cursor });
+  }
+
+  @Post('/:id/deliveries/:deliveryId/replay')
+  @RequirePublicApiScopes('webhooks:write')
+  replayDelivery(
+    @GetOrgFromRequest() organization: Organization,
+    @Param('id') id: string,
+    @Param('deliveryId') deliveryId: string
+  ) {
+    return this.deliveries.replay(organization.id, id, deliveryId);
+  }
+
+  @Post('/:id/test')
+  @RequirePublicApiScopes('webhooks:write')
+  sendTest(
+    @GetOrgFromRequest() organization: Organization,
+    @Param('id') id: string
+  ) {
+    return this.deliveries.sendTest(organization.id, id);
   }
 
   @Delete('/:id')

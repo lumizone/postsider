@@ -23,6 +23,7 @@ import { ShortLinkService } from '@postsider/nestjs-libraries/short-linking/shor
 import { WebhooksRepository } from '@postsider/nestjs-libraries/database/prisma/webhooks/webhooks.repository';
 import { WebhooksService } from '@postsider/nestjs-libraries/database/prisma/webhooks/webhooks.service';
 import { PublicWebhookSubscriptionsService } from '@postsider/nestjs-libraries/database/prisma/webhooks/public-webhook-subscriptions.service';
+import { PublicWebhookDeliveriesService } from '@postsider/nestjs-libraries/database/prisma/webhooks/public-webhook-deliveries.service';
 import { PublicWebhookDeliveryService } from '@postsider/nestjs-libraries/database/prisma/webhooks/public-webhook-delivery.service';
 import { SignatureRepository } from '@postsider/nestjs-libraries/database/prisma/signatures/signature.repository';
 import { SignatureService } from '@postsider/nestjs-libraries/database/prisma/signatures/signature.service';
@@ -83,6 +84,7 @@ import { PostAnalyticsService } from '@postsider/nestjs-libraries/database/prism
     WebhooksService,
     PublicWebhookSubscriptionsService,
     PublicWebhookDeliveryService,
+    PublicWebhookDeliveriesService,
     IntegrationService,
     IntegrationRepository,
     PostsService,
