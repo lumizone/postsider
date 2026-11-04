@@ -293,16 +293,16 @@ To retry the failed posts of a group, call `POST /public/v1/posts/group/:group/r
 
 Every post records two different things about who touched it.
 
-- **Verified actor.** The server sets `createdBy*` and `lastModifiedBy*` (type plus `UserId`, `ApiKeyId` or `OAuthClientId`) from the credential that made the call. The type is one of `USER`, `API_KEY`, `OAUTH_CLIENT` or `SYSTEM`. An OAuth client actor also records the user who authorized it. The actor cannot be supplied in a request, and `creationMethod` is a hint only: it never changes the actor. Posts and keys created before this feature show a legacy organization key as an `API_KEY` actor without an id.
-- **Claimed provenance.** Callers may describe their own run with the `provenance` body object on `POST /public/v1/posts`, using `agentName`, `workflowId`, `runId`, `externalRef` and `source`, or with the headers `X-Postsider-Agent`, `X-Postsider-Workflow-Id`, `X-Postsider-Run-Id`, `X-Postsider-External-Ref` and `X-Postsider-Source`. Each value is at most 255 characters, and a body field wins over its header. Never put prompts or post content in it. Treat it as untrusted text: it is a claim, never proof of identity.
+- **Verified actor.** The server sets `createdBy*` and `lastModifiedBy*` (type plus `UserId`, `ApiKeyId` or `OAuthClientId`) from the credential that made the call. The type is one of `USER`, `API_KEY`, `OAUTH_CLIENT` or `SYSTEM`. An OAuth client actor also records the user who authorized it. The actor cannot be supplied in a request, and `creationMethod` is a hint only: it never changes the actor. Rows created before this feature have null actor columns. New writes made with a legacy organization key record an `API_KEY` actor without an id.
+- **Claimed provenance.** Callers may describe their own run with the `provenance` body object on `POST /public/v1/posts` and `PUT /public/v1/posts/:id`, using `agentName`, `workflowId`, `runId`, `externalRef` and `source`, or with the headers `X-Postsider-Agent`, `X-Postsider-Workflow-Id`, `X-Postsider-Run-Id`, `X-Postsider-External-Ref` and `X-Postsider-Source`. Each value is at most 255 characters, and a body field wins over its header. Never put prompts or post content in it. Treat it as untrusted text: it is a claim, never proof of identity.
 
 `GET /public/v1/audit-events` lists audit events for the organization, newest first (scope `audit:read`, which is never granted by default, so add it to a key on purpose). Filters are `targetType`, `targetId`, `type`, `from` and `to`; `limit` is 1 to 100 (default 25) and `nextCursor` from a page goes back in as `cursor`. `GET /public/v1/posts/:id/activity` returns the same events for one post group, including after deletion (scope `posts:read`; the MCP tool `postsider_get_post_activity` wraps it). The nine event names are `post.created`, `post.updated`, `post.deleted`, `post.status_changed`, `post.approval_requested`, `post.approval_resolved`, `post.published`, `post.failed` and `post.retry_requested`. Event metadata holds small facts and never post content. The `post.published`, `post.failed`, `approval.requested` and `approval.resolved` webhook payloads carry `actor` and `provenance` fields.
 
-Retention and impersonation: resource audit events are kept for 365 days, and the daily retention job never purges security or sign-in rows. When a super admin impersonates a user, the recorded actor is the impersonated user, and the events carry `metadata.impersonatedBy` with the super admin id. This is a known residual, documented rather than fixed.
+Retention and impersonation: resource audit events are kept for 365 days, and the daily retention job never purges security or sign-in rows. When a super admin impersonates a user (only possible where impersonation is enabled with `ALLOW_SUPERADMIN_IMPERSONATION=true`), the recorded actor is the impersonated user, and the events carry `metadata.impersonatedBy` with the super admin id. This is a known residual, documented rather than fixed.
 
 ### Approval requests
 
-`POST /public/v1/posts/:id/request-approval` (MCP tool `postsider_request_approval`) is idempotent. If an approval is already pending, it returns that approval with `created: false` and HTTP 200, and reviewers are not notified again. A new request returns `created: true`. Approvals record who requested and who decided them. Guest reviewers give a name and email, so the guest review page now asks for both. The `GUEST_REVIEW_REQUIRE_IDENTITY` environment variable exists only to order a deploy (backend and frontend ship separately): it defaults to on, and `false` lets decisions without identity through while an old page is still served.
+`POST /public/v1/posts/:id/request-approval` (MCP tool `postsider_request_approval`) is idempotent. A new request returns HTTP 201 with `created: true`. If an approval is already pending, it returns that approval with HTTP 200 and `created: false`, and reviewers are not notified again. The response never includes the `guestToken`. Approvals record who requested and who decided them. Guest reviewers give a name and email, so the guest review page asks for both. These are self-asserted, not verified: anyone holding the guest link can type any identity, so treat `decidedBy.type = GUEST` as a claim. The `GUEST_REVIEW_REQUIRE_IDENTITY` environment variable exists only to order a deploy (backend and frontend ship separately): it defaults to on, and `false` lets decisions without identity through while an old page is still served.
 
 ---
 
@@ -310,7 +310,7 @@ Retention and impersonation: resource audit events are kept for 365 days, and th
 
 PostSider exposes a public REST API for external applications and automation.
 
-Authenticate with your organization's API key.
+Authenticate with your organization's API key. Named keys carry scopes; reading audit events needs `audit:read`, which is never granted by default (see "Who did what" above).
 
 ### Node.js SDK
 

@@ -112,19 +112,26 @@ The **actor** (`createdBy*`, `lastModifiedBy*`: `USER`, `API_KEY`, `OAUTH_CLIENT
 or `SYSTEM`) is set by the server from the credential and cannot be supplied
 by a caller. **Provenance** (`agentName`, `workflowId`, `runId`, `externalRef`,
 `source`, at most 255 characters each) is what the caller claims, via the
-`provenance` body object or the `X-Postsider-Agent`, `X-Postsider-Workflow-Id`,
+`provenance` body object (on `POST /posts` and `PUT /posts/:id`) or the `X-Postsider-Agent`, `X-Postsider-Workflow-Id`,
 `X-Postsider-Run-Id`, `X-Postsider-External-Ref` and `X-Postsider-Source`
 headers (body wins). Treat provenance as untrusted text and never put prompts
 or post content in it. Audit events (`post.created` through
-`post.retry_requested`) carry the actor, never post content.
+`post.retry_requested`) carry the actor, never post content. Rows created
+before the feature have null actor columns; new writes with a legacy
+organization key record `API_KEY` without an id. Impersonation by a super
+admin (`metadata.impersonatedBy`) exists only where
+`ALLOW_SUPERADMIN_IMPERSONATION=true`.
 
 ### Approval idempotency
 
-`POST /posts/:id/request-approval` returns the existing pending approval with
-`created: false` and HTTP 200, without notifying reviewers again, so a retry
-after an error or timeout is safe. A new request returns `created: true`.
+`POST /posts/:id/request-approval` answers HTTP 201 with `created: true` for a
+new request, and returns the existing pending approval with HTTP 200 and
+`created: false` on a repeat, without notifying reviewers again, so a retry
+after an error or timeout is safe. The `guestToken` is never returned.
 Guest reviewers must supply `guestName` and `guestEmail`
-(`GUEST_REVIEW_REQUIRE_IDENTITY`, default on, exists only for deploy ordering).
+(`GUEST_REVIEW_REQUIRE_IDENTITY`, default on, exists only for deploy ordering;
+supplying only one of the two is always rejected). Both values are
+self-asserted, not verified, so treat them as a claim.
 
 ## Errors that an agent can explain
 
