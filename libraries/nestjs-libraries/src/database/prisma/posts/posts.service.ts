@@ -7,7 +7,10 @@ import {
   Optional,
   ValidationPipe,
 } from '@nestjs/common';
-import { PostsRepository } from '@postsider/nestjs-libraries/database/prisma/posts/posts.repository';
+import {
+  PostErrorMeta,
+  PostsRepository,
+} from '@postsider/nestjs-libraries/database/prisma/posts/posts.repository';
 import { CreatePostDto } from '@postsider/nestjs-libraries/dtos/posts/create.post.dto';
 import dayjs from 'dayjs';
 import { slotsForDay } from './queue-slots';
@@ -1029,7 +1032,8 @@ export class PostsService {
           'ERROR',
           'Could not schedule the publish workflow (scheduler unavailable). Please re-schedule this post.',
           undefined,
-          orgId
+          orgId,
+          { category: 'UNKNOWN', retryable: true }
         );
       } catch (stateErr) {
         this._logger.error(
@@ -1587,9 +1591,22 @@ export class PostsService {
     state: State,
     err?: any,
     body?: any,
-    orgId?: string
+    orgId?: string,
+    meta?: PostErrorMeta
   ) {
-    return this._postRepository.changeState(id, state, err, body, orgId);
+    return this._postRepository.changeState(id, state, err, body, orgId, meta);
+  }
+
+  recordPublishAttempt(orgId: string, id: string) {
+    return this._postRepository.recordPublishAttempt(orgId, id);
+  }
+
+  claimErrorForRetry(orgId: string, id: string) {
+    return this._postRepository.claimErrorForRetry(orgId, id);
+  }
+
+  getTopLevelPostsByGroup(orgId: string, group: string) {
+    return this._postRepository.getTopLevelPostsByGroup(orgId, group);
   }
 
   /**
