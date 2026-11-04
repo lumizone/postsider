@@ -66,8 +66,6 @@ const {
   claimPostForPublish,
   inAppNotification,
   changeState,
-  markPublishFailed,
-  updatePost,
   sendWebhooks,
   isCommentableById,
 } = proxyActivities<PostActivity>({
@@ -76,6 +74,19 @@ const {
     maximumAttempts: 3,
     backoffCoefficient: 1,
     initialInterval: '2 minutes',
+  },
+});
+
+// Writes that record the outcome of (or the refusal to make) a provider call.
+// They must not give up: if they did, the row would stay QUEUE with no releaseId
+// and the hourly missing-post sweep would publish the post again.
+const { markPublishFailed, updatePost } = proxyActivities<PostActivity>({
+  startToCloseTimeout: '5 minute',
+  retry: {
+    maximumAttempts: 0, // unlimited
+    initialInterval: '30 seconds',
+    backoffCoefficient: 2,
+    maximumInterval: '10 minutes',
   },
 });
 

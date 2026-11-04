@@ -17,9 +17,13 @@ const mockActivities: Record<string, jest.Mock> = {
   processPlug: jest.fn(),
 };
 const mockSleep = jest.fn();
+const mockProxyOptions: any[] = [];
 
 jest.mock('@temporalio/workflow', () => ({
-  proxyActivities: jest.fn(() => mockActivities),
+  proxyActivities: jest.fn((opts: any) => {
+    mockProxyOptions.push(opts);
+    return mockActivities;
+  }),
   sleep: (...args: any[]) => mockSleep(...args),
   defineSignal: jest.fn(() => 'poke'),
   setHandler: jest.fn(),
@@ -29,6 +33,25 @@ jest.mock('@temporalio/workflow', () => ({
 }));
 
 import { postWorkflowV109 } from './post.workflow.v1.0.9';
+
+describe('v1.0.9 activity proxies', () => {
+  it('has a dedicated unlimited-retry proxy for post-call writes', () => {
+    const writes = mockProxyOptions.find(
+      (o) => o?.retry?.maximumAttempts === 0
+    );
+    expect(writes).toEqual(
+      expect.objectContaining({
+        retry: {
+          maximumAttempts: 0,
+          initialInterval: '30 seconds',
+          backoffCoefficient: 2,
+          maximumInterval: '10 minutes',
+        },
+      })
+    );
+    expect(writes.startToCloseTimeout).toBeDefined();
+  });
+});
 
 const integration = (over: any = {}) => ({
   id: 'int1',
