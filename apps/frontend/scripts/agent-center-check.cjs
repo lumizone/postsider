@@ -34,7 +34,7 @@ const BASE = arg("base", "http://localhost:4200").replace(/\/$/, "");
 const OUT = path.resolve(arg("out", path.join(os.tmpdir(), "agent-center-shots")));
 fs.mkdirSync(OUT, { recursive: true });
 
-const DASH = /[–—]/;
+const DASH = /[\u2013\u2014]/;
 const results = []; // { name, failures: string[] }
 const shots = [];
 let browser;
