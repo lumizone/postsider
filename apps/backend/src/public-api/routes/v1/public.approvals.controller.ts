@@ -36,7 +36,7 @@ import {
 } from '@postsider/nestjs-libraries/dtos/approval/public-approval.dto';
 
 const DECISION_ERRORS =
-  'Errors: 403 self_approval_blocked (the key or client created or requested this approval, or the flow requires a different approver), 403 not_allowed_for_stage (the stage does not allow automation), 403 key_action_not_allowed or key_channel_not_allowed (approving schedules the post, so the key needs the schedule action on its channel), 409 approval_already_resolved (decided the opposite way already), 409 stage_changed (expectStage was sent and the approval is no longer at that stage; the body carries the current stage). Send expectStage (the stage.position you read) so a retry or a stale view can never decide a later stage; it is optional. Deciding the same way twice answers 200 with changed false.';
+  'Errors: 403 self_approval_blocked (the key or client created or requested this approval, or the flow requires a different approver), 403 not_allowed_for_stage (the stage does not allow automation), 403 key_action_not_allowed or key_channel_not_allowed (approving schedules the post, so only an approve decision needs the schedule action on its channel, a reject does not), 409 approval_already_resolved (decided the opposite way already), 409 stage_changed (expectStage was sent and the approval is no longer at that stage; the body carries the current stage). Send expectStage (the stage.position you read) so a retry or a stale view can never decide a later stage; it is optional. Deciding the same way twice answers 200 with changed false.';
 
 @ApiTags('Public API Approvals')
 @ApiHeader({

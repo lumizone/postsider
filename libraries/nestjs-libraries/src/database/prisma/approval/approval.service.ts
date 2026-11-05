@@ -381,8 +381,9 @@ export class ApprovalService {
       originOf(approval, post, rows, position)
     );
     if (!verdict.ok) throw verdictError(verdict);
-    if (stageDecider.kind === 'automation') {
+    if (stageDecider.kind === 'automation' && decision === 'approve') {
       // Approving schedules the post: the key needs that action on the channel.
+      // Rejecting schedules nothing, so a key without it may still reject.
       this.assertKeyMaySchedule(post.integrationId);
     }
     if (opts.expectStage !== undefined && opts.expectStage !== position) {
