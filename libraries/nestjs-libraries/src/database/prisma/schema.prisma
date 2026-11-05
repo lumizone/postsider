@@ -476,6 +476,7 @@ model Post {
   @@index([updatedAt])
   @@index([releaseURL])
   @@index([integrationId])
+  @@index([organizationId, state, updatedAt])
 }
 
 model PostAnalytics {
