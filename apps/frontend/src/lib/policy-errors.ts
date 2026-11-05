@@ -44,6 +44,14 @@ export function summarizeCreateResult(created: unknown): { approvalRequested: bo
   return { approvalRequested, blocked: false };
 }
 
+/**
+ * The date was not applied when an approval was requested, or when a policy
+ * outcome says REQUIRE_APPROVAL even though no new request was created (an
+ * approval already exists).
+ */
 export function summarizeDateResult(res: unknown): { approvalRequested: boolean } {
-  return { approvalRequested: isRecord(res) && res.approvalRequested === true };
+  if (!isRecord(res)) return { approvalRequested: false };
+  const policy = res.policy;
+  const policyHolds = isRecord(policy) && policy.effect === 'REQUIRE_APPROVAL';
+  return { approvalRequested: res.approvalRequested === true || policyHolds };
 }

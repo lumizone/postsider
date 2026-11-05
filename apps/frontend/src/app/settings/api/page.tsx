@@ -19,6 +19,7 @@ import {
   isPermissionsSaveable,
   permissionsFromRow,
   permissionsPayload,
+  permissionsPayloadForEdit,
   reconcileWithKnown,
   type KeyPermissionsState,
 } from "@/lib/key-permissions-model";
@@ -132,6 +133,7 @@ export default function ApiSettingsPage() {
   const [renameValue, setRenameValue] = useState("");
   const [editScopes, setEditScopes] = useState<string[]>([]);
   const [editPerms, setEditPerms] = useState<KeyPermissionsState>(UNLIMITED);
+  const [editInitialPerms, setEditInitialPerms] = useState<KeyPermissionsState>(UNLIMITED);
   const [renameBusy, setRenameBusy] = useState(false);
 
   const onRename = async () => {
@@ -140,16 +142,19 @@ export default function ApiSettingsPage() {
     // Stored ids of deleted or disabled channels are dropped here: the server
     // answers 400 "Unknown channel id" for them. Both lists are sent on every
     // save so that switching the limit off really clears it.
+    // When the limit controls were not touched, no permission field is sent at
+    // all, so a pure rename always works and never changes the limit.
     const perms = reconcileWithKnown(editPerms, knownChannelIds).state;
-    if (!name || editScopes.length === 0 || !isPermissionsSaveable(perms)) return;
-    if (perms.limited && channelsLoading) return;
+    const sent = permissionsPayloadForEdit(editPerms, editInitialPerms) && permissionsPayload(perms);
+    if (!name || editScopes.length === 0) return;
+    if (sent && !isPermissionsSaveable(perms)) return;
+    if (sent && perms.limited && channelsLoading) return;
     setRenameBusy(true);
     try {
-      const sent = permissionsPayload(perms);
       const res = await api.put<Partial<ApiKeyRow> | null>(`/settings/api-keys/${renameTarget.id}`, {
         name,
         scopes: editScopes,
-        ...sent,
+        ...(sent ?? {}),
       });
       // Take the saved row from the response; fall back to what was sent.
       const pickList = (value: unknown, fallback: string[]) =>
@@ -161,8 +166,11 @@ export default function ApiSettingsPage() {
                 ...k,
                 name: typeof res?.name === "string" ? res.name : name,
                 scopes: pickList(res?.scopes, editScopes),
-                allowedActions: pickList(res?.allowedActions, sent.allowedActions),
-                allowedIntegrationIds: pickList(res?.allowedIntegrationIds, sent.allowedIntegrationIds),
+                allowedActions: pickList(res?.allowedActions, sent ? sent.allowedActions : k.allowedActions ?? []),
+                allowedIntegrationIds: pickList(
+                  res?.allowedIntegrationIds,
+                  sent ? sent.allowedIntegrationIds : k.allowedIntegrationIds ?? [],
+                ),
               }
             : k,
         ),
@@ -224,8 +232,9 @@ export default function ApiSettingsPage() {
     !renameBusy &&
     !!renameValue.trim() &&
     editScopes.length > 0 &&
-    isPermissionsSaveable(reconcileWithKnown(editPerms, knownChannelIds).state) &&
-    !(editPerms.limited && channelsLoading);
+    (permissionsPayloadForEdit(editPerms, editInitialPerms) === null ||
+      (isPermissionsSaveable(reconcileWithKnown(editPerms, knownChannelIds).state) &&
+        !(editPerms.limited && channelsLoading)));
 
   const channelCountText = (count: number) => {
     const form = channelCountKey(count, locale);
@@ -306,7 +315,7 @@ export default function ApiSettingsPage() {
                   {new Date(k.createdAt).toLocaleDateString(locale, { year: "numeric", month: "short", day: "numeric" })}
                 </span>
                 <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                  <IconBtn onClick={() => { setRenameTarget({ id: k.id, name: k.name, scopes: k.scopes ?? [] }); setRenameValue(k.name); setEditScopes(k.scopes ?? []); setEditPerms(permissionsFromRow(k)); }} title={t("settingsApi.rename")}>
+                  <IconBtn onClick={() => { setRenameTarget({ id: k.id, name: k.name, scopes: k.scopes ?? [] }); setRenameValue(k.name); setEditScopes(k.scopes ?? []); setEditPerms(permissionsFromRow(k)); setEditInitialPerms(permissionsFromRow(k)); }} title={t("settingsApi.rename")}>
                     <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M11.5 1.5l3 3L5 14H2v-3l9.5-9.5Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" /></svg>
                   </IconBtn>
                   <IconBtn onClick={() => setDeleteTarget({ id: k.id, name: k.name })} title={t("settingsApi.revoke")} danger>
