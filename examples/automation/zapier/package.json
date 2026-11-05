@@ -1,0 +1,17 @@
+{
+  "name": "postsider-zapier-app",
+  "version": "0.1.0",
+  "description": "Starting scaffold for a PostSider Zapier app (approvals). Not published, not validated against zapier-platform-cli.",
+  "private": true,
+  "main": "index.js",
+  "license": "AGPL-3.0",
+  "scripts": {
+    "test": "node --test test/map.test.js"
+  },
+  "dependencies": {
+    "zapier-platform-core": "16.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
