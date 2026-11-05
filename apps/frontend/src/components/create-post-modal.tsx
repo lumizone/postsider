@@ -39,6 +39,7 @@ import {
 import { useT } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/i18n";
 import { InfoTip } from "./info-tip";
+import { policyErrorMessage } from "./policy-notice";
 import { suggestSlots, type SlotSuggestion } from "@/lib/smart-slots-api";
 import { getCommentProviders } from "@/lib/comment-providers";
 
@@ -406,6 +407,11 @@ function humanizeSubmitError(err: unknown, t: Translate): string {
     message?: string;
     body?: unknown;
   };
+
+  // A policy refusal (422 policy_blocked, 400 policy_input_too_large) names
+  // the rules; it goes first because its body can also carry a message.
+  const policyText = policyErrorMessage(t, err);
+  if (policyText) return policyText;
 
   const body = anyErr?.body as
     | { message?: unknown; error?: unknown }

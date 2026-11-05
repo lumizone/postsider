@@ -32,6 +32,8 @@ import { requestApproval, getApprovalByPost } from '@/lib/approval-api';
 import { PostDetailDrawer } from './post-detail-drawer';
 import { PostMediaThumb } from './post-media-thumb';
 import { ConfirmDialog } from './confirm-dialog';
+import { PolicyNotice } from './policy-notice';
+import { summarizeCreateResult } from '@/lib/policy-errors';
 import {
   CreatePostModal,
   type NewPostInput,
@@ -256,6 +258,8 @@ export function Posts() {
   const [error, setError] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+  // A policy sent a save to approval instead of scheduling it.
+  const [policyNotice, setPolicyNotice] = useState(false);
   const [evergreenGroups, setEvergreenGroups] = useState<Set<string>>(
     new Set()
   );
@@ -647,7 +651,9 @@ export function Posts() {
       perChannelSettings: post.perChannelSettings,
       ...(group ? { group } : {}),
     };
-    return await createPost(input);
+    const created = await createPost(input);
+    if (summarizeCreateResult(created).approvalRequested) setPolicyNotice(true);
+    return created;
   };
 
   const refreshList = async () => {
@@ -700,6 +706,7 @@ export function Posts() {
   return (
     <section className={styles.root}>
       {toast && <div className={styles.toast}>{toast}</div>}
+      {policyNotice && <PolicyNotice onClose={() => setPolicyNotice(false)} />}
       {duplicateTargetGroup && (
         <DuplicateChannelPicker
           channels={channels}

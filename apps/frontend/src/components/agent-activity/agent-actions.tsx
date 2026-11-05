@@ -14,6 +14,7 @@ import {
 import { planBulk, type SelectableGroup } from "@/lib/agent-activity-model";
 import { useT } from "@/lib/i18n";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { policyErrorMessage } from "@/components/policy-notice";
 import { RetryUnknownDialog } from "./retry-unknown-dialog";
 import s from "./agent-activity.module.css";
 
@@ -36,10 +37,11 @@ export interface AgentActionsApi {
 
 function errorText(t: Translate, e: unknown): string {
   if (e instanceof ApiError) {
+    // 422 policy_blocked and 400 policy_input_too_large: localized, rule names as text.
+    const policyText = policyErrorMessage(t, e);
+    if (policyText) return policyText;
     if (e.status === 403) return t("agentActivity.action.forbidden");
     if (e.status === 404) return t("agentActivity.drawer.changed");
-    // 422 policy_blocked: the server message already names the rules.
-    if (e.status === 422 && e.message) return e.message;
   }
   return t("agentActivity.action.failed");
 }

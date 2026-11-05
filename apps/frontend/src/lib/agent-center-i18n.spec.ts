@@ -93,3 +93,29 @@ describe('settingsApi key permission keys', () => {
     expect(/[\u2013\u2014]/.test(enApi[key] + plApi[key])).toBe(false);
   });
 });
+
+// Policy outcome keys of the composer and calendar (Phase 4 Task 16).
+const CREATE_POST_POLICY_KEYS = [
+  'policyBlocked',
+  'policyBlockedNoRules',
+  'policyApprovalSent',
+  'policyInputTooLarge',
+] as const;
+
+describe('createPost policy keys', () => {
+  const enCp = (en as unknown as { createPost: Record<string, string> }).createPost;
+  const plCp = (pl as unknown as { createPost: Record<string, string> }).createPost;
+
+  it.each(CREATE_POST_POLICY_KEYS)('has %s in English and Polish', (key) => {
+    expect(typeof enCp[key]).toBe('string');
+    expect(typeof plCp[key]).toBe('string');
+    expect(enCp[key].length).toBeGreaterThan(0);
+    expect(plCp[key].length).toBeGreaterThan(0);
+    expect(placeholders(plCp[key])).toEqual(placeholders(enCp[key]));
+    expect(/[\u2013\u2014]/.test(enCp[key] + plCp[key])).toBe(false);
+  });
+
+  it('keeps the rules placeholder in the blocked text', () => {
+    expect(placeholders(enCp.policyBlocked)).toEqual(['rules']);
+  });
+});
