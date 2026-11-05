@@ -25,6 +25,7 @@ import {
   SubscriptionException,
 } from '@postsider/backend/services/auth/permissions/permission.exception.class';
 import { PermissionsService } from '@postsider/backend/services/auth/permissions/permissions.service';
+import { CustomerService } from '@postsider/nestjs-libraries/database/prisma/integrations/customer.service';
 import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
 import { ChannelCapacityExceededError } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.repository';
 import { PostsService } from '@postsider/nestjs-libraries/database/prisma/posts/posts.service';
@@ -72,6 +73,7 @@ export class PublicWorkspaceController {
     private _smartSlots: SmartSlotsService,
     private _postChecker: PostCheckerService,
     private _permissionsService: PermissionsService,
+    private _customerService: CustomerService,
     @Optional() private _policyGate?: PostPolicyGateService
   ) {}
 
@@ -184,17 +186,41 @@ export class PublicWorkspaceController {
     return this._smartSlots.suggest(org.id, id, channel.providerIdentifier, n);
   }
 
-  /** Assign the channel to a client (customer) by name; empty name unassigns. */
+  /**
+   * Assign the channel to a client (customer) by name or by customer id.
+   * Send one of them, never both. An empty name or a null customerId unassigns.
+   */
   @Put('/integrations/:id/customer')
   @RequirePublicApiScopes('channels:write')
   async setChannelCustomer(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string,
-    @Body() body: { name?: string | null }
+    @Body() body: { name?: string | null; customerId?: string | null }
   ) {
     Sentry.metrics.count('public_api-request', 1);
     this.assertAdmin(org);
+    const hasName = body?.name !== undefined && body?.name !== null;
+    const hasId = body?.customerId !== undefined && body?.customerId !== null;
+    if (hasName && hasId) {
+      throw new HttpException(
+        { msg: 'Send either name or customerId, not both.' },
+        400
+      );
+    }
+    if (hasId && typeof body.customerId !== 'string') {
+      throw new HttpException({ msg: 'customerId must be a string' }, 400);
+    }
     await this.requireChannel(org.id, id);
+    if (body?.customerId !== undefined) {
+      if (body.customerId === null) {
+        await this._integrationService.updateIntegrationGroup(org.id, id, '');
+        return { id, customer: null, customerId: null };
+      }
+      // Throws 404 for a foreign, unknown or archived customer.
+      const customer = await this._customerService.get(org.id, body.customerId);
+      await this._integrationService.updateIntegrationGroup(org.id, id, customer.id);
+      return { id, customer: customer.name, customerId: customer.id };
+    }
     const name = typeof body?.name === 'string' ? body.name.trim().slice(0, 100) : '';
     await this._integrationService.updateOnCustomerName(org.id, id, name);
     // Never return the integration row: it carries the channel's OAuth tokens.

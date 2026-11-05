@@ -8,6 +8,7 @@ import { SubscriptionService } from '@postsider/nestjs-libraries/database/prisma
 import { SubscriptionRepository } from '@postsider/nestjs-libraries/database/prisma/subscriptions/subscription.repository';
 import { NotificationService } from '@postsider/nestjs-libraries/database/prisma/notifications/notification.service';
 import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
+import { CustomerService } from '@postsider/nestjs-libraries/database/prisma/integrations/customer.service';
 import { IntegrationRepository } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.repository';
 import { PostsService } from '@postsider/nestjs-libraries/database/prisma/posts/posts.service';
 import { PostsRepository } from '@postsider/nestjs-libraries/database/prisma/posts/posts.repository';
@@ -98,6 +99,7 @@ import { PostAnalyticsService } from '@postsider/nestjs-libraries/database/prism
     PublicWebhookDeliveriesService,
     IntegrationService,
     IntegrationRepository,
+    CustomerService,
     PostsService,
     PostsRepository,
     SignatureRepository,

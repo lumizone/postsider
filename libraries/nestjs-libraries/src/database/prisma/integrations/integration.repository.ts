@@ -863,6 +863,77 @@ export class IntegrationRepository {
     });
   }
 
+  // Customers (workspaces) for the provisioning API. Every query carries the
+  // organization and, except for archive, the live filter.
+  async listCustomersWithCounts(orgId: string) {
+    const rows = await this._customers.model.customer.findMany({
+      where: { orgId, deletedAt: null },
+      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        createdAt: true,
+        _count: { select: { integrations: { where: { deletedAt: null } } } },
+      },
+    });
+    return rows.map(({ _count, ...row }) => ({
+      ...row,
+      channelCount: _count.integrations,
+    }));
+  }
+
+  countLiveCustomers(orgId: string) {
+    return this._customers.model.customer.count({
+      where: { orgId, deletedAt: null },
+    });
+  }
+
+  findCustomerById(orgId: string, id: string) {
+    return this._customers.model.customer.findFirst({
+      where: { id, orgId, deletedAt: null },
+    });
+  }
+
+  findLiveCustomerByName(orgId: string, name: string) {
+    return this._customers.model.customer.findFirst({
+      where: { orgId, name, deletedAt: null },
+    });
+  }
+
+  createCustomer(orgId: string, name: string) {
+    return this._customers.model.customer.create({
+      data: { name, orgId },
+    });
+  }
+
+  async renameCustomer(orgId: string, id: string, name: string) {
+    const res = await this._customers.model.customer.updateMany({
+      where: { id, orgId, deletedAt: null },
+      data: { name },
+    });
+    return res.count > 0;
+  }
+
+  /**
+   * Soft delete the customer and detach its channels in one transaction.
+   * Only integrations.customerId is written; posts and channels stay.
+   * Returns null when no live customer of the organization matched.
+   */
+  archiveCustomer(orgId: string, id: string) {
+    return this._transaction.model.$transaction(async (tx) => {
+      const archived = await tx.customer.updateMany({
+        where: { id, orgId, deletedAt: null },
+        data: { deletedAt: new Date() },
+      });
+      if (archived.count === 0) return null;
+      const detached = await tx.integration.updateMany({
+        where: { organizationId: orgId, customerId: id },
+        data: { customerId: null },
+      });
+      return { detachedChannels: detached.count };
+    });
+  }
+
   getIntegrationsList(org: string) {
     return this._integration.model.integration.findMany({
       where: {
