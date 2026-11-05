@@ -95,12 +95,19 @@ the queue state. Final publication is asynchronous and can later become
 Named API keys have granular scopes including `organization:read`,
 `channels:read/write`, `posts:read/write`, `approvals:read/write`,
 `media:write`, `analytics:read`, `notifications:read`,
-`publishing:read/write`, `webhooks:read/write` and `audit:read`. `audit:read`
-and `webhooks:*` are never granted by default. Grant only the
+`publishing:read/write`, `webhooks:read/write` and `audit:read`. `audit:read`,
+`policies:read/write` and `approvals:decide`. `audit:read`,
+`webhooks:*`, `policies:*` and `approvals:decide` are never granted by default. Grant only the
 scopes an integration needs. OAuth MCP consents use `posts:read`,
 `posts:write` and `channels:write`, which the backend maps to the
 corresponding Public API permissions. Legacy OAuth credentials preserve
 pre-existing access but do not receive new webhook administration by default.
+`approvals:decide` lets a key approve or reject the current stage of a pending
+approval, which schedules the post on the final stage. Existing keys do not have
+it (the legacy scope set is unchanged), the create-key dialog never preselects it,
+and it cannot be granted to OAuth or MCP tokens. It does not allow editing
+approval flows (that is `policies:write`). A key with limits also needs the
+`SCHEDULE` action on the post's channel, so a draft-only key cannot approve.
 MCP OAuth tokens cannot read `/audit-events` (no `audit:read`), but they can
 read a post's activity through `posts:read`.
 
@@ -139,6 +146,103 @@ Guest reviewers must supply `guestName` and `guestEmail`
 (`GUEST_REVIEW_REQUIRE_IDENTITY`, default on, exists only for deploy ordering;
 supplying only one of the two is always rejected). Both values are
 self-asserted, not verified, so treat them as a claim.
+
+Deciding: `POST /approvals/:id/approve` and `/reject` accept an optional
+`Idempotency-Key`. With a key, a retry replays the stored answer and the same key
+with a different body is a conflict. Without a key, repeating the same decision
+returns 200 with `changed: false`, and the opposite decision answers
+`409 approval_already_resolved`. A retry after a non-final approval never decides
+the next stage, because a decision is tied to the stage that was current.
+
+### Approval identity
+
+Every decision records who made it, from the credential and never from the body.
+The audit event `post.approval_resolved` carries `via`, `stage`, `stageCount` and
+`final` in its metadata (never a token).
+
+| `via` | Who is recorded | Verified? |
+| --- | --- | --- |
+| `DASHBOARD` and bulk actions | The signed-in member (`USER` plus user id) | Yes, session |
+| `API` | The API key (`API_KEY` plus key id) on the stage and the approval | Yes, credential |
+| `EMAIL_LINK` | The member the email was sent to (`USER` plus user id from the link row) | Only as far as that mailbox: whoever holds the email acts as that member |
+| `GUEST` | No actor. Name and email typed by the guest, audit actor null with `by: guest` | No, self-asserted |
+
+Self-approval rules. Automation (API key or OAuth client) never decides an
+approval it requested or a post it created; there is no switch. For humans, a
+flow's `preventSelfApproval` (default on for new flows) bars the post's creator
+and the requester, and `requireDistinctApprovers` (default on) bars anyone who
+decided an earlier stage. A `SUPERADMIN` bypasses a stage's member list but never
+these two rules. Guests are not members and are not subject to them, so a stage
+that forbids self-approval should leave `allowGuest` off (the default for flow
+stages): creating a guest link is refused with `guest_not_allowed_for_stage`
+otherwise. The implicit single stage (no flow) enforces neither flag for humans,
+so a solo owner can approve their own post, as before. The two flags are read from
+the flow row when a decision is made, not copied onto the approval, so editing a
+flow changes the rules for approvals already in flight. Stage membership, roles,
+`allowAutomation` and `allowGuest` are snapshotted when the approval is requested.
+
+### Links in email (threat model)
+
+Off unless `APPROVAL_EMAIL_LINKS=true`. A link is a bearer credential.
+
+What protects it: 32 random bytes (43 characters), only the SHA-256 is stored, a
+lifetime of `APPROVAL_LINK_TTL_HOURS` (default 48, at most 168), single use
+(consumed with a conditional update, so two parallel clicks decide once), and a
+two step page. `GET /public/approver-links/:token` changes nothing and returns a
+challenge; the decision (`POST .../decision`, JSON only) needs that challenge, which
+is accepted only from 2 seconds to 15 minutes after it was issued and only for the
+same link, so a scanner or previewer that merely opens the URL cannot decide and a
+cross-site form cannot submit. Membership, role, disabled state and the stage rules
+(including self-approval) are checked again when the decision is made. Unknown,
+expired, used, revoked and malformed links all answer the same `404 link_invalid`.
+Five failed attempts revoke a link, and the per-IP rate limit also applies. Responses
+carry `Cache-Control: no-store` and `Referrer-Policy: no-referrer`; the page renders
+server text as plain text and never stores the token.
+
+Residual risks, stated plainly:
+
+- Whoever holds the email can decide as that member until the link is used or
+  expires. A forwarded email or a compromised mailbox is enough. This is why the
+  feature is opt-in.
+- The email, including the link, is part of the Temporal workflow history for as
+  long as the Temporal namespace keeps it. The link is single use and expires, so an
+  old entry is inert, but operators who cannot accept that should leave the flag off.
+- A decision made in the dashboard or API does not delete the unused email links; they
+  stay until the TTL and answer `409 approval_already_resolved`, which also tells the
+  holder the final status. They cannot decide anything.
+- Link emails go only to members who could use the link. Recipient selection ignores
+  channel assignment narrowing and honours the member's success-email preference.
+- If `JWT_SECRET` or `FRONTEND_URL` is missing, links are not produced and the plain
+  notification is sent.
+- An approval whose eligible set is empty would deadlock; the flow validator checks
+  members when the flow is saved, and a `SUPERADMIN` can always decide.
+- A page left open for more than 15 minutes holds an expired challenge. The approver
+  page reloads the link data once after a stale challenge and then asks to retry.
+- Slack is notify only. The message holds no post content or ids and cannot be recalled.
+  Slack webhook URLs are secrets and are kept out of stored errors and logs.
+- The hosted OAuth MCP server cannot decide approvals. The local stdio tool
+  `postsider_decide_approval` exists only with
+  `POSTSIDER_MCP_ALLOW_APPROVAL_DECISIONS=true`; the server-side checks (scope, no
+  self-approval, key limits) are what hold, not the tool description.
+
+### The `guestToken` exposure (fixed in Phase 5)
+
+What was wrong: `GET /approval/pending` and `GET /approval/post/:postId` returned the
+whole approval row, including the guest review token, to every member of the
+organization whatever their role. A plain member could open `/review/<token>` and
+approve a post as a "guest", bypassing the rule that only admins approve.
+Who was affected: any organization where an admin had created a guest link and a
+`USER` member or a script holding a member session called those routes while the
+link was valid (links last 7 days). Whether a token was actually misused is not
+recorded, because guest decisions have no verified actor.
+What changed: the dashboard routes now return an explicit projection with no token
+fields (admins get `hasGuestLink` and `guestLinkExpiresAt` only); tokens are stored
+as SHA-256 only; the migration copies the hash of each existing token and then
+clears the plaintext column, so a database dump no longer yields working links.
+Outstanding guest links keep working once, through the hash, and are shown only as
+"link active". Rolling the application back after the migration makes old links
+answer "invalid", which is safe. The plaintext column stays for one release.
+Owners worried about a past exposure can revoke and re-create any link that is still open.
 
 ## Errors that an agent can explain
 
