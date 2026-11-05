@@ -188,7 +188,9 @@ What this does not guarantee, in plain terms:
 
 - Drafts are reported, not enforced, at write time. Publish time still enforces
   `BLOCK`.
-- Dashboard edits are only caught at publish time. Workflows started before
+- Dashboard saves are checked at write time for `USER` rules in the composer
+  and calendar drag only. CSV import, duplicate, approve, resuming a pause and
+  evergreen recycling are caught at publish time. Workflows started before
   v1.0.9 skip the publish-time check until they run.
 - Approvals carry no content version, so an approval for older content is
   honored at publish time after a dashboard edit. An API edit or
@@ -226,6 +228,25 @@ What this does not guarantee, in plain terms:
   probe rule settings without an audit entry, and the global throttler is
   effectively open. Send the literal path `/public/v1/policies/evaluate`;
   encoded spellings are not read-classified and need `posts:write`.
+
+## Dashboard routes (Phase 4)
+
+Phase 4 adds session-authenticated dashboard routes only: `/agent-activity`
+(summary, filters, list, group detail, bulk approve or reject, retry) and
+`/policies` (rule management and a dry run). It changes no public route, scope,
+webhook payload or MCP tool, and these routes are not reachable with an API key
+or an MCP token.
+
+Two existing dashboard writes now evaluate `USER` rules. `POST /posts` (create
+and edit) and `PUT /posts/:id/date` with action `schedule` can answer
+`422 policy_blocked`, or succeed with `approvalRequested` set when a
+`REQUIRE_APPROVAL` rule routes the post to approval (the post is saved as a
+draft, or the date is not applied). Drafts and `update` date shifts are not
+enforced. CSV import, duplicate, approve, resuming a pause and evergreen
+recycling are not checked at write time. The publish-time guard still applies to
+all of them. Claimed provenance shown on the Agent activity page is never
+verified. A `USER` caller of an admin dashboard route can see `402` before `403`
+when billing is on.
 
 ## Real-client verification (run without social publications)
 

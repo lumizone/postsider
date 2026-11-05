@@ -4,6 +4,28 @@ All notable changes to the PostSider dashboard.
 
 ## Unreleased
 
+### Agent activity and policies
+
+- **New Agent activity page (`/agents`).** See what API keys, OAuth clients and
+  MCP clients did: summary tiles (actions today, waiting for review, policy
+  blocked, failed, published today), filters by status, channel, actor, agent
+  name, source and date, and a detail drawer with destinations, who did it,
+  approval, policy outcome, content compare and an audit timeline. Claimed agent
+  details are labelled as not verified.
+- **Approve, reject and retry from one place.** Administrators can approve or
+  reject several items at once and retry failed destinations. A failure whose
+  outcome is unknown asks you to confirm you checked the platform first.
+- **New Policies page (Settings).** Administrators create, edit, switch on or
+  off and delete rules, and can test a post against them without saving.
+- **Limits per API key.** The API key dialogs have a Permissions section to
+  restrict a key to certain actions and channels.
+- **Composer and calendar messages.** Saving a post that a rule blocks shows
+  "Blocked by policy" with the rule names; a post sent to approval instead of
+  being scheduled says so and links to Approval. The same applies when dragging a
+  post to a new day.
+- **Calendar links.** The calendar opens a post with `?post=` and a day with
+  `?date=`.
+
 ### Dark theme
 
 - **The dashboard has a dark theme, with a light / dark / system preference.**
