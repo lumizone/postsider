@@ -48,10 +48,10 @@ const perform = async (z, bundle) => {
     body,
     skipThrowForStatus: true,
   });
-  if (response.status === 409 && response.data && response.data.error === 'approval_stage_changed') {
+  if (response.status === 409 && response.data && response.data.error === 'stage_changed') {
     throw new z.errors.Error(
       'This approval has already moved to another stage. Check it before deciding again.',
-      'approval_stage_changed',
+      'stage_changed',
       409
     );
   }

@@ -28,7 +28,7 @@ Approving also schedules the post, so the key needs the schedule action on the p
 - Polling is not used for triggers; they are REST hooks. If Zapier cannot reach PostSider's outbound delivery (the target must be a public HTTPS URL), the hook never fires.
 - The scaffold does not verify webhook signatures inside Zapier. Deliveries carry `X-Postsider-Signature` (`sha256=` HMAC-SHA256 over `<timestamp>.<raw body>`), `X-Postsider-Timestamp`, `X-Postsider-Event` and `X-Postsider-Event-Id`. If you add a verification step, use `verifySignature` and reject a timestamp more than 300 seconds from now.
 - Zapier deduplicates trigger items by `id`; the mapping sets `id` to the envelope id (`X-Postsider-Event-Id`).
-- The Approve and Reject action sends an `Idempotency-Key` built from the Zap id and a hash of the approval id, decision, note, current stage position and `requestedAt` (the action reads the approval first and also sends `expectStage`; if that read fails it uses a random key). A decision on a stage that has moved on is a 409 `approval_stage_changed`. A decision that conflicts with an already resolved approval is a 409 `approval_already_resolved`.
+- The Approve and Reject action sends an `Idempotency-Key` built from the Zap id and a hash of the approval id, decision, note, current stage position and `requestedAt` (the action reads the approval first and also sends `expectStage`; if that read fails it uses a random key). A decision on a stage that has moved on is a 409 `stage_changed`. A decision that conflicts with an already resolved approval is a 409 `approval_already_resolved`.
 - The scaffold was written from the repository's API contract, not by running it. Expect to adjust field definitions after `zapier validate`.
 
 ## Owner actions (not done)

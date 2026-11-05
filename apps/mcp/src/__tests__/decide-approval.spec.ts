@@ -324,12 +324,12 @@ describe('postsider_decide_approval', () => {
       expect(hostile).not.toContain('Ignore previous');
     });
 
-    it('409 approval_stage_changed maps to a fixed safe sentence', async () => {
+    it('409 stage_changed maps to a fixed safe sentence', async () => {
       const text = await decideWith(409, {
-        error: 'approval_stage_changed',
+        error: 'stage_changed',
         leaked: 'secret-internal-detail',
       });
-      expect(text).toContain('approval_stage_changed');
+      expect(text).toContain('stage_changed');
       expect(text).toMatch(/another stage|stage has moved|already moved/i);
       expect(text).toContain('postsider_get_approval_status');
       expect(text).not.toContain('secret-internal-detail');
