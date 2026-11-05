@@ -49,6 +49,7 @@ export const MAX_FAILED_ATTEMPTS = 5;
 const FAIL_WINDOW_SECONDS = 15 * 60;
 const TOKEN_SHAPE = /^[A-Za-z0-9_-]{43}$/;
 const VIEW_TEXT_MAX = 5000;
+const LINK_EMAIL_CONCURRENCY = 5;
 
 type StageSummary = { position: number; total: number; name: string };
 type Review = NonNullable<
@@ -160,25 +161,27 @@ export class ApprovalLinkService {
       const stageLabel =
         stage.total > 1 ? `Stage ${stage.position} of ${stage.total}` : 'Approval';
 
-      for (const member of users) {
-        if (!eligible.has(member.user.id)) continue;
-        if (member.user.sendSuccessEmails === false) continue;
+      const targets = users.filter(
+        (m: any) => eligible.has(m.user.id) && m.user.sendSuccessEmails !== false
+      );
+      let sent = 0;
+      const sendTo = async (member: any) => {
         try {
-          const link = await this._organizations.getUserOrgLink(orgId, member.user.id);
-          if (!link || link.disabled) continue;
+          // role/disabled come from the members list already fetched above.
+          if (member.disabled) return;
           const verdict = canDecideStage(
             def,
             rules,
             {
               kind: 'member',
               userId: member.user.id,
-              role: link.role as 'USER' | 'ADMIN' | 'SUPERADMIN',
-              disabled: link.disabled,
+              role: member.role as 'USER' | 'ADMIN' | 'SUPERADMIN',
+              disabled: !!member.disabled,
             },
             origin
           );
           // A link that could not be used (own post under a no self approval flow) is noise.
-          if (!verdict.ok) continue;
+          if (!verdict.ok) return;
 
           const token = newLinkToken();
           const tokenHash = hashLinkToken(token);
@@ -201,6 +204,7 @@ export class ApprovalLinkService {
               rejectUrl: `${base}/approve/${token}?intent=reject`,
             });
             await this._notifications.sendEmail(member.user.email, subject, html);
+            sent += 1;
           } catch (error) {
             // An unsent email must not leave a live credential behind.
             await this._links.deleteToken(tokenHash).catch(() => undefined);
@@ -213,8 +217,13 @@ export class ApprovalLinkService {
             }`
           );
         }
+      };
+      // Small concurrency cap; each member keeps its own error isolation.
+      for (let i = 0; i < targets.length; i += LINK_EMAIL_CONCURRENCY) {
+        await Promise.all(targets.slice(i, i + LINK_EMAIL_CONCURRENCY).map(sendTo));
       }
-      return true;
+      // Only a delivered link counts: otherwise the caller sends the plain email.
+      return sent > 0;
     } catch (error) {
       this.logger.warn(
         `approver link emails not sent for approval ${approval.id}: ${
