@@ -57,13 +57,15 @@ const RULE_FIELDS = [
   'condition',
   'conditionParams',
   'effect',
+  'approvalFlowId',
 ] as const;
 
 function pickRuleFields<T extends object>(body: T): T {
   const picked: Record<string, unknown> = {};
   for (const key of RULE_FIELDS) {
     const value = (body as Record<string, unknown>)[key];
-    if (value === null) {
+    // approvalFlowId null means "clear the flow"; every other field must not be null.
+    if (value === null && key !== 'approvalFlowId') {
       throw new BadRequestException({ msg: `${key} must not be null`, field: key });
     }
     if (value !== undefined) picked[key] = value;

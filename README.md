@@ -216,7 +216,7 @@ The package is:
 @postsider/mcp
 ```
 
-The MCP layer is a thin interface over PostSider's public API and exposes **19 tools** for workflows such as:
+The MCP layer is a thin interface over PostSider's public API and exposes **40 tools** on the hosted server, 41 on the local stdio server, and 42 on the local stdio server when you opt in to approval decisions (see "Approvals" below), for workflows such as:
 
 - Listing connected channels
 - Reviewing the publishing calendar
@@ -303,6 +303,61 @@ Retention and impersonation: resource audit events are kept for 365 days, and th
 ### Approval requests
 
 `POST /public/v1/posts/:id/request-approval` (MCP tool `postsider_request_approval`) is idempotent. A new request returns HTTP 201 with `created: true`. If an approval is already pending, it returns that approval with HTTP 200 and `created: false`, and reviewers are not notified again. The response never includes the `guestToken`. Approvals record who requested and who decided them. Guest reviewers give a name and email, so the guest review page asks for both. These are self-asserted, not verified: anyone holding the guest link can type any identity, so treat `decidedBy.type = GUEST` as a claim. The `GUEST_REVIEW_REQUIRE_IDENTITY` environment variable exists only to order a deploy (backend and frontend ship separately): it defaults to on, and `false` lets decisions without identity through while an old page is still served.
+
+### Approvals (stages, flows, links)
+
+**Stages and flows.** An approval can have one stage or up to five. A *flow* is an ordered list of stages, and each stage names who may decide it: a minimum role (`ADMIN` or `SUPERADMIN`; a plain `USER` can never decide), an optional list of named members, and two switches, `allowAutomation` (an API key may decide) and `allowGuest` (a guest link may decide). A post goes through the stages in order. Approving a stage that is not the last one keeps the approval `PENDING` and the post in approval, and the next stage's approvers are notified. Only approving the last stage schedules the post. A rejection at any stage ends the approval as `REJECTED` and returns the post to draft. An organization can have 20 live flows. Flows are managed by admins in Settings, Approval flows, or through `/public/v1/approval-flows` (`GET`, `GET /:id`, `POST`, `PUT /:id`, `DELETE /:id` which archives; scopes `policies:read` and `policies:write`). An archive is refused with `flow_in_use` while an enabled rule points at the flow.
+
+**How a rule picks a flow.** A `REQUIRE_APPROVAL` policy rule can carry an `approvalFlowId`. When a post is routed to approval, the flow of the first matching rule that has one is used (rules run in priority order). If no matching rule names a flow, the organization's default flow is used. If there is no default flow either, the approval has a single implicit stage that behaves exactly like before Phase 5: any admin may approve, automation and guests are allowed, and a solo owner can approve their own post. The stage definitions are copied onto the approval when it is requested, so editing or archiving a flow does not change the stages of an approval already in progress.
+
+**Who can decide.** A human must be an enabled member whose role meets the stage's minimum, and, when the stage lists members, be one of them (a `SUPERADMIN` is exempt from the list so a stage cannot deadlock when listed members leave). Two flow flags, both on by default for flows you create, restrict humans further: `preventSelfApproval` (the decider may not be the post's creator or the requester) and `requireDistinctApprovers` (whoever decided an earlier stage cannot decide a later one). A `SUPERADMIN` is never exempt from these two. A solo owner who needs to approve their own posts turns the flags off on the flow, or uses no flow at all. Automation never decides an approval it requested or a post it created, with no flag to change that. Important: the two flags are read from the flow row at decision time and are not copied onto the approval, so changing a flag on a flow affects approvals that are already in flight. (If a flow is hard deleted, the strict defaults apply.) Stage definitions, by contrast, are a snapshot.
+
+**Deciding with an API key.** `POST /public/v1/approvals/:id/approve` and `/reject` need the scope `approvals:decide`. It is never in a default scope set, existing keys do not have it, it cannot be granted to OAuth or MCP tokens, and it does not allow editing flows. Because approving schedules the post, a key limited by key limits must also be allowed `SCHEDULE` on the post's channel, so a draft-only key cannot approve. The stage must have `allowAutomation` on. `GET /public/v1/approvals` (scope `approvals:read`) lists approvals as `{ "approvals": [...], "nextCursor": "..." }` with `status`, `limit` (1 to 100), `cursor` and `since` filters, and `GET /public/v1/approvals/:id` returns one item with a plain-text preview.
+
+```bash
+curl -X POST "$POSTSIDER_API_URL/public/v1/approvals/$APPROVAL_ID/approve" \
+  -H "Authorization: $POSTSIDER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: approve-$APPROVAL_ID-stage-1" \
+  -d '{ "note": "Checked the claims and the link." }'
+```
+
+The answer is `{ approvalId, postId, status, changed, stage: { position, total }, final }`. Repeating the same decision returns 200 with `changed: false`. The opposite decision after a decision is `409 approval_already_resolved`. A refused key gets `403` with `not_allowed_for_stage` or `self_approval_blocked`. Every decision is attributed to the key in the audit trail and on the stage.
+
+**Email approver links.** Off by default. Set `APPROVAL_EMAIL_LINKS=true` and each eligible approver receives a personal "Review and approve" and "Review and reject" link by email instead of the plain notification. The link lives for `APPROVAL_LINK_TTL_HOURS` (default 48, range 1 to 168), needs no login, and works once. Opening it only shows the post: the decision needs a second click on the page, which is protected by a short-lived challenge (it is accepted from 2 seconds to 15 minutes after the page loaded), so a mail scanner that fetches the link cannot decide. The decision is recorded as the member the email was sent to, whose membership, role and stage eligibility are checked again at that moment. Five failed attempts revoke the link. Be clear about what this means: whoever holds the email can decide as that member until the link is used or expires, so a forwarded email is a real risk. Enable it knowingly. Details are in [`docs/API-MCP-TRUST.md`](docs/API-MCP-TRUST.md).
+
+- A link email is not sent to members who could not use it (for example the post's creator when `preventSelfApproval` is on).
+- If `JWT_SECRET` or `FRONTEND_URL` is missing, links cannot be built and PostSider sends the plain notification email instead.
+- A decision made in the dashboard or through the API leaves the unused email links in place until they expire, but they are inert: they answer `409 approval_already_resolved`.
+
+**Guest links.** An admin can still create a guest review link for a pending approval. A link is only possible when the current stage has `allowGuest` on (`400 guest_not_allowed_for_stage` otherwise). A guest link is single use: if a guest approves a stage that is not the last one, the link is consumed and an admin must create a new link for the next stage. Guest names and emails are self-asserted. Guest links are stored as a SHA-256 hash, and the dashboard no longer returns any token material (see the security note in `docs/API-MCP-TRUST.md`).
+
+**MCP.** The tool `postsider_decide_approval` exists only on the local stdio server and only when `POSTSIDER_MCP_ALLOW_APPROVAL_DECISIONS=true` is set (exactly `true`). The hosted OAuth MCP server cannot decide approvals. It uses the same API route and needs a key with `approvals:decide`.
+
+**Workspaces (customers).** `GET /public/v1/customers` (scope `channels:read`), `POST /public/v1/customers`, `PUT /public/v1/customers/:id` and `POST /public/v1/customers/:id/archive` (scope `channels:write`, admin caller) create, rename and archive named channel groups, up to 200 per organization. Archiving detaches the channels and keeps the posts. `PUT /public/v1/integrations/:id/customer` accepts a `customerId`. There is no audit event for these changes, and the name and cap checks are soft, so two simultaneous creates can race. Creating organizations or inviting members is not available through the API.
+
+### Slack, Make and Zapier
+
+**Slack (notify only).** Register a Slack incoming webhook URL as an ordinary webhook subscription. PostSider recognizes `https://hooks.slack.com/services/...` and sends Slack's message format instead of the usual envelope.
+
+```bash
+curl -X POST "$POSTSIDER_API_URL/public/v1/webhook-subscriptions" \
+  -H "Authorization: $POSTSIDER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Slack approvals",
+    "url": "https://hooks.slack.com/services/T000/B000/XXXX",
+    "events": ["approval.requested", "approval.resolved", "post.failed"]
+  }'
+```
+
+The message is one line (for example "A post is waiting for approval (stage 1 of 2: Reviewer).") plus a link button to the PostSider approval or agent activity page. It deliberately contains no post text, no media, and no ids or names of people, because a Slack channel can include people who are not PostSider users. The button leads to a login-gated page, so nobody can decide from Slack. There are no interactive Approve buttons, no reminders and no automatic expiry: a message cannot be recalled when a stage is decided somewhere else. The Slack URL is a secret; PostSider keeps it out of stored delivery errors and logs.
+
+**Make.** [`docs/automation/make.md`](docs/automation/make.md) has recipes built from the Webhooks and HTTP modules. They are written from the API contract and have not been tested against a live Make account.
+
+**Zapier.** [`docs/automation/zapier.md`](docs/automation/zapier.md) and the scaffold in [`examples/automation/zapier`](examples/automation/zapier) (two triggers, three actions, tested mapping code). The scaffold has not been validated or pushed: `zapier-platform-core` is not installed in this repository, so `zapier validate` is still to do, and nothing was submitted to Zapier.
+
+**n8n.** The `n8n-nodes-postsider` package version 0.2.0 adds approval, policy check and group operations and an approval-to-Slack example. It is not published. The scopes table in its README is partly assumed from the API contract and should be checked against a real server before release.
 
 ### Policies and key limits
 
@@ -534,6 +589,9 @@ The primary local-development settings are:
 | `FRONTEND_URL` | URL used to reach the frontend |
 | `NEXT_PUBLIC_BACKEND_URL` | Public backend URL embedded in the frontend |
 | `BACKEND_INTERNAL_URL` | Backend URL used by internal services |
+| `APPROVAL_EMAIL_LINKS` | `true` sends approvers a personal one-click email link (default off; see Approvals) |
+| `APPROVAL_LINK_TTL_HOURS` | Lifetime of those links in hours, 1 to 168 (default 48) |
+| `POSTSIDER_MCP_ALLOW_APPROVAL_DECISIONS` | MCP server only: `true` registers `postsider_decide_approval` on the local stdio server |
 
 For production, set a dedicated `ENCRYPTION_KEY` as documented in [`.env.example`](.env.example).
 

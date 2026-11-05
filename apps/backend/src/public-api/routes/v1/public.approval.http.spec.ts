@@ -95,7 +95,24 @@ describe('public approval endpoints', () => {
     });
     expect(body).toHaveProperty('requestedAt');
     expect(body).toHaveProperty('resolvedAt');
+    expect(body).toMatchObject({ stage: null, stages: [] });
     expect(JSON.stringify(body)).not.toContain('stored-secret-token');
+  });
+
+  it('GET approval reports stage progress while the status is still PENDING', async () => {
+    approvals.getForPost.mockResolvedValue({
+      ...row,
+      status: 'PENDING',
+      stage: { position: 2, total: 2, name: 'Legal' },
+      stages: [
+        { position: 1, name: 'Editor', status: 'APPROVED', decidedBy: { type: 'USER', userId: 'u1' }, decidedAt: null },
+        { position: 2, name: 'Legal', status: 'PENDING', decidedBy: null, decidedAt: null },
+      ],
+    });
+    const body = await (await fetch(`${base}/posts/p1/approval`)).json();
+    expect(body.status).toBe('PENDING');
+    expect(body.stage).toEqual({ position: 2, total: 2, name: 'Legal' });
+    expect(body.stages).toHaveLength(2);
   });
 
   it('GET approval returns NONE when there is no approval', async () => {

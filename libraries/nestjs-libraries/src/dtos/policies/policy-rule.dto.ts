@@ -104,6 +104,17 @@ export class CreatePolicyRuleDto {
   @ApiProperty({ enum: POLICY_EFFECTS })
   @IsIn(POLICY_EFFECTS)
   effect: PolicyEffectName;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description:
+      'Approval flow that handles posts this rule holds. Only for REQUIRE_APPROVAL rules. Send null to clear it.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  approvalFlowId?: string | null;
 }
 
 export class UpdatePolicyRuleDto extends PartialType(CreatePolicyRuleDto) {}

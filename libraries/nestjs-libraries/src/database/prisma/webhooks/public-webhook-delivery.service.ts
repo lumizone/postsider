@@ -8,7 +8,12 @@ import {
   PublicWebhookEvent,
 } from '@postsider/nestjs-libraries/services/public-webhook-events';
 import { signWebhook } from '@postsider/nestjs-libraries/services/webhook.signature';
+import {
+  buildSlackBody,
+  isSlackWebhookUrl,
+} from '@postsider/nestjs-libraries/services/slack-message';
 import { PublicWebhookSubscriptionsService } from './public-webhook-subscriptions.service';
+import { redactUrl } from './redact-url';
 
 export const WEBHOOK_BACKOFF_MS = [
   60_000, 300_000, 1_800_000, 7_200_000, 21_600_000, 43_200_000,
@@ -265,7 +270,11 @@ export class PublicWebhookDeliveryService {
     row: ClaimedDelivery,
     target: { url: string; secretVersion: string }
   ): Promise<{ statusCode: number | null; error: string | null }> {
-    const body = JSON.stringify(row.payload);
+    const body = isSlackWebhookUrl(target.url)
+      ? JSON.stringify(
+          buildSlackBody(row.payload, process.env.FRONTEND_URL ?? '')
+        )
+      : JSON.stringify(row.payload);
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const secret = this.subscriptions.deriveSecret(
       row.subscriptionId,
@@ -299,9 +308,10 @@ export class PublicWebhookDeliveryService {
         error: response.ok ? null : `HTTP ${response.status}`,
       };
     } catch (error) {
+      // The target URL can be a secret (Slack): never keep it in error text.
       return {
         statusCode: null,
-        error: String(error).slice(0, MAX_ERROR_LENGTH),
+        error: redactUrl(String(error), target.url).slice(0, MAX_ERROR_LENGTH),
       };
     }
   }

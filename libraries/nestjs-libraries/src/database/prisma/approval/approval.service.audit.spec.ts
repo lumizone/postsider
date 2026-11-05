@@ -11,17 +11,17 @@ import { ApprovalService } from './approval.service';
 
 function build(created: boolean) {
   const repo: any = {
-    getPost: jest.fn().mockResolvedValue({ state: 'DRAFT', parentPostId: null, integrationId: 'c1' }),
+    getPost: jest.fn().mockResolvedValue({ id: 'p1', state: 'DRAFT', parentPostId: null, integrationId: 'c1' }),
     openRequest: jest.fn().mockResolvedValue({ approval: { id: 'ap1', status: 'PENDING' }, created }),
     getById: jest.fn().mockResolvedValue({ id: 'ap1', postId: 'p1', status: 'PENDING' }),
-    resolve: jest.fn().mockResolvedValue(1),
+    decideStageTx: jest.fn().mockResolvedValue(true),
+    revertFinal: jest.fn().mockResolvedValue(1),
     getByGuestToken: jest.fn().mockResolvedValue({
       id: 'ap1',
       organizationId: 'o1',
       post: { id: 'p1' },
       guestTokenExpiresAt: new Date(),
     }),
-    resolveByGuestToken: jest.fn().mockResolvedValue(1),
   };
   const posts: any = {
     setPostState: jest.fn().mockResolvedValue(undefined),
@@ -37,7 +37,7 @@ function build(created: boolean) {
     repo,
     posts,
     notifications,
-    {} as any,
+    { getUserOrgLink: jest.fn().mockResolvedValue({ role: 'ADMIN', disabled: false }) } as any,
     { deliver: jest.fn().mockResolvedValue(undefined) } as any,
     audit as any
   );
@@ -69,8 +69,8 @@ describe('ApprovalService audit hooks', () => {
     await svc.approve('o1', 'ap1', 'u2', 'ADMIN');
     await svc.reject('o1', 'ap1', 'u2', 'ADMIN', 'no');
     expect(audit.logResourceEvent.mock.calls.map((c: any) => c[0].metadata)).toEqual([
-      { approvalId: 'ap1', decision: 'APPROVED' },
-      { approvalId: 'ap1', decision: 'REJECTED' },
+      { approvalId: 'ap1', decision: 'APPROVED', via: 'DASHBOARD', stage: 1, stageCount: 1, final: true },
+      { approvalId: 'ap1', decision: 'REJECTED', via: 'DASHBOARD', stage: 1, stageCount: 1, final: true },
     ]);
     expect(audit.logResourceEvent.mock.calls[0][0].event).toBe('post.approval_resolved');
   });
@@ -84,7 +84,7 @@ describe('ApprovalService audit hooks', () => {
       organizationId: 'o1',
       event: 'post.approval_resolved',
       targetId: 'p1',
-      metadata: { approvalId: 'ap1', decision: 'APPROVED', by: 'guest' },
+      metadata: { approvalId: 'ap1', decision: 'APPROVED', by: 'guest', via: 'GUEST', final: true },
     });
   });
 

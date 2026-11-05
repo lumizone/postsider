@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useT } from "@/lib/i18n";
 import {
@@ -10,10 +11,49 @@ import {
   rejectPost,
   createGuestLink,
 } from "@/lib/approval-api";
+import {
+  canDecideStageClient,
+  stageProgressLabel,
+  stageSegments,
+} from "@/lib/approval-stage-model";
 import { parsePostMedia, type PostMedia } from "@/lib/posts";
 import { platformFromIdentifier } from "@/lib/integrations";
 import { PlatformIcon } from "@/components/platform-icon";
 import ap from "./approval.module.css";
+
+/** Small segmented progress: filled / half / outlined / crossed / dashed shapes, no colour. */
+function StageProgress({
+  stages,
+  current,
+  label,
+}: {
+  stages: PendingApproval["stages"];
+  current: number;
+  label: string;
+}) {
+  const t = useT();
+  const segments = stageSegments(stages, current);
+  if (segments.length === 0) return null;
+  return (
+    <ol className={ap.stageBar} aria-label={label}>
+      {segments.map((seg) => (
+        <li
+          key={seg.position}
+          className={`${ap.seg} ${ap["seg_" + seg.shape]}`}
+          title={`${seg.name}: ${t(seg.labelKey)}`}
+          aria-label={`${seg.name}: ${t(seg.labelKey)}`}
+        />
+      ))}
+    </ol>
+  );
+}
+
+/** The server's error code, when the body carries one. */
+function errorCode(e: unknown): string | null {
+  if (!(e instanceof ApiError) || !e.body || typeof e.body !== "object") return null;
+  const code = (e.body as Record<string, unknown>).error;
+  return typeof code === "string" ? code : null;
+}
 
 const ghostBtn: React.CSSProperties = {
   padding: "8px 14px",
@@ -102,7 +142,9 @@ export default function ApprovalPage() {
   // Track which post content sections are expanded (default: first 280 chars)
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
+  const [refreshing, setRefreshing] = useState(false);
   const refresh = async () => {
+    setRefreshing(true);
     try {
       const res = await getPendingApprovals();
       setItems(Array.isArray(res) ? res : []);
@@ -110,6 +152,7 @@ export default function ApprovalPage() {
       setError(e instanceof Error ? e.message : t("approval.loadError"));
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
   useEffect(() => {
@@ -117,17 +160,50 @@ export default function ApprovalPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // One request in flight for the whole list: a click while another call runs is ignored.
+  const anyBusy = busyIds.size > 0 || refreshing;
+
+  const messageFor = (e: unknown, fallback: string): string => {
+    switch (errorCode(e)) {
+      case "not_allowed_for_stage":
+        return t("approval.errorNotAllowed");
+      case "self_approval_blocked":
+        return t("approval.errorSelfApproval");
+      case "approval_already_resolved":
+        return t("approval.errorAlreadyResolved");
+      case "approval_stage_invalid":
+      case "stage_changed":
+        return t("approval.errorStageMoved");
+      case "key_action_not_allowed":
+      case "key_channel_not_allowed":
+        return t("approval.errorKeyScope");
+      case "guest_not_allowed_for_stage":
+        return t("approval.guestLinkNotAllowed");
+      default:
+        // The server's own text is rendered as plain text by React.
+        return e instanceof Error && e.message ? e.message : fallback;
+    }
+  };
+
   const act = async (id: string, fn: () => Promise<unknown>) => {
-    if (busyIds.has(id)) return;
+    if (anyBusy) return;
     setBusyIds((s) => new Set(s).add(id));
     setError(null);
     try {
       await fn();
-      setItems((p) => p.filter((x) => x.id !== id));
       setRejectFor(null);
       setNote("");
+      // An approval at a middle stage stays pending (now at the next stage), so
+      // the list is reloaded instead of dropping the row.
+      await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("approval.actionError"));
+      setError(messageFor(e, t("approval.actionError")));
+      const code = errorCode(e);
+      if (code === "approval_already_resolved" || code === "approval_stage_invalid" || code === "stage_changed") {
+        setRejectFor(null);
+        setNote("");
+        await refresh();
+      }
     } finally {
       setBusyIds((s) => {
         const n = new Set(s);
@@ -139,9 +215,11 @@ export default function ApprovalPage() {
 
   const [linkBusyId, setLinkBusyId] = useState<string | null>(null);
   const [linkMsgFor, setLinkMsgFor] = useState<string | null>(null);
+  // Approvals whose current stage refused a guest link (guest_not_allowed_for_stage).
+  const [noGuestIds, setNoGuestIds] = useState<Set<string>>(new Set());
 
   const getGuestLink = async (id: string) => {
-    if (linkBusyId) return;
+    if (linkBusyId || anyBusy) return;
     setLinkBusyId(id);
     setLinkMsgFor(null);
     setError(null);
@@ -155,8 +233,13 @@ export default function ApprovalPage() {
       }
       setLinkMsgFor(id);
       setTimeout(() => setLinkMsgFor((cur) => (cur === id ? null : cur)), 5000);
+      // The link now exists; the list shows when it expires.
+      void refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("approval.guestLinkError"));
+      if (errorCode(e) === "guest_not_allowed_for_stage") {
+        setNoGuestIds((cur) => new Set(cur).add(id));
+      }
+      setError(messageFor(e, t("approval.guestLinkError")));
     } finally {
       setLinkBusyId(null);
     }
@@ -204,6 +287,15 @@ export default function ApprovalPage() {
             const picture = a.post?.integration?.picture;
             const images = media.filter((m) => m.kind === "image").length;
             const videos = media.filter((m) => m.kind === "video").length;
+            const stageText = stageProgressLabel(a.stage, t);
+            const verdict = canDecideStageClient(a.stage, { userId: user?.id, role: user?.role }, {
+              earlierDeciderUserIds: (a.stages ?? [])
+                .filter((st) => st.status === "APPROVED")
+                .map((st) => st.decidedBy?.userId)
+                .filter((x): x is string => typeof x === "string"),
+            });
+            const canDecide = verdict.allowed;
+            const guestAllowed = !noGuestIds.has(a.id);
 
             return (
               <div key={a.id} style={{ border: "1px solid var(--line-soft)", borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
@@ -262,6 +354,14 @@ export default function ApprovalPage() {
                   </div>
                 </div>
 
+                {/* Stage position and progress (hidden for the single implicit stage) */}
+                {stageText && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{stageText}</span>
+                    <StageProgress stages={a.stages} current={a.stage?.position ?? 1} label={t("approval.stageProgress")} />
+                  </div>
+                )}
+
                 {/* Media type summary + count */}
                 {media.length > 0 && (
                   <div style={{ fontSize: 12, color: "var(--muted)" }}>
@@ -299,17 +399,25 @@ export default function ApprovalPage() {
                         className={ap.reasonInput}
                       />
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <button type="button" style={{ ...ghostBtn, color: "var(--danger-bright)", borderColor: "color-mix(in srgb, var(--danger) 38%, transparent)" }} disabled={busyIds.has(a.id)} onClick={() => act(a.id, () => rejectPost(a.id, note || undefined))}>{t("approval.confirmReject")}</button>
+                        <button type="button" style={{ ...ghostBtn, color: "var(--danger-bright)", borderColor: "color-mix(in srgb, var(--danger) 38%, transparent)" }} disabled={anyBusy} onClick={() => act(a.id, () => rejectPost(a.id, note || undefined, a.stage?.position))}>{t("approval.confirmReject")}</button>
                         <button type="button" style={ghostBtn} onClick={() => { setRejectFor(null); setNote(""); }}>{t("common.cancel")}</button>
                       </div>
                     </div>
                   ) : (
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <button type="button" style={{ ...ghostBtn, background: "var(--fg)", color: "var(--bg)", border: "none", fontWeight: 600 }} disabled={busyIds.has(a.id)} onClick={() => act(a.id, () => approvePost(a.id))}>{t("approval.approveSchedule")}</button>
-                        <button type="button" style={ghostBtn} disabled={busyIds.has(a.id)} onClick={() => { setRejectFor(a.id); setNote(""); }}>{t("approval.reject")}</button>
-                        <button type="button" style={ghostBtn} disabled={linkBusyId === a.id} onClick={() => getGuestLink(a.id)}>{t("approval.guestLink")}</button>
+                        <button type="button" style={{ ...ghostBtn, background: "var(--fg)", color: "var(--bg)", border: "none", fontWeight: 600, opacity: canDecide ? 1 : 0.5 }} disabled={anyBusy || !canDecide} onClick={() => act(a.id, () => approvePost(a.id, a.stage?.position))}>{t("approval.approveSchedule")}</button>
+                        <button type="button" style={ghostBtn} disabled={anyBusy || !canDecide} onClick={() => { setRejectFor(a.id); setNote(""); }}>{t("approval.reject")}</button>
+                        {guestAllowed && (
+                          <button type="button" style={ghostBtn} disabled={linkBusyId === a.id || anyBusy} onClick={() => getGuestLink(a.id)}>{t("approval.guestLink")}</button>
+                        )}
                       </div>
+                      {!canDecide && verdict.reasonKey && (
+                        <span role="note" style={{ fontSize: 12, color: "var(--muted)" }}>{t(verdict.reasonKey)}</span>
+                      )}
+                      {a.hasGuestLink && a.guestLinkExpiresAt && (
+                        <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("approval.guestLinkActive", { date: shortDay(a.guestLinkExpiresAt) })}</span>
+                      )}
                       {linkMsgFor === a.id && (
                         <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("approval.guestLinkCreated")}</span>
                       )}

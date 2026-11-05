@@ -4,6 +4,24 @@ All notable changes to the PostSider dashboard.
 
 ## Unreleased
 
+### Approvals: stages, flows and email links
+
+- **Multi-stage approvals.** `/approval` shows "Stage N of M" with the stage name and
+  a progress bar, and disables Approve and Reject with the reason when you cannot
+  decide the current stage. The list reloads after a decision because a middle stage
+  stays pending at the next stage.
+- **New Approval flows page (Settings, admins).** Create flows of up to five stages
+  with a minimum role, named approvers, automation and guest switches, and the two
+  self-approval flags. A Require approval policy rule can pick a flow.
+- **Safer guest links.** Members no longer see guest link tokens; admins see
+  "Review link active until" instead. A stage must allow guests before a link can
+  be created.
+- **Approver page (`/approve/[token]`).** Opened from an approval email (off unless
+  the owner enables email links), it shows the post and asks for a confirming click.
+- **API keys.** The `approvals:decide` scope is never preselected and carries a
+  warning. Agent activity, Policies, Approval flows and the approver pages are
+  translated into English and Polish only; other languages show English.
+
 ### Agent activity and policies
 
 - **New Agent activity page (`/agents`).** See what API keys, OAuth clients and

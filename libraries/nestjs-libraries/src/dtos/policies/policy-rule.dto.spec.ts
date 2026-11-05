@@ -62,6 +62,21 @@ describe('CreatePolicyRuleDto', () => {
   });
 });
 
+describe('approvalFlowId', () => {
+  it('accepts a string, null and omission', async () => {
+    expect(await errorsFor({ approvalFlowId: 'flow-1' })).toEqual([]);
+    expect(await errorsFor({ approvalFlowId: null })).toEqual([]);
+    expect(await errorsFor({})).toEqual([]);
+    expect(await errorsFor({ approvalFlowId: 'a'.repeat(64) })).toEqual([]);
+  });
+
+  it('rejects 65 characters and non strings', async () => {
+    expect(await errorsFor({ approvalFlowId: 'a'.repeat(65) })).toContain('approvalFlowId');
+    expect(await errorsFor({ approvalFlowId: 5 })).toContain('approvalFlowId');
+    expect(await errorsFor({ approvalFlowId: 'a'.repeat(65) }, UpdatePolicyRuleDto)).toContain('approvalFlowId');
+  });
+});
+
 describe('UpdatePolicyRuleDto', () => {
   it('allows a partial body but still validates the fields given', async () => {
     expect(await errorsFor({}, UpdatePolicyRuleDto)).toEqual([]);

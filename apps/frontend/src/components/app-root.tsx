@@ -22,6 +22,8 @@ const PUBLIC_PATHS = [
   // Guest approval review link: /review/<token> — no account, gated by an
   // unguessable expiring token, not a login session.
   "/review",
+  // Approver email link: /approve/<token>: signed single use token, no login.
+  "/approve",
 ];
 
 /** Pages that render without the dashboard shell but require auth. */

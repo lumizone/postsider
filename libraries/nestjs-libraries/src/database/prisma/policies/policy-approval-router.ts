@@ -20,7 +20,7 @@ export class PolicyApprovalRouter {
   async route(
     orgId: string,
     postId: string,
-    opts: { terminateWorkflow: boolean; onlyFromState?: string }
+    opts: { terminateWorkflow: boolean; onlyFromState?: string; ruleIds?: string[] }
   ): Promise<{ requested: boolean; approvalId: string | null }> {
     const post = await this._repo.getPostById(postId, orgId);
     if (!post) throw new NotFoundException({ msg: 'Post not found' });
@@ -43,7 +43,9 @@ export class PolicyApprovalRouter {
       }
     }
 
-    const result = await this._approvals.requestApprovalFromApi(orgId, postId);
+    const result = await this._approvals.requestApprovalFromApi(orgId, postId, {
+      ruleIds: opts.ruleIds,
+    });
     return { requested: !!result.created, approvalId: result.id ?? null };
   }
 }

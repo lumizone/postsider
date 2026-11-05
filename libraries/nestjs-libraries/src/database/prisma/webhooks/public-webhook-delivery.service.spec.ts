@@ -481,3 +481,73 @@ describe('PublicWebhookDeliveryService', () => {
     });
   });
 });
+
+describe('PublicWebhookDeliveryService Slack targets', () => {
+  const originalFetch = global.fetch;
+  const SLACK = 'https://hooks.slack.com/services/T000/B000/SECRETVALUE';
+  afterEach(() => {
+    global.fetch = originalFetch;
+    delete process.env.FRONTEND_URL;
+  });
+
+  it('sends the Slack body for a Slack target, signed over that body', async () => {
+    process.env.FRONTEND_URL = 'https://app.postsider.com';
+    const { service } = makeService({ subscription: { ...SUB, url: SLACK } });
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200 }) as any;
+    const row = claimed({
+      event: 'post.failed',
+      payload: {
+        id: 'evt_abc',
+        event: 'post.failed',
+        createdAt: '2026-11-04T00:00:00.000Z',
+        organizationId: 'org-1',
+        data: { postId: 'post-1', errorCategory: 'RATE_LIMITED' },
+      } as any,
+    });
+    await service.attempt(row);
+    const [, request] = (global.fetch as jest.Mock).mock.calls[0];
+    const sent = JSON.parse(request.body);
+    expect(sent.text).toBe('A post failed to publish (RATE_LIMITED).');
+    expect(request.body).not.toContain('post-1');
+    const ts = request.headers['X-Postsider-Timestamp'];
+    expect(request.headers['X-Postsider-Signature']).toBe(
+      `sha256=${createHmac('sha256', 'pwhsec_test').update(`${ts}.${request.body}`).digest('hex')}`
+    );
+  });
+
+  it('keeps the exact payload body for non Slack targets', async () => {
+    const { service } = makeService();
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200 }) as any;
+    const row = claimed();
+    await service.attempt(row);
+    expect((global.fetch as jest.Mock).mock.calls[0][1].body).toBe(
+      JSON.stringify(row.payload)
+    );
+  });
+
+  it('never stores the Slack url in lastError for a fetch error', async () => {
+    const rowUpdate = jest.fn().mockResolvedValue({});
+    const { service } = makeService({ subscription: { ...SUB, url: SLACK }, rowUpdate });
+    global.fetch = jest
+      .fn()
+      .mockRejectedValue(new Error(`request to ${SLACK} failed, reason: boom`)) as any;
+    await service.attempt(claimed());
+    const stored = JSON.stringify(rowUpdate.mock.calls);
+    expect(stored).toContain('boom');
+    expect(stored).not.toContain('SECRETVALUE');
+    expect(stored).toContain('[url]');
+  });
+
+  it('stores only HTTP 400 for a Slack 400', async () => {
+    const rowUpdate = jest.fn().mockResolvedValue({});
+    const { service } = makeService({ subscription: { ...SUB, url: SLACK }, rowUpdate });
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      text: async () => 'invalid_payload',
+    }) as any;
+    await service.attempt(claimed());
+    const data = rowUpdate.mock.calls.at(-1)![0].data;
+    expect(data.lastError).toBe('HTTP 400');
+  });
+});

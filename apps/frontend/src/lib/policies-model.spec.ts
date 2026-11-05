@@ -295,3 +295,34 @@ describe('ruleSummary', () => {
     });
   });
 });
+
+describe('approvalFlowId', () => {
+  it('is left out when no flow is chosen (the default flow)', () => {
+    expect('approvalFlowId' in toInput(form())).toBe(false);
+  });
+
+  it('is sent for a REQUIRE_APPROVAL rule that picks a flow', () => {
+    expect(toInput(form({ approvalFlowId: 'f1' })).approvalFlowId).toBe('f1');
+  });
+
+  it('round trips a stored flow', () => {
+    const r = rule({ approvalFlowId: 'f9' });
+    expect(formFromRule(r).approvalFlowId).toBe('f9');
+    expect(toInput(formFromRule(r)).approvalFlowId).toBe('f9');
+  });
+
+  it('sends null when the stored flow is cleared back to the default', () => {
+    const f = { ...formFromRule(rule({ approvalFlowId: 'f9' })), approvalFlowId: '' };
+    expect(toInput(f).approvalFlowId).toBeNull();
+  });
+
+  it('never sends a flow for a BLOCK rule', () => {
+    expect('approvalFlowId' in toInput(form({ effect: 'BLOCK', approvalFlowId: 'f1' }))).toBe(false);
+    const stored = { ...formFromRule(rule({ approvalFlowId: 'f9' })), effect: 'BLOCK' as const };
+    expect('approvalFlowId' in toInput(stored)).toBe(false);
+  });
+
+  it('treats a null stored flow as none', () => {
+    expect(formFromRule(rule({ approvalFlowId: null })).approvalFlowId).toBe('');
+  });
+});

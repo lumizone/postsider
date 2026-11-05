@@ -46,6 +46,10 @@ export type PolicyFormState = {
   appliesToApiKeyIds: string[];
   appliesToIntegrationIds: string[];
   appliesToProviders: string;
+  /** "" = the default flow. Only meaningful while the effect is REQUIRE_APPROVAL. */
+  approvalFlowId: string;
+  /** The flow the stored rule pointed to, so clearing it can be sent as null. */
+  approvalFlowStored: string;
 };
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -69,6 +73,8 @@ export function emptyForm(): PolicyFormState {
     appliesToApiKeyIds: [],
     appliesToIntegrationIds: [],
     appliesToProviders: "",
+    approvalFlowId: "",
+    approvalFlowStored: "",
   };
 }
 
@@ -130,6 +136,8 @@ export function formFromRule(r: PolicyRule): PolicyFormState {
   f.appliesToApiKeyIds = [...(r.appliesToApiKeyIds ?? [])];
   f.appliesToIntegrationIds = [...(r.appliesToIntegrationIds ?? [])];
   f.appliesToProviders = (r.appliesToProviders ?? []).join(", ");
+  f.approvalFlowId = typeof r.approvalFlowId === "string" ? r.approvalFlowId : "";
+  f.approvalFlowStored = f.approvalFlowId;
 
   const p = isRecord(r.conditionParams) ? r.conditionParams : {};
   if (r.condition === "CONTAINS_WORDS") {
@@ -213,7 +221,7 @@ export function toInput(f: PolicyFormState): PolicyInput {
     conditionParams = { max: Number(f.capMax.trim()), scope: f.capScope };
     if (f.capTimezone) conditionParams.timezone = f.capTimezone;
   }
-  return {
+  const input: PolicyInput = {
     name: f.name.trim(),
     enabled: f.enabled,
     priority: Number(f.priority.trim()),
@@ -225,6 +233,13 @@ export function toInput(f: PolicyFormState): PolicyInput {
     appliesToIntegrationIds: [...f.appliesToIntegrationIds],
     appliesToProviders: parseProviders(f.appliesToProviders),
   };
+  // A flow only makes sense for a rule that requires approval; for a BLOCK rule
+  // the key is left out (the server clears a stored flow when the effect changes).
+  if (f.effect === "REQUIRE_APPROVAL") {
+    if (f.approvalFlowId) input.approvalFlowId = f.approvalFlowId;
+    else if (f.approvalFlowStored) input.approvalFlowId = null;
+  }
+  return input;
 }
 
 export type RuleFilterKey = "actorTypes" | "apiKeys" | "channels" | "providers";

@@ -44,7 +44,7 @@ describe('ApprovalRepository compensation', () => {
       repository.revertGuestApproval(
         'org-1',
         'approval-1',
-        'guest-token',
+        'guest-token-hash',
         expiresAt
       )
     ).resolves.toBe(1);
@@ -55,7 +55,7 @@ describe('ApprovalRepository compensation', () => {
         organizationId: 'org-1',
         status: 'APPROVED',
         approverId: null,
-        guestToken: null,
+        guestTokenHash: null,
       },
       data: {
         status: 'PENDING',
@@ -63,7 +63,8 @@ describe('ApprovalRepository compensation', () => {
         resolvedAt: null,
         guestName: null,
         guestEmail: null,
-        guestToken: 'guest-token',
+        guestToken: null,
+        guestTokenHash: 'guest-token-hash',
         guestTokenExpiresAt: expiresAt,
       },
     });
@@ -77,10 +78,20 @@ describe('ApprovalRepository attribution and idempotent request', () => {
       create: jest.fn(),
       findFirst: jest.fn(),
     };
+    const stage = { deleteMany: jest.fn(), createMany: jest.fn() };
+    const tokens = { deleteMany: jest.fn() };
     return {
       model,
+      stage,
+      tokens,
       repository: new ApprovalRepository(
-        { model: { postApproval: model } } as any,
+        {
+          model: {
+            postApproval: model,
+            postApprovalStage: stage,
+            approvalActionToken: tokens,
+          },
+        } as any,
         {} as any
       ),
     };
@@ -112,6 +123,7 @@ describe('ApprovalRepository attribution and idempotent request', () => {
       guestName: null,
       guestEmail: null,
       guestToken: null,
+      guestTokenHash: null,
       guestTokenExpiresAt: null,
       resolvedAt: null,
       note: null,
@@ -188,6 +200,7 @@ describe('ApprovalRepository attribution and idempotent request', () => {
       guestName: 'Ann',
       guestEmail: 'a@b.co',
       guestToken: null,
+      guestTokenHash: null,
       guestTokenExpiresAt: null,
     });
   });

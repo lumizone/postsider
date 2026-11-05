@@ -44,6 +44,7 @@ const API_SCOPES = [
   "media:write",
   "approvals:read",
   "approvals:write",
+  "approvals:decide",
   "analytics:read",
   "notifications:read",
   "publishing:read",
@@ -360,6 +361,9 @@ export default function ApiSettingsPage() {
                   </label>
                 ))}
               </div>
+              <div style={{ fontSize: 12, lineHeight: 1.5, color: "var(--muted)" }}>
+                {t("settingsApi.approvalsDecideWarning")}
+              </div>
               <KeyPermissionsEditor
                 value={newPerms}
                 onChange={setNewPerms}
@@ -461,6 +465,9 @@ export default function ApiSettingsPage() {
                   {scope}
                 </label>
               ))}
+            </div>
+            <div style={{ fontSize: 11, lineHeight: 1.5, color: "var(--muted)" }}>
+              {t("settingsApi.approvalsDecideWarning")}
             </div>
             <KeyPermissionsEditor
               value={editPerms}

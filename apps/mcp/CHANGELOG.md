@@ -8,6 +8,18 @@ recorded here.
 
 ### Added
 
+- `postsider_decide_approval` (local stdio server only, opt-in): approve or
+  reject the current stage of a pending approval as the API key. Registered
+  only when `POSTSIDER_MCP_ALLOW_APPROVAL_DECISIONS=true`; the hosted server
+  never offers it. The key needs the `approvals:decide` scope, and the API
+  refuses a key that requested the approval or created the post. Retries are
+  safe (the tool reads the approval first and derives the `Idempotency-Key` from
+  the approval, decision, note, current stage and request time, and sends
+  `expectStage` so a stale call cannot decide a later stage; if the read fails
+  it uses a random per-call key). Default counts are unchanged: 40 tools hosted, 41 on the local stdio
+  server, 42 on the local stdio server with the opt-in. Refusals
+  (`self_approval_blocked`, `not_allowed_for_stage`, `approval_already_resolved`)
+  are reported as short fixed sentences, never as the raw response body.
 - `postsider_check_policy`: dry run the workspace policies before creating a
   post. Returns the effect (ALLOW, REQUIRE_APPROVAL or BLOCK), the matched rule
   names and whether the API key may perform the action. Writes nothing. The tool

@@ -11,7 +11,8 @@ export const LEGACY_PUBLIC_API_SCOPES: PublicApiScope[] =
     (scope) =>
       !scope.startsWith('webhooks:') &&
       !scope.startsWith('policies:') &&
-      scope !== 'audit:read'
+      scope !== 'audit:read' &&
+      scope !== 'approvals:decide'
   );
 
 /**

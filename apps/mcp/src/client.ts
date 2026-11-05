@@ -230,6 +230,47 @@ function describePolicyError(status: number, data: unknown): string | undefined 
   return undefined;
 }
 
+const APPROVAL_STATUSES = new Set(['PENDING', 'APPROVED', 'REJECTED']);
+
+/**
+ * Fixed-text sentences for the approval decision refusals. Only the error code
+ * and (for a conflict) one whitelisted status word are read from the body;
+ * nothing else the server sent is echoed to the agent.
+ */
+function describeApprovalError(status: number, data: unknown): string | undefined {
+  if (!data || typeof data !== 'object') return undefined;
+  const body = data as Record<string, unknown>;
+  if (status === 403 && body.error === 'self_approval_blocked') {
+    return (
+      'Refused (self_approval_blocked): this API key cannot decide an approval for content it created or requested, ' +
+      'or this stage needs a different approver. Ask a human to decide it in PostSider.'
+    );
+  }
+  if (status === 403 && body.error === 'not_allowed_for_stage') {
+    return (
+      'Refused (not_allowed_for_stage): this approval stage does not allow a decision from an API key. ' +
+      'Ask a human to decide it in PostSider.'
+    );
+  }
+  if (status === 409 && body.error === 'approval_already_resolved') {
+    const current =
+      typeof body.status === 'string' && APPROVAL_STATUSES.has(body.status)
+        ? ` (current status ${body.status})`
+        : '';
+    return (
+      `Conflict (approval_already_resolved): this approval was already decided the other way${current}. ` +
+      'Read it with postsider_get_approval_status and do not retry.'
+    );
+  }
+  if (status === 409 && body.error === 'stage_changed') {
+    return (
+      'Conflict (stage_changed): this approval has already moved to another stage, so your decision was not applied. ' +
+      'Read it with postsider_get_approval_status and ask the user before deciding the new stage.'
+    );
+  }
+  return undefined;
+}
+
 /** Parse a JSON body, falling back to raw text when it is not JSON. */
 function parseBody(text: string): unknown {
   if (!text) {
@@ -463,6 +504,10 @@ export class PostsiderClient {
       if (policyText) {
         throw new Error(policyText);
       }
+      const approvalText = describeApprovalError(res.status, data);
+      if (approvalText) {
+        throw new Error(approvalText);
+      }
       if (res.status === 403) {
         const body = data && typeof data === 'object'
           ? data as Record<string, unknown>
@@ -470,9 +515,9 @@ export class PostsiderClient {
         const required = Array.isArray(body.requiredScopes)
           ? body.requiredScopes.filter(
               (item): item is string =>
-                typeof item === 'string' && /^[a-z]+:(read|write)$/.test(item)
+                typeof item === 'string' && /^[a-z]+:(read|write|decide)$/.test(item)
             )
-          : typeof body.scope === 'string' && /^[a-z]+:(read|write)$/.test(body.scope)
+          : typeof body.scope === 'string' && /^[a-z]+:(read|write|decide)$/.test(body.scope)
           ? [body.scope]
           : [];
         const scopeHint = required.length

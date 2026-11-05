@@ -209,6 +209,8 @@ export const bulkResolveApprovals = (body: {
   action: "approve" | "reject";
   approvalIds: string[];
   note?: string;
+  /** approval id -> stage position the admin saw (optional; a moved approval is skipped). */
+  stages?: Record<string, number>;
 }) => api.post<BulkResult>("/agent-activity/approvals/bulk", body);
 
 export const retryAgentGroup = (group: string, includeUnknownOutcome: boolean) =>

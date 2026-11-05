@@ -99,4 +99,18 @@ describe('PolicyApprovalRouter', () => {
     await expect(router.route('org', 'p', { terminateWorkflow: true })).rejects.toThrow();
     expect(approvals.requestApprovalFromApi).not.toHaveBeenCalled();
   });
+
+  describe('ruleIds', () => {
+    it('forwards ruleIds to requestApprovalFromApi', async () => {
+      repo.getPostById.mockResolvedValue({ id: 'p', state: 'DRAFT' });
+      await router.route('org', 'p', { terminateWorkflow: true, ruleIds: ['r2', 'r1'] });
+      expect(approvals.requestApprovalFromApi).toHaveBeenCalledWith('org', 'p', { ruleIds: ['r2', 'r1'] });
+    });
+
+    it('absent ruleIds passes an undefined ruleIds (same as before)', async () => {
+      repo.getPostById.mockResolvedValue({ id: 'p', state: 'DRAFT' });
+      await router.route('org', 'p', { terminateWorkflow: true });
+      expect(approvals.requestApprovalFromApi).toHaveBeenCalledWith('org', 'p', { ruleIds: undefined });
+    });
+  });
 });

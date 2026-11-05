@@ -167,7 +167,7 @@ describe('write-time policy gate over HTTP', () => {
       expect(res.status).toBe(201);
       const options = postsService.createPost.mock.calls[0][3];
       expect([...options.forceDraftIntegrationIds]).toEqual(['chB']);
-      expect(router.route).toHaveBeenCalledWith('org-1', 'pb', { terminateWorkflow: false });
+      expect(router.route).toHaveBeenCalledWith('org-1', 'pb', { terminateWorkflow: false, ruleIds: ['r1'] });
       const json = await res.json();
       expect(json[0]).toMatchObject({ postId: 'pa', approvalRequested: false, policy: { effect: 'ALLOW', matched: [] } });
       expect(json[1]).toMatchObject({ postId: 'pb', approvalRequested: true });
@@ -225,7 +225,7 @@ describe('write-time policy gate over HTTP', () => {
       expect(postsService.createPost).toHaveBeenCalledTimes(1);
       expect([...postsService.createPost.mock.calls[0][3].forceDraftIntegrationIds]).toEqual(['chA']);
       // The router only requests: no terminate, no race with a status change.
-      expect(router.route).toHaveBeenCalledWith('org-1', 'p1', { terminateWorkflow: false });
+      expect(router.route).toHaveBeenCalledWith('org-1', 'p1', { terminateWorkflow: false, ruleIds: ['r1'] });
       expect(postsService.changePostStatus).not.toHaveBeenCalled();
       const json = await res.json();
       expect(json[0]).toMatchObject({ postId: 'p1', approvalRequested: true });
@@ -292,7 +292,7 @@ describe('write-time policy gate over HTTP', () => {
       const json = await res.json();
       expect(json).toMatchObject({ id: 'p1', state: 'APPROVAL', approvalRequested: true });
       expect(json.policy.effect).toBe('REQUIRE_APPROVAL');
-      expect(router.route).toHaveBeenCalledWith('org-1', 'p1', { terminateWorkflow: true });
+      expect(router.route).toHaveBeenCalledWith('org-1', 'p1', { terminateWorkflow: true, ruleIds: ['r1'] });
       expect(postsService.changePostStatus).not.toHaveBeenCalled();
     });
 
@@ -422,7 +422,11 @@ describe('write-time policy gate over HTTP', () => {
       expect(res.status).toBe(201);
       const json = await res.json();
       expect(routed).toBe(true);
-      expect(router.route).toHaveBeenCalledWith('org-1', 'pb', { terminateWorkflow: false, onlyFromState: 'ERROR' });
+      expect(router.route).toHaveBeenCalledWith('org-1', 'pb', {
+        terminateWorkflow: false,
+        onlyFromState: 'ERROR',
+        ruleIds: ['r1'],
+      });
       expect(json.policy.effect).toBe('REQUIRE_APPROVAL');
       expect(json.results[1].action).toBe('approval_requested');
     });
@@ -437,7 +441,11 @@ describe('write-time policy gate over HTTP', () => {
       });
       await send('POST', '/posts/group/g1/retry-failed', {});
       expect(routed).toBe(true);
-      expect(router.route).toHaveBeenCalledWith('org-1', 'pa', { terminateWorkflow: false, onlyFromState: 'ERROR' });
+      expect(router.route).toHaveBeenCalledWith('org-1', 'pa', {
+        terminateWorkflow: false,
+        onlyFromState: 'ERROR',
+        ruleIds: undefined,
+      });
     });
 
     it('passes the evaluated ids to the service', async () => {

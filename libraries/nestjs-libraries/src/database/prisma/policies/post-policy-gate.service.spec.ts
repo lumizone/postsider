@@ -240,7 +240,10 @@ describe('PostPolicyGateService', () => {
         pre(channels, ['b']) as any
       );
       expect(router.route).toHaveBeenCalledTimes(1);
-      expect(router.route).toHaveBeenCalledWith('org', 'pb', { terminateWorkflow: false });
+      expect(router.route).toHaveBeenCalledWith('org', 'pb', {
+        terminateWorkflow: false,
+        ruleIds: ['r-Rule one'],
+      });
       expect(out[0]).toEqual({
         postId: 'pa',
         integration: 'a',
@@ -278,7 +281,7 @@ describe('PostPolicyGateService', () => {
       await gate.finishCreate('org', [{ postId: 'pb', integration: 'b' }], pre(channels, ['b']) as any, {
         terminateWorkflow: true,
       });
-      expect(router.route).toHaveBeenCalledWith('org', 'pb', { terminateWorkflow: true });
+      expect(router.route).toHaveBeenCalledWith('org', 'pb', { terminateWorkflow: true, ruleIds: ['r-Rule one'] });
     });
 
     it('reports requested false from an idempotent router as approvalRequested false', async () => {
@@ -380,7 +383,7 @@ describe('PostPolicyGateService', () => {
       });
       const out = await gate.gateStatus('org', 'p', 'schedule');
       expect(router.route).toHaveBeenCalledTimes(1);
-      expect(router.route).toHaveBeenCalledWith('org', 'p', { terminateWorkflow: true });
+      expect(router.route).toHaveBeenCalledWith('org', 'p', { terminateWorkflow: true, ruleIds: ['r-Rule one'] });
       expect(out).toMatchObject({ proceed: false, approvalRequested: true });
       expect(evaluation.recordOutcome.mock.calls[0][3]).toEqual({ postId: 'p' });
     });
@@ -416,6 +419,61 @@ describe('PostPolicyGateService', () => {
       const err: any = await gate.gateStatus('org', 'p', 'schedule').catch((e) => e);
       expect(err.getStatus()).toBe(400);
       expect(err.getResponse().error).toBe('policy_input_too_large');
+    });
+  });
+
+  describe('ruleIds for the approval flow (Phase 5)', () => {
+    const second = { ...match('REQUIRE_APPROVAL', 'Second'), ruleId: 'r-second' };
+    const first = { ...match('REQUIRE_APPROVAL', 'First'), ruleId: 'r-first' };
+    const blockRule = { ...match('BLOCK', 'Hard'), ruleId: 'r-block' };
+
+    it('finishCreate passes the matched REQUIRE_APPROVAL ids of the channel in match order, never a BLOCK id', async () => {
+      const matched = [second, blockRule, first];
+      await gate.finishCreate(
+        'org',
+        [{ postId: 'pb', integration: 'b' }],
+        {
+          outcome: { effect: 'REQUIRE_APPROVAL', matched, channels: [{ integrationId: 'b', effect: 'REQUIRE_APPROVAL', matched }] },
+          approvalIntegrationIds: new Set(['b']),
+        } as any
+      );
+      expect(router.route).toHaveBeenCalledWith('org', 'pb', {
+        terminateWorkflow: false,
+        ruleIds: ['r-second', 'r-first'],
+      });
+    });
+
+    it('finishCreate does not mix in rules of another channel', async () => {
+      await gate.finishCreate(
+        'org',
+        [{ postId: 'pb', integration: 'b' }],
+        {
+          outcome: {
+            effect: 'REQUIRE_APPROVAL',
+            matched: [first, second],
+            channels: [
+              { integrationId: 'a', effect: 'REQUIRE_APPROVAL', matched: [first] },
+              { integrationId: 'b', effect: 'REQUIRE_APPROVAL', matched: [second] },
+            ],
+          },
+          approvalIntegrationIds: new Set(['a', 'b']),
+        } as any
+      );
+      expect(router.route).toHaveBeenCalledWith('org', 'pb', { terminateWorkflow: false, ruleIds: ['r-second'] });
+    });
+
+    it('gateStatus passes the outcome REQUIRE_APPROVAL ids in match order', async () => {
+      evaluation.targetFromStoredPost.mockResolvedValue(target('a'));
+      evaluation.evaluateTargets.mockResolvedValue({
+        effect: 'REQUIRE_APPROVAL',
+        matched: [second, blockRule, first],
+        channels: [{ integrationId: 'a', effect: 'REQUIRE_APPROVAL', matched: [second, blockRule, first] }],
+      });
+      await gate.gateStatus('org', 'p', 'schedule');
+      expect(router.route).toHaveBeenCalledWith('org', 'p', {
+        terminateWorkflow: true,
+        ruleIds: ['r-second', 'r-first'],
+      });
     });
   });
 
@@ -521,9 +579,36 @@ describe('PostPolicyGateService', () => {
       expect([...out.evaluatedPostIds]).toEqual(['B']);
     });
 
+    it('returns the REQUIRE_APPROVAL rule ids per approval post and routeRetry forwards them', async () => {
+      const r1 = { ...match('REQUIRE_APPROVAL', 'One'), ruleId: 'r-one' };
+      const r2 = { ...match('REQUIRE_APPROVAL', 'Two'), ruleId: 'r-two' };
+      evaluation.topLevelRowsOfGroup.mockResolvedValue([row('A', 'a'), row('B', 'b')]);
+      evaluation.evaluateTargets.mockResolvedValue({
+        effect: 'REQUIRE_APPROVAL',
+        matched: [r1, r2],
+        channels: [
+          { integrationId: 'a', effect: 'REQUIRE_APPROVAL', matched: [r1] },
+          { integrationId: 'b', effect: 'REQUIRE_APPROVAL', matched: [r2] },
+        ],
+      });
+      const out = await gate.gateRetry('org', 'g', retryOpts);
+      expect(out.approvalRuleIdsByPost.get('A')).toEqual(['r-one']);
+      expect(out.approvalRuleIdsByPost.get('B')).toEqual(['r-two']);
+      await gate.routeRetry('org', 'A', out.approvalRuleIdsByPost.get('A'));
+      expect(router.route).toHaveBeenCalledWith('org', 'A', {
+        terminateWorkflow: false,
+        onlyFromState: 'ERROR',
+        ruleIds: ['r-one'],
+      });
+    });
+
     it('routeRetry only routes a row that is still in ERROR', async () => {
       await gate.routeRetry('org', 'A');
-      expect(router.route).toHaveBeenCalledWith('org', 'A', { terminateWorkflow: false, onlyFromState: 'ERROR' });
+      expect(router.route).toHaveBeenCalledWith('org', 'A', {
+        terminateWorkflow: false,
+        onlyFromState: 'ERROR',
+        ruleIds: undefined,
+      });
     });
 
     it('skips a row whose stored post is gone', async () => {
@@ -600,7 +685,7 @@ describe('PostPolicyGateService', () => {
       evaluation.evaluateTargets.mockResolvedValue(requireApproval);
       const out = await gate.gateReschedule('org', 'p1', newDate, userActor);
       expect(out).toMatchObject({ proceed: false, approvalRequested: true });
-      expect(router.route).toHaveBeenCalledWith('org', 'p1', { terminateWorkflow: true });
+      expect(router.route).toHaveBeenCalledWith('org', 'p1', { terminateWorkflow: true, ruleIds: ['r-Rule one'] });
       expect(evaluation.recordOutcome).toHaveBeenCalledWith('org', requireApproval, 'write', { postId: 'p1' });
     });
 

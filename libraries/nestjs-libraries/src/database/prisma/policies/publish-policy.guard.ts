@@ -82,7 +82,10 @@ export class PublishPolicyGuard {
         return { kind: 'approval_requested' };
       }
 
-      await this._router.route(orgId, postId, { terminateWorkflow: false });
+      await this._router.route(orgId, postId, {
+        terminateWorkflow: false,
+        ruleIds: outcome.matched.filter((m) => m.effect === 'REQUIRE_APPROVAL').map((m) => m.ruleId),
+      });
       return { kind: 'approval_requested' };
     } catch (error) {
       if (error instanceof PolicyInputTooLargeError) {

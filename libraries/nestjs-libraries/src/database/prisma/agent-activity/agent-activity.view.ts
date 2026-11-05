@@ -265,6 +265,7 @@ const TIMELINE_METADATA_KEYS = new Set([
   'approvalId', 'decision', 'by', 'group', 'integrationId', 'state', 'publishDate', 'creationMethod',
   'from', 'to', 'includeUnknownOutcome', 'previousErrorCategory', 'errorCategory', 'errorRetryable',
   'releaseUrl', 'effect', 'phase', 'matchedCount', 'ruleIds', 'ruleNames',
+  'via', 'stage', 'stageCount', 'final',
 ]);
 
 /** Timeline metadata: only known keys survive, values are cleaned. */

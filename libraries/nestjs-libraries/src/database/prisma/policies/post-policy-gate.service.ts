@@ -34,6 +34,11 @@ const EMPTY_OUTCOME = (): PolicyOutcome => ({ effect: 'ALLOW', matched: [], chan
 
 const RANK: Record<Effect, number> = { ALLOW: 0, REQUIRE_APPROVAL: 1, BLOCK: 2 };
 
+/** Rule ids of the REQUIRE_APPROVAL matches, in the (priority) order of the matches. */
+const approvalRuleIds = (matched: PolicyMatch[]): string[] => [
+  ...new Set(matched.filter((m) => m.effect === 'REQUIRE_APPROVAL').map((m) => m.ruleId)),
+];
+
 const actorKey = (a: PolicyTarget['actors'][number]) =>
   [a.type, a.userId, a.apiKeyId, a.oauthClientId].join('|');
 
@@ -125,6 +130,7 @@ export class PostPolicyGateService {
       if (pre.approvalIntegrationIds.has(item.integration)) {
         const routed = await this._router.route(orgId, item.postId, {
           terminateWorkflow: !!opts.terminateWorkflow,
+          ruleIds: approvalRuleIds(policy.matched),
         });
         approvalRequested = routed.requested;
         await this._evaluation.recordOutcome(
@@ -195,7 +201,10 @@ export class PostPolicyGateService {
       await this._evaluation.recordOutcome(orgId, outcome, 'write', { postId });
       throw new PolicyBlockedException(outcome);
     }
-    const routed = await this._router.route(orgId, postId, { terminateWorkflow: true });
+    const routed = await this._router.route(orgId, postId, {
+      terminateWorkflow: true,
+      ruleIds: approvalRuleIds(outcome.matched),
+    });
     await this._evaluation.recordOutcome(orgId, outcome, 'write', { postId });
     return { proceed: false, policy: exposed(), approvalRequested: routed.requested };
   }
@@ -213,9 +222,12 @@ export class PostPolicyGateService {
   ): Promise<{
     policy: PolicyOutcome;
     approvalPostIds: Set<string>;
+    /** REQUIRE_APPROVAL rule ids per approval post (its channel's matches), for the approval flow. */
+    approvalRuleIdsByPost: Map<string, string[]>;
     evaluatedPostIds: Set<string>;
   }> {
     const approvalPostIds = new Set<string>();
+    const approvalRuleIdsByPost = new Map<string, string[]>();
     const evaluatedPostIds = new Set<string>();
     let outcome: PolicyOutcome;
     let candidates: Array<{ id: string; integrationId: string }>;
@@ -238,7 +250,9 @@ export class PostPolicyGateService {
           evaluatedPostIds.add(row.id);
         }
       }
-      if (!targets.length) return { policy: EMPTY_OUTCOME(), approvalPostIds, evaluatedPostIds };
+      if (!targets.length) {
+        return { policy: EMPTY_OUTCOME(), approvalPostIds, approvalRuleIdsByPost, evaluatedPostIds };
+      }
       outcome = await this._evaluation.evaluateTargets(orgId, targets, 'write');
     } catch (error) {
       // Retry re-arms publishing: an evaluation failure fails closed.
@@ -249,12 +263,15 @@ export class PostPolicyGateService {
       await this._evaluation.recordOutcome(orgId, outcome, 'write', {});
       throw new PolicyBlockedException(outcome);
     }
-    const approvalChannels = new Set(
-      outcome.channels.filter((c) => c.effect === 'REQUIRE_APPROVAL').map((c) => c.integrationId)
+    const approvalChannels = new Map(
+      outcome.channels
+        .filter((c) => c.effect === 'REQUIRE_APPROVAL')
+        .map((c) => [c.integrationId, approvalRuleIds(c.matched)] as const)
     );
     for (const row of candidates) {
       if (evaluatedPostIds.has(row.id) && approvalChannels.has(row.integrationId)) {
         approvalPostIds.add(row.id);
+        approvalRuleIdsByPost.set(row.id, approvalChannels.get(row.integrationId)!);
       }
     }
     if (outcome.effect !== 'ALLOW') await this._evaluation.recordOutcome(orgId, outcome, 'write', {});
@@ -265,6 +282,7 @@ export class PostPolicyGateService {
         channels: outcome.channels.map((c) => ({ ...c, matched: sanitizeMatches(c.matched) })),
       },
       approvalPostIds,
+      approvalRuleIdsByPost,
       evaluatedPostIds,
     };
   }
@@ -339,7 +357,10 @@ export class PostPolicyGateService {
     if (outcome.effect === 'ALLOW') {
       return { proceed: true, policy: exposed(), approvalRequested: false };
     }
-    const routed = await this._router.route(orgId, postId, { terminateWorkflow: true });
+    const routed = await this._router.route(orgId, postId, {
+      terminateWorkflow: true,
+      ruleIds: approvalRuleIds(outcome.matched),
+    });
     await this._evaluation.recordOutcome(orgId, outcome, 'write', { postId });
     return { proceed: false, policy: exposed(), approvalRequested: routed.requested };
   }
@@ -360,10 +381,11 @@ export class PostPolicyGateService {
    * workflow, so nothing is terminated. An approval that is already open
    * counts as routed.
    */
-  async routeRetry(orgId: string, postId: string): Promise<boolean> {
+  async routeRetry(orgId: string, postId: string, ruleIds?: string[]): Promise<boolean> {
     const routed = await this._router.route(orgId, postId, {
       terminateWorkflow: false,
       onlyFromState: 'ERROR',
+      ruleIds,
     });
     return routed.requested || routed.approvalId !== null;
   }

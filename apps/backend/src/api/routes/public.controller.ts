@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -26,6 +27,7 @@ import { isSafePublicHttpsUrl } from '@postsider/nestjs-libraries/dtos/webhooks/
 import { ssrfSafeDispatcher } from '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
 import { ApprovalService } from '@postsider/nestjs-libraries/database/prisma/approval/approval.service';
 import { GuestReviewResolveDto } from '@postsider/nestjs-libraries/dtos/approval/guest-review-resolve.dto';
+import { ApprovalLinkService } from '@postsider/nestjs-libraries/database/prisma/approval/approval-link.service';
 import { AuthRateLimitGuard } from '@postsider/nestjs-libraries/services/auth-rate-limit.guard';
 import { HttpForbiddenException } from '@postsider/nestjs-libraries/services/exception.filter';
 
@@ -37,8 +39,45 @@ export class PublicController {
   constructor(
     private _trackService: TrackService,
     private _postsService: PostsService,
-    private _approvalService: ApprovalService
+    private _approvalService: ApprovalService,
+    private _approverLinks: ApprovalLinkService
   ) {}
+
+  // Email approver links (APPROVAL_EMAIL_LINKS). Unauthenticated, gated by a
+  // single use token that is stored hashed. GET only reads and hands out the
+  // short lived challenge the POST must echo; it never changes anything, so a
+  // mail scanner or link previewer cannot decide. Never cached, never leaked
+  // through the Referer header.
+  @Get('/approver-links/:token')
+  @UseGuards(AuthRateLimitGuard)
+  async getApproverLink(
+    @Param('token') token: string,
+    @Res({ passthrough: true }) res: Response
+  ) {
+    this.noStore(res);
+    return this._approverLinks.view(token);
+  }
+
+  @Post('/approver-links/:token/decision')
+  @UseGuards(AuthRateLimitGuard)
+  async decideApproverLink(
+    @Param('token') token: string,
+    @Body() body: unknown,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response
+  ) {
+    this.noStore(res);
+    // JSON only: a cross-site HTML form cannot send this content type.
+    if (!req.is('application/json')) {
+      throw new BadRequestException({ error: 'invalid_request' });
+    }
+    return this._approverLinks.decide(token, body);
+  }
+
+  private noStore(res: Response) {
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+  }
 
   // Guest approval review (no account — gated by an unguessable, expiring,
   // single-use token minted by an org ADMIN/SUPERADMIN via

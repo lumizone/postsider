@@ -4,6 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "rea
 import { settingsStyles as s } from "@/components/settings-ui";
 import { ApiError } from "@/lib/api";
 import { useT, type MessageKey } from "@/lib/i18n";
+import type { ApprovalFlow } from "@/lib/approval-flows-api";
 import type { PolicyApiKeyChoice, PolicyInput, PolicyRule } from "@/lib/policies-api";
 import {
   POLICY_ACTOR_TYPE_LIST,
@@ -28,6 +29,8 @@ interface Props {
   rule: PolicyRule | null;
   apiKeys: PolicyApiKeyChoice[];
   channels: PolicyChannelChoice[];
+  /** Live approval flows; null when they could not be loaded. */
+  flows?: ApprovalFlow[] | null;
   onSave: (input: PolicyInput) => Promise<void>;
   onClose: () => void;
 }
@@ -50,7 +53,7 @@ function toggle<T>(list: T[], value: T, on: boolean): T[] {
 const FOCUSABLE =
   'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
 
-export function PolicyRuleForm({ rule, apiKeys, channels, onSave, onClose }: Props) {
+export function PolicyRuleForm({ rule, apiKeys, channels, flows = [], onSave, onClose }: Props) {
   const t = useT();
   const uid = useId();
   const [form, setForm] = useState<PolicyFormState>(() =>
@@ -244,6 +247,31 @@ export function PolicyRuleForm({ rule, apiKeys, channels, onSave, onClose }: Pro
               {err("priority")}
             </div>
           </div>
+
+          {form.effect === "REQUIRE_APPROVAL" && (
+            <div className={s.field}>
+              <label className={s.label} htmlFor={fieldId("approvalFlow")}>
+                {t("approvalFlows.rule.label")}
+              </label>
+              <select
+                id={fieldId("approvalFlow")}
+                className={s.select}
+                value={form.approvalFlowId}
+                onChange={(e) => set("approvalFlowId", e.target.value)}
+              >
+                <option value="">{t("approvalFlows.rule.defaultOption")}</option>
+                {(flows ?? []).map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+                {form.approvalFlowId && !(flows ?? []).some((f) => f.id === form.approvalFlowId) && (
+                  <option value={form.approvalFlowId}>{t("approvalFlows.rule.unavailable")}</option>
+                )}
+              </select>
+              <div className={s.hint}>{flows === null ? t("approvalFlows.rule.loadFailed") : t("approvalFlows.rule.hint")}</div>
+            </div>
+          )}
 
           <div className={s.field}>
             <label className={s.label} htmlFor={fieldId("condition")}>

@@ -129,6 +129,29 @@ export class NotificationService {
   }
 
   /**
+   * The channel-assignment narrowing shared by every approver notification
+   * (plain email and approval link email). Members are `{ user: { id } }`
+   * rows. With explicit assignments on the channel only assigned members
+   * remain, but only if at least one assigned user is in the pool, otherwise a
+   * channel assigned to non-approvers would silently notify nobody.
+   */
+  async narrowToChannelAssignees<T extends { user: { id: string } }>(
+    orgId: string,
+    integrationId: string | undefined | null,
+    members: T[]
+  ): Promise<T[]> {
+    if (!integrationId) return members;
+    const assigned = await this._channelAssignments.listForIntegration(
+      orgId,
+      integrationId
+    );
+    if (assigned.length === 0) return members;
+    const assignedIds = new Set(assigned.map((a) => a.userId));
+    const scoped = members.filter((m) => assignedIds.has(m.user.id));
+    return scoped.length > 0 ? scoped : members;
+  }
+
+  /**
    * Email only the org's approvers (ADMIN/SUPERADMIN) — used when a new post
    * lands in the approval queue so the right people get pinged.
    *
@@ -145,23 +168,13 @@ export class NotificationService {
     integrationId?: string
   ) {
     const userOrg = await this._organizationRepository.getAllUsersOrgs(orgId);
-    let approvers = (userOrg?.users || []).filter(
-      (u: any) => u.role === 'ADMIN' || u.role === 'SUPERADMIN'
+    const approvers = await this.narrowToChannelAssignees(
+      orgId,
+      integrationId,
+      (userOrg?.users || []).filter(
+        (u: any) => u.role === 'ADMIN' || u.role === 'SUPERADMIN'
+      )
     );
-    if (integrationId) {
-      const assigned = await this._channelAssignments.listForIntegration(
-        orgId,
-        integrationId
-      );
-      if (assigned.length > 0) {
-        const assignedIds = new Set(assigned.map((a) => a.userId));
-        const scoped = approvers.filter((a: any) => assignedIds.has(a.user.id));
-        // Only narrow if at least one assigned user is ALSO an approver —
-        // otherwise a channel assigned to non-admin staff would silently
-        // notify nobody about a request only an admin can actually resolve.
-        if (scoped.length > 0) approvers = scoped;
-      }
-    }
     for (const member of approvers) {
       if (member?.user?.sendSuccessEmails === false) continue;
       await this.sendEmail(member.user.email, subject, message);

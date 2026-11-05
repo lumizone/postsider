@@ -752,7 +752,11 @@ export class PublicIntegrationsController {
               approvalPostIds: gated.approvalPostIds,
               evaluatedPostIds: gated.evaluatedPostIds,
               routeToApproval: (postId: string) =>
-                this._policyGate!.routeRetry(org.id, postId),
+                this._policyGate!.routeRetry(
+                  org.id,
+                  postId,
+                  gated.approvalRuleIdsByPost?.get(postId)
+                ),
             }
           : {}),
       });
@@ -812,6 +816,9 @@ export class PublicIntegrationsController {
       resolvedAt: approval.resolvedAt,
       requestedBy: actorViewFromColumns(approval, 'requestedBy'),
       decidedBy: approvalDecidedByView(approval),
+      // Progress through the approval stages; status stays PENDING until the last one.
+      stage: (approval as any).stage ?? null,
+      stages: (approval as any).stages ?? [],
     };
   }
 

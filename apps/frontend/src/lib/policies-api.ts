@@ -32,6 +32,8 @@ export interface PolicyRule {
   condition: PolicyCondition;
   conditionParams: unknown;
   effect: PolicyEffect;
+  /** Approval flow used when the rule requires approval; null/absent = the default flow. */
+  approvalFlowId?: string | null;
   createdAt?: string;
 }
 
@@ -46,6 +48,8 @@ export interface PolicyInput {
   appliesToApiKeyIds: string[];
   appliesToIntegrationIds: string[];
   appliesToProviders: string[];
+  /** Only sent for REQUIRE_APPROVAL rules: an id picks a flow, null clears it. */
+  approvalFlowId?: string | null;
 }
 
 export type EvaluateAsActor = {

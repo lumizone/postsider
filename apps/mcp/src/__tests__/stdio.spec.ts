@@ -4,7 +4,11 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { EXPECTED_TOOL_COUNT, EXPECTED_TOOL_NAMES } from './tool-inventory.js';
+import {
+  DECIDE_APPROVAL_TOOL,
+  EXPECTED_TOOL_COUNT,
+  EXPECTED_TOOL_NAMES,
+} from './tool-inventory.js';
 
 /**
  * Protocol-level test of the built stdio entrypoint.
@@ -171,11 +175,15 @@ beforeAll(() => {
 
 describe('stdio entrypoint', () => {
   it('completes initialize and tools/list with the full tool inventory, stdout clean', async () => {
-    const harness = spawnServer({
+    // The opt-in decision tool must stay out unless asked for, whatever the
+    // developer's own shell exports.
+    const defaultEnv: Record<string, string | undefined> = {
       ...process.env,
       POSTSIDER_API_KEY: API_KEY,
       POSTSIDER_API_URL: 'https://api.postsider.com',
-    });
+    };
+    delete defaultEnv.POSTSIDER_MCP_ALLOW_APPROVAL_DECISIONS;
+    const harness = spawnServer(defaultEnv);
 
     let initError: unknown;
     let initName: string | undefined;
@@ -228,6 +236,55 @@ describe('stdio entrypoint', () => {
     expect(harness.residualStdout()).toBe('');
     expect(harness.stderr()).toContain('PostSider MCP server running (stdio)');
   }, 30_000);
+
+  it.each([
+    ['true', true],
+    ['1', false],
+    ['TRUE', false],
+    ['false', false],
+    ['', false],
+  ])(
+    'POSTSIDER_MCP_ALLOW_APPROVAL_DECISIONS=%j registers the decision tool: %s',
+    async (value, enabled) => {
+      const harness = spawnServer({
+        ...process.env,
+        POSTSIDER_API_KEY: API_KEY,
+        POSTSIDER_API_URL: 'https://api.postsider.com',
+        POSTSIDER_MCP_ALLOW_APPROVAL_DECISIONS: value,
+      });
+      let toolNames: string[] = [];
+      try {
+        await harness.request(1, 'initialize', {
+          protocolVersion: '2024-11-05',
+          capabilities: {},
+          clientInfo: { name: 'stdio-test', version: '1.0.0' },
+        });
+        harness.child.stdin.write(
+          `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`
+        );
+        const listed = await harness.request(2, 'tools/list');
+        toolNames = (
+          (listed.result as { tools?: { name: string }[] } | undefined)?.tools ?? []
+        ).map((tool) => tool.name);
+      } finally {
+        await harness.close();
+      }
+
+      const stdioOnly = ['postsider_upload_media_from_file'];
+      if (enabled) {
+        // 40 shared + the local file tool + the decision tool.
+        expect(toolNames).toHaveLength(EXPECTED_TOOL_COUNT + stdioOnly.length + 1);
+        expect([...toolNames].sort()).toEqual(
+          [...EXPECTED_TOOL_NAMES, ...stdioOnly, DECIDE_APPROVAL_TOOL].sort()
+        );
+      } else {
+        expect(toolNames).toHaveLength(EXPECTED_TOOL_COUNT + stdioOnly.length);
+        expect(toolNames).not.toContain(DECIDE_APPROVAL_TOOL);
+      }
+      expect(harness.strayStdout).toEqual([]);
+    },
+    30_000
+  );
 
   it('advertises and serves five complete static skills', async () => {
     const harness = spawnServer({

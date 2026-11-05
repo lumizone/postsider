@@ -163,6 +163,13 @@ describe('policy management API over HTTP', () => {
       expect(dto.name).toBe('Secret');
     });
 
+    it('create passes approvalFlowId to the service', async () => {
+      rules.create.mockResolvedValue(publicRule({ id: 'new', effect: 'REQUIRE_APPROVAL', approvalFlowId: 'f1' }));
+      const res = await send('POST', '/policies', { ...body, effect: 'REQUIRE_APPROVAL', approvalFlowId: 'f1' });
+      expect(res.status).toBe(201);
+      expect(rules.create.mock.calls[0][1]).toMatchObject({ approvalFlowId: 'f1' });
+    });
+
     it('audits policy.create with only policyId and name', async () => {
       rules.create.mockResolvedValue(publicRule({ id: 'new', name: 'Secret' }));
       await send('POST', '/policies', body);
@@ -286,6 +293,25 @@ describe('policy management API over HTTP', () => {
       rules.update.mockRejectedValue(new NotFoundException({ msg: 'Policy rule not found' }));
       expect((await send('PUT', '/policies/foreign', { name: 'x' })).status).toBe(404);
       expect(audit.logSecurityEvent).not.toHaveBeenCalled();
+    });
+
+    it('accepts approvalFlowId null to clear the flow and returns approvalFlowId in the view', async () => {
+      rules.update.mockResolvedValue(publicRule({ effect: 'REQUIRE_APPROVAL', approvalFlowId: null }));
+      const res = await send('PUT', '/policies/r1', { approvalFlowId: null });
+      expect(res.status).toBe(200);
+      expect(rules.update.mock.calls[0][2]).toEqual({ approvalFlowId: null });
+      expect(await res.json()).toMatchObject({ approvalFlowId: null });
+    });
+
+    it('passes a flow id and keeps rejecting null for every other field', async () => {
+      rules.update.mockResolvedValue(publicRule({ effect: 'REQUIRE_APPROVAL', approvalFlowId: 'f1' }));
+      const ok = await send('PUT', '/policies/r1', { approvalFlowId: 'f1' });
+      expect(ok.status).toBe(200);
+      expect(rules.update.mock.calls[0][2]).toEqual({ approvalFlowId: 'f1' });
+      rules.update.mockClear();
+      expect((await send('PUT', '/policies/r1', { effect: null })).status).toBe(400);
+      expect((await send('PUT', '/policies/r1', { approvalFlowId: 'x'.repeat(65) })).status).toBe(400);
+      expect(rules.update).not.toHaveBeenCalled();
     });
 
     it('rejects null fields with 400', async () => {

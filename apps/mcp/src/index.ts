@@ -10,6 +10,8 @@
  *   POSTSIDER_API_KEY  (required) - org API key from Settings -> API
  *   POSTSIDER_API_URL  (optional) - instance base URL
  *                                   default: https://api.postsider.com
+ *   POSTSIDER_MCP_ALLOW_APPROVAL_DECISIONS (optional) - "true" registers
+ *                                   postsider_decide_approval (off by default)
  *
  * Transport: stdio (the standard for local MCP clients).
  */
@@ -19,10 +21,17 @@ import { createPostSiderMcpServer } from './server.js';
 
 const apiKey = process.env.POSTSIDER_API_KEY;
 const baseUrl = process.env.POSTSIDER_API_URL || 'https://api.postsider.com';
+// Deciding an approval is a human governance act: off unless the person running
+// this local server opts in. Exactly "true" enables it; anything else is off.
+const allowApprovalDecisions =
+  process.env.POSTSIDER_MCP_ALLOW_APPROVAL_DECISIONS === 'true';
 
 async function main(key: string, url: string) {
   const client = new PostsiderClient(key, url);
-  const server = createPostSiderMcpServer(client, { allowLocalFiles: true });
+  const server = createPostSiderMcpServer(client, {
+    allowLocalFiles: true,
+    allowApprovalDecisions,
+  });
   const transport = new StdioServerTransport();
 
   await server.connect(transport);
