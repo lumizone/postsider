@@ -1,4 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { AuditLogger } from '@postsider/nestjs-libraries/database/prisma/audit/audit.logger';
+import { recordPostEvent } from '@postsider/nestjs-libraries/database/prisma/audit/post-audit';
+import { emptyPostIdentity } from '@postsider/nestjs-libraries/actor/post-identity';
+import { SYSTEM_ACTOR } from '@postsider/nestjs-libraries/actor/post-actor';
 import {
   Activity,
   ActivityMethod,
@@ -114,7 +118,8 @@ export class PostActivity {
     private _publicWebhookDelivery: PublicWebhookDeliveryService,
     private _temporalService: TemporalService,
     private _subscriptionService: SubscriptionService,
-    private _providerEnvHelper: ProviderEnvHelper
+    private _providerEnvHelper: ProviderEnvHelper,
+    @Optional() private _audit?: AuditLogger
   ) {}
 
   @ActivityMethod()
@@ -436,6 +441,15 @@ export class PostActivity {
     }
   }
 
+  /** Best effort: identity can never block or fail an event. */
+  private async _identityFor(orgId: string, postId: string) {
+    try {
+      return await this._postService.getPostIdentity(orgId, postId);
+    } catch {
+      return emptyPostIdentity();
+    }
+  }
+
   private async _emitPostFailed(
     orgId: string,
     postId: string,
@@ -445,6 +459,7 @@ export class PostActivity {
     const post = await this._postService
       .getPostByForWebhookId(postId, orgId)
       .catch(() => null);
+    const identity = await this._identityFor(orgId, postId);
     await this._publicWebhookDelivery
       .deliver(orgId, 'post.failed', {
         postId,
@@ -452,6 +467,8 @@ export class PostActivity {
         errorCategory: meta.category,
         errorRetryable: meta.retryable,
         post,
+        actor: identity.actor,
+        provenance: identity.provenance,
       })
       .catch((error) => {
         this._logger.warn(
@@ -460,6 +477,15 @@ export class PostActivity {
           )}`
         );
       });
+    await recordPostEvent(this._audit, {
+      organizationId: orgId,
+      event: 'post.failed',
+      targetType: 'post',
+      targetId: postId,
+      actor: SYSTEM_ACTOR,
+      status: 'error',
+      metadata: { errorCategory: meta.category, errorRetryable: meta.retryable },
+    });
   }
 
   @ActivityMethod()
@@ -493,6 +519,25 @@ export class PostActivity {
 
   @ActivityMethod()
   async sendWebhooks(postId: string, orgId: string, integrationId: string) {
+    const post = await this._deliverPublishedWebhooks(postId, orgId, integrationId);
+    // Audited only after delivery completed without throwing: the activity is
+    // retried on failure, so writing earlier could record one publish twice.
+    const postRow: any = Array.isArray(post) ? post[0] : post;
+    await recordPostEvent(this._audit, {
+      organizationId: orgId,
+      event: 'post.published',
+      targetType: 'post',
+      targetId: postId,
+      actor: SYSTEM_ACTOR,
+      metadata: { integrationId, releaseUrl: postRow?.releaseURL ?? null },
+    });
+  }
+
+  private async _deliverPublishedWebhooks(
+    postId: string,
+    orgId: string,
+    integrationId: string
+  ) {
     const webhooks = (
       await this._webhookService.getWebhooksForDelivery(orgId)
     ).filter((f) => {
@@ -503,8 +548,13 @@ export class PostActivity {
     });
 
     const post = await this._postService.getPostByForWebhookId(postId, orgId);
+    const identity = await this._identityFor(orgId, postId);
     await this._publicWebhookDelivery
-      .deliver(orgId, 'post.published', { post })
+      .deliver(orgId, 'post.published', {
+        post,
+        actor: identity.actor,
+        provenance: identity.provenance,
+      })
       .catch((error) => {
         this._logger.warn(
           `Public webhook delivery failed without blocking publish: ${String(
@@ -515,7 +565,7 @@ export class PostActivity {
 
     // Nothing left to deliver through the legacy webhook surface.
     if (webhooks.length === 0) {
-      return;
+      return post;
     }
 
     // Re-validate egress at fire time. The stored URL was only checked for
@@ -588,6 +638,7 @@ export class PostActivity {
         );
       })
     );
+    return post;
   }
   @ActivityMethod()
   async processPlug(data: {

@@ -1,3 +1,8 @@
+import { AuditLogger } from '@postsider/nestjs-libraries/database/prisma/audit/audit.logger';
+import {
+  recordPostEvent,
+  safeIsoDate,
+} from '@postsider/nestjs-libraries/database/prisma/audit/post-audit';
 import {
   BadRequestException,
   HttpException,
@@ -74,6 +79,7 @@ import { OrganizationRepository } from '@postsider/nestjs-libraries/database/pri
 import { PublishingPausedException } from '@postsider/nestjs-libraries/services/publishing.paused.exception';
 import { NotificationService } from '@postsider/nestjs-libraries/database/prisma/notifications/notification.service';
 import { FunnelAttributionService } from '@postsider/nestjs-libraries/database/prisma/attribution/funnel-attribution.service';
+import { PostProvenance } from '@postsider/nestjs-libraries/actor/post-provenance';
 
 type PostWithConditionals = Post & {
   integration?: Integration;
@@ -92,6 +98,13 @@ export type RetryFailedResult = {
     | 'rearm_failed';
 };
 
+import { actorViewFromColumns } from '@postsider/nestjs-libraries/actor/post-actor';
+import { provenanceView } from '@postsider/nestjs-libraries/actor/post-provenance';
+import {
+  PostIdentity,
+  emptyPostIdentity,
+} from '@postsider/nestjs-libraries/actor/post-identity';
+
 @Injectable()
 export class PostsService {
   private _logger = new Logger(PostsService.name);
@@ -109,7 +122,8 @@ export class PostsService {
     private _subscriptionService: SubscriptionService,
     private _organizationRepository: OrganizationRepository,
     private _notificationService: NotificationService,
-    @Optional() private _funnelAttribution?: FunnelAttributionService
+    @Optional() private _funnelAttribution?: FunnelAttributionService,
+    @Optional() private _audit?: AuditLogger
   ) {}
 
   searchForMissingThreeHoursPosts() {
@@ -919,7 +933,25 @@ export class PostsService {
   }
 
   async deletePost(orgId: string, group: string) {
+    // Read the rows first: after the delete they are no longer addressable.
+    let auditRows: Array<{ id: string; integrationId: string }> = [];
+    if (this._audit) {
+      try {
+        auditRows = await this.getTopLevelPostsByGroup(orgId, group);
+      } catch {
+        auditRows = [];
+      }
+    }
     const post = await this._postRepository.deletePost(orgId, group);
+    for (const row of auditRows) {
+      await recordPostEvent(this._audit, {
+        organizationId: orgId,
+        event: 'post.deleted',
+        targetType: 'post',
+        targetId: row.id,
+        metadata: { group, integrationId: row.integrationId },
+      });
+    }
 
     if (post?.id) {
       try {
@@ -951,6 +983,22 @@ export class PostsService {
 
   async countPostsFromDay(orgId: string, date: Date) {
     return this._postRepository.countPostsFromDay(orgId, date);
+  }
+
+  /** Actor and provenance of a post; best effort, all-null shape on any miss. */
+  async getPostIdentity(orgId: string, postId: string): Promise<PostIdentity> {
+    try {
+      const row = await this._postRepository.getPostIdentity(orgId, postId);
+      return {
+        actor: {
+          createdBy: actorViewFromColumns(row, 'createdBy'),
+          lastModifiedBy: actorViewFromColumns(row, 'lastModifiedBy'),
+        },
+        provenance: provenanceView(row),
+      };
+    } catch {
+      return emptyPostIdentity();
+    }
   }
 
   getPostByForWebhookId(id: string, orgId?: string) {
@@ -1343,7 +1391,8 @@ export class PostsService {
   async createPost(
     orgId: string,
     body: CreatePostDto,
-    creationMethod: CreationMethod
+    creationMethod: CreationMethod,
+    options: { provenance?: PostProvenance } = {}
   ): Promise<any[]> {
     if (
       body.type === 'schedule' &&
@@ -1441,7 +1490,7 @@ export class PostsService {
             : updateContent[i],
         }));
 
-        const { posts } = await this._postRepository.createOrUpdatePost(
+        const { posts, createdIds } = await this._postRepository.createOrUpdatePost(
           body.type,
           orgId,
           body.type === 'now'
@@ -1450,7 +1499,8 @@ export class PostsService {
           post,
           body.tags,
           creationMethod,
-          body.inter
+          body.inter,
+          options.provenance
         );
 
         if (!posts?.length) {
@@ -1482,6 +1532,23 @@ export class PostsService {
             )
           );
         }
+
+        const wasCreated = !!createdIds?.includes(posts[0].id);
+        await recordPostEvent(this._audit, {
+          organizationId: orgId,
+          event: wasCreated ? 'post.created' : 'post.updated',
+          targetType: 'post',
+          targetId: posts[0].id,
+          metadata: {
+            state: posts[0].state,
+            integrationId: post.integration.id,
+            group: posts[0].group,
+            publishDate: safeIsoDate(posts[0].publishDate),
+            ...(wasCreated && creationMethod != null
+              ? { creationMethod: String(creationMethod) }
+              : {}),
+          },
+        });
 
         Sentry.metrics.count('post_created', 1);
         postList.push({
@@ -1622,6 +1689,10 @@ export class PostsService {
     return this._postRepository.getTopLevelPostsByGroup(orgId, group);
   }
 
+  getPostIdsInGroupIncludingDeleted(orgId: string, postId: string) {
+    return this._postRepository.getPostIdsInGroupIncludingDeleted(orgId, postId);
+  }
+
   /**
    * Re-arms the failed destinations of a post group. Rows are claimed
    * ERROR -> QUEUE conditionally, so concurrent calls cannot double-start a
@@ -1695,6 +1766,16 @@ export class PostsService {
       this._logger.error(`retryFailed: could not re-arm post ${row.id}: ${err}`);
       return skip('rearm_failed');
     }
+    await recordPostEvent(this._audit, {
+      organizationId: orgId,
+      event: 'post.retry_requested',
+      targetType: 'post',
+      targetId: row.id,
+      metadata: {
+        includeUnknownOutcome: opts.includeUnknownOutcome,
+        previousErrorCategory: row.errorCategory ?? null,
+      },
+    });
     return { ...base, action: 'requeued' };
   }
 
@@ -1877,6 +1958,15 @@ export class PostsService {
       );
     }
 
+    if (getPostById.state !== state) {
+      await recordPostEvent(this._audit, {
+        organizationId: orgId,
+        event: 'post.status_changed',
+        targetType: 'post',
+        targetId: id,
+        metadata: { from: getPostById.state, to: state },
+      });
+    }
     return { id, state };
   }
 
@@ -1891,6 +1981,15 @@ export class PostsService {
       undefined,
       orgId
     );
+    if (post.state !== state) {
+      await recordPostEvent(this._audit, {
+        organizationId: orgId,
+        event: 'post.status_changed',
+        targetType: 'post',
+        targetId: postId,
+        metadata: { from: post.state, to: state },
+      });
+    }
     return { id: postId, state };
   }
 
@@ -1947,6 +2046,32 @@ export class PostsService {
         orgId,
         getPostById.state === 'DRAFT' ? 'DRAFT' : 'QUEUE'
       );
+    }
+
+    const resultingState =
+      action === 'schedule'
+        ? getPostById.state === 'DRAFT'
+          ? 'DRAFT'
+          : 'QUEUE'
+        : getPostById.state;
+    if (action === 'schedule' && getPostById.state !== resultingState) {
+      await recordPostEvent(this._audit, {
+        organizationId: orgId,
+        event: 'post.status_changed',
+        targetType: 'post',
+        targetId: id,
+        metadata: { from: getPostById.state, to: resultingState },
+      });
+    } else {
+      // The state did not change (drag-reschedule of a QUEUE or DRAFT post,
+      // or an explicit 'update'): record the date change itself.
+      await recordPostEvent(this._audit, {
+        organizationId: orgId,
+        event: 'post.updated',
+        targetType: 'post',
+        targetId: id,
+        metadata: { publishDate: safeIsoDate(date) },
+      });
     }
 
     return newDate;

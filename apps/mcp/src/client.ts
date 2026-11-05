@@ -219,6 +219,18 @@ async function readBoundedBody(
   return { text: new TextDecoder().decode(bytes), truncated };
 }
 
+/** Header-safe agent name: printable ASCII only, whitespace collapsed, max 255. Never throws. */
+function sanitizeAgentName(name: unknown): string | undefined {
+  if (typeof name !== 'string') return undefined;
+  const cleaned = name
+    .replace(/[^\x20-\x7E]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 255)
+    .trim();
+  return cleaned || undefined;
+}
+
 /**
  * Thin HTTP client for the PostSider public API (`/public/v1`).
  *
@@ -229,9 +241,15 @@ async function readBoundedBody(
  */
 export class PostsiderClient {
   private readonly base: string;
+  private agentName: string | undefined;
 
   constructor(private readonly apiKey: string, baseUrl: string) {
     this.base = resolveBaseUrl(baseUrl);
+  }
+
+  /** Record the MCP client name (stdio only) so the audit trail can show which agent acted. */
+  setAgentName(name: string | undefined): void {
+    this.agentName = sanitizeAgentName(name);
   }
 
   private async request(
@@ -268,6 +286,8 @@ export class PostsiderClient {
         method,
         headers: {
           Authorization: this.apiKey,
+          'X-Postsider-Source': 'mcp',
+          ...(this.agentName ? { 'X-Postsider-Agent': this.agentName } : {}),
           // A FormData body sets its own multipart boundary header.
           ...(opts.body && !opts.form ? { 'Content-Type': 'application/json' } : {}),
           ...(opts.idempotencyKey ? { 'Idempotency-Key': opts.idempotencyKey } : {}),

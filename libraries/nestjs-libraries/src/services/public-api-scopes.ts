@@ -13,6 +13,7 @@ export const PUBLIC_API_SCOPES = [
   'publishing:write',
   'webhooks:read',
   'webhooks:write',
+  'audit:read',
 ] as const;
 
 export type PublicApiScope = (typeof PUBLIC_API_SCOPES)[number];

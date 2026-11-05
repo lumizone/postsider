@@ -9,6 +9,8 @@ import {
   legacyCookieDomain,
 } from '@postsider/helpers/subdomain/subdomain.management';
 import { HttpForbiddenException } from '@postsider/nestjs-libraries/services/exception.filter';
+import { runWithActor } from '@postsider/nestjs-libraries/actor/actor-context';
+import { actorFromUser } from '@postsider/nestjs-libraries/actor/post-actor';
 import { MfaService } from './mfa.service';
 import { isImpersonationEnabled } from './impersonation.flag';
 
@@ -93,6 +95,7 @@ export class AuthMiddleware implements NestMiddleware {
         );
 
         if (loadImpersonate) {
+          const impersonatorId = user.id;
           user = loadImpersonate.user;
           user.isSuperAdmin = true;
           delete (user as any).password;
@@ -109,7 +112,9 @@ export class AuthMiddleware implements NestMiddleware {
           // eslint-disable-next-line @typescript-eslint/ban-ts-comment
           // @ts-expect-error
           req.org = loadImpersonate.organization;
-          next();
+          runWithActor(actorFromUser(user), () => next(), {
+            impersonatedBy: impersonatorId,
+          });
           return;
         }
       }
@@ -144,6 +149,9 @@ export class AuthMiddleware implements NestMiddleware {
     } catch (err) {
       throw new HttpForbiddenException();
     }
-    next();
+    // The actor is the session user re-resolved from the database, never a
+    // value taken from the request body or headers.
+    // @ts-ignore
+    runWithActor(actorFromUser(req.user), () => next());
   }
 }

@@ -92,6 +92,18 @@
         "destructive_justification": "Deletes, overwrites, or revokes nothing."
       }
     },
+    "postsider_get_post_activity": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads the audit trail of the caller's own post (who did what and when); it changes nothing.",
+        "open_world_justification": "Reads the caller's own post history, including publish outcomes on external platforms, without modifying it.",
+        "destructive_justification": "Deletes, overwrites, or revokes nothing."
+      }
+    },
     "postsider_get_post": {
       "annotations": {
         "readOnlyHint": true,

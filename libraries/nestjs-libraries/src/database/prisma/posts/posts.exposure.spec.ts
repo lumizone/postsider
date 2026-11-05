@@ -34,6 +34,39 @@ describe('publish reliability fields exposure', () => {
     });
   });
 
+  it('getPosts also selects the 8 actor and 5 provenance columns', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const repo = new PostsRepository(
+      { model: { post: { findMany } } } as any,
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any
+    );
+    await repo.getPosts('org-1', { startDate: '2026-06-01', endDate: '2026-06-30' } as any);
+    expect(findMany.mock.calls[0][0].select).toMatchObject({
+      createdByType: true, createdByUserId: true, createdByApiKeyId: true,
+      createdByOAuthClientId: true, lastModifiedByType: true, lastModifiedByUserId: true,
+      lastModifiedByApiKeyId: true, lastModifiedByOAuthClientId: true,
+      agentName: true, workflowId: true, runId: true, externalRef: true, source: true,
+      errorCategory: true, id: true, state: true,
+    });
+  });
+
+  it('getPost rows carry identity columns through without integration secrets', async () => {
+    const service = Object.create(PostsService.prototype) as any;
+    service.getPostsRecursively = async () => [
+      {
+        id: 'p1', group: 'g', integrationId: 'i', settings: '{}', image: '[]',
+        createdByType: 'API_KEY', createdByApiKeyId: 'k1', agentName: 'bot',
+        integration: { id: 'i', token: 's', refreshToken: 'r', customInstanceDetails: 'c' },
+      },
+    ];
+    service.updateMedia = async () => [];
+    const result = await PostsService.prototype.getPost.call(service, 'org-1', 'p1');
+    expect(result.posts[0]).toMatchObject({ createdByType: 'API_KEY', agentName: 'bot' });
+    for (const k of ['token', 'refreshToken', 'customInstanceDetails']) {
+      expect(result.posts[0].integration).not.toHaveProperty(k);
+    }
+  });
+
   it('getPost carries the four fields and never the integration token', async () => {
     const service = Object.create(PostsService.prototype) as any;
     const at = new Date('2026-11-04T10:00:00Z');

@@ -20,10 +20,11 @@ export const getGuestReview = (token: string) =>
 export const resolveGuestReview = (
   token: string,
   action: "approve" | "reject",
+  identity: { name: string; email: string },
   note?: string,
 ) =>
   api.post(
     `/public/approval-review/${encodeURIComponent(token)}/resolve`,
-    { action, note },
+    { action, note, guestName: identity.name, guestEmail: identity.email },
     { silent: true },
   );

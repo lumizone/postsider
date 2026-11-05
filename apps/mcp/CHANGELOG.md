@@ -10,6 +10,11 @@ recorded here.
 
 - `postsider_retry_failed_posts`: re-queue only the ERROR destinations of a
   post group. Unknown-outcome rows are skipped unless explicitly confirmed.
+- `postsider_get_post_activity`: list who did what to a post and when, with the
+  verified actor, newest first and paged by `nextCursor`.
+- Every request now identifies itself with `X-Postsider-Source: mcp` and, on
+  the local stdio server, the MCP client name as `X-Postsider-Agent`. The
+  hosted HTTP transport is stateless and sends no agent name.
 - `postsider_get_post` documents the new `errorCategory`, `errorRetryable`,
   `publishAttempts` and `lastPublishAttemptAt` fields.
 

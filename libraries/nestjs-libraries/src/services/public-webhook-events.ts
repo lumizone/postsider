@@ -13,6 +13,18 @@ export type PublicWebhookDeliveryEvent =
   | PublicWebhookEvent
   | typeof PUBLIC_WEBHOOK_TEST_EVENT;
 
+const SAMPLE_ACTOR = {
+  createdBy: { type: 'API_KEY', apiKeyId: 'api_key_example' },
+  lastModifiedBy: { type: 'SYSTEM' },
+};
+const SAMPLE_PROVENANCE = {
+  agentName: 'content-agent',
+  workflowId: null,
+  runId: null,
+  externalRef: null,
+  source: 'api',
+};
+
 export const PUBLIC_WEBHOOK_EVENT_SAMPLES: Record<
   PublicWebhookEvent,
   Record<string, unknown>
@@ -23,6 +35,8 @@ export const PUBLIC_WEBHOOK_EVENT_SAMPLES: Record<
       state: 'PUBLISHED',
       releaseURL: 'https://social.example.com/post/123',
     },
+    actor: SAMPLE_ACTOR,
+    provenance: SAMPLE_PROVENANCE,
   },
   'post.failed': {
     postId: 'post_example',
@@ -30,17 +44,31 @@ export const PUBLIC_WEBHOOK_EVENT_SAMPLES: Record<
     post: { id: 'post_example', state: 'ERROR' },
     errorCategory: 'RATE_LIMITED',
     errorRetryable: true,
+    actor: SAMPLE_ACTOR,
+    provenance: SAMPLE_PROVENANCE,
   },
   'approval.requested': {
     approvalId: 'approval_example',
     postId: 'post_example',
     status: 'PENDING',
+    actor: SAMPLE_ACTOR,
+    provenance: SAMPLE_PROVENANCE,
+    approval: {
+      requestedBy: { type: 'API_KEY', apiKeyId: 'api_key_example' },
+      decidedBy: null,
+    },
   },
   'approval.resolved': {
     approvalId: 'approval_example',
     postId: 'post_example',
     status: 'APPROVED',
     note: null,
+    actor: SAMPLE_ACTOR,
+    provenance: SAMPLE_PROVENANCE,
+    approval: {
+      requestedBy: { type: 'API_KEY', apiKeyId: 'api_key_example' },
+      decidedBy: { type: 'USER', userId: 'user_example' },
+    },
   },
 };
 

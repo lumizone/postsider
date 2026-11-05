@@ -56,7 +56,7 @@ describe('PostActivity public webhook events', () => {
     expect(publicWebhooks.deliver).toHaveBeenCalledWith(
       'org-1',
       'post.published',
-      { post: { id: 'post-1', state: 'PUBLISHED' } }
+      expect.objectContaining({ post: { id: 'post-1', state: 'PUBLISHED' } })
     );
   });
 
@@ -78,13 +78,13 @@ describe('PostActivity public webhook events', () => {
     expect(publicWebhooks.deliver).toHaveBeenCalledWith(
       'org-1',
       'post.failed',
-      {
+      expect.objectContaining({
         postId: 'post-1',
         error: 'provider failure',
         errorCategory: 'UNKNOWN',
         errorRetryable: false,
         post: { id: 'post-1', state: 'PUBLISHED' },
-      }
+      })
     );
     expect(posts.changeState.mock.invocationCallOrder[0]).toBeLessThan(
       publicWebhooks.deliver.mock.invocationCallOrder[0]

@@ -8,6 +8,7 @@ import {
   Post,
   Put,
   Query,
+  Res,
   Headers,
   UploadedFile,
   UseInterceptors,
@@ -18,9 +19,11 @@ import { CustomFileValidationPipe } from '@postsider/nestjs-libraries/upload/cus
 import {
   ApiExtraModels,
   ApiHeader,
+  ApiOkResponse,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { PublicPostIdentityFieldsDto } from '@postsider/nestjs-libraries/dtos/posts/public-post-identity.dto';
 import { PublicPostFailureFieldsDto } from '@postsider/nestjs-libraries/dtos/posts/public-post-failure.dto';
 import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
 import { Organization } from '@prisma/client';
@@ -46,6 +49,12 @@ import { Readable } from 'stream';
 import { ssrfSafeDispatcher } from '@postsider/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
 import { detectFileType } from '@postsider/nestjs-libraries/upload/detect-file-type';
 import { ApprovalService } from '@postsider/nestjs-libraries/database/prisma/approval/approval.service';
+import { AuditEventsService } from '@postsider/nestjs-libraries/database/prisma/audit/audit-events.service';
+import {
+  ListPostActivityDto,
+  resolveAuditPaging,
+} from '@postsider/nestjs-libraries/dtos/audit/list-audit-events.dto';
+import { PublicAuditEventsResponseDto } from '@postsider/nestjs-libraries/dtos/audit/public-audit-event.dto';
 import { PublicApiScopeGuard } from '@postsider/backend/services/auth/public-api-scope.guard';
 import { RequirePublicApiScopes } from '@postsider/backend/services/auth/public-api-scope.decorator';
 
@@ -62,6 +71,12 @@ const PUBLIC_API_ALLOWED_MIME = new Set<string>([
 // Inline base64 uploads travel through the JSON body parser (50 MB) and the
 // model context, so they are capped well below the multipart limit.
 const BASE64_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
+import type { Response } from 'express';
+import {
+  approvalDecidedByView,
+  toPublicApproval,
+} from '@postsider/nestjs-libraries/database/prisma/approval/approval.projection';
+import { actorViewFromColumns } from '@postsider/nestjs-libraries/actor/post-actor';
 import * as Sentry from '@sentry/nestjs';
 import {
   socialIntegrationList,
@@ -74,6 +89,7 @@ import { PostValidationException } from '@postsider/backend/api/routes/posts.val
 import { timer } from '@postsider/helpers/utils/timer';
 import { ioRedis } from '@postsider/nestjs-libraries/redis/redis.service';
 import { PublicApiIdempotencyService } from '@postsider/nestjs-libraries/database/prisma/idempotency/public-api-idempotency.service';
+import { parseProvenance } from '@postsider/nestjs-libraries/actor/post-provenance';
 import { AgencyOverviewService } from '@postsider/nestjs-libraries/database/prisma/agency/agency-overview.service';
 import { CustomerReportService } from '@postsider/nestjs-libraries/database/prisma/agency/customer-report.service';
 import {
@@ -82,7 +98,7 @@ import {
 } from '@postsider/nestjs-libraries/upload/remote.response';
 
 @ApiTags('Public API')
-@ApiExtraModels(PublicPostFailureFieldsDto)
+@ApiExtraModels(PublicPostFailureFieldsDto, PublicPostIdentityFieldsDto)
 @ApiHeader({
   name: 'Authorization',
   required: true,
@@ -103,7 +119,8 @@ export class PublicIntegrationsController {
     private _approvalService: ApprovalService,
     private _idempotency: PublicApiIdempotencyService,
     private _agencyOverview: AgencyOverviewService,
-    private _customerReport: CustomerReportService
+    private _customerReport: CustomerReportService,
+    private _auditEvents: AuditEventsService
   ) {}
 
   @Post('/upload')
@@ -281,7 +298,7 @@ export class PublicIntegrationsController {
   @ApiOperation({
     summary: 'List posts',
     description:
-      'Returns posts in a date range. Each post row includes errorCategory, errorRetryable, publishAttempts and lastPublishAttemptAt. UNKNOWN_OUTCOME means the platform may have published the post: check the channel before retrying.',
+      'Returns posts in a date range. Each post row includes errorCategory, errorRetryable, publishAttempts and lastPublishAttemptAt. UNKNOWN_OUTCOME means the platform may have published the post: check the channel before retrying. Each post row also carries the verified actor columns (createdBy* and lastModifiedBy*: Type, UserId, ApiKeyId, OAuthClientId) and the claimed provenance columns (agentName, workflowId, runId, externalRef, source); provenance is a claim, never proof of identity.',
   })
   async getPosts(
     @GetOrgFromRequest() org: Organization,
@@ -359,7 +376,7 @@ export class PublicIntegrationsController {
   @ApiOperation({
     summary: 'Get a post',
     description:
-      'Returns the post group. Each post row includes errorCategory (AUTH_EXPIRED, PERMISSION_MISSING, RATE_LIMITED, INVALID_CONTENT, PROVIDER_UNAVAILABLE, UNKNOWN_OUTCOME, UNKNOWN or null), errorRetryable, publishAttempts and lastPublishAttemptAt. UNKNOWN_OUTCOME means the platform may have published the post: check the channel before retrying.',
+      'Returns the post group. Each post row includes errorCategory (AUTH_EXPIRED, PERMISSION_MISSING, RATE_LIMITED, INVALID_CONTENT, PROVIDER_UNAVAILABLE, UNKNOWN_OUTCOME, UNKNOWN or null), errorRetryable, publishAttempts and lastPublishAttemptAt. UNKNOWN_OUTCOME means the platform may have published the post: check the channel before retrying. Each post row also carries the verified actor columns (createdBy* and lastModifiedBy*: Type, UserId, ApiKeyId, OAuthClientId) and the claimed provenance columns (agentName, workflowId, runId, externalRef, source); provenance is a claim, never proof of identity.',
   })
   async getPost(
     @GetOrgFromRequest() org: Organization,
@@ -369,15 +386,48 @@ export class PublicIntegrationsController {
     return this._postsService.getPost(org.id, id);
   }
 
+  @Get('/posts/:id/activity')
+  @RequirePublicApiScopes('posts:read')
+  @ApiOperation({
+    summary: 'List post activity',
+    description:
+      'Audit trail of a post group, newest first, including after deletion. Events: post.created, post.updated, post.deleted, post.status_changed, post.approval_requested, post.approval_resolved, post.published, post.failed, post.retry_requested. Metadata never contains post content.',
+  })
+  @ApiOkResponse({ type: PublicAuditEventsResponseDto })
+  async getPostActivity(
+    @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string,
+    @Query() query: ListPostActivityDto
+  ) {
+    Sentry.metrics.count('public_api-request', 1);
+    const paging = resolveAuditPaging(query);
+    const targetIds = await this._postsService.getPostIdsInGroupIncludingDeleted(
+      org.id,
+      id
+    );
+    if (!targetIds) {
+      throw new HttpException({ msg: 'Post not found' }, 404);
+    }
+    return this._auditEvents.list(org.id, {
+      targetType: 'post',
+      targetIds,
+      ...paging,
+    });
+  }
+
   @Post('/posts')
   @RequirePublicApiScopes('posts:write')
   @CheckPolicies([AuthorizationActions.Create, Sections.POSTS_PER_MONTH])
   async createPost(
     @GetOrgFromRequest() org: Organization,
     @Body() rawBody: any,
+    @Headers() headers: Record<string, unknown>,
     @Headers('idempotency-key') idempotencyKey?: string
   ) {
     Sentry.metrics.count('public_api-request', 1);
+
+    // Claimed provenance is validated before any work or idempotency claim.
+    const provenance = parseProvenance(rawBody?.provenance, headers);
 
     const body = await this._postsService.mapTypeToPost(
       rawBody,
@@ -403,7 +453,9 @@ export class PublicIntegrationsController {
     if (claim?.kind === 'replay') return claim.response;
 
     try {
-      const result = await this._postsService.createPost(org.id, body, creationMethod);
+      const result = await this._postsService.createPost(org.id, body, creationMethod, {
+        provenance,
+      });
       if (claim?.kind === 'new') await this._idempotency.complete(claim.id, result);
       return result;
     } catch (error) {
@@ -491,9 +543,12 @@ export class PublicIntegrationsController {
   async updatePost(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string,
-    @Body() rawBody: any
+    @Body() rawBody: any,
+    @Headers() headers: Record<string, unknown>
   ) {
     Sentry.metrics.count('public_api-request', 1);
+
+    const provenance = parseProvenance(rawBody?.provenance, headers);
 
     const patch = {
       content:
@@ -535,7 +590,7 @@ export class PublicIntegrationsController {
       state === 'DRAFT' ? 'draft' : 'update'
     );
 
-    return this._postsService.createPost(org.id, body, 'API');
+    return this._postsService.createPost(org.id, body, 'API', { provenance });
   }
 
   @Delete('/posts/:id')
@@ -600,10 +655,15 @@ export class PublicIntegrationsController {
   @RequirePublicApiScopes('approvals:write')
   async requestApproval(
     @GetOrgFromRequest() org: Organization,
-    @Param('id') id: string
+    @Param('id') id: string,
+    @Res({ passthrough: true }) res: Response
   ) {
     Sentry.metrics.count('public_api-request', 1);
-    return this._approvalService.requestApprovalFromApi(org.id, id);
+    const result = await this._approvalService.requestApprovalFromApi(org.id, id);
+    // A retry on an already open approval is a no-op: 200, not 201.
+    if (!result.created) res.status(200);
+    // Explicit projection: never expose guestToken or the routing requester id.
+    return toPublicApproval(result, result.created);
   }
 
   // Read-side counterpart to request-approval: lets a pipeline that pushed a
@@ -626,6 +686,8 @@ export class PublicIntegrationsController {
       note: approval.note,
       requestedAt: approval.requestedAt,
       resolvedAt: approval.resolvedAt,
+      requestedBy: actorViewFromColumns(approval, 'requestedBy'),
+      decidedBy: approvalDecidedByView(approval),
     };
   }
 

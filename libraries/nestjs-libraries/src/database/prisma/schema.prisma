@@ -430,6 +430,19 @@ model Post {
   lastRecycledAt             DateTime?
   firstComment               String?
   shareToken                 String?                   @unique
+  createdByType              PostActorType?
+  createdByUserId            String?
+  createdByApiKeyId          String?
+  createdByOAuthClientId     String?
+  lastModifiedByType         PostActorType?
+  lastModifiedByUserId       String?
+  lastModifiedByApiKeyId     String?
+  lastModifiedByOAuthClientId String?
+  agentName                  String?                   @db.VarChar(255)
+  workflowId                 String?                   @db.VarChar(255)
+  runId                      String?                   @db.VarChar(255)
+  externalRef                String?                   @db.VarChar(255)
+  source                     String?                   @db.VarChar(255)
   createdAt                  DateTime                  @default(now())
   updatedAt                  DateTime                  @updatedAt
   deletedAt                  DateTime?
@@ -1012,6 +1025,13 @@ enum APPROVED_SUBMIT_FOR_ORDER {
   YES
 }
 
+enum PostActorType {
+  USER
+  API_KEY
+  OAUTH_CLIENT
+  SYSTEM
+}
+
 enum CreationMethod {
   UNKNOWN
   WEB
@@ -1106,9 +1126,17 @@ model AuditLog {
   status         String // "ok" | "error" | "rate_limited" | "connector_not_authorized" | ...
   inputHash      String? // hash of input params, never raw secrets
   type           String? // "rate_limited" | "connector_revoked" | ...
+  targetType     String?
+  targetId       String?
+  actorType      PostActorType?
+  actorApiKeyId  String?
+  actorOAuthClientId String?
+  metadata       Json?
   createdAt      DateTime     @default(now())
   organization   Organization? @relation(fields: [organizationId], references: [id])
 
+  @@index([organizationId, targetType, targetId, createdAt])
+  @@index([organizationId, createdAt])
   @@index([organizationId])
   @@index([connectorId])
   @@index([actorUserId])
@@ -1201,6 +1229,13 @@ model PostApproval {
   // action per pending approval, not a default.
   guestToken          String?        @unique
   guestTokenExpiresAt DateTime?
+  requestedByType     PostActorType?
+  requestedByUserId   String?
+  requestedByApiKeyId String?
+  requestedByOAuthClientId String?
+  decidedByType       PostActorType?
+  guestName           String?        @db.VarChar(120)
+  guestEmail          String?        @db.VarChar(254)
   post                Post           @relation(fields: [postId], references: [id])
   organization        Organization   @relation(fields: [organizationId], references: [id])
   requestedBy         User           @relation("approvalRequester", fields: [requestedById], references: [id])

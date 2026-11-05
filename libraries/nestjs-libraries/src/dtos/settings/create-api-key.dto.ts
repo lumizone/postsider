@@ -22,7 +22,7 @@ export class CreateApiKeyDto {
     type: [String],
     enum: PUBLIC_API_SCOPES,
     description:
-      'Defaults to all currently supported scopes for compatibility.',
+      'Defaults to the legacy scopes (everything except webhooks:* and audit:read). audit:read and webhooks:* are never granted by default.',
   })
   @IsOptional()
   @IsArray()

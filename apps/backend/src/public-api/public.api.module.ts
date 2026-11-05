@@ -9,6 +9,7 @@ import { OpenaiService } from '@postsider/nestjs-libraries/openai/openai.service
 import { ExtractContentService } from '@postsider/nestjs-libraries/openai/extract.content.service';
 import { CodesService } from '@postsider/nestjs-libraries/services/codes.service';
 import { PublicIntegrationsController } from '@postsider/backend/public-api/routes/v1/public.integrations.controller';
+import { PublicAuditController } from '@postsider/backend/public-api/routes/v1/public.audit.controller';
 import { PublicWorkspaceController } from '@postsider/backend/public-api/routes/v1/public.workspace.controller';
 import { PublicOrganizationController } from '@postsider/backend/public-api/routes/v1/public.organization.controller';
 import { PublicWebhookSubscriptionsController } from '@postsider/backend/public-api/routes/v1/public-webhook-subscriptions.controller';
@@ -22,6 +23,7 @@ const authenticatedController = [
   PublicWorkspaceController,
   PublicOrganizationController,
   PublicWebhookSubscriptionsController,
+  PublicAuditController,
 ];
 @Module({
   imports: [UploadModule],

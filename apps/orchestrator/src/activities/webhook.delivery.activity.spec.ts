@@ -1,4 +1,5 @@
 import {
+  AUDIT_RESOURCE_RETENTION_DAYS,
   DELIVERY_RETENTION_DAYS,
   IDEMPOTENCY_RETENTION_DAYS,
   PURGE_BATCH,
@@ -15,6 +16,10 @@ const build = () => {
       deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     publicApiIdempotency: {
+      findMany: jest.fn().mockResolvedValue([]),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
+    auditLog: {
       findMany: jest.fn().mockResolvedValue([]),
       deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
@@ -80,7 +85,7 @@ describe('WebhookDeliveryActivity', () => {
       expect(prisma.publicWebhookDelivery.deleteMany).toHaveBeenLastCalledWith({
         where: { id: { in: ['id0', 'id1', 'id2'] } },
       });
-      expect(out).toEqual({ deliveries: 5003, idempotency: 0 });
+      expect(out).toMatchObject({ deliveries: 5003, idempotency: 0 });
     });
 
     it('purges idempotency rows and returns both counts', async () => {
@@ -90,7 +95,7 @@ describe('WebhookDeliveryActivity', () => {
       prisma.publicApiIdempotency.findMany.mockResolvedValueOnce(ids(4));
       prisma.publicApiIdempotency.deleteMany.mockResolvedValueOnce({ count: 4 });
 
-      await expect(activity.purgeExpiredPublicApiRecords(now)).resolves.toEqual({
+      await expect(activity.purgeExpiredPublicApiRecords(now)).resolves.toMatchObject({
         deliveries: 2,
         idempotency: 4,
       });
@@ -101,9 +106,73 @@ describe('WebhookDeliveryActivity', () => {
       await expect(activity.purgeExpiredPublicApiRecords(now)).resolves.toEqual({
         deliveries: 0,
         idempotency: 0,
+        auditEvents: 0,
       });
       expect(prisma.publicWebhookDelivery.deleteMany).not.toHaveBeenCalled();
       expect(prisma.publicApiIdempotency.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.auditLog.deleteMany).not.toHaveBeenCalled();
+    });
+
+    describe('audit retention', () => {
+      const DAY = 24 * 60 * 60 * 1000;
+
+      it('exports 365 days', () => {
+        expect(AUDIT_RESOURCE_RETENTION_DAYS).toBe(365);
+      });
+
+      it('filters only resource events older than 365 days, exactly', async () => {
+        const { activity, prisma } = build();
+        await activity.purgeExpiredPublicApiRecords(now);
+        const cutoff = new Date(now.getTime() - 365 * DAY);
+        expect(prisma.auditLog.findMany).toHaveBeenCalledWith({
+          where: { type: 'resource', createdAt: { lt: cutoff } },
+          select: { id: true },
+          take: PURGE_BATCH,
+        });
+        const where = prisma.auditLog.findMany.mock.calls[0][0].where;
+        expect(Object.keys(where).sort()).toEqual(['createdAt', 'type']);
+        expect(where.createdAt.lt.getTime()).toBe(Date.parse('2025-11-04T00:00:00Z'));
+        // a row 364 days old is newer than the cutoff, so it is outside the filter
+        expect(new Date(now.getTime() - 364 * DAY) < where.createdAt.lt).toBe(false);
+        expect(new Date(now.getTime() - 366 * DAY) < where.createdAt.lt).toBe(true);
+      });
+
+      it('returns the deleted count as auditEvents', async () => {
+        const { activity, prisma } = build();
+        prisma.auditLog.findMany.mockResolvedValueOnce(ids(3));
+        prisma.auditLog.deleteMany.mockResolvedValueOnce({ count: 3 });
+        await expect(activity.purgeExpiredPublicApiRecords(now)).resolves.toEqual({
+          deliveries: 0,
+          idempotency: 0,
+          auditEvents: 3,
+        });
+      });
+
+      it('loops on full batches and stops on a short one', async () => {
+        const { activity, prisma } = build();
+        prisma.auditLog.findMany
+          .mockResolvedValueOnce(ids(PURGE_BATCH))
+          .mockResolvedValueOnce(ids(2));
+        prisma.auditLog.deleteMany
+          .mockResolvedValueOnce({ count: PURGE_BATCH })
+          .mockResolvedValueOnce({ count: 2 });
+        const out = await activity.purgeExpiredPublicApiRecords(now);
+        expect(prisma.auditLog.findMany).toHaveBeenCalledTimes(2);
+        expect(out.auditEvents).toBe(PURGE_BATCH + 2);
+      });
+
+      it('rethrows an audit failure after deliveries and idempotency ran', async () => {
+        const { activity, prisma } = build();
+        prisma.publicWebhookDelivery.findMany.mockResolvedValueOnce(ids(1));
+        prisma.publicWebhookDelivery.deleteMany.mockResolvedValueOnce({ count: 1 });
+        prisma.publicApiIdempotency.findMany.mockResolvedValueOnce(ids(1));
+        prisma.publicApiIdempotency.deleteMany.mockResolvedValueOnce({ count: 1 });
+        prisma.auditLog.findMany.mockResolvedValueOnce(ids(1));
+        prisma.auditLog.deleteMany.mockRejectedValueOnce(new Error('db down'));
+        await expect(activity.purgeExpiredPublicApiRecords(now)).rejects.toThrow('db down');
+        expect(prisma.publicWebhookDelivery.deleteMany).toHaveBeenCalledTimes(1);
+        expect(prisma.publicApiIdempotency.deleteMany).toHaveBeenCalledTimes(1);
+      });
     });
   });
 });

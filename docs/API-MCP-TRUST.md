@@ -47,6 +47,8 @@ mandatory on every workspace.
 | Change draft to queued | `PUT /public/v1/posts/:id/status` with `{"status":"schedule"}` | `posts:write` | `postsider_update_post_status` |
 | Read schedule/status | `GET /public/v1/posts/:id` | `posts:read` | `postsider_get_post` |
 | Retry failed posts of a group | `POST /public/v1/posts/group/:group/retry-failed` (`UNKNOWN_OUTCOME` posts need `includeUnknownOutcome: true`) | `posts:write` | `postsider_retry_failed_posts` |
+| Read a post's audit trail | `GET /public/v1/posts/:id/activity` | `posts:read` | `postsider_get_post_activity` |
+| List organization audit events | `GET /public/v1/audit-events` | `audit:read` | - |
 
 Paths are relative to the API origin `https://api.postsider.com`. The
 self-hosted proxy commonly adds `/api` **before** `/public/v1`.
@@ -86,11 +88,14 @@ the queue state. Final publication is asynchronous and can later become
 Named API keys have granular scopes including `organization:read`,
 `channels:read/write`, `posts:read/write`, `approvals:read/write`,
 `media:write`, `analytics:read`, `notifications:read`,
-`publishing:read/write` and `webhooks:read/write`. Grant only the
+`publishing:read/write`, `webhooks:read/write` and `audit:read`. `audit:read`
+and `webhooks:*` are never granted by default. Grant only the
 scopes an integration needs. OAuth MCP consents use `posts:read`,
 `posts:write` and `channels:write`, which the backend maps to the
 corresponding Public API permissions. Legacy OAuth credentials preserve
 pre-existing access but do not receive new webhook administration by default.
+MCP OAuth tokens cannot read `/audit-events` (no `audit:read`), but they can
+read a post's activity through `posts:read`.
 
 Webhooks use `GET /public/v1/webhook-subscriptions/events` to describe the
 supported event payloads and
@@ -100,6 +105,33 @@ deliveries are signed with `X-Postsider-Signature` and
 `X-Postsider-Timestamp`. Consumers must verify signature and timestamp,
 deduplicate by `X-Postsider-Event-Id`, and be prepared for retry/at-least-once
 delivery.
+
+### Actor versus claimed provenance
+
+The **actor** (`createdBy*`, `lastModifiedBy*`: `USER`, `API_KEY`, `OAUTH_CLIENT`
+or `SYSTEM`) is set by the server from the credential and cannot be supplied
+by a caller. **Provenance** (`agentName`, `workflowId`, `runId`, `externalRef`,
+`source`, at most 255 characters each) is what the caller claims, via the
+`provenance` body object (on `POST /posts` and `PUT /posts/:id`) or the `X-Postsider-Agent`, `X-Postsider-Workflow-Id`,
+`X-Postsider-Run-Id`, `X-Postsider-External-Ref` and `X-Postsider-Source`
+headers (body wins). Treat provenance as untrusted text and never put prompts
+or post content in it. Audit events (`post.created` through
+`post.retry_requested`) carry the actor, never post content. Rows created
+before the feature have null actor columns; new writes with a legacy
+organization key record `API_KEY` without an id. Impersonation by a super
+admin (`metadata.impersonatedBy`) exists only where
+`ALLOW_SUPERADMIN_IMPERSONATION=true`.
+
+### Approval idempotency
+
+`POST /posts/:id/request-approval` answers HTTP 201 with `created: true` for a
+new request, and returns the existing pending approval with HTTP 200 and
+`created: false` on a repeat, without notifying reviewers again, so a retry
+after an error or timeout is safe. The `guestToken` is never returned.
+Guest reviewers must supply `guestName` and `guestEmail`
+(`GUEST_REVIEW_REQUIRE_IDENTITY`, default on, exists only for deploy ordering;
+supplying only one of the two is always rejected). Both values are
+self-asserted, not verified, so treat them as a claim.
 
 ## Errors that an agent can explain
 

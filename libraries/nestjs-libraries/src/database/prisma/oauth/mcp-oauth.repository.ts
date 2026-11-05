@@ -350,6 +350,8 @@ export class McpOAuthRepository {
       membership,
       scopes: row.grant.scopes,
       mcpOAuthGrantId: row.grant.id,
+      mcpOAuthClientId: row.grant.mcpOAuthClientId,
+      userId: row.grant.userId,
     };
   }
 }
