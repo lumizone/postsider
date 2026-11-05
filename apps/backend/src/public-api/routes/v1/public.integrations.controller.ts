@@ -15,7 +15,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { CustomFileValidationPipe } from '@postsider/nestjs-libraries/upload/custom.upload.validation';
-import { ApiHeader, ApiTags } from '@nestjs/swagger';
+import {
+  ApiExtraModels,
+  ApiHeader,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
+import { PublicPostFailureFieldsDto } from '@postsider/nestjs-libraries/dtos/posts/public-post-failure.dto';
 import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
 import { Organization } from '@prisma/client';
 import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
@@ -27,6 +33,7 @@ import { UploadFactory } from '@postsider/nestjs-libraries/upload/upload.factory
 import { probeDimensions } from '@postsider/nestjs-libraries/upload/probe-dimensions';
 import { MediaService } from '@postsider/nestjs-libraries/database/prisma/media/media.service';
 import { GetPostsDto } from '@postsider/nestjs-libraries/dtos/posts/get.posts.dto';
+import { RetryFailedPostsDto } from '@postsider/nestjs-libraries/dtos/posts/retry-failed.dto';
 import { ChangePostStatusDto } from '@postsider/nestjs-libraries/dtos/posts/change.post.status.dto';
 import {
   AuthorizationActions,
@@ -75,6 +82,7 @@ import {
 } from '@postsider/nestjs-libraries/upload/remote.response';
 
 @ApiTags('Public API')
+@ApiExtraModels(PublicPostFailureFieldsDto)
 @ApiHeader({
   name: 'Authorization',
   required: true,
@@ -270,6 +278,11 @@ export class PublicIntegrationsController {
 
   @Get('/posts')
   @RequirePublicApiScopes('posts:read')
+  @ApiOperation({
+    summary: 'List posts',
+    description:
+      'Returns posts in a date range. Each post row includes errorCategory, errorRetryable, publishAttempts and lastPublishAttemptAt. UNKNOWN_OUTCOME means the platform may have published the post: check the channel before retrying.',
+  })
   async getPosts(
     @GetOrgFromRequest() org: Organization,
     @Query() query: GetPostsDto,
@@ -343,6 +356,11 @@ export class PublicIntegrationsController {
 
   @Get('/posts/:id')
   @RequirePublicApiScopes('posts:read')
+  @ApiOperation({
+    summary: 'Get a post',
+    description:
+      'Returns the post group. Each post row includes errorCategory (AUTH_EXPIRED, PERMISSION_MISSING, RATE_LIMITED, INVALID_CONTENT, PROVIDER_UNAVAILABLE, UNKNOWN_OUTCOME, UNKNOWN or null), errorRetryable, publishAttempts and lastPublishAttemptAt. UNKNOWN_OUTCOME means the platform may have published the post: check the channel before retrying.',
+  })
   async getPost(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string
@@ -542,6 +560,35 @@ export class PublicIntegrationsController {
   ) {
     Sentry.metrics.count('public_api-request', 1);
     return this._postsService.deletePost(org.id, group);
+  }
+
+  @Post('/posts/group/:group/retry-failed')
+  @RequirePublicApiScopes('posts:write')
+  async retryFailedByGroup(
+    @GetOrgFromRequest() org: Organization,
+    @Param('group') group: string,
+    @Body() body: RetryFailedPostsDto,
+    @Headers('idempotency-key') idempotencyKey?: string
+  ) {
+    Sentry.metrics.count('public_api-request', 1);
+    const includeUnknownOutcome = body.includeUnknownOutcome === true;
+    const claim = await this._idempotency.claim(org.id, idempotencyKey, {
+      route: 'retry-failed',
+      group,
+      includeUnknownOutcome,
+    });
+    if (claim?.kind === 'replay') return claim.response;
+
+    try {
+      const result = await this._postsService.retryFailedByGroup(org.id, group, {
+        includeUnknownOutcome,
+      });
+      if (claim?.kind === 'new') await this._idempotency.complete(claim.id, result);
+      return result;
+    } catch (error) {
+      if (claim?.kind === 'new') await this._idempotency.release(claim.id);
+      throw error;
+    }
   }
 
   // Lets an external content pipeline (agency's own generator, n8n, ...) push

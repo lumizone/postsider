@@ -50,6 +50,8 @@ export class InfiniteWorkflowRegister implements OnModuleInit {
       { type: 'evergreenWorkflow', id: 'evergreen-workflow' },
       { type: 'collectAnalyticsWorkflow', id: 'collect-analytics-workflow' },
       { type: 'refreshRecoveryWorkflow', id: 'refresh-recovery-workflow' },
+      { type: 'webhookDeliveryWorkflow', id: 'webhook-delivery-workflow' },
+      { type: 'publicApiRetentionWorkflow', id: 'public-api-retention-workflow' },
     ] as const;
     const maxAttempts = 20;
     const delayMs = 15_000;

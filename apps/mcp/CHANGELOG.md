@@ -4,6 +4,15 @@ Notable changes to `@postsider/mcp`. This file begins with the first released
 version: earlier internal iterations were never published, so they are not
 recorded here.
 
+## Unreleased
+
+### Added
+
+- `postsider_retry_failed_posts`: re-queue only the ERROR destinations of a
+  post group. Unknown-outcome rows are skipped unless explicitly confirmed.
+- `postsider_get_post` documents the new `errorCategory`, `errorRetryable`,
+  `publishAttempts` and `lastPublishAttemptAt` fields.
+
 ## 1.1.0 - 2026-10-13
 
 ### Fixed

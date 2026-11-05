@@ -12,7 +12,7 @@ describe('PublicWebhookSubscriptionsController contract', () => {
       .map((name) => (prototype as any)[name])
       .filter((handler) => Reflect.hasMetadata(METHOD_METADATA, handler));
 
-    expect(routeHandlers.length).toBe(7);
+    expect(routeHandlers.length).toBe(10);
     for (const handler of routeHandlers) {
       const scopes = Reflect.getMetadata(PUBLIC_API_SCOPES_KEY, handler);
       expect(scopes).toEqual(expect.arrayContaining([expect.any(String)]));
@@ -21,7 +21,7 @@ describe('PublicWebhookSubscriptionsController contract', () => {
   });
 
   it('returns samples for all supported events without exposing a real secret', () => {
-    const controller = new PublicWebhookSubscriptionsController({} as any);
+    const controller = new PublicWebhookSubscriptionsController({} as any, {} as any);
     const result = controller.events({ id: 'org-1' } as any);
 
     expect(result.map(({ event }) => event)).toEqual([

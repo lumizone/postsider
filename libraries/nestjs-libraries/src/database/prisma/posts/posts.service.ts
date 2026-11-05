@@ -4,10 +4,14 @@ import {
   HttpStatus,
   Injectable,
   Logger,
+  NotFoundException,
   Optional,
   ValidationPipe,
 } from '@nestjs/common';
-import { PostsRepository } from '@postsider/nestjs-libraries/database/prisma/posts/posts.repository';
+import {
+  PostErrorMeta,
+  PostsRepository,
+} from '@postsider/nestjs-libraries/database/prisma/posts/posts.repository';
 import { CreatePostDto } from '@postsider/nestjs-libraries/dtos/posts/create.post.dto';
 import dayjs from 'dayjs';
 import { slotsForDay } from './queue-slots';
@@ -74,6 +78,18 @@ import { FunnelAttributionService } from '@postsider/nestjs-libraries/database/p
 type PostWithConditionals = Post & {
   integration?: Integration;
   childrenPost: Post[];
+};
+
+export type RetryFailedResult = {
+  postId: string;
+  integrationId: string;
+  previousState: State;
+  action: 'requeued' | 'skipped';
+  reason?:
+    | 'not_in_error_state'
+    | 'unknown_outcome_requires_confirmation'
+    | 'already_published'
+    | 'rearm_failed';
 };
 
 @Injectable()
@@ -997,7 +1013,7 @@ export class PostsService {
       if (!workflow) {
         throw new Error('Temporal client is not available');
       }
-      await workflow.start('postWorkflowV108', {
+      await workflow.start('postWorkflowV109', {
         workflowId: `post_${postId}`,
         taskQueue: 'main',
         workflowIdConflictPolicy: 'TERMINATE_EXISTING',
@@ -1029,7 +1045,8 @@ export class PostsService {
           'ERROR',
           'Could not schedule the publish workflow (scheduler unavailable). Please re-schedule this post.',
           undefined,
-          orgId
+          orgId,
+          { category: 'UNKNOWN', retryable: true }
         );
       } catch (stateErr) {
         this._logger.error(
@@ -1587,9 +1604,98 @@ export class PostsService {
     state: State,
     err?: any,
     body?: any,
-    orgId?: string
+    orgId?: string,
+    meta?: PostErrorMeta
   ) {
-    return this._postRepository.changeState(id, state, err, body, orgId);
+    return this._postRepository.changeState(id, state, err, body, orgId, meta);
+  }
+
+  recordPublishAttempt(orgId: string, id: string) {
+    return this._postRepository.recordPublishAttempt(orgId, id);
+  }
+
+  claimErrorForRetry(orgId: string, id: string) {
+    return this._postRepository.claimErrorForRetry(orgId, id);
+  }
+
+  getTopLevelPostsByGroup(orgId: string, group: string) {
+    return this._postRepository.getTopLevelPostsByGroup(orgId, group);
+  }
+
+  /**
+   * Re-arms the failed destinations of a post group. Rows are claimed
+   * ERROR -> QUEUE conditionally, so concurrent calls cannot double-start a
+   * row, and rows that already carry a release id are never re-armed
+   * (at-most-once publishing).
+   */
+  async retryFailedByGroup(
+    orgId: string,
+    group: string,
+    opts: { includeUnknownOutcome: boolean }
+  ): Promise<{ group: string; results: RetryFailedResult[] }> {
+    const rows = await this.getTopLevelPostsByGroup(orgId, group);
+    if (!rows.length) {
+      throw new NotFoundException('Group not found');
+    }
+    if (rows.some((r) => r.state === 'ERROR')) {
+      await this.assertOrgNotPausedForSchedule(orgId);
+    }
+    const results: RetryFailedResult[] = [];
+    for (const row of rows) {
+      results.push(await this.retryFailedRow(orgId, row, opts));
+    }
+    return { group, results };
+  }
+
+  private async retryFailedRow(
+    orgId: string,
+    row: Awaited<ReturnType<PostsService['getTopLevelPostsByGroup']>>[number],
+    opts: { includeUnknownOutcome: boolean }
+  ): Promise<RetryFailedResult> {
+    const base = {
+      postId: row.id,
+      integrationId: row.integrationId,
+      previousState: row.state as State,
+    };
+    const skip = (reason: NonNullable<RetryFailedResult['reason']>): RetryFailedResult => ({
+      ...base,
+      action: 'skipped',
+      reason,
+    });
+
+    if (row.state !== 'ERROR') return skip('not_in_error_state');
+    if (row.errorCategory === 'UNKNOWN_OUTCOME' && !opts.includeUnknownOutcome) {
+      return skip('unknown_outcome_requires_confirmation');
+    }
+    if (row.releaseId && row.releaseId !== 'missing') return skip('already_published');
+
+    const provider = row.integration.providerIdentifier;
+    if (provider === 'tiktok') {
+      try {
+        const problems = await this.tiktokProblemsForStoredPost(orgId, row.id);
+        if (problems.length) return skip('rearm_failed');
+      } catch (err) {
+        this._logger.error(`retryFailed: TikTok check failed for post ${row.id}: ${err}`);
+        return skip('rearm_failed');
+      }
+    }
+
+    if (!(await this.claimErrorForRetry(orgId, row.id))) {
+      return skip('not_in_error_state');
+    }
+    try {
+      await this.startWorkflow(
+        provider.split('-')[0].toLowerCase(),
+        row.id,
+        orgId,
+        'QUEUE'
+      );
+    } catch (err) {
+      // startWorkflow already marked the row ERROR again.
+      this._logger.error(`retryFailed: could not re-arm post ${row.id}: ${err}`);
+      return skip('rearm_failed');
+    }
+    return { ...base, action: 'requeued' };
   }
 
   /**

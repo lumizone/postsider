@@ -6,7 +6,7 @@ export const loadSwagger = (app: INestApplication) => {
   const config = new DocumentBuilder()
     .setTitle('PostSider API')
     .setDescription(
-      'PostSider REST API. The Agent Bridge surface is served under /public/v1 and authenticated with an agent token (agt_), OAuth token (pos_) or organization API key.'
+      'PostSider REST API. The public API is served under /public/v1 and authenticated with an OAuth token (pos_) or an organization API key.'
     )
     .setVersion('1.0')
     .addBearerAuth(

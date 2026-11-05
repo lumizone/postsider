@@ -22,6 +22,18 @@ import { v4 as uuidv4 } from 'uuid';
 import { CreateTagDto } from '@postsider/nestjs-libraries/dtos/posts/create.tag.dto';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import { randomBytes } from 'crypto';
+import { PublishErrorCategoryName } from '@postsider/nestjs-libraries/integrations/publish-error.classifier';
+
+export interface PostErrorMeta {
+  category: PublishErrorCategoryName;
+  retryable: boolean;
+}
+
+const CLEARED_ERROR_FIELDS = {
+  error: null,
+  errorCategory: null,
+  errorRetryable: null,
+} as const;
 
 dayjs.extend(isoWeek);
 dayjs.extend(weekOfYear);
@@ -326,6 +338,10 @@ export class PostsRepository {
         group: true,
         creationMethod: true,
         image: true,
+        errorCategory: true,
+        errorRetryable: true,
+        publishAttempts: true,
+        lastPublishAttemptAt: true,
         tags: {
           select: {
             tag: true,
@@ -588,6 +604,44 @@ export class PostsRepository {
         state: 'PUBLISHED',
         releaseURL,
         releaseId: postId,
+        ...CLEARED_ERROR_FIELDS,
+      },
+    });
+  }
+
+  recordPublishAttempt(orgId: string, id: string) {
+    return this._post.model.post.update({
+      where: { id, organizationId: orgId },
+      data: {
+        publishAttempts: { increment: 1 },
+        lastPublishAttemptAt: new Date(),
+      },
+    });
+  }
+
+  async claimErrorForRetry(orgId: string, id: string): Promise<boolean> {
+    const res = await this._post.model.post.updateMany({
+      where: { id, organizationId: orgId, state: 'ERROR', deletedAt: null },
+      data: { state: 'QUEUE', ...CLEARED_ERROR_FIELDS },
+    });
+    return res.count === 1;
+  }
+
+  getTopLevelPostsByGroup(orgId: string, group: string) {
+    return this._post.model.post.findMany({
+      where: {
+        organizationId: orgId,
+        group,
+        deletedAt: null,
+        parentPostId: null,
+      },
+      select: {
+        id: true,
+        state: true,
+        integrationId: true,
+        errorCategory: true,
+        releaseId: true,
+        integration: { select: { providerIdentifier: true } },
       },
     });
   }
@@ -610,7 +664,8 @@ export class PostsRepository {
     state: State,
     err?: any,
     body?: any,
-    orgId?: string
+    orgId?: string,
+    meta?: PostErrorMeta
   ) {
     const update = await this._post.model.post.update({
       where: {
@@ -621,6 +676,15 @@ export class PostsRepository {
         state,
         ...(err
           ? { error: typeof err === 'string' ? err : JSON.stringify(err) }
+          : {}),
+        ...(state === 'ERROR'
+          ? {
+              errorCategory: meta?.category ?? 'UNKNOWN',
+              errorRetryable: meta?.retryable ?? false,
+            }
+          : {}),
+        ...((state === 'QUEUE' || state === 'DRAFT') && !err
+          ? CLEARED_ERROR_FIELDS
           : {}),
       },
       include: {
@@ -665,6 +729,16 @@ export class PostsRepository {
     isDraft: boolean,
     action: 'schedule' | 'update' = 'schedule'
   ) {
+    // A published post keeps its release ids: clearing them would let the
+    // re-armed post publish a second time (at-most-once publishing).
+    const existing =
+      action === 'schedule'
+        ? await this._post.model.post.findFirst({
+            where: { organizationId: orgId, id },
+            select: { state: true },
+          })
+        : null;
+    const keepRelease = existing?.state === 'PUBLISHED';
     return this._post.model.post.update({
       where: {
         organizationId: orgId,
@@ -677,8 +751,8 @@ export class PostsRepository {
         ...(action === 'schedule'
           ? {
               state: isDraft ? 'DRAFT' : 'QUEUE',
-              releaseId: null,
-              releaseURL: null,
+              ...(keepRelease ? {} : { releaseId: null, releaseURL: null }),
+              ...CLEARED_ERROR_FIELDS,
             }
           : {}),
       },
@@ -720,15 +794,17 @@ export class PostsRepository {
     const uuid = uuidv4();
 
     for (const value of body.value) {
-      if (state === 'update' && value.id) {
-        const existing = await this._post.model.post.findFirst({
-          where: { id: value.id, organizationId: orgId, deletedAt: null },
-          select: { id: true },
-        });
-        if (!existing) {
-          throw new BadRequestException('Post not found');
-        }
+      const existing = value.id
+        ? await this._post.model.post.findFirst({
+            where: { id: value.id, organizationId: orgId, deletedAt: null },
+            select: { id: true, state: true },
+          })
+        : null;
+      if (state === 'update' && value.id && !existing) {
+        throw new BadRequestException('Post not found');
       }
+      // Never clear release ids of an already published row (at-most-once).
+      const keepRelease = existing?.state === 'PUBLISHED';
       const updateData = (type: 'create' | 'update') => ({
         publishDate: dayjs(date).toDate(),
         integration: {
@@ -768,6 +844,10 @@ export class PostsRepository {
           : {
               state:
                 state === 'draft' ? ('DRAFT' as const) : ('QUEUE' as const),
+              ...(type === 'update' && keepRelease
+                ? {}
+                : { releaseId: null, releaseURL: null }),
+              ...CLEARED_ERROR_FIELDS,
             }),
         image: JSON.stringify(value.image),
         settings: JSON.stringify(body.settings),

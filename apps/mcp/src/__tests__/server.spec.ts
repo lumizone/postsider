@@ -210,6 +210,46 @@ describe('createPostSiderMcpServer', () => {
       await mcpClient.close();
     });
 
+    it('retries failed posts via POST retry-failed with encoded group, body and idempotency key', async () => {
+      fetchMock.mockImplementation(async () => new Response('{"group":"g 1","results":[]}', { status: 200 }));
+      const mcpClient = await connect();
+
+      const result = await mcpClient.callTool({
+        name: 'postsider_retry_failed_posts',
+        arguments: { groupId: 'g 1', includeUnknownOutcome: true, idempotencyKey: 'k1' },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(String(url)).toContain('/posts/group/g%201/retry-failed');
+      expect(init.method).toBe('POST');
+      expect(init.body).toBe('{"includeUnknownOutcome":true}');
+      expect((init.headers as Record<string, string>)['Idempotency-Key']).toBe('k1');
+      await mcpClient.close();
+    });
+
+    it('defaults includeUnknownOutcome to false when retrying failed posts', async () => {
+      fetchMock.mockImplementation(async () => new Response('{"group":"g1","results":[]}', { status: 200 }));
+      const mcpClient = await connect();
+
+      await mcpClient.callTool({
+        name: 'postsider_retry_failed_posts',
+        arguments: { groupId: 'g1' },
+      });
+
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(init.body).toBe('{"includeUnknownOutcome":false}');
+      await mcpClient.close();
+    });
+
+    it('documents the failure fields on postsider_get_post', async () => {
+      const mcpClient = await connect();
+      const { tools } = await mcpClient.listTools();
+      const tool = tools.find((t) => t.name === 'postsider_get_post');
+      expect(tool?.description).toContain('errorCategory');
+      await mcpClient.close();
+    });
+
     it('refuses a plain HTTP media URL', async () => {
       const mcpClient = await connect();
 

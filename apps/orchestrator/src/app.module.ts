@@ -8,6 +8,7 @@ import { MediaCleanupActivity } from '@postsider/orchestrator/activities/media.c
 import { R2MultipartCleanupActivity } from '@postsider/orchestrator/activities/r2.multipart.cleanup.activity';
 import { EvergreenActivity } from '@postsider/orchestrator/activities/evergreen.activity';
 import { CollectAnalyticsActivity } from '@postsider/orchestrator/activities/collect.analytics.activity';
+import { WebhookDeliveryActivity } from '@postsider/orchestrator/activities/webhook.delivery.activity';
 import { HealthController } from '@postsider/orchestrator/health.controller';
 
 const activities = [
@@ -18,6 +19,7 @@ const activities = [
   R2MultipartCleanupActivity,
   EvergreenActivity,
   CollectAnalyticsActivity,
+  WebhookDeliveryActivity,
 ];
 @Module({
   imports: [

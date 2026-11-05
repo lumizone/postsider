@@ -46,6 +46,7 @@ mandatory on every workspace.
 | Read review status | `GET /public/v1/posts/:id/approval` | `approvals:read` | `postsider_get_approval_status` |
 | Change draft to queued | `PUT /public/v1/posts/:id/status` with `{"status":"schedule"}` | `posts:write` | `postsider_update_post_status` |
 | Read schedule/status | `GET /public/v1/posts/:id` | `posts:read` | `postsider_get_post` |
+| Retry failed posts of a group | `POST /public/v1/posts/group/:group/retry-failed` (`UNKNOWN_OUTCOME` posts need `includeUnknownOutcome: true`) | `posts:write` | `postsider_retry_failed_posts` |
 
 Paths are relative to the API origin `https://api.postsider.com`. The
 self-hosted proxy commonly adds `/api` **before** `/public/v1`.

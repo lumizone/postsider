@@ -418,7 +418,7 @@ export function createPostSiderMcpServer(
     {
       title: 'Get post details',
       description:
-        'Get the full organization-scoped post group, including current state, scheduled time, media, channel and publish error. Use this to inspect the result of an asynchronous create or publish operation.',
+        'Get the full organization-scoped post group, including current state, scheduled time, media, channel and publish error. Use this to inspect the result of an asynchronous create or publish operation. Each post row also carries errorCategory, errorRetryable, publishAttempts and lastPublishAttemptAt; UNKNOWN_OUTCOME means check the platform before retrying.',
       inputSchema: {
         postId: nonEmptyId.describe('Post id returned by postsider_create_post.'),
       },
@@ -882,7 +882,7 @@ export function createPostSiderMcpServer(
     {
       title: 'Update post status',
       description:
-        'Move an existing post between draft and scheduled queue. Switching to "schedule" makes the post eligible for automatic publication at its saved date; do so only after the user explicitly authorized the content, channels and timing. Read the stored post before and after the change.',
+        'Move an existing post between draft and scheduled queue. Switching to "schedule" makes the post eligible for automatic publication at its saved date; do so only after the user explicitly authorized the content, channels and timing. Read the stored post before and after the change. If the post is in ERROR with errorCategory UNKNOWN_OUTCOME, it may already be live on the channel: ask the user to check the channel and confirm before re-queuing it, and prefer postsider_retry_failed_posts for group retries.',
       inputSchema: {
         postId: nonEmptyId.describe('Post id.'),
         status: z
@@ -900,6 +900,47 @@ export function createPostSiderMcpServer(
       try {
         return ok(
           await client.put(`/posts/${encodeURIComponent(postId)}/status`, { status })
+        );
+      } catch (e) {
+        return fail(e);
+      }
+    }
+  );
+
+  server.registerTool(
+    'postsider_retry_failed_posts',
+    {
+      title: 'Retry failed posts',
+      description:
+        'Re-queue only the destinations of a post group that are in ERROR, never published, queued, draft or pending approval rows. Read the group first with postsider_get_post. Rows whose errorCategory is UNKNOWN_OUTCOME may already be live on the platform: they are skipped unless includeUnknownOutcome is true, and you must only set it after the user confirmed on the platform that the post is not published. The result lists every row as requeued or skipped with a reason. Do not call this repeatedly; read the posts back to see the new state.',
+      inputSchema: {
+        groupId: nonEmptyId.describe('Post group id (the group field of postsider_get_post).'),
+        includeUnknownOutcome: z
+          .boolean()
+          .optional()
+          .describe('Also re-queue UNKNOWN_OUTCOME rows. Only after the user confirmed the post is not live.'),
+        idempotencyKey: z
+          .string()
+          .min(1)
+          .max(255)
+          .optional()
+          .describe('Optional key so a repeated call does not re-queue twice.'),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async ({ groupId, includeUnknownOutcome, idempotencyKey }) => {
+      try {
+        return ok(
+          await client.post(
+            `/posts/group/${encodeURIComponent(groupId)}/retry-failed`,
+            { includeUnknownOutcome: includeUnknownOutcome === true },
+            idempotencyKey
+          )
         );
       } catch (e) {
         return fail(e);

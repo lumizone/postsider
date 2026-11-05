@@ -29,6 +29,7 @@ export const EXPECTED_TOOL_NAMES = [
   'postsider_request_approval',
   'postsider_update_post',
   'postsider_update_post_status',
+  'postsider_retry_failed_posts',
   'postsider_upload_media_base64',
   'postsider_upload_media_from_url',
   'postsider_check_post',
@@ -47,7 +48,7 @@ export const EXPECTED_TOOL_NAMES = [
   'postsider_set_queue_plan',
 ] as const;
 
-export const EXPECTED_TOOL_COUNT = 37;
+export const EXPECTED_TOOL_COUNT = 38;
 
 /**
  * The expected risk annotations of every tool.
@@ -205,6 +206,12 @@ export const EXPECTED_TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
     openWorldHint: true,
   },
   postsider_update_post_status: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: true,
+  },
+  postsider_retry_failed_posts: {
     readOnlyHint: false,
     destructiveHint: false,
     idempotentHint: true,

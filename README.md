@@ -250,7 +250,7 @@ Full MCP documentation:
 
 ### Claude Code plugin
 
-This repository also contains the Claude Code plugin metadata and the `postsider-workflow` skill.
+This repository also contains the Claude Code plugin metadata and five skills: postsider-agency-operations, postsider-approval-workflow, postsider-calendar-review, postsider-content-publishing and postsider-performance-reporting.
 
 ```bash
 claude plugin marketplace add lumizone/postsider
@@ -262,6 +262,32 @@ A safe read-only connection check:
 ```text
 List my connected PostSider channels. Do not create or modify anything.
 ```
+
+### Webhooks
+
+Webhook subscriptions are managed under `/public/v1/webhook-subscriptions` and receive these events: `post.published`, `post.failed`, `approval.requested` and `approval.resolved`. The `webhook.test` event is sent only by the test endpoint described below.
+
+Every delivery is a JSON POST with this envelope:
+
+```json
+{ "id": "...", "event": "post.failed", "createdAt": "...", "organizationId": "...", "data": {} }
+```
+
+For `post.failed`, `data` contains `postId`, `error`, `errorCategory`, `errorRetryable` and `post`.
+
+Each request carries these headers: `X-Postsider-Event`, `X-Postsider-Event-Id`, `X-Postsider-Timestamp`, `X-Postsider-Signature` and `X-Webhook-Attempt`. The signature is `HMAC-SHA256` over `<timestamp>.<raw body>` computed with the subscription secret, sent as `sha256=<hex>`. Verify it against the raw request body before parsing.
+
+Delivery is at least once, so receivers must dedupe on the event id. A failed delivery is retried after 1 minute, 5 minutes, 30 minutes, 2 hours, 6 hours and 12 hours, which makes 7 attempts in total. After the last attempt the delivery is marked `FAILED`. Responses with a 4xx status other than 429 are not retried. A subscription is deactivated after 10 consecutive failed deliveries.
+
+Delivery log, replay and test routes:
+
+- `GET /public/v1/webhook-subscriptions/:id/deliveries` lists deliveries (scope `webhooks:read`).
+- `POST /public/v1/webhook-subscriptions/:id/deliveries/:deliveryId/replay` queues a delivery again (scope `webhooks:write`).
+- `POST /public/v1/webhook-subscriptions/:id/test` sends a `webhook.test` event (scope `webhooks:write`).
+
+Deliveries are kept for 30 days and idempotency keys for 7 days.
+
+To retry the failed posts of a group, call `POST /public/v1/posts/group/:group/retry-failed` (scope `posts:write`, optional `Idempotency-Key` header). Posts whose `errorCategory` is `UNKNOWN_OUTCOME` may already have been published on the provider, so they are skipped unless the body sets `includeUnknownOutcome` to `true`. The MCP tool `postsider_retry_failed_posts` wraps this route.
 
 ---
 

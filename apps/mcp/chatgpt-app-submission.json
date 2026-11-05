@@ -200,6 +200,18 @@
         "destructive_justification": "Does not delete, overwrite, or revoke anything."
       }
     },
+    "postsider_retry_failed_posts": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Re-queues failed posts for publishing to the user's connected channels.",
+        "open_world_justification": "Failed posts are published again to the external social platforms the user connected.",
+        "destructive_justification": "Does not delete or overwrite content."
+      }
+    },
     "postsider_delete_post": {
       "annotations": {
         "readOnlyHint": false,

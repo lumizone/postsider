@@ -12,7 +12,18 @@ import {
 import { Integration, Post, State } from '@prisma/client';
 import { stripHtmlValidation } from '@postsider/helpers/utils/strip.html.validation';
 import { IntegrationManager } from '@postsider/nestjs-libraries/integrations/integration.manager';
-import { AuthTokenDetails } from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import {
+  AuthTokenDetails,
+  PostResponse,
+} from '@postsider/nestjs-libraries/integrations/social/social.integrations.interface';
+import {
+  classifyPublishError,
+  PrePublishError,
+  PublishFailure,
+  sanitizeFailureMessage,
+  UNKNOWN_OUTCOME_MESSAGE,
+} from '@postsider/nestjs-libraries/integrations/publish-error.classifier';
+import { runWithPublishSideEffectTracking } from '@postsider/nestjs-libraries/integrations/publish-side-effect.context';
 import { RefreshIntegrationService } from '@postsider/nestjs-libraries/integrations/refresh.integration.service';
 import { timer } from '@postsider/helpers/utils/timer';
 import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
@@ -27,6 +38,11 @@ import { SubscriptionService } from '@postsider/nestjs-libraries/database/prisma
 import { ProviderEnvHelper } from '@postsider/nestjs-libraries/integrations/provider-env.helper';
 import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
 import { signWebhook } from '@postsider/nestjs-libraries/services/webhook.signature';
+
+export type PublishAttemptResult =
+  | { outcome: 'published'; results: PostResponse[] }
+  | { outcome: 'already_published'; releaseId: string }
+  | { outcome: 'failed'; failure: PublishFailure };
 
 // Drops fields the workflow and downstream activities never read — biggest wins are `error` (grows per retry) and `childrenPost` (Prisma side-loads it on every recursive row).
 function slimPost(post: any) {
@@ -112,7 +128,7 @@ export class PostActivity {
     for (const post of list) {
       await this._temporalService
         .client!.getRawClient()!
-        .workflow.signalWithStart('postWorkflowV108', {
+        .workflow.signalWithStart('postWorkflowV109', {
           workflowId: `post_${post.id}`,
           taskQueue: 'main',
           signal: 'poke',
@@ -279,7 +295,7 @@ export class PostActivity {
           );
 
           if (!subscription) {
-            throw new Error(
+            throw new PrePublishError(
               'No active subscription found for this organization.'
             );
           }
@@ -291,7 +307,7 @@ export class PostActivity {
         // Orphaned integration for a provider that no longer exists — fail this
         // post cleanly (workflow marks it ERROR) instead of crashing on undefined.
         if (!getIntegration) {
-          throw new Error(
+          throw new PrePublishError(
             `Provider "${integration.providerIdentifier}" is no longer supported`
           );
         }
@@ -395,31 +411,74 @@ export class PostActivity {
     body?: any,
     orgId?: string
   ) {
-    await this._postService.changeState(id, state, err, body, orgId);
+    const meta =
+      state === 'ERROR'
+        ? err && typeof err === 'object'
+          ? (({ category, retryable }) => ({ category, retryable }))(
+              classifyPublishError(err)
+            )
+          : { category: 'UNKNOWN' as const, retryable: false }
+        : undefined;
+    await this._postService.changeState(id, state, err, body, orgId, meta);
     if (state === 'ERROR') {
       const eventOrganizationId =
         orgId ??
         body?.[0]?.integration?.organizationId ??
         body?.[0]?.organizationId;
       if (eventOrganizationId) {
-        const post = await this._postService
-          .getPostByForWebhookId(id, eventOrganizationId)
-          .catch(() => null);
-        await this._publicWebhookDelivery
-          .deliver(eventOrganizationId, 'post.failed', {
-            postId: id,
-            error: err == null ? null : String(err),
-            post,
-          })
-          .catch((error) => {
-            this._logger.warn(
-              `Public webhook delivery failed without blocking state update: ${String(
-                error
-              )}`
-            );
-          });
+        await this._emitPostFailed(
+          eventOrganizationId,
+          id,
+          err == null ? null : String(err),
+          meta!
+        );
       }
     }
+  }
+
+  private async _emitPostFailed(
+    orgId: string,
+    postId: string,
+    errorText: string | null,
+    meta: { category: string; retryable: boolean }
+  ) {
+    const post = await this._postService
+      .getPostByForWebhookId(postId, orgId)
+      .catch(() => null);
+    await this._publicWebhookDelivery
+      .deliver(orgId, 'post.failed', {
+        postId,
+        error: errorText,
+        errorCategory: meta.category,
+        errorRetryable: meta.retryable,
+        post,
+      })
+      .catch((error) => {
+        this._logger.warn(
+          `Public webhook delivery failed without blocking state update: ${String(
+            error
+          )}`
+        );
+      });
+  }
+
+  @ActivityMethod()
+  async markPublishFailed(
+    orgId: string,
+    postId: string,
+    failure: PublishFailure,
+    body?: unknown
+  ): Promise<void> {
+    const meta = { category: failure.category, retryable: failure.retryable };
+    await this._postService.changeState(
+      postId,
+      'ERROR',
+      failure.message,
+      body,
+      orgId,
+      meta
+    );
+    await this._emitPostFailed(orgId, postId, failure.message, meta);
   }
 
   @ActivityMethod()
@@ -663,6 +722,120 @@ export class PostActivity {
       throw new Error(`Integration ${integrationId} not found`);
     }
     return integration as Integration;
+  }
+
+  private _startFailure(e: any): PublishAttemptResult {
+    return {
+      outcome: 'failed',
+      failure: {
+        category: 'UNKNOWN',
+        retryable: true,
+        autoRetry: 'none',
+        message:
+          'Publishing could not start: ' +
+          sanitizeFailureMessage(e?.message, 'internal error'),
+      },
+    };
+  }
+
+  /**
+   * A provider call that already got a 2xx for a write request and then failed
+   * may have published, so whatever the classified category, it is not safe to
+   * auto-retry. Only requests made through SocialAbstract.fetch are observed.
+   */
+  private _failureAfterCall(
+    e: any,
+    sideEffectObserved: boolean
+  ): PublishFailure {
+    const failure = classifyPublishError(e);
+    if (!sideEffectObserved) return failure;
+    const original = sanitizeFailureMessage(failure.message, '');
+    return {
+      category: 'UNKNOWN_OUTCOME',
+      retryable: false,
+      autoRetry: 'none',
+      message: sanitizeFailureMessage(
+        original && original !== UNKNOWN_OUTCOME_MESSAGE
+          ? `${UNKNOWN_OUTCOME_MESSAGE} (${original})`
+          : UNKNOWN_OUTCOME_MESSAGE,
+        UNKNOWN_OUTCOME_MESSAGE
+      ),
+    };
+  }
+
+  @ActivityMethod()
+  async publishPostById(
+    orgId: string,
+    integrationId: string,
+    posts: Post[],
+    allowRepublish: boolean
+  ): Promise<PublishAttemptResult> {
+    let integration: Integration;
+    try {
+      const row = await this._postService.getPostById(posts[0].id, orgId);
+      if (!allowRepublish && row?.releaseId && row.releaseId !== 'missing') {
+        if (row.state === 'QUEUE') {
+          await this._postService.updatePost(
+            row.id,
+            row.releaseId,
+            row.releaseURL ?? '',
+            orgId
+          );
+        }
+        return { outcome: 'already_published', releaseId: row.releaseId };
+      }
+      await this._postService.recordPublishAttempt(orgId, posts[0].id);
+      integration = await this._loadIntegration(orgId, integrationId);
+    } catch (e: any) {
+      return this._startFailure(e);
+    }
+    const tracked = runWithPublishSideEffectTracking(() =>
+      this.postSocial(integration, posts)
+    );
+    try {
+      return { outcome: 'published', results: await tracked.result };
+    } catch (e) {
+      return {
+        outcome: 'failed',
+        failure: this._failureAfterCall(e, tracked.state.sideEffectObserved),
+      };
+    }
+  }
+
+  @ActivityMethod()
+  async publishCommentById(
+    orgId: string,
+    integrationId: string,
+    id: string,
+    postId: string | undefined,
+    posts: Post[]
+  ): Promise<PublishAttemptResult> {
+    let integration: Integration;
+    // Best-effort: first comments use a synthetic id with no row, and attempt
+    // bookkeeping must never block a real provider call.
+    try {
+      await this._postService.recordPublishAttempt(orgId, posts[0].id);
+    } catch (e: any) {
+      this._logger.warn(
+        `publishCommentById: could not record attempt for ${posts[0]?.id}: ${e?.message}`
+      );
+    }
+    try {
+      integration = await this._loadIntegration(orgId, integrationId);
+    } catch (e: any) {
+      return this._startFailure(e);
+    }
+    const tracked = runWithPublishSideEffectTracking(() =>
+      this.postComment(id, postId, integration, posts)
+    );
+    try {
+      return { outcome: 'published', results: await tracked.result };
+    } catch (e) {
+      return {
+        outcome: 'failed',
+        failure: this._failureAfterCall(e, tracked.state.sideEffectObserved),
+      };
+    }
   }
 
   @ActivityMethod()

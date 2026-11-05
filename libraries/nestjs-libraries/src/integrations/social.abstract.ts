@@ -3,6 +3,8 @@ import { Integration } from '@prisma/client';
 import { ApplicationFailure } from '@temporalio/activity';
 import { readOrFetch } from '@postsider/helpers/utils/read.or.fetch';
 import sharp from 'sharp';
+import { BadBodyKind, isPreConnectionError } from './publish-error.classifier';
+import { markPublishSideEffect } from './publish-side-effect.context';
 
 export type ValidityMedia = {
   path: string;
@@ -29,15 +31,38 @@ export class RefreshToken extends ApplicationFailure {
 }
 
 export class BadBody extends ApplicationFailure {
-  constructor(identifier: string, json: string, body: BodyInit, message = '') {
+  constructor(
+    identifier: string,
+    json: string,
+    body: BodyInit,
+    message = '',
+    kind?: BadBodyKind
+  ) {
     super(message, 'bad_body', true, [
       {
         identifier,
         json,
         body,
+        ...(kind ? { kind } : {}),
       },
     ]);
   }
+}
+
+/** Failure kind from the response that ends a fetch, never from an earlier retry. */
+function kindForFinalResponse(
+  status: number,
+  bodyText: string
+): BadBodyKind | undefined {
+  if (status >= 500) return 'provider_unavailable';
+  if (
+    status === 429 ||
+    bodyText.includes('rate_limit_exceeded') ||
+    bodyText.includes('Rate limit')
+  ) {
+    return 'rate_limited';
+  }
+  return undefined;
 }
 
 export class NotEnoughScopes extends ApplicationFailure {
@@ -164,11 +189,12 @@ export abstract class SocialAbstract {
     ignoreConcurrency?: boolean
   ) {
     let globalErr = {};
+    let handle: ReturnType<SocialAbstract['handleErrors']>;
     let value: any;
     try {
       value = await func();
     } catch (err) {
-      const handle = this.handleErrors(safeStringify(err), 200);
+      handle = this.handleErrors(safeStringify(err), 200);
       value = { err: true, value: 'Unknown Error', ...(handle || {}) };
       globalErr = err as any;
     }
@@ -182,7 +208,23 @@ export abstract class SocialAbstract {
           value.value || ''
         );
       }
-      throw new BadBody('', safeStringify(globalErr), {} as any, value.value || '');
+      const innerKind = (globalErr as any)?.details?.[0]?.kind as
+        | BadBodyKind
+        | undefined;
+      const kind =
+        innerKind ??
+        (isPreConnectionError(globalErr)
+          ? 'pre_connection'
+          : !handle && typeof (globalErr as any)?.type !== 'string'
+          ? 'unknown_outcome'
+          : undefined);
+      throw new BadBody(
+        '',
+        safeStringify(globalErr),
+        {} as any,
+        value.value || '',
+        kind
+      );
     }
 
     return value;
@@ -198,11 +240,8 @@ export abstract class SocialAbstract {
     const request = await fetch(url, options);
 
     if (request.status >= 200 && request.status < 300) {
+      markPublishSideEffect(options?.method);
       return request;
-    }
-
-    if (totalRetries > 2) {
-      throw new BadBody(identifier, '{}', options.body || '{}');
     }
 
     let json = '{}';
@@ -210,6 +249,16 @@ export abstract class SocialAbstract {
       json = await request.text();
     } catch (err) {
       json = '{}';
+    }
+
+    if (totalRetries > 2) {
+      throw new BadBody(
+        identifier,
+        '{}',
+        options.body || '{}',
+        '',
+        kindForFinalResponse(request.status, json)
+      );
     }
 
     const handleError = this.handleErrors(json || '{}', request.status);
@@ -258,7 +307,8 @@ export abstract class SocialAbstract {
       identifier,
       json,
       options.body!,
-      handleError?.value || 'Unknown Error'
+      handleError?.value || 'Unknown Error',
+      kindForFinalResponse(request.status, json)
     );
   }
 
