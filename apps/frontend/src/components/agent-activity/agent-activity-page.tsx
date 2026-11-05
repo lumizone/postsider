@@ -16,6 +16,7 @@ import {
 } from "@/lib/agent-activity-filters";
 import { pruneSelection, toggleGroup } from "@/lib/agent-activity-model";
 import { AgentFiltersBar, type ChannelOption } from "./agent-filters";
+import { AgentGroupDrawer } from "./agent-group-drawer";
 import { AgentGroupRow } from "./agent-group-row";
 import { AgentSummaryBar } from "./agent-summary-bar";
 import { useAgentActivity } from "./use-agent-activity";
@@ -36,8 +37,7 @@ export function AgentActivityPage() {
 
   const [channels, setChannels] = useState<ChannelOption[]>([]);
   const [selection, setSelection] = useState<Set<string>>(new Set());
-  // Task 12 attaches the drawer to this.
-  const [, setOpened] = useState<AgentGroup | null>(null);
+  const [opened, setOpened] = useState<AgentGroup | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -139,6 +139,15 @@ export function AgentActivityPage() {
           ))}
         </ul>
       )}
+
+      {opened ? (
+        <AgentGroupDrawer
+          key={opened.group}
+          group={opened}
+          onClose={() => setOpened(null)}
+          onChanged={refresh}
+        />
+      ) : null}
 
       {nextCursor && !loading ? (
         <div className={s.more}>
