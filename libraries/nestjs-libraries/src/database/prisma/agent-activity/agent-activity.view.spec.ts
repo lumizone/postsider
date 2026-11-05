@@ -100,6 +100,24 @@ describe('toGroupSummary', () => {
     expect(long.contentPreview).toHaveLength(240);
   });
 
+  it('separates paragraphs and line breaks with a space in the preview', () => {
+    expect(
+      toGroupSummary([row({ content: '<p>Hello</p><p>World</p>a<br>b' })], noResolve, []).contentPreview
+    ).toBe('Hello World a b');
+  });
+
+  it('cleans bidi and zero-width characters from claimed provenance', () => {
+    const s = toGroupSummary(
+      [row({ agentName: 'bo\u202Et\u200B', source: '\u2066cron', workflowId: 'w\u0007f' } as any)],
+      noResolve,
+      []
+    );
+    expect(s.claimed.agentName).toBe('bot');
+    expect(s.claimed.source).toBe('cron');
+    expect(s.claimed.workflowId).toBe('wf');
+    expect(s.claimed.runId).toBeNull();
+  });
+
   it('keeps all five claimed keys even when null', () => {
     const s = toGroupSummary([row()], noResolve, []);
     expect(s.claimed).toEqual({

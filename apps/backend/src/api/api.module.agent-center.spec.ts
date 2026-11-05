@@ -1,4 +1,7 @@
 jest.mock('isomorphic-dompurify', () => ({ sanitize: (v: string) => v }));
+// ApiModule transitively imports jsdom (ESM), which jest cannot parse. This spec only
+// checks controller registration and never runs a handler, so a stub is enough; do not
+// copy it into a behavior spec.
 jest.mock('jsdom', () => ({ JSDOM: class {} }));
 
 import { ApiModule } from './api.module';

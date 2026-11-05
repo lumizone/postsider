@@ -1,28 +1,35 @@
 // Local day bounds in an IANA time zone, correct on DST days (23 or 25 hours).
 
-export function isValidTimeZone(tz: unknown): tz is string {
-  if (typeof tz !== 'string' || tz.length === 0 || tz.length > 100) return false;
+/** Canonical IANA name of a zone (fixes casing), or null for anything else. */
+export function canonicalTimeZone(tz: unknown): string | null {
+  if (typeof tz !== 'string' || tz.length === 0 || tz.length > 100) return null;
+  // offset zones (+05:30) are not IANA names: not accepted
+  if (/^[+-]/.test(tz)) return null;
   try {
-    new Intl.DateTimeFormat('en-US', { timeZone: tz });
-    return true;
+    const name = new Intl.DateTimeFormat('en-US', { timeZone: tz }).resolvedOptions().timeZone;
+    return typeof name === 'string' && name.length > 0 && !/^[+-]/.test(name) ? name : null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+export function isValidTimeZone(tz: unknown): tz is string {
+  return canonicalTimeZone(tz) !== null;
 }
 
 export function resolveTimeZone(
   requested?: string | null,
   orgDefault?: string | null
 ): string {
-  if (isValidTimeZone(requested)) return requested;
-  if (isValidTimeZone(orgDefault)) return orgDefault;
-  return 'UTC';
+  return canonicalTimeZone(requested) ?? canonicalTimeZone(orgDefault) ?? 'UTC';
 }
 
+const MAX_FORMATTERS = 200;
 const formatters = new Map<string, Intl.DateTimeFormat>();
 function formatter(timeZone: string): Intl.DateTimeFormat {
   let f = formatters.get(timeZone);
   if (!f) {
+    if (formatters.size >= MAX_FORMATTERS) formatters.clear();
     f = new Intl.DateTimeFormat('en-US', {
       timeZone,
       hourCycle: 'h23',
@@ -36,6 +43,10 @@ function formatter(timeZone: string): Intl.DateTimeFormat {
     formatters.set(timeZone, f);
   }
   return f;
+}
+
+export function formatterCacheSize(): number {
+  return formatters.size;
 }
 
 function localParts(instant: number, timeZone: string) {

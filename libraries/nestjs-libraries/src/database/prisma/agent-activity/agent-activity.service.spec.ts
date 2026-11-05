@@ -215,6 +215,17 @@ describe('AgentActivityService.list', () => {
     );
   });
 
+  it('rejects an invalid from or to date with 400', async () => {
+    const { svc, repo } = make();
+    await expect(
+      svc.list('org-1', { ...filters, limit: 5, from: new Date('x'), to: T(9) })
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      svc.list('org-1', { ...filters, limit: 5, to: new Date('x') })
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(repo.pageGroups).not.toHaveBeenCalled();
+  });
+
   it('rejects a bad cursor and from > to with 400 before touching the database', async () => {
     const { svc, repo } = make();
     await expect(svc.list('org-1', { ...filters, limit: 5, cursor: '%%%' })).rejects.toBeInstanceOf(
@@ -246,7 +257,19 @@ describe('AgentActivityService.filters', () => {
     expect(directory.resolve).toHaveBeenCalledTimes(1);
     expect(out.actors.map((a) => a.key)).toEqual(['API_KEY:legacy', 'API_KEY:k1', 'OAUTH_CLIENT:c1']);
     expect(out.actors[1]).toEqual({ key: 'API_KEY:k1', type: 'API_KEY', id: 'k1', name: 'N', state: 'ok' });
-    expect(out.agentNames).toEqual(['bot']);
-    expect(out.sources).toEqual(['cron']);
+    expect(out.agentNames).toEqual([{ value: 'bot', label: 'bot' }]);
+    expect(out.sources).toEqual([{ value: 'cron', label: 'cron' }]);
+  });
+
+  it('returns the raw value for filtering and a cleaned label for display', async () => {
+    const { svc, repo } = make();
+    repo.recentActors.mockResolvedValue([]);
+    repo.recentProvenance.mockResolvedValue({
+      agentNames: ['bo\u202Et', '\u200B'],
+      sources: ['\u2066cron'],
+    });
+    const out = await svc.filters('org-1', new Date('2026-11-05T12:00:00Z'));
+    expect(out.agentNames).toEqual([{ value: 'bo\u202Et', label: 'bot' }]);
+    expect(out.sources).toEqual([{ value: '\u2066cron', label: 'cron' }]);
   });
 });

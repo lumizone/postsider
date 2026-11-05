@@ -5,6 +5,7 @@ import { Test } from '@nestjs/testing';
 import type { AddressInfo } from 'net';
 import { AgentActivityController } from './agent-activity.controller';
 import { AgentActivityService } from '@postsider/nestjs-libraries/database/prisma/agent-activity/agent-activity.service';
+import { CHECK_POLICIES_KEY } from '@postsider/backend/services/auth/permissions/permissions.ability';
 import { HttpExceptionFilter } from '@postsider/nestjs-libraries/services/exception.filter';
 
 describe('AgentActivityController (dashboard reads)', () => {
@@ -48,6 +49,12 @@ describe('AgentActivityController (dashboard reads)', () => {
     });
   });
 
+  it('declares no policy check on any read handler (every member may read)', () => {
+    for (const name of ['summary', 'list', 'filters'] as const) {
+      expect(Reflect.getMetadata(CHECK_POLICIES_KEY, AgentActivityController.prototype[name])).toBeUndefined();
+    }
+  });
+
   it('allows a USER-role member on reads', async () => {
     role = 'USER';
     expect((await fetch(`${base}/summary`)).status).toBe(200);
@@ -83,6 +90,9 @@ describe('AgentActivityController (dashboard reads)', () => {
     ['bucket=nope'],
     [`integrationIds=${Array.from({ length: 21 }, (_, i) => `i${i}`).join(',')}`],
     ['from=garbage'],
+    ['from=2026-W01'],
+    ['to=2026-123'],
+    [`integrationIds=${'a'.repeat(101)}`],
   ])('rejects %s with 400 and does not call the service', async (qs) => {
     const res = await fetch(`${base}?${qs}`);
     expect(res.status).toBe(400);

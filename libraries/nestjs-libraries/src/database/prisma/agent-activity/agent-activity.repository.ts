@@ -105,6 +105,7 @@ export class AgentActivityRepository {
         organizationId: orgId,
         parentPostId: null,
         deletedAt: null,
+        integration: { deletedAt: null },
         group: { in: groups },
       },
       select: ROW_SELECT,

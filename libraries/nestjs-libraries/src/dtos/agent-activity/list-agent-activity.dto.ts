@@ -39,6 +39,7 @@ export class ListAgentActivityDto {
   @Transform(splitIds)
   @ArrayMaxSize(20)
   @IsString({ each: true })
+  @MaxLength(100, { each: true })
   integrationIds?: string[];
 
   @IsOptional()

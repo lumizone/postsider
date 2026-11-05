@@ -18,6 +18,7 @@ import {
   decodeGroupCursor,
   encodeGroupCursor,
 } from '@postsider/nestjs-libraries/agent-activity/activity-cursor';
+import { cleanDisplayName } from '@postsider/nestjs-libraries/agent-activity/display-name';
 import { actorViewFromColumns } from '@postsider/nestjs-libraries/actor/post-actor';
 import type { ActorView } from '@postsider/nestjs-libraries/actor/post-actor';
 
@@ -47,8 +48,9 @@ export type ActivityFilterOptions = {
     name: string | null;
     state: 'ok' | 'revoked' | 'unknown' | 'legacy';
   }>;
-  agentNames: string[];
-  sources: string[];
+  /** `value` is the stored text used for exact-match filtering, `label` is cleaned for display */
+  agentNames: Array<{ value: string; label: string }>;
+  sources: Array<{ value: string; label: string }>;
 };
 
 const FILTER_WINDOW_DAYS = 90;
@@ -130,6 +132,12 @@ export class AgentActivityService {
       actor = parsed;
     } else {
       actor = q.actor;
+    }
+    if (
+      (q.from && Number.isNaN(q.from.getTime())) ||
+      (q.to && Number.isNaN(q.to.getTime()))
+    ) {
+      throw new BadRequestException('Invalid date');
     }
     if (q.from && q.to && q.from.getTime() > q.to.getTime()) {
       throw new BadRequestException('"from" must not be after "to"');
@@ -223,6 +231,15 @@ export class AgentActivityService {
         state: display?.state ?? 'unknown',
       });
     }
-    return { actors, agentNames: provenance.agentNames, sources: provenance.sources };
+    const options = (values: string[]) =>
+      values.flatMap((value) => {
+        const label = cleanDisplayName(value, 255);
+        return label === null ? [] : [{ value, label }];
+      });
+    return {
+      actors,
+      agentNames: options(provenance.agentNames),
+      sources: options(provenance.sources),
+    };
   }
 }

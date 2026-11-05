@@ -1,4 +1,4 @@
-import { dayBounds, isValidTimeZone, resolveTimeZone } from './activity-day';
+import { dayBounds, formatterCacheSize, isValidTimeZone, resolveTimeZone } from './activity-day';
 
 const iso = (d: Date) => d.toISOString();
 
@@ -52,5 +52,25 @@ describe('resolveTimeZone', () => {
     expect(resolveTimeZone('Asia/Tokyo', 'Europe/Warsaw')).toBe('Asia/Tokyo');
     expect(resolveTimeZone(undefined, undefined)).toBe('UTC');
     expect(resolveTimeZone(null, 'nope')).toBe('UTC');
+  });
+});
+
+describe('time zone canonicalization', () => {
+  it('echoes the canonical name, not the caller casing', () => {
+    expect(resolveTimeZone('EuRoPe/WaRsAw', null)).toBe('Europe/Warsaw');
+    expect(resolveTimeZone('europe/warsaw', null)).toBe('Europe/Warsaw');
+    expect(resolveTimeZone('utc', null)).toBe('UTC');
+  });
+  it('rejects offset zones and falls back to the org default', () => {
+    expect(isValidTimeZone('+05:30')).toBe(false);
+    expect(isValidTimeZone('-08:00')).toBe(false);
+    expect(resolveTimeZone('+05:30', 'Europe/Warsaw')).toBe('Europe/Warsaw');
+  });
+  it('keeps the formatter cache bounded', () => {
+    const now = new Date('2026-11-05T12:00:00Z');
+    for (const tz of (Intl as any).supportedValuesOf('timeZone') as string[]) {
+      dayBounds(now, resolveTimeZone(tz, null));
+    }
+    expect(formatterCacheSize()).toBeLessThanOrEqual(200);
   });
 });

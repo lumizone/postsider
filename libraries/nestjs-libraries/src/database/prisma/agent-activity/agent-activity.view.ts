@@ -1,4 +1,5 @@
 // Pure mapping from post rows to the group summary. No Nest, Prisma or React imports.
+import { cleanDisplayName } from '@postsider/nestjs-libraries/agent-activity/display-name';
 import { stripHtmlValidation } from '@postsider/helpers/utils/strip.html.validation';
 import { actorViewFromColumns } from '@postsider/nestjs-libraries/actor/post-actor';
 import {
@@ -85,11 +86,14 @@ export const PREVIEW_MAX = 240;
 const RETRY_BUCKETS: RowBucket[] = ['retryable', 'unknown_outcome', 'failed_other'];
 
 function preview(content: string): string {
-  const text = stripHtmlValidation('none', content ?? '')
+  const text = stripHtmlValidation('none', (content ?? '').replace(/<\/(p|div|li|h[1-6])>|<br\s*\/?>/gi, ' '))
     .replace(/\s+/g, ' ')
     .trim();
   return Array.from(text).slice(0, PREVIEW_MAX).join('').trim();
 }
+
+// claimed provenance is untrusted text: strip controls, bidi and zero-width characters
+const cleanClaim = (raw: unknown): string | null => cleanDisplayName(raw, 255);
 
 export function toGroupSummary(
   rows: ActivityRow[],
@@ -132,11 +136,11 @@ export function toGroupSummary(
     createdBy: resolve(actorViewFromColumns(first, 'createdBy')),
     lastModifiedBy: resolve(actorViewFromColumns(first, 'lastModifiedBy')),
     claimed: {
-      agentName: first.agentName ?? null,
-      workflowId: first.workflowId ?? null,
-      runId: first.runId ?? null,
-      externalRef: first.externalRef ?? null,
-      source: first.source ?? null,
+      agentName: cleanClaim(first.agentName),
+      workflowId: cleanClaim(first.workflowId),
+      runId: cleanClaim(first.runId),
+      externalRef: cleanClaim(first.externalRef),
+      source: cleanClaim(first.source),
     },
     pendingApprovalIds: pendingIds,
     canRetry,

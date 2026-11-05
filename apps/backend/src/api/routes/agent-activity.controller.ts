@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Organization } from '@prisma/client';
 import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
@@ -35,6 +35,12 @@ export class AgentActivityController {
     @GetOrgFromRequest() org: Organization,
     @Query() query: ListAgentActivityDto
   ) {
+    const from = query.from ? new Date(query.from) : undefined;
+    const to = query.to ? new Date(query.to) : undefined;
+    // IsISO8601 also accepts week and ordinal forms that Date cannot parse
+    if ((from && Number.isNaN(from.getTime())) || (to && Number.isNaN(to.getTime()))) {
+      throw new BadRequestException('Invalid date');
+    }
     return this._activity.list(org.id, {
       bucket: query.bucket ?? 'attention',
       scope: query.scope ?? 'relevant',
@@ -42,8 +48,8 @@ export class AgentActivityController {
       actor: query.actor,
       agentName: query.agentName,
       source: query.source,
-      from: query.from ? new Date(query.from) : undefined,
-      to: query.to ? new Date(query.to) : undefined,
+      from,
+      to,
       limit: query.limit ?? 25,
       cursor: query.cursor,
     });

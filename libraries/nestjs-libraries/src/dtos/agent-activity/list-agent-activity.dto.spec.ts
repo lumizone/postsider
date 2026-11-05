@@ -57,4 +57,9 @@ describe('ListAgentActivityDto', () => {
     expect((await check({ from: 'yesterday' })).props).toContain('from');
     expect((await check({ to: 'tomorrow' })).props).toContain('to');
   });
+
+  it('caps the length of each integration id', async () => {
+    expect((await check({ integrationIds: 'a'.repeat(100) })).props).toEqual([]);
+    expect((await check({ integrationIds: 'a'.repeat(101) })).props).toContain('integrationIds');
+  });
 });

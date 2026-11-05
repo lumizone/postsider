@@ -64,6 +64,7 @@ describe('AgentActivityRepository', () => {
         organizationId: 'org-1',
         parentPostId: null,
         deletedAt: null,
+        integration: { deletedAt: null },
         group: { in: ['g1', 'g2'] },
       });
       const keys = Object.keys(arg.select);
