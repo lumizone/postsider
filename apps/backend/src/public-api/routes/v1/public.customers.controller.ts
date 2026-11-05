@@ -34,7 +34,7 @@ import { assertAdmin } from '@postsider/backend/public-api/routes/v1/assert-admi
 const shape = (c: { id: string; name: string; createdAt: Date; channelCount?: number }) => ({
   id: c.id,
   name: c.name,
-  channelCount: c.channelCount ?? 0,
+  ...(c.channelCount === undefined ? {} : { channelCount: c.channelCount }),
   createdAt: c.createdAt,
 });
 
