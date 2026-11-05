@@ -40,6 +40,7 @@ import {
   type CreatePostInput,
 } from '@/lib/posts';
 import { requestApproval, getApprovalByPost } from '@/lib/approval-api';
+import { parseCalendarDeepLink, stripCalendarDeepLink } from '@/lib/calendar-deep-link';
 import {
   CreatePostModal,
   type NewPostInput,
@@ -861,6 +862,41 @@ export function Calendar({ year, month }: CalendarProps) {
       setEditLoading(false);
     }
   };
+
+  // The Agent Control Center links here with ?post=<id> and/or ?date=YYYY-MM-DD.
+  // Consumed once, after the first full load, and stripped from the address bar
+  // (same pattern as ?connect=1). The member role cannot edit, so ?post= is
+  // ignored for them.
+  const deepLinkHandled = useRef(false);
+  useEffect(() => {
+    if (!bootstrapped || deepLinkHandled.current) return;
+    if (typeof window === 'undefined') return;
+    deepLinkHandled.current = true;
+    const link = parseCalendarDeepLink(window.location.search);
+    if (link.date) {
+      const [y, m, d] = link.date.split('-').map(Number);
+      setCursor(new Date(y, m - 1, 1));
+      setSelected(new Date(y, m - 1, d));
+    }
+    if (link.postId && !isMember) {
+      void openEventForEdit({
+        id: link.postId,
+        channelId: '',
+        date: '',
+        time: '',
+      } as CalendarEvent);
+    }
+    const stripped = stripCalendarDeepLink(window.location.search);
+    if (stripped !== window.location.search.replace(/^\?/, '')) {
+      window.history.replaceState(
+        {},
+        '',
+        window.location.pathname + (stripped ? '?' + stripped : '') + window.location.hash
+      );
+    }
+    // openEventForEdit is recreated every render; the ref makes this run once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bootstrapped, isMember]);
 
   const deletePost = async (group: string) => {
     try {

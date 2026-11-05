@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { ApiError } from "@/lib/api";
 import {
   getAgentGroup,
@@ -12,6 +13,11 @@ import {
   type DestinationDetail,
   type PolicyEffect,
 } from "@/lib/agent-activity-api";
+import {
+  calendarDateParam,
+  destinationLinkVisibility,
+  pendingApprovalIdsOf,
+} from "@/lib/agent-activity-actions";
 import { BUCKET_WEIGHT, bucketLabelKey } from "@/lib/agent-activity-model";
 import { destinationToChannel } from "@/lib/agent-destination-channel";
 import { useI18n } from "@/lib/i18n";
@@ -22,6 +28,7 @@ import { effectiveMaxLength, getProviderRequirement } from "@/lib/provider-requi
 import { PlatformIcon } from "@/components/platform-icon";
 import { PostPreviewPanel } from "@/components/post-preview/post-preview-panel";
 import { ActorLabel } from "./actor-label";
+import { ActionMessage, AgentActions, type AgentActionsApi } from "./agent-actions";
 import { AgentContentCompare } from "./agent-content-compare";
 import { errorKey, safeHttpUrl } from "./agent-group-drawer-helpers";
 import { AgentTimeline } from "./agent-timeline";
@@ -50,6 +57,16 @@ interface Props {
   group: AgentGroup;
   onClose: () => void;
   onChanged: () => void;
+  actions: AgentActionsApi;
+  role: string | undefined;
+  /** Bumped by the page after an action finished: the detail reloads without a skeleton. */
+  reloadSignal: number;
+}
+
+/** True when a modal other than the drawer itself (for example a confirm dialog) is on screen. */
+function otherModalOpen(own: HTMLElement | null): boolean {
+  const modals = document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]');
+  return Array.from(modals).some((el) => el !== own);
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -65,7 +82,7 @@ function effectLabel(t: (k: MessageKey) => string, effect: string): string {
   return EFFECTS.has(effect) ? t(`agentActivity.effect.${effect}` as MessageKey) : effect;
 }
 
-export function AgentGroupDrawer({ group, onClose, onChanged }: Props) {
+export function AgentGroupDrawer({ group, onClose, onChanged, actions, role, reloadSignal }: Props) {
   const { t, locale } = useI18n();
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [reloadKey, setReloadKey] = useState(0);
@@ -86,6 +103,8 @@ export function AgentGroupDrawer({ group, onClose, onChanged }: Props) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // A confirm dialog opened from the drawer owns Escape and Tab: the drawer must not close or steal focus.
+      if (otherModalOpen(dialogRef.current)) return;
       if (e.key === "Escape") {
         e.stopPropagation();
         onCloseRef.current();
@@ -114,7 +133,8 @@ export function AgentGroupDrawer({ group, onClose, onChanged }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    setState({ status: "loading" });
+    // A reload after an action keeps the sections on screen; a first load or a retry shows the skeleton.
+    setState((prev) => (prev.status === "ready" ? prev : { status: "loading" }));
     getAgentGroup(group.group)
       .then((detail) => {
         if (cancelled) return;
@@ -132,7 +152,7 @@ export function AgentGroupDrawer({ group, onClose, onChanged }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [group.group, reloadKey]);
+  }, [group.group, reloadKey, reloadSignal]);
 
   const detail = state.status === "ready" ? state.detail : null;
   const when = new Date(detail?.updatedAt ?? group.updatedAt);
@@ -200,7 +220,21 @@ export function AgentGroupDrawer({ group, onClose, onChanged }: Props) {
           ) : null}
 
           {detail ? (
-            <DrawerSections detail={detail} activeId={activeId} onActive={setActiveId} />
+            <DrawerSections detail={detail} activeId={activeId} onActive={setActiveId} role={role} />
+          ) : null}
+        </div>
+
+        <div className={s.drawerFooter}>
+          <ActionMessage message={actions.message} />
+          {detail ? (
+            <AgentActions
+              actions={actions}
+              role={role}
+              group={group.group}
+              canRetry={group.canRetry}
+              buckets={detail.destinations.map((d) => d.bucket)}
+              pendingIds={pendingApprovalIdsOf(detail.destinations)}
+            />
           ) : null}
         </div>
       </div>
@@ -212,10 +246,12 @@ function DrawerSections({
   detail,
   activeId,
   onActive,
+  role,
 }: {
   detail: AgentGroupDetail;
   activeId: string | null;
   onActive: (id: string) => void;
+  role: string | undefined;
 }) {
   const { t, locale } = useI18n();
   const first = detail.destinations[0] ?? null;
@@ -235,7 +271,7 @@ function DrawerSections({
         </h3>
         <ul className={s.destList}>
           {detail.destinations.map((d) => (
-            <DestinationBlock key={d.postId} d={d} fmt={fmt} />
+            <DestinationBlock key={d.postId} d={d} fmt={fmt} role={role} />
           ))}
         </ul>
       </section>
@@ -333,11 +369,21 @@ function DrawerSections({
   );
 }
 
-function DestinationBlock({ d, fmt }: { d: DestinationDetail; fmt: (iso: string | null) => string }) {
+function DestinationBlock({
+  d,
+  fmt,
+  role,
+}: {
+  d: DestinationDetail;
+  fmt: (iso: string | null) => string;
+  role: string | undefined;
+}) {
   const { t } = useI18n();
   const platform = platformFromIdentifier(d.integration.providerIdentifier);
   const failed = d.state === "ERROR" || d.errorCategory !== null || d.errorMessage !== null;
   const release = safeHttpUrl(d.releaseURL);
+  const links = destinationLinkVisibility({ role, state: d.state, hasReleaseUrl: release !== null });
+  const calendarDate = calendarDateParam(d.publishDate);
   const lastAttempt = fmt(d.lastPublishAttemptAt);
   const publishAt = fmt(d.publishDate);
   return (
@@ -374,7 +420,17 @@ function DestinationBlock({ d, fmt }: { d: DestinationDetail; fmt: (iso: string 
         ) : null}
         {lastAttempt ? <span>{t("agentActivity.drawer.lastAttempt", { when: lastAttempt })}</span> : null}
         {publishAt ? <span>{t("agentActivity.drawer.scheduledFor", { when: publishAt })}</span> : null}
-        {release ? (
+      </div>
+      <div className={s.destLinks}>
+        {links.openEditor ? (
+          <Link href={"/calendar?post=" + encodeURIComponent(d.postId)}>
+            {t("agentActivity.action.openEditor")}
+          </Link>
+        ) : null}
+        {links.openCalendar && calendarDate ? (
+          <Link href={"/calendar?date=" + calendarDate}>{t("agentActivity.action.openCalendar")}</Link>
+        ) : null}
+        {links.viewOnPlatform && release ? (
           <a href={release} target="_blank" rel="noopener noreferrer">
             {t("agentActivity.action.viewOnPlatform")}
           </a>

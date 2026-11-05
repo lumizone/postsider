@@ -7,6 +7,7 @@ import type { MessageKey } from "@/lib/i18n";
 import { platformFromIdentifier } from "@/lib/integrations";
 import { PlatformIcon } from "@/components/platform-icon";
 import { actorName, actorTypeLabel } from "./actor-label";
+import { AgentActions, type AgentActionsApi } from "./agent-actions";
 import s from "./agent-activity.module.css";
 
 const MAX_CHIPS = 4;
@@ -41,9 +42,11 @@ interface Props {
   selected: boolean;
   onToggle: (group: string) => void;
   onOpen: (group: AgentGroup) => void;
+  actions: AgentActionsApi;
+  role: string | undefined;
 }
 
-export function AgentGroupRow({ group, selectable, selected, onToggle, onOpen }: Props) {
+export function AgentGroupRow({ group, selectable, selected, onToggle, onOpen, actions, role }: Props) {
   const { t, locale } = useI18n();
   const weight = BUCKET_WEIGHT[group.bucket];
   const when = formatWhen(group.updatedAt, locale);
@@ -113,6 +116,15 @@ export function AgentGroupRow({ group, selectable, selected, onToggle, onOpen }:
           ) : null}
         </span>
       </button>
+      <AgentActions
+        className={s.rowActions}
+        actions={actions}
+        role={role}
+        group={group.group}
+        canRetry={group.canRetry}
+        buckets={group.destinations.map((d) => d.bucket)}
+        pendingIds={group.pendingApprovalIds}
+      />
     </li>
   );
 }

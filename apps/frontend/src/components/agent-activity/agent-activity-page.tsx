@@ -15,6 +15,7 @@ import {
   type AgentFilters,
 } from "@/lib/agent-activity-filters";
 import { pruneSelection, toggleGroup } from "@/lib/agent-activity-model";
+import { ActionMessage, AgentBulkBar, useAgentActions } from "./agent-actions";
 import { AgentFiltersBar, type ChannelOption } from "./agent-filters";
 import { AgentGroupDrawer } from "./agent-group-drawer";
 import { AgentGroupRow } from "./agent-group-row";
@@ -38,6 +39,18 @@ export function AgentActivityPage() {
   const [channels, setChannels] = useState<ChannelOption[]>([]);
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [opened, setOpened] = useState<AgentGroup | null>(null);
+  // Bumped after every finished action so an open drawer reloads its detail.
+  const [detailSignal, setDetailSignal] = useState(0);
+  const actions = useAgentActions({
+    onDone: () => {
+      refresh();
+      setDetailSignal((n) => n + 1);
+    },
+  });
+  const { clearMessage } = actions;
+  const role = user?.role;
+  // Prefer the freshest copy of the opened group; fall back to the snapshot (it may have left the loaded page).
+  const openedGroup = opened ? (groups.find((g) => g.group === opened.group) ?? opened) : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -94,11 +107,7 @@ export function AgentActivityPage() {
         onChange={applyFilters}
       />
 
-      {selection.size > 0 ? (
-        <p className={s.selectedNote} aria-live="polite">
-          {t("agentActivity.list.selected", { count: selection.size })}
-        </p>
-      ) : null}
+      {opened ? null : <ActionMessage message={actions.message} />}
 
       {error ? (
         <div role="alert" className={s.errorBanner}>
@@ -134,18 +143,29 @@ export function AgentActivityPage() {
               selectable={isAdmin && g.pendingApprovalIds.length > 0}
               selected={selection.has(g.group)}
               onToggle={(id) => setSelection((prev) => toggleGroup(prev, id))}
-              onOpen={setOpened}
+              onOpen={(g) => {
+                clearMessage();
+                setOpened(g);
+              }}
+              actions={actions}
+              role={role}
             />
           ))}
         </ul>
       )}
 
-      {opened ? (
+      {openedGroup ? (
         <AgentGroupDrawer
-          key={opened.group}
-          group={opened}
-          onClose={() => setOpened(null)}
+          key={openedGroup.group}
+          group={openedGroup}
+          onClose={() => {
+            clearMessage();
+            setOpened(null);
+          }}
           onChanged={refresh}
+          actions={actions}
+          role={role}
+          reloadSignal={detailSignal}
         />
       ) : null}
 
@@ -155,6 +175,15 @@ export function AgentActivityPage() {
             {loadingMore ? t("agentActivity.list.loadingMore") : t("agentActivity.list.loadMore")}
           </button>
         </div>
+      ) : null}
+
+      {isAdmin ? (
+        <AgentBulkBar
+          actions={actions}
+          groups={groups}
+          selection={selection}
+          onCleared={() => setSelection(new Set())}
+        />
       ) : null}
     </div>
   );
