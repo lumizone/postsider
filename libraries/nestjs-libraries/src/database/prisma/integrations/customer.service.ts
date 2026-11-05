@@ -9,6 +9,13 @@ import { IntegrationRepository } from '@postsider/nestjs-libraries/database/pris
 export const MAX_CUSTOMERS_PER_ORG = 200;
 
 const notFound = () => new NotFoundException({ msg: 'Customer not found' });
+const nameTaken = () =>
+  new ConflictException({
+    error: 'customer_name_taken',
+    msg: 'Another customer already has this name.',
+  });
+const isUniqueViolation = (error: unknown) =>
+  (error as { code?: string })?.code === 'P2002';
 
 /**
  * Customers are the workspaces (clients) an organization groups its channels
@@ -33,26 +40,39 @@ export class CustomerService {
   async create(orgId: string, name: string) {
     const existing = await this._repo.findLiveCustomerByName(orgId, name);
     if (existing) return { customer: existing, created: false };
-    if ((await this._repo.countLiveCustomers(orgId)) >= MAX_CUSTOMERS_PER_ORG) {
-      throw new BadRequestException({
-        error: 'customer_limit_reached',
-        msg: `An organization can have at most ${MAX_CUSTOMERS_PER_ORG} customers.`,
-      });
+    try {
+      const customer = await this._repo.createCustomerWithinLimit(
+        orgId,
+        name,
+        MAX_CUSTOMERS_PER_ORG
+      );
+      if (!customer) {
+        throw new BadRequestException({
+          error: 'customer_limit_reached',
+          msg: `An organization can have at most ${MAX_CUSTOMERS_PER_ORG} customers.`,
+        });
+      }
+      return { customer, created: true };
+    } catch (error) {
+      // Lost a race on the same name (partial unique index): idempotent result.
+      if (isUniqueViolation(error)) {
+        const winner = await this._repo.findLiveCustomerByName(orgId, name);
+        if (winner) return { customer: winner, created: false };
+      }
+      throw error;
     }
-    const customer = await this._repo.createCustomer(orgId, name);
-    return { customer, created: true };
   }
 
   async rename(orgId: string, id: string, name: string) {
     const current = await this.get(orgId, id);
     const clash = await this._repo.findLiveCustomerByName(orgId, name);
-    if (clash && clash.id !== id) {
-      throw new ConflictException({
-        error: 'customer_name_taken',
-        msg: 'Another customer already has this name.',
-      });
+    if (clash && clash.id !== id) throw nameTaken();
+    try {
+      if (!(await this._repo.renameCustomer(orgId, id, name))) throw notFound();
+    } catch (error) {
+      if (isUniqueViolation(error)) throw nameTaken();
+      throw error;
     }
-    if (!(await this._repo.renameCustomer(orgId, id, name))) throw notFound();
     return { ...current, name };
   }
 
