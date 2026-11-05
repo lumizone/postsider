@@ -16,7 +16,7 @@ import { buildCreatePostBody } from './post-body.js';
 import { registerPostSiderSkills } from './skills-catalog.js';
 
 export const POSTSIDER_MCP_SERVER_NAME = 'postsider';
-export const POSTSIDER_MCP_SERVER_VERSION = '1.1.0';
+export const POSTSIDER_MCP_SERVER_VERSION = '1.2.0';
 
 /**
  * Ceiling on one tool result. Every result is injected into the agent's
