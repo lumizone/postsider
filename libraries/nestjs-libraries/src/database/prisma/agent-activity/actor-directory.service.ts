@@ -27,6 +27,15 @@ export class ActorDirectoryService {
     private _oauthApps: PrismaRepository<'oAuthApp'>
   ) {}
 
+  /**
+   * Resolves display names for actor views in one batched round.
+   *
+   * Contract: `views` must come from rows already scoped to `orgId` (posts,
+   * approvals, audit rows of this organization). McpOAuthClient is a global table
+   * with no organizationId, so a request supplied OAUTH_CLIENT id (for example an
+   * `actor=OAUTH_CLIENT:<id>` filter) must never be passed here unfiltered, or any
+   * member could read the name of another tenant's client by id.
+   */
   async resolve(
     orgId: string,
     views: ReadonlyArray<ActorView | null | undefined>
@@ -131,8 +140,11 @@ export class ActorDirectoryService {
             authorizedBy: view.userId ? userNames.get(view.userId) ?? null : null,
           };
         }
-        default:
+        case 'SYSTEM':
           return { type: 'SYSTEM', id: null, name: null, state: 'ok', authorizedBy: null };
+        default:
+          // an unexpected stored type is not PostSider; show no actor
+          return null;
       }
     };
   }

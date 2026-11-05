@@ -21,4 +21,18 @@ describe('cleanDisplayName', () => {
   it('strips C1 controls', () => {
     expect(cleanDisplayName('a\u0085b\u009fc')).toBe('abc');
   });
+  it('strips bidi and zero-width characters', () => {
+    expect(cleanDisplayName('a\u202Eb\u202Ac\u2066d\u2069e')).toBe('abcde');
+    expect(cleanDisplayName('x\u200B\u200C\u200D\u200E\u200Fy')).toBe('xy');
+    expect(cleanDisplayName('p\u2060\u2061\u2064q\uFEFFr')).toBe('pqr');
+    expect(cleanDisplayName('\u202E\u200B')).toBeNull();
+  });
+  it('cuts by code points and never splits an emoji', () => {
+    const emoji = '\uD83D\uDE00';
+    const out = cleanDisplayName(emoji.repeat(100)) as string;
+    expect(Array.from(out)).toHaveLength(80);
+    expect(out).toBe(emoji.repeat(80));
+    expect(cleanDisplayName('ab' + emoji + 'cd', 3)).toBe('ab' + emoji);
+    expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(out)).toBe(false);
+  });
 });

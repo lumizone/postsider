@@ -151,4 +151,17 @@ describe('ActorDirectoryService', () => {
     const r = await svc.resolve('org-1', [{ type: 'API_KEY', apiKeyId: 'k1' }]);
     expect(r({ type: 'API_KEY', apiKeyId: 'k1' })?.name).toHaveLength(80);
   });
+
+  it('resolves an unknown actor type to null, not SYSTEM', async () => {
+    const { svc } = make();
+    const resolve = await svc.resolve('org-1', [{ type: 'ROBOT' } as any]);
+    expect(resolve({ type: 'ROBOT' } as any)).toBeNull();
+    expect(resolve({ type: 'SYSTEM' })).toEqual({
+      type: 'SYSTEM',
+      id: null,
+      name: null,
+      state: 'ok',
+      authorizedBy: null,
+    });
+  });
 });
