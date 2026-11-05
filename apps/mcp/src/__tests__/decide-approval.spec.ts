@@ -21,11 +21,56 @@ import {
 const apiKey = 'test-api-key-123';
 const baseUrl = 'https://api.postsider.com';
 
-function expectedKey(approvalId: string, decision: string, note: string | undefined) {
+function expectedKey(
+  approvalId: string,
+  decision: string,
+  note: string | undefined,
+  position: number,
+  requestedAt: string
+) {
   return `mcp-decide-${createHash('sha256')
-    .update(JSON.stringify([approvalId, decision, note ?? '']))
+    .update(JSON.stringify([approvalId, decision, note ?? '', position, requestedAt]))
     .digest('hex')}`;
 }
+
+const REQUESTED_AT = '2026-11-04T10:00:00.000Z';
+
+/** Real GET /approvals/:id shape (flat item plus preview). */
+function approvalItem(position: number, requestedAt = REQUESTED_AT) {
+  return JSON.stringify({
+    id: 'abc',
+    postId: 'p1',
+    status: 'PENDING',
+    note: null,
+    requestedAt,
+    resolvedAt: null,
+    stage: { position, total: 2, name: 'Review' },
+    preview: 'Hello',
+  });
+}
+
+const DECIDE_OK =
+  '{"approvalId":"abc","postId":"p1","status":"APPROVED","changed":true,"stage":{"position":1,"total":1},"final":true}';
+
+/** GET /approvals/:id answers the item, POST answers `postBody`. */
+function routeFetch(
+  fetchMock: ReturnType<typeof jest.fn>,
+  item: string | null,
+  postBody: string = DECIDE_OK,
+  postStatus = 200
+) {
+  fetchMock.mockImplementation(async (_url: unknown, init?: RequestInit) => {
+    if ((init?.method ?? 'GET') === 'GET') {
+      return item === null
+        ? new Response('{"message":"boom"}', { status: 500 })
+        : new Response(item, { status: 200 });
+    }
+    return new Response(postBody, { status: postStatus });
+  });
+}
+
+const posts = (fetchMock: ReturnType<typeof jest.fn>) =>
+  fetchMock.mock.calls.filter((c) => (c[1] as RequestInit).method === 'POST') as [URL, RequestInit][];
 
 describe('postsider_decide_approval', () => {
   let fetchMock: ReturnType<typeof jest.fn>;
@@ -118,14 +163,8 @@ describe('postsider_decide_approval', () => {
     await mcpClient.close();
   });
 
-  it('approves with the derived idempotency key and no body', async () => {
-    fetchMock.mockImplementation(
-      async () =>
-        new Response(
-          '{"approvalId":"abc","postId":"p1","status":"APPROVED","changed":true,"stage":{"position":1,"total":1},"final":true}',
-          { status: 200 }
-        )
-    );
+  it('reads the approval first and sends stage-bound key plus expectStage', async () => {
+    routeFetch(fetchMock, approvalItem(2));
     const mcpClient = await connect({ allowApprovalDecisions: true });
     const result = await mcpClient.callTool({
       name: DECIDE_APPROVAL_TOOL,
@@ -134,47 +173,78 @@ describe('postsider_decide_approval', () => {
     expect(result.isError).toBeFalsy();
     expect(textOf(result)).toContain('"final":true');
 
-    const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
+    const [getUrl, getInit] = fetchMock.mock.calls[0] as [URL, RequestInit];
+    expect(String(getUrl)).toBe(`${baseUrl}/public/v1/approvals/abc`);
+    expect(getInit.method ?? 'GET').toBe('GET');
+    const [[url, init]] = posts(fetchMock);
     expect(String(url)).toBe(`${baseUrl}/public/v1/approvals/abc/approve`);
-    expect(init.method).toBe('POST');
-    expect(init.body).toBeUndefined();
+    expect(JSON.parse(String(init.body))).toEqual({ expectStage: 2 });
     const headers = init.headers as Record<string, string>;
-    expect(headers['Idempotency-Key']).toBe(expectedKey('abc', 'approve', undefined));
+    expect(headers['Idempotency-Key']).toBe(expectedKey('abc', 'approve', undefined, 2, REQUESTED_AT));
     await mcpClient.close();
   });
 
-  it('rejects with a note, sends only { note } and a different key', async () => {
-    fetchMock.mockImplementation(async () => new Response('{}', { status: 200 }));
+  it('rejects with a note and sends { note, expectStage } and a different key', async () => {
+    routeFetch(fetchMock, approvalItem(1));
     const mcpClient = await connect({ allowApprovalDecisions: true });
     await mcpClient.callTool({
       name: DECIDE_APPROVAL_TOOL,
       arguments: { approvalId: 'a/b', decision: 'reject', note: 'Wrong date' },
     });
-    const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
+    const [getUrl] = fetchMock.mock.calls[0] as [URL];
+    expect(String(getUrl)).toBe(`${baseUrl}/public/v1/approvals/a%2Fb`);
+    const [[url, init]] = posts(fetchMock);
     expect(String(url)).toBe(`${baseUrl}/public/v1/approvals/a%2Fb/reject`);
-    expect(JSON.parse(String(init.body))).toEqual({ note: 'Wrong date' });
+    expect(JSON.parse(String(init.body))).toEqual({ note: 'Wrong date', expectStage: 1 });
     const headers = init.headers as Record<string, string>;
-    expect(headers['Idempotency-Key']).toBe(expectedKey('a/b', 'reject', 'Wrong date'));
-    expect(headers['Idempotency-Key']).not.toBe(expectedKey('a/b', 'reject', undefined));
+    expect(headers['Idempotency-Key']).toBe(expectedKey('a/b', 'reject', 'Wrong date', 1, REQUESTED_AT));
+    expect(headers['Idempotency-Key']).not.toBe(expectedKey('a/b', 'reject', undefined, 1, REQUESTED_AT));
     await mcpClient.close();
   });
 
-  it('derives the same key for a retry and a different key for another decision', async () => {
-    fetchMock.mockImplementation(async () => new Response('{}', { status: 200 }));
+  it('same key for a retry; new key for another stage, another round or another decision', async () => {
     const mcpClient = await connect({ allowApprovalDecisions: true });
     const args = { approvalId: 'abc', decision: 'approve' };
+    const keyFor = async (item: string, a: Record<string, unknown> = args) => {
+      fetchMock.mockReset();
+      routeFetch(fetchMock, item);
+      await mcpClient.callTool({ name: DECIDE_APPROVAL_TOOL, arguments: a });
+      return (posts(fetchMock)[0][1].headers as Record<string, string>)['Idempotency-Key'];
+    };
+    const base = await keyFor(approvalItem(1));
+    expect(await keyFor(approvalItem(1))).toBe(base);
+    expect(await keyFor(approvalItem(2))).not.toBe(base);
+    expect(await keyFor(approvalItem(1, '2026-11-05T09:00:00.000Z'))).not.toBe(base);
+    expect(await keyFor(approvalItem(1), { approvalId: 'abc', decision: 'reject' })).not.toBe(base);
+    expect(base).toMatch(/^[A-Za-z0-9._:-]{1,255}$/);
+    await mcpClient.close();
+  });
+
+  it('falls back to a random per-call nonce key (no expectStage) when the read fails', async () => {
+    const mcpClient = await connect({ allowApprovalDecisions: true });
+    const args = { approvalId: 'abc', decision: 'approve' };
+    routeFetch(fetchMock, null);
     await mcpClient.callTool({ name: DECIDE_APPROVAL_TOOL, arguments: args });
     await mcpClient.callTool({ name: DECIDE_APPROVAL_TOOL, arguments: args });
+    const sent = posts(fetchMock);
+    const k = sent.map(([, i]) => (i.headers as Record<string, string>)['Idempotency-Key']);
+    expect(k[0]).not.toBe(k[1]);
+    expect(k[0]).toMatch(/^mcp-decide-nonce-[A-Za-z0-9-]+$/);
+    expect(k[0]).not.toBe(expectedKey('abc', 'approve', undefined, 1, REQUESTED_AT));
+    expect(sent[0][1].body).toBeUndefined();
+    await mcpClient.close();
+  });
+
+  it('falls back when the item has no usable stage position or requestedAt', async () => {
+    routeFetch(fetchMock, '{"id":"abc","status":"PENDING"}');
+    const mcpClient = await connect({ allowApprovalDecisions: true });
     await mcpClient.callTool({
       name: DECIDE_APPROVAL_TOOL,
-      arguments: { approvalId: 'abc', decision: 'reject' },
+      arguments: { approvalId: 'abc', decision: 'approve' },
     });
-    const keys = fetchMock.mock.calls.map(
-      (c) => ((c[1] as RequestInit).headers as Record<string, string>)['Idempotency-Key']
-    );
-    expect(keys[0]).toBe(keys[1]);
-    expect(keys[2]).not.toBe(keys[0]);
-    expect(keys[0]).toMatch(/^[A-Za-z0-9._:-]{1,255}$/);
+    const [[, init]] = posts(fetchMock);
+    expect((init.headers as Record<string, string>)['Idempotency-Key']).toMatch(/^mcp-decide-nonce-/);
+    expect(init.body).toBeUndefined();
     await mcpClient.close();
   });
 
@@ -193,7 +263,7 @@ describe('postsider_decide_approval', () => {
     }
     expect(fetchMock).not.toHaveBeenCalled();
 
-    fetchMock.mockImplementation(async () => new Response('{}', { status: 200 }));
+    routeFetch(fetchMock, approvalItem(1), '{}');
     const ok = await mcpClient.callTool({
       name: DECIDE_APPROVAL_TOOL,
       arguments: { approvalId: 'abc', decision: 'reject', note: 'x'.repeat(500) },
@@ -204,9 +274,7 @@ describe('postsider_decide_approval', () => {
 
   describe('error mapping (fixed text, never the raw body)', () => {
     async function decideWith(status: number, body: unknown) {
-      fetchMock.mockImplementation(
-        async () => new Response(JSON.stringify(body), { status })
-      );
+      routeFetch(fetchMock, approvalItem(1), JSON.stringify(body), status);
       const mcpClient = await connect({ allowApprovalDecisions: true });
       const result = await mcpClient.callTool({
         name: DECIDE_APPROVAL_TOOL,
@@ -254,6 +322,17 @@ describe('postsider_decide_approval', () => {
       });
       expect(hostile).toContain('approval_already_resolved');
       expect(hostile).not.toContain('Ignore previous');
+    });
+
+    it('409 approval_stage_changed maps to a fixed safe sentence', async () => {
+      const text = await decideWith(409, {
+        error: 'approval_stage_changed',
+        leaked: 'secret-internal-detail',
+      });
+      expect(text).toContain('approval_stage_changed');
+      expect(text).toMatch(/another stage|stage has moved|already moved/i);
+      expect(text).toContain('postsider_get_approval_status');
+      expect(text).not.toContain('secret-internal-detail');
     });
 
     it('a missing scope still gets the generic scope hint, and 404 stays generic', async () => {

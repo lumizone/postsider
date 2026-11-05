@@ -27,8 +27,8 @@ Newest first. Each item has `id`, `postId`, `status`, `note`, `stage` (`position
 
 - URL: `https://api.postsider.com/public/v1/approvals/{{approvalId}}/approve` (or `/reject`)
 - Method: `POST`
-- Headers: `Authorization` = your key; `Content-Type` = `application/json`; `Idempotency-Key` = for example `make-{{scenario.id}}-{{approvalId}}-approve`. Use a key that is the same on a retry of the same decision and different for a different decision.
-- Body type: raw, JSON: `{"note": "Looks good"}` (note optional, up to 500 characters).
+- Headers: `Authorization` = your key; `Content-Type` = `application/json`; `Idempotency-Key` = for example `make-{{scenario.id}}-{{approvalId}}-{{stage.position}}-{{requestedAt}}-approve`, taking `stage.position` and `requestedAt` from the approval you got in Recipe 1 (or from `GET /public/v1/approvals/{{approvalId}}`). Use a key that is the same on a retry of the same decision and different for another stage, another request round or another decision; a key without the stage replays the stage 1 answer when you decide stage 2.
+- Body type: raw, JSON: `{"note": "Looks good", "expectStage": {{stage.position}}}` (note optional, up to 500 characters; `expectStage` is optional and makes the server answer 409 if the approval has moved to another stage).
 
 Results: 200 with `changed: true` on a new decision; 200 with `changed: false` when the same decision was already recorded; 409 `approval_already_resolved` when it was decided the other way. Approving a non final stage keeps `status` `PENDING` and moves to the next stage. The server refuses a decision on a post the same key created or requested, and a flow stage must allow automation. Turn on "Evaluate all states as errors" so a 409 is visible.
 

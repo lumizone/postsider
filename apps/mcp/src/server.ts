@@ -9,7 +9,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { readFile, realpath, stat } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { basename, extname } from 'node:path';
 import { PostsiderClient } from './client.js';
 import { buildCreatePostBody } from './post-body.js';
@@ -120,6 +120,37 @@ const httpsUrl = z
 
 /** Non-empty identifier, so a blank id fails locally instead of at the API. */
 const nonEmptyId = z.string().min(1, 'Must be a non-empty id.');
+
+/**
+ * Current stage position and request time of an approval (GET /approvals/:id),
+ * or undefined when the read fails or the item lacks usable values. Never
+ * throws: the caller falls back to a nonce key.
+ */
+async function readDecisionBinding(
+  client: PostsiderClient,
+  approvalId: string
+): Promise<{ position: number; requestedAt: string } | undefined> {
+  try {
+    const item = (await client.get(`/approvals/${encodeURIComponent(approvalId)}`)) as {
+      requestedAt?: unknown;
+      stage?: { position?: unknown } | null;
+    } | null;
+    const position = item?.stage?.position;
+    const requestedAt = item?.requestedAt;
+    if (
+      typeof position === 'number' &&
+      Number.isInteger(position) &&
+      position >= 1 &&
+      typeof requestedAt === 'string' &&
+      requestedAt.length > 0
+    ) {
+      return { position, requestedAt };
+    }
+  } catch {
+    // fall through
+  }
+  return undefined;
+}
 
 export interface PostSiderServerOptions {
   /**
@@ -1100,15 +1131,29 @@ export function createPostSiderMcpServer(
       },
       async ({ approvalId, decision, note }) => {
         try {
-          // The key is a pure function of the decision, so a model that retries
-          // the same call replays the first answer instead of deciding twice.
-          const idempotencyKey = `mcp-decide-${createHash('sha256')
-            .update(JSON.stringify([approvalId, decision, note ?? '']))
-            .digest('hex')}`;
+          // Read the approval first: its current stage position and requestedAt
+          // make the key specific to this stage of this round, so a stale
+          // deterministic key can never replay an earlier stage's answer. The
+          // same position is sent as expectStage, so a call made against a
+          // stage that has since moved on is refused with 409 instead of
+          // deciding the next stage.
+          const bound = await readDecisionBinding(client, approvalId);
+          const idempotencyKey = bound
+            ? `mcp-decide-${createHash('sha256')
+                .update(
+                  JSON.stringify([approvalId, decision, note ?? '', bound.position, bound.requestedAt])
+                )
+                .digest('hex')}`
+            : // The read failed: a random per-call key is safe, a stale
+              // deterministic one is not.
+              `mcp-decide-nonce-${randomUUID()}`;
+          const body: Record<string, unknown> = {};
+          if (note) body.note = note;
+          if (bound) body.expectStage = bound.position;
           return ok(
             await client.post(
               `/approvals/${encodeURIComponent(approvalId)}/${decision}`,
-              note ? { note } : undefined,
+              Object.keys(body).length ? body : undefined,
               idempotencyKey
             )
           );

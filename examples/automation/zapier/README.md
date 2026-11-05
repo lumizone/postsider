@@ -28,7 +28,7 @@ Status: a scaffold, not a finished or published Zapier app. Nothing here was run
 
 - The Authorization header carries the API key as is, the same as the n8n credential.
 - A trigger subscription is created with the Zapier target URL and deleted on unsubscribe. The subscription secret is not used by this scaffold: delivered payloads are not signature checked inside Zapier. `verifySignature` in `lib/map.js` is provided for a catch step or a relay that has the raw body and headers.
-- Approve and Reject send `Idempotency-Key: zapier:<zap id>:<hash of approval, decision, note>`, so a Zap replay cannot decide twice. The server refuses a decision on a post the same key created or requested, and a stage must allow automation.
+- Approve and Reject send `Idempotency-Key: zapier:<zap id>:<hash of approval, decision, note, stage position, requestedAt>` after reading the approval, and send `expectStage`, so a Zap replay cannot decide twice and a stale run cannot decide a later stage (409). If the read fails a random key is used. The server refuses a decision on a post the same key created or requested, and a stage must allow automation.
 - The `approval.resolved` event fires once, when the approval becomes final.
 
 ## Owner steps

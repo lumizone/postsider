@@ -246,8 +246,10 @@ plus `/api`, e.g. `https://social.example.com/api`. The server appends
   `POSTSIDER_MCP_ALLOW_APPROVAL_DECISIONS=true`, the hosted server never offers
   it (OAuth tokens cannot hold `approvals:decide`), and the API key itself must
   carry the `approvals:decide` scope. The API refuses a key that requested the
-  approval or created the post, so an agent cannot approve its own work. A retry
-  of the same decision sends the same `Idempotency-Key` and is harmless.
+  approval or created the post, so an agent cannot approve its own work. The tool
+  reads the approval first and ties its `Idempotency-Key` and an `expectStage`
+  value to the current stage and request time, so a retry of the same decision
+  is harmless and a stale call cannot decide a later stage (it gets a 409).
 - A missing API key exits 1 with an explanatory message on stderr. stdout carries
   protocol frames only.
 

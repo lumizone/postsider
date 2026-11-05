@@ -103,13 +103,23 @@ function mapApprovalItem(item, event) {
 }
 
 /**
- * Idempotency-Key for a decision: stable for the same zap, approval, decision
- * and note, so a Zapier replay of the same step cannot decide twice.
+ * Idempotency-Key for a decision: stable for the same zap, approval, decision,
+ * note, stage position and request time. The stage and request time keep a
+ * later stage, or a re-requested approval, from replaying an earlier answer.
+ * Pass both from GET /approvals/:id (stage.position, requestedAt).
  */
-function idempotencyKey(zapId, approvalId, decision, note) {
+function idempotencyKey(zapId, approvalId, decision, note, stagePosition, requestedAt) {
   const hash = crypto
     .createHash('sha256')
-    .update(JSON.stringify([String(approvalId), String(decision), note || '']))
+    .update(
+      JSON.stringify([
+        String(approvalId),
+        String(decision),
+        note || '',
+        stagePosition === undefined ? null : stagePosition,
+        requestedAt === undefined ? null : String(requestedAt),
+      ])
+    )
     .digest('hex')
     .slice(0, 32);
   return `zapier:${zapId || 'nozap'}:${hash}`;

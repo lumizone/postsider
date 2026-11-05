@@ -262,6 +262,12 @@ function describeApprovalError(status: number, data: unknown): string | undefine
       'Read it with postsider_get_approval_status and do not retry.'
     );
   }
+  if (status === 409 && body.error === 'approval_stage_changed') {
+    return (
+      'Conflict (approval_stage_changed): this approval has already moved to another stage, so your decision was not applied. ' +
+      'Read it with postsider_get_approval_status and ask the user before deciding the new stage.'
+    );
+  }
   return undefined;
 }
 

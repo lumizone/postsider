@@ -156,3 +156,63 @@ test('idempotencyKey is stable per zap, approval, decision and note', () => {
   assert.match(a, /^zapier:zap1:[0-9a-f]{32}$/);
   assert.match(idempotencyKey(undefined, 'a', 'approve'), /^zapier:nozap:/);
 });
+
+test('idempotencyKey changes with the stage position and the request time', () => {
+  const at = '2026-11-04T10:00:00.000Z';
+  const base = idempotencyKey('zap1', 'appr_1', 'approve', 'ok', 1, at);
+  assert.equal(base, idempotencyKey('zap1', 'appr_1', 'approve', 'ok', 1, at));
+  assert.notEqual(base, idempotencyKey('zap1', 'appr_1', 'approve', 'ok', 2, at));
+  assert.notEqual(base, idempotencyKey('zap1', 'appr_1', 'approve', 'ok', 1, '2026-11-05T09:00:00.000Z'));
+  assert.notEqual(base, idempotencyKey('zap1', 'appr_1', 'approve', 'ok'));
+});
+
+test('decide action reads the approval first and sends expectStage with a stage bound key', async () => {
+  const decide = require('../creates/decide_approval');
+  const calls = [];
+  const z = {
+    errors: { Error: class extends Error {} },
+    request: async (req) => {
+      calls.push(req);
+      if (req.method === 'GET') {
+        return {
+          status: 200,
+          data: { id: 'a1', requestedAt: '2026-11-04T10:00:00.000Z', stage: { position: 2, total: 3, name: 'x' } },
+          throwForStatus() {},
+        };
+      }
+      return { status: 200, data: { changed: true }, throwForStatus() {} };
+    },
+  };
+  await decide.operation.perform(z, {
+    inputData: { approvalId: 'a1', decision: 'approve', note: 'ok' },
+    meta: { zap: { id: 'zap1' } },
+  });
+  assert.equal(calls[0].method, 'GET');
+  assert.match(calls[0].url, /\/public\/v1\/approvals\/a1$/);
+  assert.deepEqual(calls[1].body, { note: 'ok', expectStage: 2 });
+  assert.equal(
+    calls[1].headers['Idempotency-Key'],
+    idempotencyKey('zap1', 'a1', 'approve', 'ok', 2, '2026-11-04T10:00:00.000Z')
+  );
+});
+
+test('decide action falls back to a nonce key without expectStage when the read fails', async () => {
+  const decide = require('../creates/decide_approval');
+  const keys = [];
+  const bodies = [];
+  const z = {
+    errors: { Error: class extends Error {} },
+    request: async (req) => {
+      if (req.method === 'GET') return { status: 500, data: {}, throwForStatus() {} };
+      keys.push(req.headers['Idempotency-Key']);
+      bodies.push(req.body);
+      return { status: 200, data: {}, throwForStatus() {} };
+    },
+  };
+  const bundle = { inputData: { approvalId: 'a1', decision: 'approve' }, meta: { zap: { id: 'zap1' } } };
+  await decide.operation.perform(z, bundle);
+  await decide.operation.perform(z, bundle);
+  assert.notEqual(keys[0], keys[1]);
+  assert.match(keys[0], /^zapier:zap1:nonce-/);
+  assert.deepEqual(bodies[0], {});
+});
