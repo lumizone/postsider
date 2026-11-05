@@ -4,6 +4,7 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api, setAuthToken } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
+import { rememberLoginMethod, trackLogin } from '@/lib/ga4';
 
 function GoogleCallbackInner() {
   const router = useRouter();
@@ -40,11 +41,13 @@ function GoogleCallbackInner() {
         );
 
         if (res?.mfaEnrollmentRequired) {
+          rememberLoginMethod('google');
           router.replace('/login/mfa/enroll');
           return;
         }
 
         if (res?.mfaRequired) {
+          rememberLoginMethod('google');
           router.replace('/login/mfa');
           return;
         }
@@ -62,12 +65,15 @@ function GoogleCallbackInner() {
             { anonymous: true, silent: true }
           );
           if (registration?.mfaEnrollmentRequired) {
+            rememberLoginMethod('google');
             router.replace('/login/mfa/enroll');
             return;
           }
         }
 
         await refresh();
+        // A brand new account is reported as sign_up by the funnel milestones.
+        if (!isNewUser) trackLogin('google');
         router.replace(isNewUser ? '/onboarding' : '/calendar');
       } catch (err: any) {
         setError(err?.message || 'Could not sign in with Google.');

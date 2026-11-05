@@ -7,6 +7,7 @@ import { AuthShell } from './auth-shell';
 import styles from './auth.module.css';
 import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
+import { trackLogin } from '@/lib/ga4';
 import { useT } from '@/lib/i18n';
 import {
   downloadRecoveryCodes,
@@ -59,6 +60,7 @@ export function MfaEnrollmentForm() {
 
   const continueToCalendar = async () => {
     await refresh();
+    trackLogin();
     router.replace('/calendar');
   };
 

@@ -28,6 +28,7 @@ services:
         NEXT_PUBLIC_DISABLE_REGISTRATION: ${NEXT_PUBLIC_DISABLE_REGISTRATION:-}
         NEXT_PUBLIC_MCP_URL: ${NEXT_PUBLIC_MCP_URL:-}
         NEXT_PUBLIC_PUBLIC_API_URL: ${NEXT_PUBLIC_PUBLIC_API_URL:-}
+        NEXT_PUBLIC_GA_MEASUREMENT_ID: ${NEXT_PUBLIC_GA_MEASUREMENT_ID:-}
     container_name: postsider-app
     security_opt:
       - no-new-privileges:true

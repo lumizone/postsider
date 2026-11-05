@@ -10,6 +10,7 @@ import styles from "./auth.module.css";
 import { api, ApiError, setAuthToken, setOrgId } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useT } from "@/lib/i18n";
+import { rememberLoginMethod, trackLogin } from "@/lib/ga4";
 
 export function LoginForm() {
   const t = useT();
@@ -50,10 +51,12 @@ export function LoginForm() {
         silent: true,
       });
       if (result?.mfaEnrollmentRequired) {
+        rememberLoginMethod("email");
         router.replace("/login/mfa/enroll");
         return;
       }
       if (result?.mfaRequired) {
+        rememberLoginMethod("email");
         router.replace("/login/mfa");
         return;
       }
@@ -74,6 +77,7 @@ export function LoginForm() {
         }
       }
 
+      trackLogin("email");
       router.replace("/calendar");
     } catch (err) {
       setAuthToken(null);

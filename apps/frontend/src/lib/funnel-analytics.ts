@@ -1,6 +1,10 @@
 "use client";
 
 import { api } from "@/lib/api";
+import { analyticsConsent, readCookie as cookie } from "@/lib/analytics-consent";
+import { ensureGa, gaEnabled, gaEvent } from "@/lib/ga4";
+
+export { analyticsConsent };
 
 const WEBSITE_ID = "8f4f0638-114f-4ed6-8d9f-eb553b4a2b61";
 const UMAMI_SRC = "https://analytics.darkdynasty.cloud/script.js";
@@ -23,7 +27,36 @@ declare global {
 }
 
 let loadAttempted = false;
-const pending: { event: FunnelStage; data: Record<string, string>; key: string }[] = [];
+type PendingItem = {
+  event: FunnelStage;
+  data: Record<string, string>;
+  key: string;
+  umamiDone: boolean;
+  gaDone: boolean;
+};
+const pending: PendingItem[] = [];
+const gaKey = (key: string) => key + ":ga";
+
+/** GA4 name and params for each milestone. No PII, no ids, no purchase. */
+export function gaMappingFor(
+  stage: FunnelStage,
+  data: Record<string, string>,
+): { name: string; params: Record<string, string> } {
+  switch (stage) {
+    case "signup_completed":
+      // Method is not known here without new PII, so it is omitted.
+      return { name: "sign_up", params: {} };
+    case "onboarding_type_selected":
+      return {
+        name: "onboarding_type_selected",
+        params: data.onboarding_type ? { onboarding_type: data.onboarding_type } : {},
+      };
+    default:
+      // mcp_connected, first_draft_created, subscription_started keep their
+      // names. Deliberately NOT mapped to GA4 `purchase` (no value or txn id).
+      return { name: stage, params: {} };
+  }
+}
 const STAGES: FunnelStage[] = [
   "signup_completed",
   "onboarding_type_selected",
@@ -31,18 +64,6 @@ const STAGES: FunnelStage[] = [
   "first_draft_created",
   "subscription_started",
 ];
-
-function cookie(name: string): string {
-  if (typeof document === "undefined") return "";
-  try {
-    const hit = document.cookie.split("; ").find((part) => part.startsWith(name + "="));
-    return hit ? decodeURIComponent(hit.slice(name.length + 1)) : "";
-  } catch { return ""; }
-}
-
-export function analyticsConsent(): boolean {
-  return cookie("ps_analytics_consent") === "1";
-}
 
 function setJourneyCookie(id: string) {
   if (typeof window === "undefined") return;
@@ -65,20 +86,38 @@ function journeyId(): string {
 }
 
 function flush() {
-  if (!analyticsConsent() || typeof window === "undefined" || !window.umami) return;
-  while (pending.length) {
-    const item = pending[0];
-    try {
-      window.umami.track(item.event, item.data);
-      // Mark only after Umami's client accepted the event. Browser transport
-      // delivery itself cannot be guaranteed or observed by this integration.
-      try { localStorage.setItem(item.key, "1"); } catch {}
-      pending.shift();
-    } catch {
-      // Keep the item for a subsequent flush instead of falsely marking it
-      // as delivered and silently losing the conversion.
-      break;
+  if (!analyticsConsent() || typeof window === "undefined") return;
+  // GA4 and Umami are independent sinks: a blocked Umami must not lose or
+  // duplicate GA events, so each has its own once-only marker.
+  for (const item of pending) {
+    if (item.gaDone || !gaEnabled()) continue;
+    const { name, params } = gaMappingFor(item.event, item.data);
+    if (gaEvent(name, params)) {
+      item.gaDone = true;
+      try { localStorage.setItem(gaKey(item.key), "1"); } catch {}
     }
+  }
+  while (pending.length && window.umami) {
+    const item = pending[0];
+    if (!item.umamiDone) {
+      try {
+        window.umami.track(item.event, item.data);
+        // Mark only after Umami's client accepted the event. Browser transport
+        // delivery itself cannot be guaranteed or observed by this integration.
+        try { localStorage.setItem(item.key, "1"); } catch {}
+        item.umamiDone = true;
+      } catch {
+        // Keep the item for a subsequent flush instead of falsely marking it
+        // as delivered and silently losing the conversion.
+        break;
+      }
+    }
+    if (item.gaDone || !gaEnabled()) pending.shift();
+    else break;
+  }
+  // Drop fully delivered items that were waiting behind an undelivered one.
+  for (let i = pending.length - 1; i >= 0; i--) {
+    if (pending[i].umamiDone && (pending[i].gaDone || !gaEnabled())) pending.splice(i, 1);
   }
 }
 
@@ -86,6 +125,7 @@ function flush() {
 export function ensureFunnelAnalytics() {
   if (!analyticsConsent() || typeof document === "undefined") return;
   journeyId();
+  ensureGa();
   if (typeof window !== "undefined" && window.umami) { flush(); return; }
   if (loadAttempted) return;
   loadAttempted = true;
@@ -115,14 +155,20 @@ function trackOnce(stage: FunnelStage, data: Record<string, string> = {}) {
   if (!analyticsConsent() || typeof window === "undefined") return;
   ensureFunnelAnalytics();
   const key = markKey(stage);
+  let umamiDone = false;
+  let gaDone = !gaEnabled();
   try {
-    if (localStorage.getItem(key) === "1") return;
+    umamiDone = localStorage.getItem(key) === "1";
+    if (!gaDone) gaDone = localStorage.getItem(gaKey(key)) === "1";
   } catch {}
+  if (umamiDone && gaDone) return;
   if (pending.some((item) => item.key === key)) return;
   const id = journeyId();
   pending.push({
     event: stage,
     key,
+    umamiDone,
+    gaDone,
     data: {
       ...(id ? { journey_id: id } : {}),
       ...(data.source ? { utm_source: safe(data.source) } : {}),

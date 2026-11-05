@@ -7,6 +7,7 @@ import {
   ensureFunnelAnalytics,
   syncFunnelMilestones,
 } from "@/lib/funnel-analytics";
+import { gaPageView } from "@/lib/ga4";
 
 /**
  * The app shares the existing Umami project with the marketing site, but
@@ -19,6 +20,8 @@ export function FunnelAnalyticsBridge() {
   useEffect(() => {
     if (!analyticsConsent()) return;
     ensureFunnelAnalytics();
+    // No-op unless NEXT_PUBLIC_GA_MEASUREMENT_ID is set and consent is granted.
+    gaPageView(pathname);
   }, [pathname]);
 
   useEffect(() => {

@@ -7,6 +7,7 @@ import { AuthShell } from './auth-shell';
 import styles from './auth.module.css';
 import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
+import { trackLogin } from '@/lib/ga4';
 import { useT } from '@/lib/i18n';
 
 /**
@@ -33,6 +34,7 @@ export function MfaForm() {
         { anonymous: true, silent: true }
       );
       await refresh();
+      trackLogin();
       router.replace('/calendar');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t('auth.mfaError'));
