@@ -521,49 +521,6 @@ export class ApprovalRepository {
     });
   }
 
-  // --- Legacy single-stage primitives ---------------------------------
-  // @deprecated The decision engine (ApprovalService.decide) uses
-  // decideStageTx and revertFinal. `resolve`, `revertApproved`,
-  // `resolveByGuestToken` and `revertGuestApproval` know nothing about stages
-  // and must not be used for new code; they stay only for their specs and for
-  // rollback compatibility and can be deleted in a follow up.
-
-  // Conditional update (status must still be PENDING) guards against two admins
-  // resolving the same approval concurrently. Returns the affected row count.
-  async resolve(
-    organizationId: string,
-    id: string,
-    approverId: string | null,
-    status: ResolveStatus,
-    note: string | null
-  ) {
-    const res = await this._approval.model.postApproval.updateMany({
-      where: { id, organizationId, status: 'PENDING' },
-      data: {
-        status,
-        approverId,
-        decidedByType: approverId ? 'USER' : null,
-        note,
-        resolvedAt: new Date(),
-      },
-    });
-    return res.count;
-  }
-
-  async revertApproved(organizationId: string, id: string, approverId: string) {
-    const res = await this._approval.model.postApproval.updateMany({
-      where: { id, organizationId, status: 'APPROVED', approverId },
-      data: {
-        status: 'PENDING',
-        approverId: null,
-        decidedByType: null,
-        note: null,
-        resolvedAt: null,
-      },
-    });
-    return res.count;
-  }
-
   // --- Guest (external reviewer) link ---------------------------------
 
   /** `tokenHash` is the SHA-256 hex of the token; the plaintext is never stored. */
@@ -623,67 +580,5 @@ export class ApprovalRepository {
         },
       },
     });
-  }
-
-  /**
-   * Atomically checks token hash + PENDING + not-expired, resolves, and
-   * consumes the token (cleared in the same update): single use, no separate
-   * step that could race between "check" and "consume".
-   */
-  async resolveByGuestToken(
-    token: string,
-    status: ResolveStatus,
-    note: string | null,
-    guest: { name: string; email: string } | null = null
-  ) {
-    const res = await this._approval.model.postApproval.updateMany({
-      where: {
-        guestTokenHash: hashGuestToken(token),
-        status: 'PENDING',
-        guestTokenExpiresAt: { gt: new Date() },
-      },
-      data: {
-        status,
-        approverId: null,
-        decidedByType: null,
-        guestName: guest?.name ?? null,
-        guestEmail: guest?.email ?? null,
-        note,
-        resolvedAt: new Date(),
-        guestToken: null,
-        guestTokenHash: null,
-        guestTokenExpiresAt: null,
-      },
-    });
-    return res.count;
-  }
-
-  /** `tokenHash` is the stored hash to put back (see `hashGuestToken`). */
-  async revertGuestApproval(
-    organizationId: string,
-    id: string,
-    tokenHash: string,
-    expiresAt: Date
-  ) {
-    const res = await this._approval.model.postApproval.updateMany({
-      where: {
-        id,
-        organizationId,
-        status: 'APPROVED',
-        approverId: null,
-        guestTokenHash: null,
-      },
-      data: {
-        status: 'PENDING',
-        note: null,
-        resolvedAt: null,
-        guestName: null,
-        guestEmail: null,
-        guestToken: null,
-        guestTokenHash: tokenHash,
-        guestTokenExpiresAt: expiresAt,
-      },
-    });
-    return res.count;
   }
 }
