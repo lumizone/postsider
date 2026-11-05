@@ -22,6 +22,10 @@ export class ApiRateLimitGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<Request>();
+    // The dashboard API shares this guard through APP_GUARD but must not be counted
+    // against the Public API bucket; only /public/* requests are limited here.
+    const path = (req.originalUrl || req.url || '').split('?')[0];
+    if (!path.startsWith('/public/')) return true;
     // @ts-ignore
     const orgId = req.org?.id;
     if (!orgId) return true; // No org resolved yet — let auth middleware handle it
