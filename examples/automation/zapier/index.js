@@ -6,6 +6,7 @@ const approvalDecided = require('./triggers/approval_decided');
 const requestApproval = require('./creates/request_approval');
 const decideApproval = require('./creates/decide_approval');
 const createDraft = require('./creates/create_draft');
+const { refuseOnAuthStatus } = require('./lib/after');
 
 const baseUrl = (bundle) =>
   String(
@@ -23,16 +24,7 @@ const beforeRequest = [
   },
 ];
 
-const afterResponse = [
-  (response) => {
-    if (response.status === 401 || response.status === 403) {
-      throw new Error(
-        'PostSider refused the request. Check that the API key exists and has the scope this step needs.'
-      );
-    }
-    return response;
-  },
-];
+const afterResponse = [refuseOnAuthStatus];
 
 module.exports = {
   version: require('./package.json').version,

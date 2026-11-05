@@ -6,7 +6,7 @@
   "main": "index.js",
   "license": "AGPL-3.0",
   "scripts": {
-    "test": "node --test test/map.test.js"
+    "test": "node --test test/map.test.js test/after.test.js"
   },
   "dependencies": {
     "zapier-platform-core": "16.0.0"

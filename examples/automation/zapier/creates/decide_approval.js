@@ -2,6 +2,7 @@
 
 const crypto = require('crypto');
 const { idempotencyKey } = require('../lib/map');
+const { refusalMessage } = require('../lib/after');
 
 // Required scope: approvals:decide (never granted by default).
 // The server decides who may approve: a key cannot decide a post it created
@@ -48,6 +49,12 @@ const perform = async (z, bundle) => {
     body,
     skipThrowForStatus: true,
   });
+  if (response.status === 401 || response.status === 403) {
+    // The global hook lets this request through (skipThrowForStatus), so the
+    // API's own reason reaches the user instead of a generic hint.
+    const code = response.data && typeof response.data.error === 'string' ? response.data.error : 'refused';
+    throw new z.errors.Error(refusalMessage(response), code, response.status);
+  }
   if (response.status === 409 && response.data && response.data.error === 'stage_changed') {
     throw new z.errors.Error(
       'This approval has already moved to another stage. Check it before deciding again.',
