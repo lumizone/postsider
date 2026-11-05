@@ -1,4 +1,10 @@
 const pl = {
+  analyticsConsent: {
+    text: "Do podstawowych statystyk używamy Umami bez plików cookie. Za Twoją zgodą Google Analytics i Google Ads mogą zapisywać pliki cookie, aby mierzyć rejestracje i reklamy.",
+    accept: "Akceptuję",
+    reject: "Odrzucam",
+    privacy: "Polityka prywatności",
+  },
   common: {
     save: "Zapisz",
     saving: "Zapisywanie…",

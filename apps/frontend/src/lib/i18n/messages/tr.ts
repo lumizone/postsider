@@ -1,4 +1,10 @@
 const tr = {
+  analyticsConsent: {
+    text: "Temel istatistikler için çerezsiz Umami kullanıyoruz. Onayınızla Google Analytics ve Google Ads, kayıtları ve reklamları ölçmek için çerez kullanabilir.",
+    accept: "Kabul et",
+    reject: "Reddet",
+    privacy: "Gizlilik politikası",
+  },
   common: {
     save: "Kaydet",
     cancel: "İptal",

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Inter, Changa_One } from "next/font/google";
 import { AppRoot } from "@/components/app-root";
+import { AnalyticsConsentBanner } from "@/components/analytics-consent-banner";
 import { FunnelAnalyticsBridge } from "@/components/funnel-analytics-bridge";
 import { AuthProvider } from "@/lib/auth-context";
 import { I18nProvider } from "@/lib/i18n";
@@ -50,6 +51,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <I18nProvider>
             <AuthProvider>
               <FunnelAnalyticsBridge />
+              <AnalyticsConsentBanner />
               <AppRoot>{children}</AppRoot>
             </AuthProvider>
           </I18nProvider>

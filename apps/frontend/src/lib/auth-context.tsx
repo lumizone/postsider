@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
+import { resetLoginGuard } from "@/lib/ga4";
 import {
   api,
   ApiError,
@@ -142,6 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAuthToken(null);
     setOrgId(null);
     setUser(null);
+    resetLoginGuard();
     router.replace("/login");
   }, [router]);
 

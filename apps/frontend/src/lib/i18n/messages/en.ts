@@ -9,6 +9,12 @@ type Widen<T> = {
 };
 
 const en = {
+  analyticsConsent: {
+    text: "We use cookieless Umami for basic stats. With your OK, Google Analytics and Google Ads may set cookies to measure signups and ads.",
+    accept: "Accept",
+    reject: "Reject",
+    privacy: "Privacy policy",
+  },
   common: {
     save: "Save",
     saving: "Saving…",

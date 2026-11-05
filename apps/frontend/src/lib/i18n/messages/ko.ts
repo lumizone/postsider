@@ -1,4 +1,10 @@
 const ko = {
+  analyticsConsent: {
+    text: "기본 통계에는 쿠키를 쓰지 않는 Umami를 사용합니다. 동의하시면 Google Analytics와 Google Ads가 가입과 광고를 측정하기 위해 쿠키를 설정할 수 있습니다.",
+    accept: "동의",
+    reject: "거부",
+    privacy: "개인정보 처리방침",
+  },
   common: {
     save: "저장",
     cancel: "취소",

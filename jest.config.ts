@@ -32,6 +32,9 @@ const config: Config = {
     'node_modules/(?!(?:.*[/\\\\])?(?:nostr-tools|@noble|@scure|uuid|mime|file-type)[/\\\\])',
   ],
   moduleNameMapper: {
+    // Frontend-internal alias (apps/frontend tsconfig `@/*`). Scoped packages
+    // start with `@scope/`, so this cannot shadow them.
+    '^@/(.*)$': '<rootDir>/apps/frontend/src/$1',
     '^@postsider/backend/(.*)$': '<rootDir>/apps/backend/src/$1',
     '^@postsider/frontend/(.*)$': '<rootDir>/apps/frontend/src/$1',
     '^@postsider/helpers/(.*)$': '<rootDir>/libraries/helpers/src/$1',
