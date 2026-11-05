@@ -3,9 +3,11 @@ import {
   ConflictException,
   ForbiddenException,
   HttpException,
+  Inject,
   Injectable,
   NotFoundException,
   Optional,
+  forwardRef,
 } from '@nestjs/common';
 import { ApprovalRepository, type StageSnapshot } from './approval.repository';
 import {
@@ -69,6 +71,8 @@ import {
   type PublicApprovalItem,
 } from './approval-public.view';
 import { checkKeyPermission } from '@postsider/nestjs-libraries/policies/key-permissions';
+import { ApprovalLinkService } from './approval-link.service';
+import { linksEnabled } from './approval-link.crypto';
 
 export type { Decider, DecideOpts, DecisionResult } from './approval-decision';
 export type ApprovalRequestResult = PostApproval & { created: boolean };
@@ -85,7 +89,10 @@ export class ApprovalService {
     private _organizations: OrganizationRepository,
     private _publicWebhookDelivery: PublicWebhookDeliveryService,
     @Optional() private _audit?: AuditLogger,
-    @Optional() private _flows?: ApprovalFlowService
+    @Optional() private _flows?: ApprovalFlowService,
+    @Optional()
+    @Inject(forwardRef(() => ApprovalLinkService))
+    private _links?: ApprovalLinkService
   ) {}
 
   /**
@@ -229,6 +236,15 @@ export class ApprovalService {
       { key: 'approvalRequested' }
     );
     const later = stage.position > 1;
+    // Opt-in (APPROVAL_EMAIL_LINKS=true): personal single use links instead of
+    // the plain email. When links cannot be produced the plain email is the fallback.
+    if (
+      linksEnabled(process.env.APPROVAL_EMAIL_LINKS) &&
+      this._links &&
+      (await this._links.sendStageEmails(orgId, approval, stage))
+    ) {
+      return;
+    }
     await this._notifications.notifyApprovers(
       orgId,
       later

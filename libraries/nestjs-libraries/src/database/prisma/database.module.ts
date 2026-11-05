@@ -51,6 +51,8 @@ import { ApprovalRepository } from '@postsider/nestjs-libraries/database/prisma/
 import { ApprovalService } from '@postsider/nestjs-libraries/database/prisma/approval/approval.service';
 import { ApprovalFlowRepository } from '@postsider/nestjs-libraries/database/prisma/approval/approval-flow.repository';
 import { ApprovalFlowService } from '@postsider/nestjs-libraries/database/prisma/approval/approval-flow.service';
+import { ApprovalLinkRepository } from '@postsider/nestjs-libraries/database/prisma/approval/approval-link.repository';
+import { ApprovalLinkService } from '@postsider/nestjs-libraries/database/prisma/approval/approval-link.service';
 import { PolicyRulesRepository } from '@postsider/nestjs-libraries/database/prisma/policies/policy-rules.repository';
 import { PolicyEvaluationService } from '@postsider/nestjs-libraries/database/prisma/policies/policy-evaluation.service';
 import { PolicyApprovalRouter } from '@postsider/nestjs-libraries/database/prisma/policies/policy-approval-router';
@@ -144,6 +146,8 @@ import { PostAnalyticsService } from '@postsider/nestjs-libraries/database/prism
     ApprovalService,
     ApprovalFlowRepository,
     ApprovalFlowService,
+    ApprovalLinkRepository,
+    ApprovalLinkService,
     PolicyRulesRepository,
     PolicyRulesService,
     PolicyEvaluationService,
