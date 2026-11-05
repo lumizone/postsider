@@ -11,13 +11,28 @@ import { useI18n } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { ApiRequestGenerator } from "@/components/api-request-generator";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { KeyPermissionsEditor } from "@/components/key-permissions-editor";
+import { useChannels } from "@/lib/use-channels";
+import {
+  channelCountKey,
+  describePermissions,
+  isPermissionsSaveable,
+  permissionsFromRow,
+  permissionsPayload,
+  reconcileWithKnown,
+  type KeyPermissionsState,
+} from "@/lib/key-permissions-model";
 
 interface ApiKeyRow {
   id: string;
   name: string;
   scopes: string[];
+  allowedActions?: string[];
+  allowedIntegrationIds?: string[];
   createdAt: string;
 }
+
+const UNLIMITED: KeyPermissionsState = { limited: false, actions: [], integrationIds: [] };
 
 const API_SCOPES = [
   "organization:read",
@@ -45,6 +60,12 @@ export default function ApiSettingsPage() {
   const { t, locale } = useI18n();
   const { user } = useAuth();
   const canManage = user?.role === "ADMIN" || user?.role === "SUPERADMIN";
+  const { raw: rawChannels, loading: channelsLoading, error: channelsError } = useChannels();
+  // The server accepts only enabled channels of this organization in a key limit.
+  const enabledChannels = rawChannels.filter((c) => !c.disabled).map((c) => ({ id: c.id, name: c.name }));
+  const channelChoices = channelsLoading || channelsError ? null : enabledChannels;
+  const knownChannelIds = channelChoices ? channelChoices.map((c) => c.id) : null;
+  const channelNameById = (id: string) => rawChannels.find((c) => c.id === id)?.name;
 
   const [keys, setKeys] = useState<ApiKeyRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,6 +76,7 @@ export default function ApiSettingsPage() {
   const [newName, setNewName] = useState("");
   const [newScopes, setNewScopes] = useState<string[]>([...DEFAULT_API_SCOPES]);
   const [creating, setCreating] = useState(false);
+  const [newPerms, setNewPerms] = useState<KeyPermissionsState>(UNLIMITED);
 
   // Modal for newly created key
   const [showModal, setShowModal] = useState(false);
@@ -80,13 +102,16 @@ export default function ApiSettingsPage() {
   }, []);
 
   const onCreate = async () => {
-    if (!newName.trim() || newScopes.length === 0 || creating) return;
+    const perms = reconcileWithKnown(newPerms, knownChannelIds).state;
+    if (!newName.trim() || newScopes.length === 0 || creating || !isPermissionsSaveable(perms)) return;
+    if (perms.limited && channelsLoading) return;
     setCreating(true);
     setError(null);
     try {
       const res = await api.post<ApiKeyRow & { key: string }>("/settings/api-keys", {
         name: newName.trim(),
         scopes: newScopes,
+        ...permissionsPayload(perms),
       });
       setRevealedKey(res.key);
       setRevealedName(res.name);
@@ -94,6 +119,7 @@ export default function ApiSettingsPage() {
       setShowCreate(false);
       setNewName("");
       setNewScopes([...DEFAULT_API_SCOPES]);
+      setNewPerms(UNLIMITED);
       void refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create key");
@@ -105,17 +131,41 @@ export default function ApiSettingsPage() {
   const [renameTarget, setRenameTarget] = useState<{ id: string; name: string; scopes: string[] } | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [editScopes, setEditScopes] = useState<string[]>([]);
+  const [editPerms, setEditPerms] = useState<KeyPermissionsState>(UNLIMITED);
   const [renameBusy, setRenameBusy] = useState(false);
 
   const onRename = async () => {
     if (!renameTarget) return;
     const name = renameValue.trim();
-    if (!name || editScopes.length === 0) return;
+    // Stored ids of deleted or disabled channels are dropped here: the server
+    // answers 400 "Unknown channel id" for them. Both lists are sent on every
+    // save so that switching the limit off really clears it.
+    const perms = reconcileWithKnown(editPerms, knownChannelIds).state;
+    if (!name || editScopes.length === 0 || !isPermissionsSaveable(perms)) return;
+    if (perms.limited && channelsLoading) return;
     setRenameBusy(true);
     try {
-      await api.put(`/settings/api-keys/${renameTarget.id}`, { name, scopes: editScopes });
+      const sent = permissionsPayload(perms);
+      const res = await api.put<Partial<ApiKeyRow> | null>(`/settings/api-keys/${renameTarget.id}`, {
+        name,
+        scopes: editScopes,
+        ...sent,
+      });
+      // Take the saved row from the response; fall back to what was sent.
+      const pickList = (value: unknown, fallback: string[]) =>
+        Array.isArray(value) ? (value as string[]) : fallback;
       setKeys((prev) =>
-        prev.map((k) => (k.id === renameTarget.id ? { ...k, name, scopes: editScopes } : k)),
+        prev.map((k) =>
+          k.id === renameTarget.id
+            ? {
+                ...k,
+                name: typeof res?.name === "string" ? res.name : name,
+                scopes: pickList(res?.scopes, editScopes),
+                allowedActions: pickList(res?.allowedActions, sent.allowedActions),
+                allowedIntegrationIds: pickList(res?.allowedIntegrationIds, sent.allowedIntegrationIds),
+              }
+            : k,
+        ),
       );
       setRenameTarget(null);
     } catch (err) {
@@ -167,6 +217,34 @@ export default function ApiSettingsPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [renameTarget, renameBusy]);
 
+  const createPermsOk =
+    isPermissionsSaveable(reconcileWithKnown(newPerms, knownChannelIds).state) &&
+    !(newPerms.limited && channelsLoading);
+  const renameOk =
+    !renameBusy &&
+    !!renameValue.trim() &&
+    editScopes.length > 0 &&
+    isPermissionsSaveable(reconcileWithKnown(editPerms, knownChannelIds).state) &&
+    !(editPerms.limited && channelsLoading);
+
+  const channelCountText = (count: number) => {
+    const form = channelCountKey(count, locale);
+    if (form === "one") return t("settingsApi.permChannelOne");
+    if (form === "few") return t("settingsApi.permChannelsFew", { count });
+    return t("settingsApi.permChannels", { count });
+  };
+  const permissionsText = (k: ApiKeyRow) => {
+    const d = describePermissions(k, channelNameById);
+    if (d.actions === null && d.channelCount === null) return t("settingsApi.permAll");
+    const actions = d.actions
+      ? d.actions.map((a) => t(`settingsApi.action_${a}` as const)).join(", ")
+      : t("settingsApi.permActionsAll");
+    const channels = d.channelCount === null ? t("settingsApi.channelsAll") : channelCountText(d.channelCount);
+    return t("settingsApi.permSummary", { actions, channels });
+  };
+  // Hover text: the channel names we can resolve, as plain text.
+  const permissionsTitle = (k: ApiKeyRow) => describePermissions(k, channelNameById).channelNames.join(", ") || undefined;
+
   if (!canManage) {
     return (
       <PageHeader
@@ -204,27 +282,31 @@ export default function ApiSettingsPage() {
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
-            <div style={{ minWidth: 480 }}>
+            <div style={{ minWidth: 680 }}>
             {/* Header */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr 120px 70px", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--line-soft)", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr 1.4fr 120px 70px", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--line-soft)", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)" }}>
               <span>{t("settingsApi.colName")}</span>
               <span>{t("settingsApi.colScopes")}</span>
+              <span>{t("settingsApi.colPermissions")}</span>
               <span>{t("settingsApi.colCreated")}</span>
               <span />
             </div>
 
             {/* Rows */}
             {keys.map((k) => (
-              <div key={k.id} style={{ display: "grid", gridTemplateColumns: "1fr 2fr 120px 70px", gap: 10, padding: "12px 0", borderBottom: "1px solid rgb(var(--tint) / 0.04)", fontSize: 13, alignItems: "center" }}>
+              <div key={k.id} style={{ display: "grid", gridTemplateColumns: "1fr 2fr 1.4fr 120px 70px", gap: 10, padding: "12px 0", borderBottom: "1px solid rgb(var(--tint) / 0.04)", fontSize: 13, alignItems: "center" }}>
                 <span style={{ fontWeight: 500 }}>{k.name}</span>
                 <span style={{ fontFamily: "monospace", fontSize: 11, color: "var(--muted)", lineHeight: 1.5 }}>
                   {Array.isArray(k.scopes) ? k.scopes.join(", ") : ""}
+                </span>
+                <span style={{ fontSize: 12, lineHeight: 1.5 }} title={permissionsTitle(k)}>
+                  {permissionsText(k)}
                 </span>
                 <span style={{ fontSize: 12, color: "var(--muted)" }}>
                   {new Date(k.createdAt).toLocaleDateString(locale, { year: "numeric", month: "short", day: "numeric" })}
                 </span>
                 <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                  <IconBtn onClick={() => { setRenameTarget({ id: k.id, name: k.name, scopes: k.scopes ?? [] }); setRenameValue(k.name); setEditScopes(k.scopes ?? []); }} title={t("settingsApi.rename")}>
+                  <IconBtn onClick={() => { setRenameTarget({ id: k.id, name: k.name, scopes: k.scopes ?? [] }); setRenameValue(k.name); setEditScopes(k.scopes ?? []); setEditPerms(permissionsFromRow(k)); }} title={t("settingsApi.rename")}>
                     <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M11.5 1.5l3 3L5 14H2v-3l9.5-9.5Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" /></svg>
                   </IconBtn>
                   <IconBtn onClick={() => setDeleteTarget({ id: k.id, name: k.name })} title={t("settingsApi.revoke")} danger>
@@ -269,11 +351,18 @@ export default function ApiSettingsPage() {
                   </label>
                 ))}
               </div>
+              <KeyPermissionsEditor
+                value={newPerms}
+                onChange={setNewPerms}
+                channels={channelChoices}
+                channelsFailed={!!channelsError}
+                disabled={creating}
+              />
               <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-                <button type="button" className={s.btnPrimary} onClick={onCreate} disabled={creating || !newName.trim() || newScopes.length === 0} style={{ whiteSpace: "nowrap" }}>
+                <button type="button" className={s.btnPrimary} onClick={onCreate} disabled={creating || !newName.trim() || newScopes.length === 0 || !createPermsOk} style={{ whiteSpace: "nowrap" }}>
                   {creating ? t("settingsApi.creating") : t("common.create")}
                 </button>
-                <button type="button" className={s.btnGhost} onClick={() => { setShowCreate(false); setNewName(""); setNewScopes([...DEFAULT_API_SCOPES]); }}>
+                <button type="button" className={s.btnGhost} onClick={() => { setShowCreate(false); setNewName(""); setNewScopes([...DEFAULT_API_SCOPES]); setNewPerms(UNLIMITED); }}>
                   {t("common.cancel")}
                 </button>
               </div>
@@ -332,7 +421,7 @@ export default function ApiSettingsPage() {
       {/* Rename modal */}
       {renameTarget && (
         <div role="dialog" aria-modal="true" aria-label={t("settingsApi.renameTitle")} style={{ position: "fixed", inset: 0, zIndex: 9999, display: "grid", placeItems: "center", background: "rgb(var(--tint) / 0.45)", backdropFilter: "blur(4px)" }} onClick={() => !renameBusy && setRenameTarget(null)}>
-          <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 420, background: "var(--bg)", borderRadius: 16, padding: "28px 24px 24px", boxShadow: "0 24px 64px rgb(var(--shadow) / calc(0.18 * var(--shadow-boost)))", display: "flex", flexDirection: "column", gap: 16 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 420, maxHeight: "calc(100vh - 32px)", overflowY: "auto", background: "var(--bg)", borderRadius: 16, padding: "28px 24px 24px", boxShadow: "0 24px 64px rgb(var(--shadow) / calc(0.18 * var(--shadow-boost)))", display: "flex", flexDirection: "column", gap: 16 }}>
             <div>
               <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 6px" }}>{t("settingsApi.renameTitle")}</h2>
               <p style={{ margin: 0, fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
@@ -364,11 +453,18 @@ export default function ApiSettingsPage() {
                 </label>
               ))}
             </div>
+            <KeyPermissionsEditor
+              value={editPerms}
+              onChange={setEditPerms}
+              channels={channelChoices}
+              channelsFailed={!!channelsError}
+              disabled={renameBusy}
+            />
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <button type="button" className={s.btnGhost} onClick={() => setRenameTarget(null)} disabled={renameBusy}>
                 {t("common.cancel")}
               </button>
-              <button type="button" className={s.btnPrimary} onClick={() => void onRename()} disabled={renameBusy || !renameValue.trim() || editScopes.length === 0} style={{ opacity: renameValue.trim() && editScopes.length > 0 ? 1 : 0.5 }}>
+              <button type="button" className={s.btnPrimary} onClick={() => void onRename()} disabled={!renameOk} style={{ opacity: renameOk ? 1 : 0.5 }}>
                 {renameBusy ? t("settingsApi.savingRename") : t("common.save")}
               </button>
             </div>

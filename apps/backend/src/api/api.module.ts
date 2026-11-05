@@ -45,6 +45,8 @@ import { ApprovedAppsController } from '@postsider/backend/api/routes/approved-a
 import { OAuthController, OAuthAuthorizedController } from '@postsider/backend/api/routes/oauth.controller';
 import { McpOAuthController } from '@postsider/backend/api/routes/mcp-oauth.controller';
 import { AnnouncementsController } from '@postsider/backend/api/routes/announcements.controller';
+import { AgentActivityController } from '@postsider/backend/api/routes/agent-activity.controller';
+import { PoliciesController } from '@postsider/backend/api/routes/policies.controller';
 import { AdminController } from '@postsider/backend/api/routes/admin.controller';
 import { AuthProviderManager } from '@postsider/backend/services/auth/providers/providers.manager';
 import { GithubProvider } from '@postsider/backend/services/auth/providers/github.provider';
@@ -80,6 +82,8 @@ const authenticatedController = [
   AgencyController,
   ReportController,
   PublishingController,
+  AgentActivityController,
+  PoliciesController,
 ];
 @Module({
   imports: [UploadModule],

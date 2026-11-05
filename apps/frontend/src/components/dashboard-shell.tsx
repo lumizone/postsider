@@ -133,6 +133,21 @@ const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
+    href: "/agents",
+    labelKey: "nav.agents",
+    icon: (
+      <svg viewBox="0 0 16 16" fill="none" aria-hidden>
+        <path
+          d="M1.75 8h2.5l1.75-4.5 3 9 1.75-4.5h3.5"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
     href: "/agency",
     labelKey: "nav.agency",
     agencyModeOnly: true,

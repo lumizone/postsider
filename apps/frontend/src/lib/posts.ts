@@ -162,8 +162,14 @@ export async function changePostDate(
   id: string,
   isoDate: string,
   action: "schedule" | "update" = "schedule",
-): Promise<void> {
-  await api.put(`/posts/${id}/date`, { date: isoDate, action });
+): Promise<{ approvalRequested?: boolean }> {
+  // A rescheduled post that a policy sent to approval answers
+  // `{ approvalRequested: true }`; an ordinary move answers an empty body.
+  const res = await api.put<{ approvalRequested?: boolean } | null | undefined>(
+    `/posts/${id}/date`,
+    { date: isoDate, action },
+  );
+  return res && typeof res === "object" ? res : {};
 }
 
 /**
@@ -200,9 +206,15 @@ export interface CreatePostInput {
   group?: string;
 }
 
-export async function createPost(
-  input: CreatePostInput,
-): Promise<Array<{ postId: string; integration: string }>> {
+/** One created post. `policy` and `approvalRequested` only appear when a policy rule applied. */
+export interface CreatedPost {
+  postId: string;
+  integration: string;
+  policy?: unknown;
+  approvalRequested?: boolean;
+}
+
+export async function createPost(input: CreatePostInput): Promise<CreatedPost[]> {
   const group = input.group || "";
   const posts = input.channelIds.map((cid) => {
     const main = input.perChannelBody[cid] ?? input.body;
@@ -235,7 +247,7 @@ export async function createPost(
     };
   });
 
-  return api.post<Array<{ postId: string; integration: string }>>("/posts", {
+  return api.post<CreatedPost[]>("/posts", {
     type: input.type,
     date: input.date,
     shortLink: input.shortLink ?? false,

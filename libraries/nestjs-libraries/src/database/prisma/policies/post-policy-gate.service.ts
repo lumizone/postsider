@@ -1,5 +1,10 @@
-import { Injectable } from '@nestjs/common';
-import type { PostActor } from '@postsider/nestjs-libraries/actor/post-actor';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import {
+  actorToColumns,
+  actorViewFromColumns,
+  type ActorView,
+  type PostActor,
+} from '@postsider/nestjs-libraries/actor/post-actor';
 import {
   PolicyBlockedException,
   policyInputTooLarge,
@@ -7,6 +12,7 @@ import {
 import { PolicyInputTooLargeError } from '@postsider/nestjs-libraries/policies/policy-text';
 import type { PolicyMatch } from '@postsider/nestjs-libraries/policies/policy-types';
 import { sanitizeMatches } from '@postsider/nestjs-libraries/policies/policy-errors';
+import { ApprovalService } from '@postsider/nestjs-libraries/database/prisma/approval/approval.service';
 import { PolicyApprovalRouter } from './policy-approval-router';
 import {
   PolicyEvaluationService,
@@ -46,19 +52,35 @@ const failClosed = (error: unknown): never => {
 export class PostPolicyGateService {
   constructor(
     private _evaluation: PolicyEvaluationService,
-    private _router: PolicyApprovalRouter
+    private _router: PolicyApprovalRouter,
+    @Optional() private _approvals?: ApprovalService
   ) {}
 
   async preflightWrite(
     orgId: string,
     body: CreateBodyLike,
     actor: PostActor,
-    opts: { editingPostId?: string } = {}
+    opts: {
+      editingPostId?: string;
+      /**
+       * Dashboard edits: one entry per `body.posts` element (same order) naming
+       * the stored post it replaces, by value id or by thread group.
+       */
+      editing?: Array<{ postId?: string; group?: string } | undefined>;
+    } = {}
   ): Promise<Pre> {
     let outcome: PolicyOutcome;
     try {
       const targets = await this._evaluation.targetsFromDraftBody(orgId, body, actor);
       if (opts.editingPostId) await this.markAsEdit(orgId, opts.editingPostId, targets);
+      else if (opts.editing) {
+        for (let i = 0; i < targets.length; i++) {
+          const ref = opts.editing[i];
+          if (!ref) continue;
+          const postId = ref.postId ?? (await this.rootOfGroup(orgId, ref.group, targets[i].integrationId));
+          if (postId) await this.markAsEdit(orgId, postId, [targets[i]]);
+        }
+      }
       outcome = await this._evaluation.evaluateTargets(orgId, targets, 'write');
     } catch (error) {
       // Drafts are report only: a failing evaluation skips the report and
@@ -245,6 +267,92 @@ export class PostPolicyGateService {
       approvalPostIds,
       evaluatedPostIds,
     };
+  }
+
+  /**
+   * A dashboard drag to a new date: evaluated like a schedule against the NEW
+   * date (max of that date and now). A post whose approval is APPROVED skips
+   * REQUIRE_APPROVAL rules only. Fails closed on evaluation errors.
+   * A stored DRAFT stays a draft when moved (ruling P3-R1): it is evaluated as
+   * a DRAFT, reported only, never blocked or routed, and fails open.
+   */
+  async gateReschedule(
+    orgId: string,
+    postId: string,
+    date: string,
+    actor: PostActor,
+    opts: { storedState?: string } = {}
+  ): Promise<{ proceed: boolean; policy: PolicyOutcome; approvalRequested: boolean }> {
+    const when = new Date(date);
+    if (Number.isNaN(when.getTime())) {
+      throw new BadRequestException({ msg: 'A valid date is required' });
+    }
+    const isDraft = opts.storedState === 'DRAFT';
+    let outcome: PolicyOutcome;
+    try {
+      const evaluate = async (approved: boolean) => {
+        const target = await this._evaluation.targetFromStoredPost(orgId, postId, {
+          action: isDraft ? 'DRAFT' : 'SCHEDULE',
+          approved,
+        });
+        if (!target) throw new NotFoundException({ msg: 'Post not found' });
+        const now = (this._evaluation.clock ?? (() => new Date()))();
+        target.scheduledAt = isDraft || when.getTime() >= now.getTime() ? when : now;
+        const view = actorViewFromColumns(actorToColumns(actor, 'createdBy'), 'createdBy') as ActorView;
+        target.actors = [view, ...target.actors.filter((a) => actorKey(a) !== actorKey(view))];
+        return this._evaluation.evaluateTargets(orgId, [target], 'write');
+      };
+      outcome = await evaluate(false);
+      if (!isDraft && outcome.effect === 'REQUIRE_APPROVAL' && this._approvals) {
+        const approval = await this._approvals.getForPost(orgId, postId);
+        // An approved post only skips REQUIRE_APPROVAL rules; BLOCK still applies.
+        if (approval?.status === 'APPROVED') outcome = await evaluate(true);
+      }
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      // Moving a draft is never refused by a failing evaluation.
+      if (isDraft) return { proceed: true, policy: EMPTY_OUTCOME(), approvalRequested: false };
+      return failClosed(error);
+    }
+
+    if (isDraft) {
+      if (outcome.effect !== 'ALLOW') await this._evaluation.recordOutcome(orgId, outcome, 'write', { postId });
+      return {
+        proceed: true,
+        policy: {
+          ...outcome,
+          matched: sanitizeMatches(outcome.matched),
+          channels: outcome.channels.map((c) => ({ ...c, matched: sanitizeMatches(c.matched) })),
+        },
+        approvalRequested: false,
+      };
+    }
+    if (outcome.effect === 'BLOCK') {
+      await this._evaluation.recordOutcome(orgId, outcome, 'write', { postId });
+      throw new PolicyBlockedException(outcome);
+    }
+    const exposed = (): PolicyOutcome => ({
+      ...outcome,
+      matched: sanitizeMatches(outcome.matched),
+      channels: outcome.channels.map((c) => ({ ...c, matched: sanitizeMatches(c.matched) })),
+    });
+    if (outcome.effect === 'ALLOW') {
+      return { proceed: true, policy: exposed(), approvalRequested: false };
+    }
+    const routed = await this._router.route(orgId, postId, { terminateWorkflow: true });
+    await this._evaluation.recordOutcome(orgId, outcome, 'write', { postId });
+    return { proceed: false, policy: exposed(), approvalRequested: routed.requested };
+  }
+
+  /** Root post of a thread group for one channel, scoped to the organization. */
+  private async rootOfGroup(
+    orgId: string,
+    group: string | undefined,
+    integrationId: string
+  ): Promise<string | undefined> {
+    if (!group) return undefined;
+    const rows = await this._evaluation.topLevelRowsOfGroup(orgId, group);
+    return (rows.find((r) => r.integrationId === integrationId) ?? rows[0])?.id;
   }
 
   /**

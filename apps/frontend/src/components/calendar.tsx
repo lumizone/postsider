@@ -40,6 +40,9 @@ import {
   type CreatePostInput,
 } from '@/lib/posts';
 import { requestApproval, getApprovalByPost } from '@/lib/approval-api';
+import { summarizeCreateResult, summarizeDateResult } from '@/lib/policy-errors';
+import { PolicyNotice, policyErrorMessage } from './policy-notice';
+import { parseCalendarDeepLink, stripCalendarDeepLink } from '@/lib/calendar-deep-link';
 import {
   CreatePostModal,
   type NewPostInput,
@@ -217,6 +220,8 @@ export function Calendar({ year, month }: CalendarProps) {
   // take minutes to appear — surface a visible notice after scheduling so the
   // user doesn't think the post failed. Non-blocking, auto-dismissed.
   const [tiktokProcessingNotice, setTiktokProcessingNotice] = useState(false);
+  // A policy sent a save or a drag to approval instead of scheduling it.
+  const [policyNotice, setPolicyNotice] = useState(false);
   // Bumped whenever a post is created, so SetupChecklist's post-count re-fetches
   // even when the composer was opened from its own "Write a post" button (which
   // doesn't otherwise change anything the checklist was watching).
@@ -261,7 +266,7 @@ export function Calendar({ year, month }: CalendarProps) {
     };
   }, [filtersOpen]);
 
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const isMember = user?.role === 'USER';
 
   const {
@@ -770,6 +775,7 @@ export function Calendar({ year, month }: CalendarProps) {
     };
     try {
       const created = await createPost(input);
+      if (summarizeCreateResult(created).approvalRequested) setPolicyNotice(true);
       // TikTok Direct Post is processed asynchronously on TikTok's side and can
       // take minutes to appear — flag it so the user doesn't read the calendar
       // as "still processing = failed". Non-blocking, auto-dismissed.
@@ -862,6 +868,42 @@ export function Calendar({ year, month }: CalendarProps) {
     }
   };
 
+  // The Agent Control Center links here with ?post=<id> and/or ?date=YYYY-MM-DD.
+  // Consumed once, after the first full load, and stripped from the address bar
+  // (same pattern as ?connect=1). The member role cannot edit, so ?post= is
+  // ignored for them.
+  const deepLinkHandled = useRef(false);
+  useEffect(() => {
+    // Wait for the user: the member check below needs the real role. The link stays until then.
+    if (!bootstrapped || authLoading || !user || deepLinkHandled.current) return;
+    if (typeof window === 'undefined') return;
+    deepLinkHandled.current = true;
+    const link = parseCalendarDeepLink(window.location.search);
+    if (link.date) {
+      const [y, m, d] = link.date.split('-').map(Number);
+      setCursor(new Date(y, m - 1, 1));
+      setSelected(new Date(y, m - 1, d));
+    }
+    if (link.postId && !isMember) {
+      void openEventForEdit({
+        id: link.postId,
+        channelId: '',
+        date: '',
+        time: '',
+      } as CalendarEvent);
+    }
+    const stripped = stripCalendarDeepLink(window.location.search);
+    if (stripped !== window.location.search.replace(/^\?/, '')) {
+      window.history.replaceState(
+        {},
+        '',
+        window.location.pathname + (stripped ? '?' + stripped : '') + window.location.hash
+      );
+    }
+    // openEventForEdit is recreated every render; the ref makes this run once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bootstrapped, authLoading, user, isMember]);
+
   const deletePost = async (group: string) => {
     try {
       await deletePostGroup(group);
@@ -905,12 +947,17 @@ export function Calendar({ year, month }: CalendarProps) {
       events.map((e) => (e.id === eventId ? { ...e, date: newDate, time } : e))
     );
     try {
-      await changePostDate(eventId, dt.toISOString(), 'schedule');
+      const res = await changePostDate(eventId, dt.toISOString(), 'schedule');
+      if (summarizeDateResult(res).approvalRequested) {
+        // The date was not applied: put the post back and tell the user.
+        setEvents(prev);
+        setPolicyNotice(true);
+      }
       void refreshEvents();
     } catch (err) {
       console.error('[reschedule]', err);
       setEvents(prev);
-      setChannelError(t('errors.postReschedule'));
+      setChannelError(policyErrorMessage(t, err) ?? t('errors.postReschedule'));
       setChannelErrorIsPlanLimit(false);
     }
   };
@@ -1006,6 +1053,7 @@ export function Calendar({ year, month }: CalendarProps) {
             </button>
           </div>
         )}
+        {policyNotice && <PolicyNotice onClose={() => setPolicyNotice(false)} />}
         {tiktokProcessingNotice && (
           <div
             role="status"

@@ -2033,6 +2033,29 @@ export class PostsService {
     return { id: postId, state };
   }
 
+  /**
+   * The checks changeDate runs before it touches anything (post exists, not
+   * published or pending approval, org not paused for a re-arm). The dashboard
+   * runs them first so a refused move never reaches the policy gate, which
+   * would otherwise audit or route a post that cannot change. Returns the
+   * stored state.
+   */
+  async assertCanReschedule(
+    orgId: string,
+    id: string,
+    action: 'schedule' | 'update' = 'schedule'
+  ): Promise<{ state: string }> {
+    const post = await this._postRepository.getPostById(id, orgId);
+    if (!post) {
+      throw new BadRequestException('Post not found');
+    }
+    this.assertMutable(post);
+    if (action === 'schedule' && post.state !== 'DRAFT') {
+      await this.assertOrgNotPausedForSchedule(orgId);
+    }
+    return { state: post.state };
+  }
+
   async changeDate(
     orgId: string,
     id: string,

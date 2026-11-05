@@ -329,7 +329,7 @@ Two separate controls limit what an automation can do. Both are off until an own
 
 Effects: `REQUIRE_APPROVAL` writes the post as a draft and requests a human approval. `BLOCK` refuses the write with `422 policy_blocked` and, at publish time, fails the post with `errorCategory: POLICY_BLOCKED` (not retryable). BLOCK beats REQUIRE_APPROVAL. A post that already has an approved approval satisfies `REQUIRE_APPROVAL` rules, but never a `BLOCK` rule.
 
-Who a rule applies to: with no actor filter a rule applies to automation only (`API_KEY` and `OAUTH_CLIENT`). `USER` and `SYSTEM` are covered only when listed. Because the dashboard is not checked at write time, a rule that lists `USER` acts at publish time only.
+Who a rule applies to: with no actor filter a rule applies to automation only (`API_KEY` and `OAUTH_CLIENT`). `USER` and `SYSTEM` are covered only when listed. A rule that lists `USER` is also applied when a person saves in the dashboard (see Agent activity below); other dashboard write paths are covered at publish time only.
 
 **Write time and publish time.** Rules are checked when the public API or MCP creates, edits, schedules or retries a post, and again just before a post is sent to the platform. Responses to create, update, status change and retry carry `policy: { effect, matched }` (create and update add it to every array element, together with `approvalRequested`). Each non-ALLOW outcome is recorded as the `post.policy_evaluated` audit event, and each rule change as `policy.changed`.
 
@@ -343,7 +343,7 @@ Who a rule applies to: with no actor filter a rule applies to automation only (`
 
 - Drafts are reported, not enforced, at write time. The same rules still apply when the draft is scheduled or published, and a BLOCK rule stops it at publish time.
 - Rules read the text of the post (and link targets). They do not look inside images or video, follow redirects, or understand meaning.
-- Dashboard edits are not checked when saved. They are caught only at publish time.
+- Dashboard saves are checked at write time only for the composer (create, edit, schedule), rescheduling a post by drag, and the places listed under Agent activity. CSV import, duplicate, approve, resuming a pause and evergreen recycling are not checked when written. They are caught at publish time.
 - Workflows started before v1.0.9 skip the publish-time check until they run.
 - Approvals carry no content version. An approval granted for older content is still honored at publish time after a dashboard edit.
 - An API edit or reschedule of an approved queued post sends it back to approval.
@@ -360,6 +360,51 @@ Who a rule applies to: with no actor filter a rule applies to automation only (`
 - The `policy` object is not the same everywhere. The `422 policy_blocked` body lists blocked channels as ids (`policy.channels` is an array of channel id strings), while the dry run returns `channels` as objects with `integrationId` and `effect`. Status change, retry and duplicate responses carry only `{ effect, matched }`. A draft report that could not be evaluated carries no `policy` at all, never a false ALLOW.
 - The dry run lets any credential with `posts:read` probe rule settings without an audit entry, and the global throttler is effectively open. Send the literal path `/public/v1/policies/evaluate`; encoded spellings are not classified as reads.
 - The MCP tool `postsider_check_policy` also needs `posts:read`.
+
+### Agent activity (dashboard)
+
+The dashboard page `/agents` ("Agent activity", in the sidebar after Approval) shows what API keys, OAuth clients and MCP clients did in the organization and what needs a person. Every member can read it. Approving, rejecting and retrying are for administrators (ADMIN and SUPERADMIN); the buttons are hidden for members with the USER role.
+
+**Summary tiles.** The unit is a destination (one channel of a post group). Each tile that shows backlog is a button that applies its bucket as a filter.
+
+- Actions today: audit events of the organization made today by an `API_KEY` or `OAUTH_CLIENT` actor.
+- Waiting for review: destinations in `APPROVAL` right now (open backlog, not limited to today).
+- Policy blocked: destinations that failed with `POLICY_BLOCKED` right now (open backlog).
+- Failed: failed destinations right now, split into retryable and unknown outcome (plus failures that need a change before another try).
+- Published today: `PUBLISHED` destinations created by an API key or OAuth client whose `updatedAt` falls today. This is a proxy: the page has no separate publish timestamp, so a later edit of a published post can move it into today.
+
+"Today" uses the browser time zone (an invalid value falls back to the organization default, then UTC).
+
+**Buckets.** A row falls into one bucket and a group takes the most urgent bucket of its destinations: `unknown_outcome`, `blocked`, `retryable`, `failed_other`, `review`, `held`, `scheduled`, `draft`, `published`. `Needs attention` (the default) is review, blocked and every failed bucket. `unknown_outcome` means the platform did not confirm whether the post went out, so it may already be live. That is why retrying it asks for a confirmation: the dialog tells you to check the channel first and the confirm button stays disabled until you tick "I checked the platform". A group with both kinds shows "Retry failed" (skips unknown outcome rows) and "Retry anyway" (the dialog). Bulk retry is not offered.
+
+**Filters.** Bucket, channels, actor, agent name, source, date range (on last update), and "Only automation". By default the list shows automation plus anything in review or failed regardless of who made it. "Load more" pages through results. The page refetches when the window regains focus and after every action; there are no timers.
+
+**Drawer.** Clicking a row opens the detail drawer: destinations (state, error category in plain words, attempts, release link), who (verified actor versus claimed provenance), approval, policy (the outcome recorded when the post was evaluated and a live check against the current rules), content previews with a word diff against the first destination, and the audit timeline. Claimed fields (agent, workflow, run, external ref, source) are shown as "claimed by the client, not verified": the server never verifies them and any caller can type anything. The verified actor comes from the credential. Names are cleaned before display and rendered as text.
+
+**Actions.** Approve and reject use the existing approval routes (single) and `POST /agent-activity/approvals/bulk` (up to 50 at once; one failure does not stop the rest, and an already resolved approval is skipped). Retry uses `POST /agent-activity/groups/:group/retry-failed` and runs the same policy check as the public retry route. Open in editor and Calendar are links: the calendar understands `?post=<id>` (opens that post in the edit modal) and `?date=YYYY-MM-DD` (moves to that month and selects the day); both are stripped from the address after use.
+
+**Settings > Policies.** Administrators manage policy rules at `/settings/policies`: list by priority, on/off switch, edit, delete, and a form for the seven conditions and their filters (actor types, API keys, channels, providers). Client checks mirror the server limits and the server stays authoritative. A "Test a post" panel runs the dry run (nothing is written) for chosen channels, type, date, text and media, "as" yourself, an API key, an OAuth client or the system. Rules that list `USER` only match when the dry run is "as" a person.
+
+**Per-key limits.** The API key create and edit dialogs in Settings > Public API have a Permissions section: switch on "Limit what this key can do", then pick allowed actions (Draft, Schedule, Publish now) and allowed channels. Switching it off clears both lists (unrestricted). Legacy organization keys and OAuth tokens are not limited by this.
+
+**Rules for people saving in the dashboard.** `USER` rules now run when a person saves.
+
+- Create, edit and schedule from the composer: BLOCK answers `422 policy_blocked` and nothing is written; the composer shows "Blocked by policy: <rule names>". REQUIRE_APPROVAL writes the post as a draft and requests approval; the response carries `approvalRequested` and the page shows "Sent for approval instead of being scheduled" with a link to Approval. Content too large to evaluate answers `400 policy_input_too_large`.
+- Saving a draft is report only: the outcome is recorded but nothing is blocked or routed.
+- Rescheduling by drag in the calendar (`PUT /posts/:id/date` with action `schedule`) evaluates the stored post at the new date. A BLOCK refuses the move (422); REQUIRE_APPROVAL sends the post to approval and does not apply the date. Dragging a draft is report only. A pure date shift of the same state (action `update`) is not gated.
+- Editing a post that needs approval writes it as a draft.
+
+**Routes.** The page uses session routes under `/agent-activity` (`GET /summary`, `GET /filters`, `GET /`, `GET /groups/:group`, `POST /approvals/bulk`, `POST /groups/:group/retry-failed`) and `/policies` (list, create, update, delete, and `POST /evaluate`). They are dashboard routes: they need a signed-in session, are not part of the public API, and are not available to API keys or MCP. Policy management is administrators only.
+
+**Known gaps.**
+
+- CSV import, duplicate, approve (scheduling an approved post), resuming a pause and evergreen recycling are not checked when written. The publish-time guard still enforces BLOCK and approvals. CSV import (default state QUEUE) is the largest of these.
+- "Published today" is a proxy (see above).
+- A retry from this page is evaluated against the organization rather than the group, so its policy event does not appear in that group's timeline. The retry result itself carries the outcome.
+- The "today" boundary is one hour off on the day clocks spring forward, in zones that skip local midnight (for example Santiago and Havana).
+- The dashboard policy helpers are copies of the public controller's. They need to be merged later.
+- Claimed provenance is never verified.
+- A member with the USER role who calls an admin route can get `402` before `403` when billing is on. Either way nothing is changed.
 
 ---
 
