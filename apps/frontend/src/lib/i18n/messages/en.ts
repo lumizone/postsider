@@ -889,7 +889,7 @@ const en = {
     localDesc: "Runs on your machine through npx with an organization API key.",
     manageKeys: "Manage API keys",
     toolsTitle: "What the agent can do",
-    toolsDesc: "19 tools: channels, calendar, drafts and scheduled posts, approvals, analytics and media. Deleting a post and pausing publishing are marked destructive.",
+    toolsDesc: "40 tools: channels, calendar, drafts and scheduled posts, approvals, analytics and media. Deleting a post and pausing publishing are marked destructive.",
     generic: "Any MCP client",
     genericSub: "Streamable HTTP",
     sub_claude: "Web, desktop, mobile",

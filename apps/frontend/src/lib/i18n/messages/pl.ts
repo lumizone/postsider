@@ -769,7 +769,7 @@ const pl = {
     localDesc: "Działa na Twoim komputerze przez npx z kluczem API organizacji.",
     manageKeys: "Zarządzaj kluczami API",
     toolsTitle: "Co potrafi agent",
-    toolsDesc: "19 narzędzi: kanały, kalendarz, szkice i zaplanowane posty, akceptacje, analityka i media. Usuwanie posta i wstrzymanie publikacji są oznaczone jako destrukcyjne.",
+    toolsDesc: "40 narzędzi: kanały, kalendarz, szkice i zaplanowane posty, akceptacje, analityka i media. Usuwanie posta i wstrzymanie publikacji są oznaczone jako destrukcyjne.",
     generic: "Dowolny klient MCP",
     genericSub: "Streamable HTTP",
     sub_claude: "Web, desktop, mobile",
