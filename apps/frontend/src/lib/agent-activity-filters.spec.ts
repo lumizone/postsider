@@ -3,6 +3,7 @@ import {
   filtersFromSearch,
   filtersToSearch,
   hasActiveFilters,
+  isRangeInverted,
   toApiQuery,
 } from './agent-activity-filters';
 
@@ -62,5 +63,14 @@ describe('agent activity filters', () => {
     expect(hasActiveFilters(DEFAULT_FILTERS)).toBe(false);
     expect(hasActiveFilters({ ...DEFAULT_FILTERS, bucket: 'all' })).toBe(true);
     expect(hasActiveFilters({ ...DEFAULT_FILTERS, actor: 'USER:1' })).toBe(true);
+  });
+});
+
+describe('isRangeInverted', () => {
+  it('is true only when both days are set and from is after to', () => {
+    expect(isRangeInverted({ ...DEFAULT_FILTERS, from: '2026-11-05', to: '2026-11-04' })).toBe(true);
+    expect(isRangeInverted({ ...DEFAULT_FILTERS, from: '2026-11-04', to: '2026-11-04' })).toBe(false);
+    expect(isRangeInverted({ ...DEFAULT_FILTERS, from: '2026-11-04' })).toBe(false);
+    expect(isRangeInverted(DEFAULT_FILTERS)).toBe(false);
   });
 });

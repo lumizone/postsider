@@ -9,8 +9,9 @@ import {
   type AgentGroup,
   type AgentSummary,
 } from "@/lib/agent-activity-api";
-import { toApiQuery, type AgentFilters } from "@/lib/agent-activity-filters";
+import { isRangeInverted, toApiQuery, type AgentFilters } from "@/lib/agent-activity-filters";
 import { mergeGroupPages } from "@/lib/agent-activity-model";
+import { planRefresh, refreshDone } from "@/lib/agent-refresh-plan";
 
 const PAGE_SIZE = 25;
 
@@ -55,13 +56,31 @@ export function useAgentActivity(filters: AgentFilters): UseAgentActivity {
   const cursorRef = useRef<string | null>(null);
   const loadingMoreRef = useRef(false);
   const loadedKey = useRef<string | null>(null);
+  const groupsRef = useRef<AgentGroup[]>([]);
+  groupsRef.current = groups;
+  const inverted = isRangeInverted(filters);
+  const invertedRef = useRef(inverted);
+  invertedRef.current = inverted;
 
   useEffect(() => {
     const mine = ++generation.current;
     let cancelled = false;
     const live = () => !cancelled && generation.current === mine;
+    // An impossible date range is reported by the page; nothing is requested.
+    if (invertedRef.current) {
+      setGroups([]);
+      setNextCursor(null);
+      cursorRef.current = null;
+      loadedKey.current = null;
+      setError(null);
+      setLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+    const sameKey = loadedKey.current === key;
     // A first load or a filter change shows the skeleton; a refresh keeps the rows.
-    if (loadedKey.current !== key) {
+    if (!sameKey) {
       setLoading(true);
       setGroups([]);
       setNextCursor(null);
@@ -72,7 +91,28 @@ export function useAgentActivity(filters: AgentFilters): UseAgentActivity {
     setLoadingMore(false);
 
     const query = JSON.parse(key) as Record<string, string>;
-    listAgentActivity(query)
+    // A refresh with unchanged filters refetches as many rows as were loaded (bounded),
+    // so loaded pages and the selection on them survive an action or a window focus.
+    const fetchRows = async (): Promise<{ groups: AgentGroup[]; nextCursor: string | null }> => {
+      if (!sameKey) return listAgentActivity(query);
+      const { limit, target } = planRefresh(groupsRef.current.length, PAGE_SIZE);
+      let acc: AgentGroup[] = [];
+      let cursor: string | null = null;
+      let pages = 0;
+      do {
+        const res: { groups: AgentGroup[]; nextCursor: string | null } = await listAgentActivity({
+          ...query,
+          limit: String(limit),
+          ...(cursor ? { cursor } : {}),
+        });
+        acc = mergeGroupPages(acc, res.groups);
+        cursor = res.nextCursor;
+        pages += 1;
+        if (!live()) break;
+      } while (!refreshDone({ fetched: acc.length, target, cursor, pages }));
+      return { groups: acc, nextCursor: cursor };
+    };
+    fetchRows()
       .then((res) => {
         if (!live()) return;
         setGroups(res.groups);
@@ -99,7 +139,7 @@ export function useAgentActivity(filters: AgentFilters): UseAgentActivity {
     return () => {
       cancelled = true;
     };
-  }, [key, refreshTick]);
+  }, [key, refreshTick, inverted]);
 
   useEffect(() => {
     let cancelled = false;

@@ -6,6 +6,8 @@ import {
   mergeGroupPages,
   pruneSelection,
   selectedApprovalIds,
+  planBulk,
+  removeSent,
   toggleGroup,
 } from './agent-activity-model';
 
@@ -72,5 +74,50 @@ describe('agent activity model', () => {
   it('exposes tile buckets and label keys', () => {
     expect(TILE_BUCKET).toEqual({ review: 'review', blocked: 'blocked', failed: 'failed' });
     expect(bucketLabelKey('failed_other')).toBe('agentActivity.bucket.failed_other');
+  });
+});
+
+describe('planBulk', () => {
+  const many = (n: number, per = 1) =>
+    Array.from({ length: n }, (_, i) =>
+      g('g' + i, Array.from({ length: per }, (_, j) => `a${i}_${j}`)),
+    );
+
+  it('sends everything and clears every group under the cap', () => {
+    const groups = many(3, 2);
+    const plan = planBulk(groups, new Set(['g0', 'g2']));
+    expect(plan.ids).toEqual(['a0_0', 'a0_1', 'a2_0', 'a2_1']);
+    expect(plan.total).toBe(4);
+    expect(plan.capped).toBe(false);
+    expect(Array.from(plan.sentGroups).sort()).toEqual(['g0', 'g2']);
+  });
+
+  it('caps at 50, reports the total and keeps unsent groups', () => {
+    const groups = many(60);
+    const sel = new Set(groups.map((x) => x.group));
+    const plan = planBulk(groups, sel);
+    expect(plan.ids).toHaveLength(50);
+    expect(plan.total).toBe(60);
+    expect(plan.capped).toBe(true);
+    expect(plan.sentGroups.size).toBe(50);
+    expect(plan.sentGroups.has('g49')).toBe(true);
+    expect(plan.sentGroups.has('g50')).toBe(false);
+  });
+
+  it('does not count a group cut in the middle as sent', () => {
+    const groups = [g('a', Array.from({ length: 30 }, (_, i) => 'a' + i)), g('b', Array.from({ length: 30 }, (_, i) => 'b' + i))];
+    const plan = planBulk(groups, new Set(['a', 'b']));
+    expect(plan.ids).toHaveLength(50);
+    expect(plan.total).toBe(60);
+    expect(Array.from(plan.sentGroups)).toEqual(['a']);
+  });
+
+  it('removeSent leaves the unsent groups selected', () => {
+    const groups = many(60);
+    const sel = new Set(groups.map((x) => x.group));
+    const plan = planBulk(groups, sel);
+    const left = removeSent(sel, plan.sentGroups);
+    expect(left.size).toBe(10);
+    expect(left.has('g50')).toBe(true);
   });
 });

@@ -79,7 +79,8 @@ export function RetryUnknownDialog({ onConfirm, onCancel, busy }: Props) {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={t("agentActivity.retryUnknown.title")}
+      aria-labelledby="ag-retry-title"
+      aria-describedby="ag-retry-body"
       className={s.modalScrim}
       onClick={(e) => {
         // The portal bubbles through the React tree: never let a click reach the drawer overlay.
@@ -89,8 +90,8 @@ export function RetryUnknownDialog({ onConfirm, onCancel, busy }: Props) {
     >
       <div ref={panelRef} className={s.modalPanel} onClick={(e) => e.stopPropagation()}>
         <div className={s.modalText}>
-          <h2 className={s.modalTitle}>{t("agentActivity.retryUnknown.title")}</h2>
-          <p className={s.modalBody}>{t("agentActivity.retryUnknown.body")}</p>
+          <h2 id="ag-retry-title" className={s.modalTitle}>{t("agentActivity.retryUnknown.title")}</h2>
+          <p id="ag-retry-body" className={s.modalBody}>{t("agentActivity.retryUnknown.body")}</p>
         </div>
         <label className={s.modalCheck}>
           <input

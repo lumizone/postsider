@@ -12,9 +12,10 @@ import {
   filtersFromSearch,
   filtersToSearch,
   hasActiveFilters,
+  isRangeInverted,
   type AgentFilters,
 } from "@/lib/agent-activity-filters";
-import { pruneSelection, toggleGroup } from "@/lib/agent-activity-model";
+import { pruneSelection, removeSent, toggleGroup } from "@/lib/agent-activity-model";
 import { ActionMessage, AgentBulkBar, useAgentActions } from "./agent-actions";
 import { AgentFiltersBar, type ChannelOption } from "./agent-filters";
 import { AgentGroupDrawer } from "./agent-group-drawer";
@@ -79,7 +80,8 @@ export function AgentActivityPage() {
     [router, pathname],
   );
 
-  const showEmpty = !loading && !error && groups.length === 0;
+  const inverted = isRangeInverted(filters);
+  const showEmpty = !loading && !error && !inverted && groups.length === 0;
 
   return (
     <div className={s.page}>
@@ -118,7 +120,13 @@ export function AgentActivityPage() {
         </div>
       ) : null}
 
-      {loading ? (
+      {inverted ? (
+        <div role="alert" className={s.errorBanner}>
+          <span>{t("agentActivity.filter.rangeInvalid")}</span>
+        </div>
+      ) : null}
+
+      {loading && !inverted ? (
         <ul className={s.list} aria-busy="true">
           {[0, 1, 2, 3].map((i) => (
             <li key={i} className={s.skeleton} aria-hidden />
@@ -182,7 +190,7 @@ export function AgentActivityPage() {
           actions={actions}
           groups={groups}
           selection={selection}
-          onCleared={() => setSelection(new Set())}
+          onSent={(sent) => setSelection((prev) => removeSent(prev, sent))}
         />
       ) : null}
     </div>

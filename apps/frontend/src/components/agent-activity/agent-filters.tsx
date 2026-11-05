@@ -41,6 +41,15 @@ export function AgentFiltersBar({ filters, options, channels, onChange }: Props)
       ? t("agentActivity.filter.channels")
       : t("agentActivity.filter.channelsSelected", { count: filters.integrationIds.length });
 
+  // A URL value that is not in the loaded options (shared link, options still loading)
+  // stays visible as applied instead of showing "Any".
+  const extraOption = (value: string, known: string[]) =>
+    value && !known.includes(value) ? (
+      <option key="__unknown" value={value}>
+        {t("agentActivity.filter.unknownValue", { value })}
+      </option>
+    ) : null;
+
   // A bucket from the URL that is not in the segmented control (for example
   // "retryable") is still shown as the current selection.
   const buckets = FILTER_BUCKETS.includes(filters.bucket)
@@ -94,6 +103,7 @@ export function AgentFiltersBar({ filters, options, channels, onChange }: Props)
             onChange={(e) => set({ actor: e.target.value })}
           >
             <option value="">{t("agentActivity.filter.any")}</option>
+            {extraOption(filters.actor, (options?.actors ?? []).map((a) => a.key))}
             {(options?.actors ?? []).map((a) => {
               const display = { type: a.type, id: a.id, name: a.name, state: a.state, authorizedBy: null };
               const type = actorTypeLabel(t, display);
@@ -115,6 +125,7 @@ export function AgentFiltersBar({ filters, options, channels, onChange }: Props)
             onChange={(e) => set({ agentName: e.target.value })}
           >
             <option value="">{t("agentActivity.filter.any")}</option>
+            {extraOption(filters.agentName, (options?.agentNames ?? []).map((o) => o.value))}
             {(options?.agentNames ?? []).map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -131,6 +142,7 @@ export function AgentFiltersBar({ filters, options, channels, onChange }: Props)
             onChange={(e) => set({ source: e.target.value })}
           >
             <option value="">{t("agentActivity.filter.any")}</option>
+            {extraOption(filters.source, (options?.sources ?? []).map((o) => o.value))}
             {(options?.sources ?? []).map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}

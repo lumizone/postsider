@@ -262,7 +262,7 @@ export function Calendar({ year, month }: CalendarProps) {
     };
   }, [filtersOpen]);
 
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const isMember = user?.role === 'USER';
 
   const {
@@ -869,7 +869,8 @@ export function Calendar({ year, month }: CalendarProps) {
   // ignored for them.
   const deepLinkHandled = useRef(false);
   useEffect(() => {
-    if (!bootstrapped || deepLinkHandled.current) return;
+    // Wait for the user: the member check below needs the real role. The link stays until then.
+    if (!bootstrapped || authLoading || !user || deepLinkHandled.current) return;
     if (typeof window === 'undefined') return;
     deepLinkHandled.current = true;
     const link = parseCalendarDeepLink(window.location.search);
@@ -896,7 +897,7 @@ export function Calendar({ year, month }: CalendarProps) {
     }
     // openEventForEdit is recreated every render; the ref makes this run once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bootstrapped, isMember]);
+  }, [bootstrapped, authLoading, user, isMember]);
 
   const deletePost = async (group: string) => {
     try {

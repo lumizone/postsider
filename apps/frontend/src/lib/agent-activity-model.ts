@@ -78,3 +78,37 @@ export function pruneSelection(sel: Set<string>, groups: SelectableGroup[]): Set
 }
 
 export const bucketLabelKey = (b: string): string => `agentActivity.bucket.${b}`;
+
+export interface BulkPlan {
+  /** Approval ids to send, at most 50. */
+  ids: string[];
+  /** All pending approvals in the selected groups. */
+  total: number;
+  capped: boolean;
+  /** Groups whose pending approvals were ALL included in `ids`. */
+  sentGroups: Set<string>;
+}
+
+export function planBulk(groups: SelectableGroup[], sel: Set<string>): BulkPlan {
+  const ids = selectedApprovalIds(groups, sel);
+  const sent = new Set(ids);
+  const all = new Set<string>();
+  const sentGroups = new Set<string>();
+  for (const g of groups) {
+    if (!sel.has(g.group)) continue;
+    g.pendingApprovalIds.forEach((id) => all.add(id));
+    if (g.pendingApprovalIds.length > 0 && g.pendingApprovalIds.every((id) => sent.has(id))) {
+      sentGroups.add(g.group);
+    }
+  }
+  return { ids, total: all.size, capped: all.size > ids.length, sentGroups };
+}
+
+/** The selection without the groups whose approvals were sent. */
+export function removeSent(sel: Set<string>, sent: Set<string>): Set<string> {
+  const next = new Set<string>();
+  sel.forEach((g) => {
+    if (!sent.has(g)) next.add(g);
+  });
+  return next;
+}

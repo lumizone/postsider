@@ -11,7 +11,7 @@ import {
   summarizeBulk,
   summarizeRetry,
 } from "@/lib/agent-activity-actions";
-import { selectedApprovalIds, type SelectableGroup } from "@/lib/agent-activity-model";
+import { planBulk, type SelectableGroup } from "@/lib/agent-activity-model";
 import { useT } from "@/lib/i18n";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { RetryUnknownDialog } from "./retry-unknown-dialog";
@@ -281,22 +281,29 @@ interface BulkBarProps {
   actions: AgentActionsApi;
   groups: SelectableGroup[];
   selection: Set<string>;
-  onCleared: () => void;
+  /** Called after a successful bulk call with the groups whose approvals were all sent. */
+  onSent: (sentGroups: Set<string>) => void;
 }
 
 /** Sticky bar for the selected groups: approve or reject only, never retry. */
-export function AgentBulkBar({ actions, groups, selection, onCleared }: BulkBarProps) {
+export function AgentBulkBar({ actions, groups, selection, onSent }: BulkBarProps) {
   const t = useT();
   const [reason, setReason] = useState("");
   // Ids are frozen when the dialog opens so a background refetch cannot change what is confirmed.
-  const [dialog, setDialog] = useState<{ action: "approve" | "reject"; ids: string[] } | null>(null);
+  const [dialog, setDialog] = useState<{
+    action: "approve" | "reject";
+    ids: string[];
+    total: number;
+    sentGroups: Set<string>;
+  } | null>(null);
 
   if (selection.size === 0) return null;
-  const ids = selectedApprovalIds(groups, selection);
+  const plan = planBulk(groups, selection);
+  const ids = plan.ids;
 
   const open = (action: "approve" | "reject") => {
     if (actions.busy || ids.length === 0) return;
-    setDialog({ action, ids });
+    setDialog({ action, ids, total: plan.total, sentGroups: plan.sentGroups });
   };
 
   return (
@@ -322,10 +329,19 @@ export function AgentBulkBar({ actions, groups, selection, onCleared }: BulkBarP
         <ConfirmDialog
           danger={dialog.action === "reject"}
           busy={actions.busy}
-          title={t(
-            dialog.action === "approve" ? "agentActivity.bulk.confirmApprove" : "agentActivity.bulk.confirmReject",
-            { count: dialog.ids.length },
-          )}
+          title={
+            dialog.total > dialog.ids.length
+              ? t(
+                  dialog.action === "approve"
+                    ? "agentActivity.bulk.confirmApproveCapped"
+                    : "agentActivity.bulk.confirmRejectCapped",
+                  { count: dialog.ids.length, total: dialog.total },
+                )
+              : t(
+                  dialog.action === "approve" ? "agentActivity.bulk.confirmApprove" : "agentActivity.bulk.confirmReject",
+                  { count: dialog.ids.length },
+                )
+          }
           body={dialog.action === "reject" && reason.trim() ? reason.trim() : ""}
           confirmLabel={t(
             dialog.action === "approve" ? "agentActivity.action.approveSelected" : "agentActivity.action.rejectSelected",
@@ -336,7 +352,7 @@ export function AgentBulkBar({ actions, groups, selection, onCleared }: BulkBarP
             setDialog(null);
             if (ok) {
               setReason("");
-              onCleared();
+              onSent(dialog.sentGroups);
             }
           }}
         />

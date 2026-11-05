@@ -1549,7 +1549,9 @@ settingsStorage: {
     filter: {
       status: "Status",
       channels: "Channels",
-      channelsSelected: "{count} channels",
+      channelsSelected: "Channels: {count}",
+      unknownValue: "Unknown ({value})",
+      rangeInvalid: "The start date is after the end date. Change one of them.",
       actor: "Actor",
       agent: "Agent name",
       source: "Source",
@@ -1704,6 +1706,8 @@ settingsStorage: {
     bulk: {
       confirmApprove: "Approve {count} approvals?",
       confirmReject: "Reject {count} approvals?",
+      confirmApproveCapped: "Approve the first {count} of {total} approvals? The rest stay selected.",
+      confirmRejectCapped: "Reject the first {count} of {total} approvals? The rest stay selected.",
       result: "{done} done, {skipped} skipped, {failed} failed",
     },
   },

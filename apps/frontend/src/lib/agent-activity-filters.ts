@@ -113,3 +113,8 @@ export function toApiQuery(f: AgentFilters, limit?: number): Record<string, stri
 export function hasActiveFilters(f: AgentFilters): boolean {
   return filtersToSearch(f) !== "";
 }
+
+/** True when both days are set and `from` is later than `to` (YYYY-MM-DD compares as text). */
+export function isRangeInverted(f: AgentFilters): boolean {
+  return f.from !== "" && f.to !== "" && f.from > f.to;
+}
