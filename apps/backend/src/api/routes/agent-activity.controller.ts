@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Param, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Organization } from '@prisma/client';
 import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
@@ -8,7 +8,7 @@ import { ListAgentActivityDto } from '@postsider/nestjs-libraries/dtos/agent-act
 // Read-only dashboard routes for the Agent Control Center. Every member of the
 // organization may read, so there is no @CheckPolicies here. The organization
 // always comes from the session, never from the query.
-// Declare literal routes (/summary, /filters) before any /groups/:group route.
+// Declare literal routes (/summary, /filters) before the /groups/:group route.
 @ApiTags('Agent activity')
 @Controller('/agent-activity')
 export class AgentActivityController {
@@ -53,5 +53,10 @@ export class AgentActivityController {
       limit: query.limit ?? 25,
       cursor: query.cursor,
     });
+  }
+
+  @Get('/groups/:group')
+  detail(@GetOrgFromRequest() org: Organization, @Param('group') group: string) {
+    return this._activity.detail(org.id, group);
   }
 }

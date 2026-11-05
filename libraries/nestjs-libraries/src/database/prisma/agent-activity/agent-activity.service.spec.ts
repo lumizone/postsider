@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, Logger, NotFoundException } from '@nestjs/common';
 import { AgentActivityService } from './agent-activity.service';
 import { encodeGroupCursor, decodeGroupCursor } from '../../../agent-activity/activity-cursor';
 import { buildActivityWhere } from '../../../agent-activity/activity-where';
@@ -47,13 +47,22 @@ const make = () => {
     automationActionCount: jest.fn().mockResolvedValue(0),
     recentActors: jest.fn().mockResolvedValue([]),
     recentProvenance: jest.fn().mockResolvedValue({ agentNames: [], sources: [] }),
+    detailRows: jest.fn().mockResolvedValue([]),
+    childRows: jest.fn().mockResolvedValue([]),
+    approvalsFor: jest.fn().mockResolvedValue([]),
+  };
+  const audit = { list: jest.fn().mockResolvedValue({ events: [], nextCursor: null }) };
+  const posts = { getPostIdsInGroupIncludingDeleted: jest.fn().mockResolvedValue(['p1', 'c1', 'gone']) };
+  const policy = {
+    targetFromStoredPost: jest.fn(async (_o: string, postId: string, opts: any) => ({ postId, ...opts })),
+    evaluateTargets: jest.fn().mockResolvedValue({ effect: 'ALLOW', matched: [], channels: [] }),
   };
   const resolver = jest.fn((v: any) =>
     v ? { type: v.type, id: v.apiKeyId ?? v.oauthClientId ?? null, name: 'N', state: 'ok', authorizedBy: null } : null
   );
   const directory = { resolve: jest.fn().mockResolvedValue(resolver) };
-  const svc = new AgentActivityService(repo as any, directory as any);
-  return { svc, repo, directory, resolver };
+  const svc = new AgentActivityService(repo as any, directory as any, audit as any, posts as any, policy as any);
+  return { svc, repo, directory, resolver, audit, posts, policy };
 };
 
 const filters = { bucket: 'attention', scope: 'relevant' } as const;
@@ -271,5 +280,267 @@ describe('AgentActivityService.filters', () => {
     const out = await svc.filters('org-1', new Date('2026-11-05T12:00:00Z'));
     expect(out.agentNames).toEqual([{ value: 'bo\u202Et', label: 'bot' }]);
     expect(out.sources).toEqual([{ value: '\u2066cron', label: 'cron' }]);
+  });
+});
+
+describe('AgentActivityService.detail', () => {
+  const detailRow = (over: Record<string, unknown> = {}) =>
+    baseRow({ lastPublishAttemptAt: null, firstComment: null, ...over });
+  const ev = (over: Record<string, unknown> = {}) => ({
+    id: 'e1',
+    type: 'post.created',
+    createdAt: T(8),
+    actor: { type: 'SYSTEM' },
+    target: { type: 'post', id: 'p1' },
+    metadata: {},
+    ...over,
+  });
+  const approvalRow = (over: Record<string, unknown> = {}) => ({
+    id: 'a1',
+    postId: 'p1',
+    status: 'PENDING',
+    note: null,
+    requestedAt: T(7),
+    resolvedAt: null,
+    requestedByType: 'API_KEY',
+    requestedByUserId: null,
+    requestedByApiKeyId: 'k1',
+    requestedByOAuthClientId: null,
+    decidedByType: null,
+    approverId: null,
+    guestName: null,
+    guestEmail: null,
+    ...over,
+  });
+
+  it('throws NotFoundException for a group without rows and queries nothing else', async () => {
+    const { svc, repo, audit } = make();
+    await expect(svc.detail('org-1', 'nope')).rejects.toThrow(new NotFoundException('Group not found'));
+    expect(repo.detailRows).toHaveBeenCalledWith('org-1', 'nope');
+    expect(repo.approvalsFor).not.toHaveBeenCalled();
+    expect(audit.list).not.toHaveBeenCalled();
+  });
+
+  it('builds destinations with plain text, thread order, trimmed error and raw image', async () => {
+    const { svc, repo } = make();
+    repo.detailRows.mockResolvedValue([
+      detailRow({
+        content: '<p>Hello <b>world</b></p><p>Second</p>',
+        image: '[{"id":"m","path":"https://x/y.png"}]',
+        state: 'ERROR',
+        error: 'e'.repeat(900),
+        errorCategory: 'RATE_LIMITED',
+        errorRetryable: true,
+        lastPublishAttemptAt: T(9, 30),
+        firstComment: '<p>first</p>',
+      }),
+    ]);
+    repo.childRows.mockResolvedValue([
+      { id: 'c2', parentPostId: 'c1', content: '<p>third</p>', createdAt: T(2) },
+      { id: 'c1', parentPostId: 'p1', content: '<p>second</p>', createdAt: T(1) },
+    ]);
+    const out = await svc.detail('org-1', 'g1');
+    expect(repo.childRows).toHaveBeenCalledWith('org-1', ['p1']);
+    const d = out.destinations[0];
+    expect(d.contentText).toBe('Hello world\nSecond');
+    expect(d.thread).toEqual(['second', 'third']);
+    expect(d.firstComment).toBe('first');
+    expect(Array.from(d.errorMessage as string).length).toBe(500);
+    expect(d.image).toBe('[{"id":"m","path":"https://x/y.png"}]');
+    expect(d.bucket).toBe('retryable');
+    expect(d.lastPublishAttemptAt).toEqual(T(9, 30));
+    expect(d.integration).toEqual({ id: 'i1', name: 'Chan', providerIdentifier: 'x', picture: null });
+    expect(d.approval).toBeNull();
+    expect(out.group).toBe('g1');
+    expect(out.updatedAt).toEqual(T(9));
+  });
+
+  it('uses one batched call per lookup', async () => {
+    const { svc, repo, audit, directory, posts } = make();
+    repo.detailRows.mockResolvedValue([detailRow(), detailRow({ id: 'p2', integrationId: 'i2' })]);
+    await svc.detail('org-1', 'g1');
+    expect(repo.detailRows).toHaveBeenCalledTimes(1);
+    expect(repo.childRows).toHaveBeenCalledTimes(1);
+    expect(repo.approvalsFor).toHaveBeenCalledWith('org-1', ['p1', 'p2']);
+    expect(repo.approvalsFor).toHaveBeenCalledTimes(1);
+    expect(posts.getPostIdsInGroupIncludingDeleted).toHaveBeenCalledWith('org-1', 'p1');
+    expect(audit.list).toHaveBeenCalledTimes(1);
+    expect(audit.list).toHaveBeenCalledWith('org-1', {
+      targetType: 'post',
+      targetIds: ['p1', 'c1', 'gone'],
+      limit: 100,
+    });
+    expect(directory.resolve).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves the approval requester and a USER decider', async () => {
+    const { svc, repo, resolver } = make();
+    repo.detailRows.mockResolvedValue([detailRow({ state: 'APPROVAL' })]);
+    repo.approvalsFor.mockResolvedValue([
+      approvalRow({ status: 'APPROVED', note: 'ok\u202E!', decidedByType: 'USER', approverId: 'u1', resolvedAt: T(8) }),
+    ]);
+    const out = await svc.detail('org-1', 'g1');
+    const a = out.destinations[0].approval as any;
+    expect(a).toMatchObject({ id: 'a1', status: 'APPROVED', note: 'ok!', resolvedAt: T(8) });
+    expect(a.requestedBy).toMatchObject({ type: 'API_KEY', id: 'k1' });
+    expect(a.decidedBy).toMatchObject({ type: 'USER', name: 'N' });
+    expect(resolver).toHaveBeenCalled();
+  });
+
+  it('shows a guest decider with a cleaned name and email and no token anywhere', async () => {
+    const { svc, repo } = make();
+    repo.detailRows.mockResolvedValue([detailRow({ state: 'APPROVAL' })]);
+    repo.approvalsFor.mockResolvedValue([
+      {
+        ...approvalRow({ status: 'REJECTED', guestName: 'Gu\u202Eest', guestEmail: 'g@x.io\u200B' }),
+        guestToken: 'SECRET-TOKEN',
+        guestTokenExpiresAt: T(1),
+      },
+    ]);
+    const out = await svc.detail('org-1', 'g1');
+    const a = out.destinations[0].approval as any;
+    expect(a.decidedBy).toEqual({ type: 'GUEST', name: 'Guest', email: 'g@x.io' });
+    const json = JSON.stringify(out);
+    expect(json).not.toContain('guestToken');
+    expect(json).not.toContain('SECRET-TOKEN');
+    expect(json).not.toMatch(/token/i);
+  });
+
+  it('maps timeline events newest first with resolved actors and a GUEST actor', async () => {
+    const { svc, repo, audit, directory } = make();
+    repo.detailRows.mockResolvedValue([detailRow()]);
+    audit.list.mockResolvedValue({
+      events: [
+        ev({ id: 'e2', type: 'post.approval_resolved', actor: { type: 'GUEST' }, metadata: { by: 'guest' } }),
+        ev({ id: 'e1', actor: { type: 'API_KEY', apiKeyId: 'k1' }, metadata: { note: 'a\u202Eb', n: 3, nested: { s: 'x\u200By' } } }),
+      ],
+      nextCursor: null,
+    });
+    const out = await svc.detail('org-1', 'g1');
+    expect(out.timeline).toHaveLength(2);
+    expect(out.timeline[0]).toMatchObject({ id: 'e2', type: 'post.approval_resolved', postId: 'p1', actor: { type: 'GUEST' } });
+    expect(out.timeline[0].actor).not.toHaveProperty('name');
+    expect(out.timeline[1].actor).toMatchObject({ type: 'API_KEY', id: 'k1' });
+    expect(out.timeline[1].metadata).toEqual({ note: 'ab', n: 3, nested: { s: 'xy' } });
+    const views = directory.resolve.mock.calls[0][1];
+    expect(views).toContainEqual({ type: 'API_KEY', apiKeyId: 'k1' });
+    expect(JSON.stringify(views)).not.toContain('GUEST');
+  });
+
+  it('keeps the name of a revoked key actor in the timeline', async () => {
+    const { svc, repo, audit, directory } = make();
+    directory.resolve.mockResolvedValue((v: any) =>
+      v ? { type: v.type, id: v.apiKeyId ?? null, name: 'Old key', state: 'revoked', authorizedBy: null } : null
+    );
+    repo.detailRows.mockResolvedValue([detailRow()]);
+    audit.list.mockResolvedValue({ events: [ev({ actor: { type: 'API_KEY', apiKeyId: 'k9' } })], nextCursor: null });
+    const out = await svc.detail('org-1', 'g1');
+    expect(out.timeline[0].actor).toMatchObject({ name: 'Old key', state: 'revoked' });
+  });
+
+  it('cleans claimed provenance and the channel name', async () => {
+    const { svc, repo } = make();
+    repo.detailRows.mockResolvedValue([
+      detailRow({ agentName: 'bo\u202Et', source: '\u2066cron', integration: { id: 'i1', name: 'Ch\u202Ean', providerIdentifier: 'x', picture: null } }),
+    ]);
+    const out = await svc.detail('org-1', 'g1');
+    expect(out.destinations[0].claimed).toMatchObject({ agentName: 'bot', source: 'cron' });
+    expect(out.destinations[0].integration.name).toBe('Chan');
+  });
+
+  describe('policy.recorded', () => {
+    it('parses the newest policy_evaluated event', async () => {
+      const { svc, repo, audit } = make();
+      repo.detailRows.mockResolvedValue([detailRow()]);
+      audit.list.mockResolvedValue({
+        events: [
+          ev({ id: 'e3', type: 'post.created' }),
+          ev({
+            id: 'e2',
+            type: 'post.policy_evaluated',
+            createdAt: T(8, 30),
+            metadata: { effect: 'REQUIRE_APPROVAL', phase: 'write', matchedCount: 2, ruleNames: 'No links | Night\u202E window' },
+          }),
+          ev({ id: 'e1', type: 'post.policy_evaluated', metadata: { effect: 'ALLOW', phase: 'publish', matchedCount: 0, ruleNames: '' } }),
+        ],
+        nextCursor: null,
+      });
+      const out = await svc.detail('org-1', 'g1');
+      expect(out.policy.recorded).toEqual({
+        effect: 'REQUIRE_APPROVAL',
+        phase: 'write',
+        at: T(8, 30),
+        ruleNames: ['No links', 'Night window'],
+        matchedCount: 2,
+      });
+    });
+
+    it('is null without such an event', async () => {
+      const { svc, repo } = make();
+      repo.detailRows.mockResolvedValue([detailRow()]);
+      expect((await svc.detail('org-1', 'g1')).policy.recorded).toBeNull();
+    });
+  });
+
+  describe('policy.current', () => {
+    it('evaluates evaluable destinations with approved only for an APPROVED approval', async () => {
+      const { svc, repo, policy } = make();
+      repo.detailRows.mockResolvedValue([
+        detailRow({ id: 'p1', state: 'QUEUE' }),
+        detailRow({ id: 'p2', state: 'PUBLISHED' }),
+        detailRow({ id: 'p3', state: 'ERROR' }),
+      ]);
+      repo.approvalsFor.mockResolvedValue([approvalRow({ postId: 'p1', status: 'APPROVED' }), approvalRow({ id: 'a3', postId: 'p3', status: 'REJECTED' })]);
+      policy.evaluateTargets.mockResolvedValue({
+        effect: 'BLOCK',
+        matched: [{ ruleId: 'r1', name: 'No\u202E links', effect: 'BLOCK', condition: 'TEXT_CONTAINS' }],
+        channels: [],
+      });
+      const out = await svc.detail('org-1', 'g1');
+      expect(policy.targetFromStoredPost).toHaveBeenCalledTimes(2);
+      expect(policy.targetFromStoredPost).toHaveBeenCalledWith('org-1', 'p1', { action: 'SCHEDULE', approved: true });
+      expect(policy.targetFromStoredPost).toHaveBeenCalledWith('org-1', 'p3', { action: 'SCHEDULE', approved: false });
+      expect(policy.evaluateTargets).toHaveBeenCalledWith('org-1', expect.any(Array), 'publish');
+      expect(policy.evaluateTargets.mock.calls[0][1]).toHaveLength(2);
+      expect(out.policy.current).toEqual({
+        effect: 'BLOCK',
+        matched: [{ ruleId: 'r1', name: 'No links', effect: 'BLOCK', condition: 'TEXT_CONTAINS' }],
+      });
+    });
+
+    it('is null when every destination is PUBLISHED', async () => {
+      const { svc, repo, policy } = make();
+      repo.detailRows.mockResolvedValue([detailRow({ state: 'PUBLISHED' })]);
+      const out = await svc.detail('org-1', 'g1');
+      expect(out.policy.current).toBeNull();
+      expect(policy.evaluateTargets).not.toHaveBeenCalled();
+    });
+
+    it('is null when the policy service is absent', async () => {
+      const { repo, directory, audit, posts } = make();
+      repo.detailRows.mockResolvedValue([detailRow()]);
+      const svc = new AgentActivityService(repo as any, directory as any, audit as any, posts as any);
+      expect((await svc.detail('org-1', 'g1')).policy.current).toBeNull();
+    });
+
+    it('is null and the detail still resolves when the evaluation throws', async () => {
+      const { svc, repo, policy } = make();
+      repo.detailRows.mockResolvedValue([detailRow()]);
+      policy.evaluateTargets.mockRejectedValue(new Error('too large'));
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      const out = await svc.detail('org-1', 'g1');
+      expect(out.policy.current).toBeNull();
+      expect(out.destinations).toHaveLength(1);
+      expect(warn).toHaveBeenCalledTimes(1);
+      warn.mockRestore();
+    });
+
+    it('is null when no stored target could be built', async () => {
+      const { svc, repo, policy } = make();
+      repo.detailRows.mockResolvedValue([detailRow()]);
+      policy.targetFromStoredPost.mockResolvedValue(null);
+      expect((await svc.detail('org-1', 'g1')).policy.current).toBeNull();
+      expect(policy.evaluateTargets).not.toHaveBeenCalled();
+    });
   });
 });

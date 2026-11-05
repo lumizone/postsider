@@ -1,9 +1,17 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { AgentActivityRepository } from '@postsider/nestjs-libraries/database/prisma/agent-activity/agent-activity.repository';
 import { ActorDirectoryService } from '@postsider/nestjs-libraries/database/prisma/agent-activity/actor-directory.service';
 import {
   ActivityRow,
+  ApprovalRow,
+  DestinationDetail,
   GroupSummary,
+  RULE_NAME_MAX,
+  RecordedPolicy,
+  TimelineItem,
+  cleanMetadata,
+  parseRecordedPolicy,
+  toDestinationDetail,
   toGroupSummary,
 } from '@postsider/nestjs-libraries/database/prisma/agent-activity/agent-activity.view';
 import { bucketOfRow } from '@postsider/nestjs-libraries/agent-activity/activity-buckets';
@@ -18,6 +26,12 @@ import {
   decodeGroupCursor,
   encodeGroupCursor,
 } from '@postsider/nestjs-libraries/agent-activity/activity-cursor';
+import { AuditEventsService } from '@postsider/nestjs-libraries/database/prisma/audit/audit-events.service';
+import { PostsRepository } from '@postsider/nestjs-libraries/database/prisma/posts/posts.repository';
+import {
+  PolicyEvaluationService,
+  PolicyTarget,
+} from '@postsider/nestjs-libraries/database/prisma/policies/policy-evaluation.service';
 import { cleanDisplayName } from '@postsider/nestjs-libraries/agent-activity/display-name';
 import { actorViewFromColumns } from '@postsider/nestjs-libraries/actor/post-actor';
 import type { ActorView } from '@postsider/nestjs-libraries/actor/post-actor';
@@ -53,15 +67,37 @@ export type ActivityFilterOptions = {
   sources: Array<{ value: string; label: string }>;
 };
 
+export type ActivityDetail = {
+  group: string;
+  updatedAt: Date;
+  destinations: DestinationDetail[];
+  policy: {
+    recorded: RecordedPolicy | null;
+    current: {
+      effect: 'ALLOW' | 'REQUIRE_APPROVAL' | 'BLOCK';
+      matched: Array<{ ruleId: string; name: string; effect: string; condition: string }>;
+    } | null;
+  };
+  timeline: TimelineItem[];
+};
+
 const FILTER_WINDOW_DAYS = 90;
+const TIMELINE_LIMIT = 100;
+/** Stored states whose destination can still be published, so a re-evaluation means something. */
+const EVALUABLE_STATES = ['QUEUE', 'DRAFT', 'APPROVAL', 'ERROR', 'HELD'];
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class AgentActivityService {
   constructor(
     private _repo: AgentActivityRepository,
-    private _actors: ActorDirectoryService
+    private _actors: ActorDirectoryService,
+    private _audit: AuditEventsService,
+    private _posts: PostsRepository,
+    @Optional() private _policy?: PolicyEvaluationService
   ) {}
+
+  private readonly logger = new Logger(AgentActivityService.name);
 
   async summary(
     orgId: string,
@@ -242,4 +278,124 @@ export class AgentActivityService {
       sources: options(provenance.sources),
     };
   }
+
+  async detail(orgId: string, group: string): Promise<ActivityDetail> {
+    const rows = await this._repo.detailRows(orgId, group);
+    if (rows.length === 0) throw new NotFoundException('Group not found');
+    const postIds = rows.map((r) => r.id);
+
+    const [children, approvals, groupIds] = await Promise.all([
+      this._repo.childRows(orgId, postIds),
+      this._repo.approvalsFor(orgId, postIds),
+      this._posts.getPostIdsInGroupIncludingDeleted(orgId, rows[0].id),
+    ]);
+    const { events } = await this._audit.list(orgId, {
+      targetType: 'post',
+      targetIds: groupIds ?? postIds,
+      limit: TIMELINE_LIMIT,
+    });
+
+    // views come from rows and audit events of this organization only (see ActorDirectoryService.resolve)
+    const views: Array<ActorView | null> = [];
+    for (const r of rows) {
+      views.push(actorViewFromColumns(r, 'createdBy'), actorViewFromColumns(r, 'lastModifiedBy'));
+    }
+    for (const a of approvals) {
+      views.push(actorViewFromColumns(a, 'requestedBy'));
+      if (a.decidedByType === 'USER' && a.approverId) {
+        views.push({ type: 'USER', userId: a.approverId });
+      } else if (a.decidedByType) {
+        views.push({ type: a.decidedByType as ActorView['type'] });
+      }
+    }
+    for (const e of events) {
+      if (e.actor.type !== 'GUEST') views.push(auditActorView(e.actor));
+    }
+    const resolve = await this._actors.resolve(orgId, views);
+
+    const approvalByPost = new Map<string, ApprovalRow>(approvals.map((a) => [a.postId, a]));
+    const destinations = rows.map((r) =>
+      toDestinationDetail(r, { children, approval: approvalByPost.get(r.id), resolve })
+    );
+
+    const timeline: TimelineItem[] = events.map((e) => ({
+      id: e.id,
+      type: e.type,
+      createdAt: e.createdAt,
+      postId: e.target.id,
+      actor:
+        e.actor.type === 'GUEST'
+          ? { type: 'GUEST' as const }
+          : resolve(auditActorView(e.actor)) ?? {
+              type: 'SYSTEM' as const,
+              id: null,
+              name: null,
+              state: 'unknown' as const,
+              authorizedBy: null,
+            },
+      metadata: cleanMetadata(e.metadata),
+    }));
+
+    const recordedEvent = events.find((e) => e.type === 'post.policy_evaluated');
+    return {
+      group,
+      updatedAt: rows.reduce((max, r) => (r.updatedAt > max ? r.updatedAt : max), rows[0].updatedAt),
+      destinations,
+      policy: {
+        recorded: recordedEvent ? parseRecordedPolicy(recordedEvent) : null,
+        current: await this.currentPolicy(orgId, rows, approvalByPost),
+      },
+      timeline,
+    };
+  }
+
+  /** Live re-evaluation against today's rules. Never fails the detail. */
+  private async currentPolicy(
+    orgId: string,
+    rows: ActivityRow[],
+    approvalByPost: Map<string, ApprovalRow>
+  ): Promise<ActivityDetail['policy']['current']> {
+    if (!this._policy) return null;
+    try {
+      const evaluable = rows.filter((r) => EVALUABLE_STATES.includes(r.state));
+      if (evaluable.length === 0) return null;
+      const targets: PolicyTarget[] = [];
+      for (const r of evaluable) {
+        const target = await this._policy.targetFromStoredPost(orgId, r.id, {
+          action: 'SCHEDULE',
+          approved: approvalByPost.get(r.id)?.status === 'APPROVED',
+        });
+        if (target) targets.push(target);
+      }
+      if (targets.length === 0) return null;
+      const outcome = await this._policy.evaluateTargets(orgId, targets, 'publish');
+      return {
+        effect: outcome.effect,
+        matched: outcome.matched.map((m) => ({
+          ruleId: m.ruleId,
+          name: cleanDisplayName(m.name, RULE_NAME_MAX) ?? '',
+          effect: m.effect,
+          condition: m.condition,
+        })),
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Policy re-evaluation failed for group ${rows[0]?.group}: ${(error as Error)?.message ?? error}`
+      );
+      return null;
+    }
+  }
+}
+
+function auditActorView(actor: {
+  type: string;
+  userId?: string;
+  apiKeyId?: string;
+  oauthClientId?: string;
+}): ActorView {
+  const view: ActorView = { type: actor.type as ActorView['type'] };
+  if (actor.userId) view.userId = actor.userId;
+  if (actor.apiKeyId) view.apiKeyId = actor.apiKeyId;
+  if (actor.oauthClientId) view.oauthClientId = actor.oauthClientId;
+  return view;
 }

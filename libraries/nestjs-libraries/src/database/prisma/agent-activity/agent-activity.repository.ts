@@ -7,7 +7,12 @@ import {
 } from '@postsider/nestjs-libraries/actor/post-actor';
 import { AUTOMATION_ACTOR_TYPES } from '@postsider/nestjs-libraries/agent-activity/activity-buckets';
 import type { PostWhere } from '@postsider/nestjs-libraries/agent-activity/activity-where';
-import type { ActivityRow } from '@postsider/nestjs-libraries/database/prisma/agent-activity/agent-activity.view';
+import type {
+  ActivityRow,
+  ApprovalRow,
+  ChildRow,
+  DetailRow,
+} from '@postsider/nestjs-libraries/database/prisma/agent-activity/agent-activity.view';
 
 const MAX_RECENT = 50;
 const automationTypes = () => ({ in: [...AUTOMATION_ACTOR_TYPES] });
@@ -44,6 +49,33 @@ const ROW_SELECT = {
     select: { id: true, name: true, providerIdentifier: true, picture: true },
   },
 } as const;
+
+const DETAIL_SELECT = {
+  ...ROW_SELECT,
+  lastPublishAttemptAt: true,
+  firstComment: true,
+} as const;
+
+// Explicit on purpose: never guestToken or guestTokenExpiresAt.
+const APPROVAL_SELECT = {
+  id: true,
+  postId: true,
+  status: true,
+  note: true,
+  requestedAt: true,
+  resolvedAt: true,
+  requestedByType: true,
+  requestedByUserId: true,
+  requestedByApiKeyId: true,
+  requestedByOAuthClientId: true,
+  decidedByType: true,
+  approverId: true,
+  guestName: true,
+  guestEmail: true,
+} as const;
+
+/** Longest thread chain walked (matches the policy evaluator's limit). */
+const MAX_CHILD_DEPTH = 100;
 
 /** Top-level destination of this organization that is not deleted. */
 const destinationBase = (orgId: string) => ({
@@ -111,6 +143,58 @@ export class AgentActivityRepository {
       select: ROW_SELECT,
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     })) as unknown as ActivityRow[];
+  }
+
+  /** Top-level, not deleted destinations of one group (empty for an unknown or foreign group). */
+  async detailRows(orgId: string, group: string): Promise<DetailRow[]> {
+    return (await this._post.model.post.findMany({
+      where: {
+        organizationId: orgId,
+        group,
+        parentPostId: null,
+        deletedAt: null,
+        integration: { deletedAt: null },
+      },
+      select: DETAIL_SELECT,
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    })) as unknown as DetailRow[];
+  }
+
+  /**
+   * Thread rows below the given top-level posts. A thread is stored as a chain
+   * (each value's parent is the previous value), so this walks one level per query
+   * up to MAX_CHILD_DEPTH. `parentPostId` is the direct parent.
+   */
+  async childRows(orgId: string, parentIds: string[]): Promise<ChildRow[]> {
+    const out: ChildRow[] = [];
+    let level = parentIds;
+    for (let depth = 0; depth < MAX_CHILD_DEPTH && level.length > 0; depth++) {
+      const rows = (await this._post.model.post.findMany({
+        where: { organizationId: orgId, parentPostId: { in: level }, deletedAt: null },
+        select: { id: true, parentPostId: true, content: true, createdAt: true },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      })) as Array<{ id: string; parentPostId: string | null; content: string; createdAt: Date }>;
+      level = [];
+      for (const row of rows) {
+        if (row.parentPostId === null) continue;
+        out.push({
+          id: row.id,
+          parentPostId: row.parentPostId,
+          content: row.content,
+          createdAt: row.createdAt,
+        });
+        level.push(row.id);
+      }
+    }
+    return out;
+  }
+
+  async approvalsFor(orgId: string, postIds: string[]): Promise<ApprovalRow[]> {
+    if (postIds.length === 0) return [];
+    return (await this._approval.model.postApproval.findMany({
+      where: { organizationId: orgId, postId: { in: postIds } },
+      select: APPROVAL_SELECT,
+    })) as unknown as ApprovalRow[];
   }
 
   async pendingApprovalIds(

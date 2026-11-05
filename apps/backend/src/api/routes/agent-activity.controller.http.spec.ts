@@ -1,6 +1,6 @@
 jest.mock('isomorphic-dompurify', () => ({ sanitize: (v: string) => v }));
 
-import { BadRequestException, INestApplication, ValidationPipe } from '@nestjs/common';
+import { BadRequestException, INestApplication, NotFoundException, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { AddressInfo } from 'net';
 import { AgentActivityController } from './agent-activity.controller';
@@ -12,7 +12,7 @@ describe('AgentActivityController (dashboard reads)', () => {
   let app: INestApplication;
   let base: string;
   let role = 'USER';
-  const service = { summary: jest.fn(), list: jest.fn(), filters: jest.fn() };
+  const service = { summary: jest.fn(), list: jest.fn(), filters: jest.fn(), detail: jest.fn() };
 
   beforeAll(async () => {
     const tokens = new Map<any, any>([[AgentActivityService, service]]);
@@ -117,5 +117,31 @@ describe('AgentActivityController (dashboard reads)', () => {
     expect(service.list.mock.calls[0][0]).toBe('org-1');
     expect(service.summary.mock.calls[0][0]).toBe('org-1');
     expect(service.filters.mock.calls[0][0]).toBe('org-1');
+  });
+
+  describe('GET /groups/:group', () => {
+    it('returns the service body to a USER-role member and passes the session org', async () => {
+      role = 'USER';
+      service.detail.mockResolvedValue({ group: 'g1', destinations: [] });
+      const res = await fetch(`${base}/groups/g1?organizationId=org-2`);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ group: 'g1', destinations: [] });
+      expect(service.detail).toHaveBeenCalledWith('org-1', 'g1');
+    });
+
+    it('answers 404 with the same body for unknown and foreign groups', async () => {
+      service.detail.mockRejectedValue(new NotFoundException('Group not found'));
+      const a = await fetch(`${base}/groups/unknown`);
+      const b = await fetch(`${base}/groups/foreign`);
+      expect(a.status).toBe(404);
+      expect(b.status).toBe(404);
+      expect(await a.json()).toEqual(await b.json());
+    });
+
+    it('declares no policy check (every member may read)', () => {
+      expect(
+        Reflect.getMetadata(CHECK_POLICIES_KEY, AgentActivityController.prototype.detail)
+      ).toBeUndefined();
+    });
   });
 });

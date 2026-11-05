@@ -226,4 +226,87 @@ describe('AgentActivityRepository', () => {
       expect(s.take).toBe(50);
     });
   });
+
+  describe('detailRows', () => {
+    it('is scoped to org and group, top level, not deleted, with the detail columns', async () => {
+      const { repo, post } = make();
+      await repo.detailRows('org-1', 'g1');
+      const arg = post.findMany.mock.calls[0][0];
+      expect(arg.where).toMatchObject({
+        organizationId: 'org-1',
+        group: 'g1',
+        parentPostId: null,
+        deletedAt: null,
+        integration: { deletedAt: null },
+      });
+      expect(arg.select.lastPublishAttemptAt).toBe(true);
+      expect(arg.select.firstComment).toBe(true);
+      expect(arg.select.image).toBe(true);
+      expect(arg.select.error).toBe(true);
+      expect(JSON.stringify(arg.select)).not.toMatch(/token|"key"/i);
+      expect(arg.orderBy).toEqual([{ createdAt: 'asc' }, { id: 'asc' }]);
+    });
+  });
+
+  describe('childRows', () => {
+    it('returns [] without a query for no parents', async () => {
+      const { repo, post } = make();
+      expect(await repo.childRows('org-1', [])).toEqual([]);
+      expect(post.findMany).not.toHaveBeenCalled();
+    });
+
+    it('walks the chain level by level, scoped to the org and not deleted', async () => {
+      const { repo, post } = make();
+      post.findMany
+        .mockResolvedValueOnce([{ id: 'c1', parentPostId: 'p1', content: 'a', createdAt: new Date(1) }])
+        .mockResolvedValueOnce([{ id: 'c2', parentPostId: 'c1', content: 'b', createdAt: new Date(2) }])
+        .mockResolvedValueOnce([]);
+      const out = await repo.childRows('org-1', ['p1']);
+      expect(out).toEqual([
+        { parentPostId: 'p1', content: 'a', createdAt: new Date(1), id: 'c1' },
+        { parentPostId: 'c1', content: 'b', createdAt: new Date(2), id: 'c2' },
+      ]);
+      const first = post.findMany.mock.calls[0][0];
+      expect(first.where).toMatchObject({
+        organizationId: 'org-1',
+        parentPostId: { in: ['p1'] },
+        deletedAt: null,
+      });
+      expect(post.findMany.mock.calls[1][0].where.parentPostId).toEqual({ in: ['c1'] });
+    });
+
+    it('stops at a depth limit', async () => {
+      const { repo, post } = make();
+      let n = 0;
+      post.findMany.mockImplementation(async () => [
+        { id: `c${++n}`, parentPostId: 'x', content: '', createdAt: new Date(n) },
+      ]);
+      await repo.childRows('org-1', ['p1']);
+      expect(post.findMany.mock.calls.length).toBeLessThanOrEqual(101);
+    });
+  });
+
+  describe('approvalsFor', () => {
+    it('selects explicit columns and never the guest token', async () => {
+      const { repo, approval } = make();
+      await repo.approvalsFor('org-1', ['p1']);
+      const arg = approval.findMany.mock.calls[0][0];
+      expect(arg.where).toEqual({ organizationId: 'org-1', postId: { in: ['p1'] } });
+      expect(Object.keys(arg.select).sort()).toEqual(
+        [
+          'id', 'postId', 'status', 'note', 'requestedAt', 'resolvedAt',
+          'requestedByType', 'requestedByUserId', 'requestedByApiKeyId',
+          'requestedByOAuthClientId', 'decidedByType', 'approverId', 'guestName', 'guestEmail',
+        ].sort()
+      );
+      expect(arg.select).not.toHaveProperty('guestToken');
+      expect(arg.select).not.toHaveProperty('guestTokenExpiresAt');
+    });
+
+    it('returns [] without a query for no posts', async () => {
+      const { repo, approval } = make();
+      expect(await repo.approvalsFor('org-1', [])).toEqual([]);
+      expect(approval.findMany).not.toHaveBeenCalled();
+    });
+  });
 });

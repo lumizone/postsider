@@ -1,4 +1,4 @@
-import { toGroupSummary, ActivityRow } from './agent-activity.view';
+import { toGroupSummary, ActivityRow, plainText, cleanMetadata, parseRecordedPolicy, threadTexts } from './agent-activity.view';
 import type { ActorResolver } from './actor-directory.service';
 
 const row = (over: Partial<ActivityRow> = {}): ActivityRow =>
@@ -176,5 +176,50 @@ describe('toGroupSummary', () => {
       releaseURL: 'https://x/1',
       publishDate: new Date('2026-11-05T10:00:00.000Z'),
     });
+  });
+});
+
+describe('detail helpers', () => {
+  it('plainText strips tags, keeps block breaks and removes bidi and control characters', () => {
+    expect(plainText('<p>A &amp; B</p><p>C<br>D</p>')).toBe('A & B\nC\nD');
+    expect(plainText('x\u202Ey\u200Bz\u0007')).toBe('xyz');
+    expect(plainText(null)).toBe('');
+  });
+
+  it('plainText is capped', () => {
+    expect(Array.from(plainText('a'.repeat(30000))).length).toBe(20000);
+  });
+
+  it('cleanMetadata cleans strings and keys, bounds depth, keeps other primitives', () => {
+    expect(cleanMetadata({ 'k\u202E': 'v\u200B', n: 1, b: true, z: null, a: ['x\u202E'] })).toEqual({
+      k: 'v',
+      n: 1,
+      b: true,
+      z: null,
+      a: ['x'],
+    });
+    expect(cleanMetadata({ a: { b: { c: { d: { e: 1 } } } } })).toEqual({ a: { b: { c: { d: {} } } } });
+  });
+
+  it('parseRecordedPolicy rejects unknown effects and drops the truncation marker', () => {
+    const at = new Date(1);
+    expect(parseRecordedPolicy({ createdAt: at, metadata: { effect: 'NOPE', phase: 'write' } })).toBeNull();
+    expect(
+      parseRecordedPolicy({
+        createdAt: at,
+        metadata: { effect: 'BLOCK', phase: 'publish', matchedCount: 3, ruleNames: 'A | B | ...' },
+      })
+    ).toEqual({ effect: 'BLOCK', phase: 'publish', at, ruleNames: ['A', 'B'], matchedCount: 3 });
+  });
+
+  it('threadTexts follows a chain and a flat list in creation order', () => {
+    const c = (id: string, parentPostId: string, n: number) => ({
+      id,
+      parentPostId,
+      content: `<p>${id}</p>`,
+      createdAt: new Date(n),
+    });
+    expect(threadTexts('root', [c('b', 'a', 2), c('a', 'root', 1), c('other', 'zzz', 0)])).toEqual(['a', 'b']);
+    expect(threadTexts('root', [c('y', 'root', 2), c('x', 'root', 1)])).toEqual(['x', 'y']);
   });
 });
