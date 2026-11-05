@@ -49,6 +49,8 @@ import { ComposerHelpersRepository } from '@postsider/nestjs-libraries/database/
 import { ComposerHelpersService } from '@postsider/nestjs-libraries/database/prisma/composer-helpers/composer-helpers.service';
 import { ApprovalRepository } from '@postsider/nestjs-libraries/database/prisma/approval/approval.repository';
 import { ApprovalService } from '@postsider/nestjs-libraries/database/prisma/approval/approval.service';
+import { ApprovalFlowRepository } from '@postsider/nestjs-libraries/database/prisma/approval/approval-flow.repository';
+import { ApprovalFlowService } from '@postsider/nestjs-libraries/database/prisma/approval/approval-flow.service';
 import { PolicyRulesRepository } from '@postsider/nestjs-libraries/database/prisma/policies/policy-rules.repository';
 import { PolicyEvaluationService } from '@postsider/nestjs-libraries/database/prisma/policies/policy-evaluation.service';
 import { PolicyApprovalRouter } from '@postsider/nestjs-libraries/database/prisma/policies/policy-approval-router';
@@ -140,6 +142,8 @@ import { PostAnalyticsService } from '@postsider/nestjs-libraries/database/prism
     ComposerHelpersService,
     ApprovalRepository,
     ApprovalService,
+    ApprovalFlowRepository,
+    ApprovalFlowService,
     PolicyRulesRepository,
     PolicyRulesService,
     PolicyEvaluationService,

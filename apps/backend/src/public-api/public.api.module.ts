@@ -13,6 +13,7 @@ import { PublicAuditController } from '@postsider/backend/public-api/routes/v1/p
 import { PublicPoliciesController } from '@postsider/backend/public-api/routes/v1/public.policies.controller';
 import { PublicWorkspaceController } from '@postsider/backend/public-api/routes/v1/public.workspace.controller';
 import { PublicCustomersController } from '@postsider/backend/public-api/routes/v1/public.customers.controller';
+import { PublicApprovalFlowsController } from '@postsider/backend/public-api/routes/v1/public.approval-flows.controller';
 import { PublicOrganizationController } from '@postsider/backend/public-api/routes/v1/public.organization.controller';
 import { PublicWebhookSubscriptionsController } from '@postsider/backend/public-api/routes/v1/public-webhook-subscriptions.controller';
 import { PublicAuthMiddleware } from '@postsider/backend/services/auth/public.auth.middleware';
@@ -27,6 +28,7 @@ const authenticatedController = [
   PublicWebhookSubscriptionsController,
   PublicAuditController,
   PublicPoliciesController,
+  PublicApprovalFlowsController,
   PublicCustomersController,
 ];
 @Module({
