@@ -1,16 +1,74 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { PostApproval } from '@prisma/client';
 import { actorToColumns, PostActor } from '@postsider/nestjs-libraries/actor/post-actor';
 import { hashGuestToken } from '@postsider/nestjs-libraries/database/prisma/approval/guest-token';
-import { PrismaRepository } from '@postsider/nestjs-libraries/database/prisma/prisma.service';
+import type {
+  FlowRules,
+  StageDef,
+} from '@postsider/nestjs-libraries/database/prisma/approval/approval-stage.rules';
+import {
+  PrismaRepository,
+  PrismaTransaction,
+} from '@postsider/nestjs-libraries/database/prisma/prisma.service';
 
 type ResolveStatus = 'APPROVED' | 'REJECTED';
+
+/** Snapshot of the flow an approval runs through, written together with the approval. */
+export type StageSnapshot = { flowId: string; stages: StageDef[] };
+
+export type StageDecisionWrite = {
+  orgId: string;
+  approvalId: string;
+  /** The stage being decided; also the approval's expected `currentStage`. */
+  position: number;
+  /** False for the implicit stage (an approval without snapshot rows). */
+  hasStageRow: boolean;
+  decision: ResolveStatus;
+  final: boolean;
+  note: string | null;
+  via: string;
+  /** The verified decider; null for a guest. */
+  actor: PostActor | null;
+  guest?: { name: string; email: string } | null;
+  /** Plaintext link token a guest decision consumes in the same transaction. */
+  guestToken?: string | null;
+};
+
+class LostRace extends Error {}
+
+const NOTE_MAX = 500;
+
+function decidedColumns(actor: PostActor | null) {
+  return {
+    decidedByType: actor ? actor.type : null,
+    decidedByApiKeyId: actor?.type === 'API_KEY' ? actor.apiKeyId : null,
+    decidedByOAuthClientId:
+      actor?.type === 'OAUTH_CLIENT' ? actor.oauthClientId : null,
+  };
+}
+
+const CLEARED_STAGE_DECISION = {
+  status: 'PENDING' as const,
+  decidedByType: null,
+  decidedByUserId: null,
+  decidedByApiKeyId: null,
+  decidedByOAuthClientId: null,
+  decidedVia: null,
+  note: null,
+  decidedAt: null,
+};
 
 @Injectable()
 export class ApprovalRepository {
   constructor(
-    private _approval: PrismaRepository<'postApproval'>,
-    private _post: PrismaRepository<'post'>
+    private _approval: PrismaRepository<
+      | 'postApproval'
+      | 'postApprovalStage'
+      | 'approvalActionToken'
+      | 'approvalFlow'
+    >,
+    private _post: PrismaRepository<'post'>,
+    @Optional() private _tx?: PrismaTransaction
   ) {}
 
   getPost(orgId: string, postId: string) {
@@ -22,6 +80,10 @@ export class ApprovalRepository {
         parentPostId: true,
         group: true,
         integrationId: true,
+        createdByType: true,
+        createdByUserId: true,
+        createdByApiKeyId: true,
+        createdByOAuthClientId: true,
       },
     });
   }
@@ -30,14 +92,36 @@ export class ApprovalRepository {
     // Scope by organization so one org can never read another org's approval.
     return this._approval.model.postApproval.findFirst({
       where: { postId, organizationId: orgId },
+      include: { stages: { orderBy: { position: 'asc' } } },
     });
   }
 
+  /** The approval with its stage snapshot rows (empty for the implicit stage). */
   getById(orgId: string, id: string) {
     return this._approval.model.postApproval.findFirst({
       where: { id, organizationId: orgId },
-      include: { requestedBy: { select: { email: true, name: true } } },
+      include: {
+        requestedBy: { select: { email: true, name: true } },
+        stages: { orderBy: { position: 'asc' } },
+      },
     });
+  }
+
+  /**
+   * The self-approval flags of the flow an approval runs through. Archived
+   * flows are still read: archiving never changes an approval in progress.
+   */
+  async getFlowRules(orgId: string, flowId: string): Promise<FlowRules | null> {
+    const flow = await this._approval.model.approvalFlow.findFirst({
+      where: { id: flowId, organizationId: orgId },
+      select: { preventSelfApproval: true, requireDistinctApprovers: true },
+    });
+    return flow
+      ? {
+          preventSelfApproval: flow.preventSelfApproval,
+          requireDistinctApprovers: flow.requireDistinctApprovers,
+        }
+      : null;
   }
 
   /**
@@ -50,13 +134,30 @@ export class ApprovalRepository {
     orgId: string,
     postId: string,
     requestedById: string,
-    actor: PostActor
+    actor: PostActor,
+    snapshot?: StageSnapshot
   ): Promise<{ approval: PostApproval; created: boolean }> {
     const model = this._approval.model.postApproval;
     const requester = {
       requestedById,
       ...actorToColumns(actor, 'requestedBy'),
     };
+    // A flow based approval is written with its flowId first: until its stage
+    // rows exist the decision engine fails closed instead of treating the
+    // approval as the (more permissive) implicit stage.
+    const progress = {
+      flowId: snapshot?.flowId ?? null,
+      stageCount: snapshot ? snapshot.stages.length : 1,
+      currentStage: 1,
+    };
+    const stageRows = (snapshot?.stages ?? []).map((st) => ({
+      position: st.position,
+      name: st.name,
+      minRole: st.minRole,
+      approverUserIds: [...st.approverUserIds],
+      allowAutomation: st.allowAutomation,
+      allowGuest: st.allowGuest,
+    }));
     // A resolved approval starts a fresh round: any guest link from the prior
     // round pointed at now-stale content and must stop working.
     const reopened = await model.updateMany({
@@ -71,6 +172,9 @@ export class ApprovalRepository {
         requestedAt: new Date(),
         approverId: null,
         decidedByType: null,
+        decidedByApiKeyId: null,
+        decidedByOAuthClientId: null,
+        decidedVia: null,
         note: null,
         guestName: null,
         guestEmail: null,
@@ -78,12 +182,21 @@ export class ApprovalRepository {
         guestToken: null,
         guestTokenHash: null,
         guestTokenExpiresAt: null,
+        ...progress,
       },
     });
     if (reopened.count === 1) {
       const approval = await model.findFirst({
         where: { postId, organizationId: orgId },
       });
+      // The new round starts from the then current flow: old stage rows and
+      // any unused decision tokens of the previous round are dropped.
+      await this.deleteStagesAndTokens(orgId, approval!.id);
+      if (stageRows.length > 0) {
+        await this._approval.model.postApprovalStage.createMany({
+          data: stageRows.map((r) => ({ ...r, approvalId: approval!.id })),
+        });
+      }
       return { approval: approval!, created: true };
     }
     try {
@@ -93,6 +206,8 @@ export class ApprovalRepository {
           organizationId: orgId,
           status: 'PENDING',
           ...requester,
+          ...progress,
+          ...(stageRows.length > 0 ? { stages: { create: stageRows } } : {}),
         },
       });
       return { approval, created: true };
@@ -105,6 +220,15 @@ export class ApprovalRepository {
       });
       return { approval: approval!, created: false };
     }
+  }
+
+  async deleteStagesAndTokens(orgId: string, approvalId: string) {
+    await this._approval.model.postApprovalStage.deleteMany({
+      where: { approvalId, approval: { organizationId: orgId } },
+    });
+    await this._approval.model.approvalActionToken.deleteMany({
+      where: { approvalId, organizationId: orgId },
+    });
   }
 
   getPending(orgId: string) {
@@ -132,9 +256,150 @@ export class ApprovalRepository {
           },
         },
         requestedBy: { select: { name: true, email: true } },
+        stages: { orderBy: { position: 'asc' } },
       },
     });
   }
+
+  /**
+   * One decision, one transaction. The stage row (when there is one) is
+   * claimed with a conditional update on `status PENDING`; the approval row is
+   * then moved on (next stage, or final) only while it is still PENDING at the
+   * same stage. Anything that does not match rolls the whole transaction back
+   * and reports `false`: that caller lost the race and must not act. A guest
+   * decision also consumes its link token (hash match, unexpired) in the same
+   * statement, so a link is single use.
+   */
+  async decideStageTx(p: StageDecisionWrite): Promise<boolean> {
+    if (!this._tx) {
+      throw new Error('PrismaTransaction is not available');
+    }
+    const now = new Date();
+    const note = p.note;
+    try {
+      await this._tx.model.$transaction(async (tx) => {
+        if (p.hasStageRow) {
+          const staged = await tx.postApprovalStage.updateMany({
+            where: {
+              approvalId: p.approvalId,
+              position: p.position,
+              status: 'PENDING',
+              approval: { organizationId: p.orgId },
+            },
+            data: {
+              status: p.decision,
+              decidedByType: p.actor ? p.actor.type : null,
+              decidedByUserId: p.actor?.type === 'USER' ? p.actor.userId : null,
+              decidedByApiKeyId:
+                p.actor?.type === 'API_KEY' ? p.actor.apiKeyId : null,
+              decidedByOAuthClientId:
+                p.actor?.type === 'OAUTH_CLIENT' ? p.actor.oauthClientId : null,
+              decidedVia: p.via,
+              note: note === null ? null : note.slice(0, NOTE_MAX),
+              decidedAt: now,
+            },
+          });
+          if (staged.count !== 1) throw new LostRace();
+        }
+        const guestWhere = p.guestToken
+          ? {
+              guestTokenHash: hashGuestToken(p.guestToken),
+              guestTokenExpiresAt: { gt: now },
+            }
+          : {};
+        const consumeToken = p.guestToken
+          ? { guestToken: null, guestTokenHash: null, guestTokenExpiresAt: null }
+          : {};
+        const approvalRes = await tx.postApproval.updateMany({
+          where: {
+            id: p.approvalId,
+            organizationId: p.orgId,
+            status: 'PENDING',
+            currentStage: p.position,
+            ...guestWhere,
+          },
+          data: p.final
+            ? {
+                status: p.decision,
+                approverId: p.actor?.type === 'USER' ? p.actor.userId : null,
+                ...decidedColumns(p.actor),
+                decidedVia: p.via,
+                note,
+                resolvedAt: now,
+                guestName: p.guest?.name ?? null,
+                guestEmail: p.guest?.email ?? null,
+                ...consumeToken,
+              }
+            : { currentStage: p.position + 1, ...consumeToken },
+        });
+        if (approvalRes.count !== 1) throw new LostRace();
+      });
+      return true;
+    } catch (error) {
+      if (error instanceof LostRace) return false;
+      throw error;
+    }
+  }
+
+  /**
+   * Undo a final approval whose scheduling failed: the approval goes back to
+   * PENDING (a guest link, when given, is restored) and the last stage row
+   * back to PENDING. Only an APPROVED approval is touched.
+   */
+  async revertFinal(
+    orgId: string,
+    approvalId: string,
+    position: number,
+    hasStageRow: boolean,
+    restoreGuest?: { tokenHash: string; expiresAt: Date }
+  ): Promise<number> {
+    if (!this._tx) {
+      throw new Error('PrismaTransaction is not available');
+    }
+    return this._tx.model.$transaction(async (tx) => {
+      const res = await tx.postApproval.updateMany({
+        where: { id: approvalId, organizationId: orgId, status: 'APPROVED' },
+        data: {
+          status: 'PENDING',
+          approverId: null,
+          decidedByType: null,
+          decidedByApiKeyId: null,
+          decidedByOAuthClientId: null,
+          decidedVia: null,
+          note: null,
+          resolvedAt: null,
+          guestName: null,
+          guestEmail: null,
+          ...(restoreGuest
+            ? {
+                guestToken: null,
+                guestTokenHash: restoreGuest.tokenHash,
+                guestTokenExpiresAt: restoreGuest.expiresAt,
+              }
+            : {}),
+        },
+      });
+      if (res.count === 1 && hasStageRow) {
+        await tx.postApprovalStage.updateMany({
+          where: {
+            approvalId,
+            position,
+            status: 'APPROVED',
+            approval: { organizationId: orgId },
+          },
+          data: CLEARED_STAGE_DECISION,
+        });
+      }
+      return res.count;
+    });
+  }
+
+  // --- Legacy single-stage primitives ---------------------------------
+  // @deprecated The decision engine (ApprovalService.decide) uses
+  // decideStageTx and revertFinal. `resolve`, `revertApproved`,
+  // `resolveByGuestToken` and `revertGuestApproval` know nothing about stages
+  // and must not be used for new code; they stay only for their specs and for
+  // rollback compatibility and can be deleted in a follow up.
 
   // Conditional update (status must still be PENDING) guards against two admins
   // resolving the same approval concurrently. Returns the affected row count.

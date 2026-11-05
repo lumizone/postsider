@@ -10,7 +10,11 @@ export type PostActor =
 
 export const SYSTEM_ACTOR: PostActor = { type: 'SYSTEM' };
 
-export type ActorPrefix = 'createdBy' | 'lastModifiedBy' | 'requestedBy';
+export type ActorPrefix =
+  | 'createdBy'
+  | 'lastModifiedBy'
+  | 'requestedBy'
+  | 'decidedBy';
 
 export type ActorColumns<P extends ActorPrefix> = {
   [K in `${P}Type`]: PostActorType | null;

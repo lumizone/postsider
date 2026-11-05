@@ -21,11 +21,11 @@ function build(rows: { open?: any; resolved?: any; guest?: any }) {
     getById: jest.fn()
       .mockResolvedValueOnce({ id: 'ap1', postId: 'p1', status: 'PENDING' })
       .mockResolvedValue(rows.resolved),
-    resolve: jest.fn().mockResolvedValue(1),
+    decideStageTx: jest.fn().mockResolvedValue(true),
+    revertFinal: jest.fn().mockResolvedValue(1),
     getByGuestToken: jest.fn().mockResolvedValue({
       id: 'ap1', organizationId: 'o1', post: { id: 'p1' }, guestTokenExpiresAt: new Date(),
     }),
-    resolveByGuestToken: jest.fn().mockResolvedValue(1),
   };
   const posts: any = {
     setPostState: jest.fn().mockResolvedValue(undefined),
@@ -38,7 +38,10 @@ function build(rows: { open?: any; resolved?: any; guest?: any }) {
     sendEmail: jest.fn().mockResolvedValue(undefined),
   };
   const deliver = jest.fn().mockResolvedValue(undefined);
-  const svc = new ApprovalService(repo, posts, notifications, {} as any, { deliver } as any);
+  const organizations: any = {
+    getUserOrgLink: jest.fn().mockResolvedValue({ role: 'ADMIN', disabled: false }),
+  };
+  const svc = new ApprovalService(repo, posts, notifications, organizations, { deliver } as any);
   return { svc, deliver, posts, repo };
 }
 
@@ -51,7 +54,11 @@ describe('ApprovalService webhook identity', () => {
     expect(deliver).toHaveBeenCalledWith('o1', 'approval.requested', {
       approvalId: 'ap1', postId: 'p1', status: 'PENDING',
       actor: IDENT.actor, provenance: IDENT.provenance,
-      approval: { requestedBy: { type: 'API_KEY', apiKeyId: 'k1' }, decidedBy: null },
+      approval: {
+        requestedBy: { type: 'API_KEY', apiKeyId: 'k1' },
+        decidedBy: null,
+        stage: { position: 1, total: 1, name: 'Approval' },
+      },
     });
   });
 
@@ -74,9 +81,12 @@ describe('ApprovalService webhook identity', () => {
     const { svc, deliver, repo } = build({
       resolved: { id: 'ap1', postId: 'p1', guestName: 'Ann', guestEmail: 'ann@x.test', decidedByType: null },
     });
-    repo.getById.mockReset().mockResolvedValue({
-      id: 'ap1', postId: 'p1', guestName: 'Ann', guestEmail: 'ann@x.test', decidedByType: null,
-    });
+    repo.getById
+      .mockReset()
+      .mockResolvedValueOnce({ id: 'ap1', postId: 'p1', status: 'PENDING' })
+      .mockResolvedValue({
+        id: 'ap1', postId: 'p1', status: 'REJECTED', guestName: 'Ann', guestEmail: 'ann@x.test', decidedByType: null,
+      });
     await svc.resolveGuestReview('tok', 'reject', 'no', { name: 'Ann', email: 'ann@x.test' });
     expect(deliver.mock.calls[0][2]).toMatchObject({
       status: 'REJECTED', note: 'no',

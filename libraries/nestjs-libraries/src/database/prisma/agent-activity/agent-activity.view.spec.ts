@@ -204,6 +204,9 @@ describe('detail helpers', () => {
         nested: { x: 1 },
       })
     ).toEqual({ approvalId: 'a1', decision: 'APPROVED', ruleNames: 'R', includeUnknownOutcome: true });
+    expect(
+      timelineMetadata({ approvalId: 'a1', via: 'EMAIL_LINK', stage: 2, stageCount: 3, final: false, token: 'secret' })
+    ).toEqual({ approvalId: 'a1', via: 'EMAIL_LINK', stage: 2, stageCount: 3, final: false });
     expect(timelineMetadata(null)).toEqual({});
     expect(timelineMetadata('x')).toEqual({});
   });

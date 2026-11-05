@@ -10,7 +10,13 @@ describe('ApprovalRepository guest token hashing', () => {
     return {
       model,
       repository: new ApprovalRepository(
-        { model: { postApproval: model } } as any,
+        {
+          model: {
+            postApproval: model,
+            postApprovalStage: { deleteMany: jest.fn(), createMany: jest.fn() },
+            approvalActionToken: { deleteMany: jest.fn() },
+          },
+        } as any,
         {} as any
       ),
     };

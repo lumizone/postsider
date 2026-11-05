@@ -78,10 +78,20 @@ describe('ApprovalRepository attribution and idempotent request', () => {
       create: jest.fn(),
       findFirst: jest.fn(),
     };
+    const stage = { deleteMany: jest.fn(), createMany: jest.fn() };
+    const tokens = { deleteMany: jest.fn() };
     return {
       model,
+      stage,
+      tokens,
       repository: new ApprovalRepository(
-        { model: { postApproval: model } } as any,
+        {
+          model: {
+            postApproval: model,
+            postApprovalStage: stage,
+            approvalActionToken: tokens,
+          },
+        } as any,
         {} as any
       ),
     };

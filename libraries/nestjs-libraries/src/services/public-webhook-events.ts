@@ -60,6 +60,7 @@ export const PUBLIC_WEBHOOK_EVENT_SAMPLES: Record<
     approval: {
       requestedBy: { type: 'API_KEY', apiKeyId: 'api_key_example' },
       decidedBy: null,
+      stage: { position: 1, total: 2, name: 'Editor review' },
     },
   },
   'approval.resolved': {
@@ -72,6 +73,7 @@ export const PUBLIC_WEBHOOK_EVENT_SAMPLES: Record<
     approval: {
       requestedBy: { type: 'API_KEY', apiKeyId: 'api_key_example' },
       decidedBy: { type: 'USER', userId: 'user_example' },
+      stage: { position: 2, total: 2, name: 'Legal review' },
     },
   },
 };

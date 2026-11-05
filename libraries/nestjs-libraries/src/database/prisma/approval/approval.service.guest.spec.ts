@@ -20,7 +20,7 @@ describe('ApprovalService guest links (hashed storage)', () => {
   const expiresAt = new Date('2026-11-12T00:00:00Z');
   const build = () => {
     const repo = {
-      getById: jest.fn().mockResolvedValue({ id: 'a1', postId: 'p1', status: 'PENDING' }),
+      getById: jest.fn().mockResolvedValue({ id: 'a1', postId: 'p1', status: 'PENDING', guestTokenExpiresAt: expiresAt }),
       setGuestToken: jest.fn().mockResolvedValue(1),
       getByGuestToken: jest.fn().mockResolvedValue({
         id: 'a1',
@@ -30,8 +30,9 @@ describe('ApprovalService guest links (hashed storage)', () => {
         post: { id: 'p1', content: 'c', image: '[]', publishDate: new Date(), integration: { name: 'x' } },
         organization: { name: 'o', logo: null },
       }),
-      resolveByGuestToken: jest.fn().mockResolvedValue(1),
-      revertGuestApproval: jest.fn().mockResolvedValue(1),
+      getPost: jest.fn().mockResolvedValue({ id: 'p1', integrationId: 'c1' }),
+      decideStageTx: jest.fn().mockResolvedValue(true),
+      revertFinal: jest.fn().mockResolvedValue(1),
     };
     const posts = { changePostStatus: jest.fn().mockResolvedValue(undefined) };
     const notifications = {
@@ -86,7 +87,7 @@ describe('ApprovalService guest links (hashed storage)', () => {
   it('resolveGuestReview consumes once and a second use fails', async () => {
     const { service, repo } = build();
     await expect(service.resolveGuestReview('tok', 'approve')).resolves.toEqual({ approved: true });
-    repo.resolveByGuestToken.mockResolvedValue(0);
+    repo.decideStageTx.mockResolvedValue(false);
     await expect(service.resolveGuestReview('tok', 'approve')).rejects.toThrow(/already been used/);
   });
 
@@ -94,6 +95,9 @@ describe('ApprovalService guest links (hashed storage)', () => {
     const { service, repo, posts } = build();
     posts.changePostStatus.mockRejectedValue(new Error('boom'));
     await expect(service.resolveGuestReview('tok', 'approve')).rejects.toThrow('boom');
-    expect(repo.revertGuestApproval).toHaveBeenCalledWith('org-1', 'a1', hashGuestToken('tok'), expiresAt);
+    expect(repo.revertFinal).toHaveBeenCalledWith('org-1', 'a1', 1, false, {
+      tokenHash: hashGuestToken('tok'),
+      expiresAt,
+    });
   });
 });

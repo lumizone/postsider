@@ -812,6 +812,9 @@ export class PublicIntegrationsController {
       resolvedAt: approval.resolvedAt,
       requestedBy: actorViewFromColumns(approval, 'requestedBy'),
       decidedBy: approvalDecidedByView(approval),
+      // Progress through the approval stages; status stays PENDING until the last one.
+      stage: (approval as any).stage ?? null,
+      stages: (approval as any).stages ?? [],
     };
   }
 
