@@ -6,6 +6,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { createHttpServer } from '../http/server.js';
 import { bearerChallenge } from '../http/well-known.js';
+import { EXPECTED_TOOL_NAMES } from './tool-inventory.js';
 import type { HttpConfig } from '../http/config.js';
 
 /**
@@ -216,6 +217,9 @@ describe('remote MCP transport', () => {
       const tools = await client.listTools();
       const names = tools.tools.map((tool) => tool.name).sort();
       expect(names).toHaveLength(40);
+      // The hosted server never offers the opt-in decision tool.
+      expect(names).toEqual([...EXPECTED_TOOL_NAMES].sort());
+      expect(names).not.toContain('postsider_decide_approval');
       expect(names).toContain('postsider_list_channels');
       expect(names).toContain('postsider_create_post');
       expect(names).toContain('postsider_delete_post');

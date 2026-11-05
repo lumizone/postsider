@@ -9,6 +9,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { readFile, realpath, stat } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { basename, extname } from 'node:path';
 import { PostsiderClient } from './client.js';
 import { buildCreatePostBody } from './post-body.js';
@@ -128,6 +129,14 @@ export interface PostSiderServerOptions {
    * server must leave it off: its filesystem is not the caller's.
    */
   allowLocalFiles?: boolean;
+  /**
+   * Register `postsider_decide_approval`, which approves or rejects a pending
+   * approval as the API key. Deciding is a human governance act, so this is off
+   * unless the person running the LOCAL stdio server opts in with
+   * `POSTSIDER_MCP_ALLOW_APPROVAL_DECISIONS=true`. The hosted server never sets
+   * it: OAuth tokens cannot hold the `approvals:decide` scope anyway.
+   */
+  allowApprovalDecisions?: boolean;
   /**
    * Largest file `postsider_upload_media_base64` accepts, in decoded bytes.
    * The local stdio server has no transport limit (25 MB, the API's own cap).
@@ -1044,7 +1053,7 @@ export function createPostSiderMcpServer(
     {
       title: 'Get a post\'s approval status',
       description:
-        'Check whether a post submitted via postsider_request_approval has been approved, rejected (with the reviewer\'s note, if any), or is still pending. Returns status "NONE" if the post was never sent for approval.',
+        'Check whether a post submitted via postsider_request_approval has been approved, rejected (with the reviewer\'s note, if any), or is still pending. Returns status "NONE" if the post was never sent for approval. Deciding is a human act in PostSider: only a local server started with approval decisions enabled offers postsider_decide_approval.',
       inputSchema: {
         postId: nonEmptyId.describe('Post id to check.'),
       },
@@ -1063,6 +1072,52 @@ export function createPostSiderMcpServer(
       }
     }
   );
+
+  if (options.allowApprovalDecisions) {
+    server.registerTool(
+      'postsider_decide_approval',
+      {
+        title: 'Approve or reject a pending approval',
+        description:
+          'Approve or reject the current stage of a pending approval, as this API key. Use it only when the user explicitly asked for this exact decision on this approval; never to clear a queue and never on your own initiative. The API key needs the approvals:decide scope. A key cannot decide an approval it requested or whose post it created, and a stage may require a different approver than an earlier one. Approving the last stage schedules the post; a reject note is shown to the author. The response says whether a later stage is still pending (final false, status PENDING). Repeating the same decision is safe and answers changed false; the opposite decision is refused. Check the result with postsider_get_approval_status.',
+        inputSchema: {
+          approvalId: nonEmptyId.describe('Approval id to decide.'),
+          decision: z
+            .enum(['approve', 'reject'])
+            .describe('"approve" or "reject". Only what the user explicitly asked for.'),
+          note: z
+            .string()
+            .max(500)
+            .optional()
+            .describe('Optional note, at most 500 characters. Shown to the author, so keep it factual.'),
+        },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: true,
+        },
+      },
+      async ({ approvalId, decision, note }) => {
+        try {
+          // The key is a pure function of the decision, so a model that retries
+          // the same call replays the first answer instead of deciding twice.
+          const idempotencyKey = `mcp-decide-${createHash('sha256')
+            .update(JSON.stringify([approvalId, decision, note ?? '']))
+            .digest('hex')}`;
+          return ok(
+            await client.post(
+              `/approvals/${encodeURIComponent(approvalId)}/${decision}`,
+              note ? { note } : undefined,
+              idempotencyKey
+            )
+          );
+        } catch (e) {
+          return fail(e);
+        }
+      }
+    );
+  }
 
   // ───────────────────────────────────────────────────────────────────────────
   // Channels: connect, switch on/off, queue plan, clients

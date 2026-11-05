@@ -26,6 +26,9 @@ const PKG_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const EXPECTED_TOOL_COUNT = 40;
 const STDIO_ONLY_TOOLS = ['postsider_upload_media_from_file'];
 const EXPECTED_STDIO_TOOL_COUNT = EXPECTED_TOOL_COUNT + STDIO_ONLY_TOOLS.length;
+// Registered only when POSTSIDER_MCP_ALLOW_APPROVAL_DECISIONS=true on the local
+// stdio server: the default surface above must not include it.
+const STDIO_OPT_IN_TOOLS = ['postsider_decide_approval'];
 const EXPECTED_SERVER_NAME = 'postsider';
 const EXPECTED_SKILL_NAMES = [
   'postsider-agency-operations',
@@ -185,6 +188,11 @@ try {
   console.log('4/5 speaking MCP to the installed bin...');
   const speak = async (envOverrides) => {
     const env = { ...process.env, POSTSIDER_API_KEY: API_KEY, ...envOverrides };
+    // Never inherit the opt-in from the developer's shell: the default surface
+    // is what ships, and only an explicit override may turn the tool on.
+    if (!('POSTSIDER_MCP_ALLOW_APPROVAL_DECISIONS' in envOverrides)) {
+      delete env.POSTSIDER_MCP_ALLOW_APPROVAL_DECISIONS;
+    }
     if (envOverrides.POSTSIDER_API_KEY === undefined && 'POSTSIDER_API_KEY' in envOverrides) {
       delete env.POSTSIDER_API_KEY;
     }
@@ -327,9 +335,11 @@ try {
   ]
     .map((match) => match[1])
     .sort();
-  if (registered.length !== EXPECTED_STDIO_TOOL_COUNT) {
+  if (registered.length !== EXPECTED_STDIO_TOOL_COUNT + STDIO_OPT_IN_TOOLS.length) {
     fail(
-      `src/server.ts registers ${registered.length} tools, expected ${EXPECTED_STDIO_TOOL_COUNT}`
+      `src/server.ts registers ${registered.length} tools, expected ${
+        EXPECTED_STDIO_TOOL_COUNT + STDIO_OPT_IN_TOOLS.length
+      } (${EXPECTED_STDIO_TOOL_COUNT} default stdio + ${STDIO_OPT_IN_TOOLS.length} opt-in)`
     );
   }
   const inventorySource = readFileSync(
@@ -361,19 +371,51 @@ try {
     );
   }
 
-  if (installedNames.join(',') !== registered.join(',')) {
+  const registeredDefault = registered.filter(
+    (name) => !STDIO_OPT_IN_TOOLS.includes(name)
+  );
+  if (installedNames.join(',') !== registeredDefault.join(',')) {
     fail(
-      'installed tool names differ from the source registrations:\n' +
+      'installed tool names differ from the source registrations (opt-in tools excluded):\n' +
         `  installed: ${installedNames.join(', ')}\n` +
-        `  source:    ${registered.join(', ')}`
+        `  source:    ${registeredDefault.join(', ')}`
     );
   }
   if (session.stray.length) {
     fail(`non-protocol bytes on stdout: ${JSON.stringify(session.stray.slice(0, 3))}`);
   }
   await session.close();
+
+  // The opt-in: with the env var set the installed artifact offers exactly one
+  // more tool, and nothing else changes.
+  const optInSession = await speak({
+    POSTSIDER_API_KEY: API_KEY,
+    POSTSIDER_MCP_ALLOW_APPROVAL_DECISIONS: 'true',
+  });
+  const optInInit = await optInSession.request(1, 'initialize', {
+    protocolVersion: '2025-06-18',
+    capabilities: {},
+    clientInfo: { name: 'tarball-smoke', version: '1.0.0' },
+  });
+  if (optInInit.error) {
+    fail(`opt-in initialize failed: ${JSON.stringify(optInInit.error)}`);
+  }
+  const optInListed = await optInSession.request(2, 'tools/list');
+  const optInNames = (optInListed.result?.tools ?? []).map((tool) => tool.name).sort();
+  const expectedOptIn = [...installedNames, ...STDIO_OPT_IN_TOOLS].sort();
+  if (optInNames.join(',') !== expectedOptIn.join(',')) {
+    fail(
+      'opt-in tool names differ from the default list plus the opt-in tools:\n' +
+        `  opt-in:   ${optInNames.join(', ')}\n` +
+        `  expected: ${expectedOptIn.join(', ')}`
+    );
+  }
+  if (optInSession.stray.length) {
+    fail(`non-protocol bytes on stdout (opt-in): ${JSON.stringify(optInSession.stray.slice(0, 3))}`);
+  }
+  await optInSession.close();
   console.log(
-    `    install handshake ok, ${tools.length} tools, ${skills.length} skills, stdout clean`
+    `    install handshake ok, ${tools.length} tools (${optInNames.length} with the approval opt-in), ${skills.length} skills, stdout clean`
   );
 
   // 5. The missing-key path must exit 1 with an empty stdout.

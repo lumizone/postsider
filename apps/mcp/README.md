@@ -136,7 +136,9 @@ written into the plugin directory.
 
 ## What the agent can do
 
-40 tools (41 on the local stdio server), all prefixed `postsider_`.
+40 tools on the hosted server, 41 on the local stdio server, and 42 on the local
+stdio server when you opt in to approval decisions (see Configuration), all
+prefixed `postsider_`.
 
 ### Read
 
@@ -174,6 +176,7 @@ written into the plugin directory.
 | `postsider_upload_media_from_url` | Import media into the library from a public HTTPS URL. | Creates media |
 | `postsider_upload_media_base64` | Upload an image or MP4 you hold as bytes (base64: 25 MB on the local server, 2.5 MB over the remote connection). No public URL needed. | Creates media |
 | `postsider_upload_media_from_file` | **Local stdio server only.** Upload an image or video (jpg, png, gif, webp, avif, bmp, tiff, mp4, mov, webm, mkv; up to 500 MB) from a file path on your own machine. Other file types are refused before being read. | Creates media |
+| `postsider_decide_approval` | **Local stdio server only, opt-in.** Approve or reject the current stage of a pending approval as the API key. Registered only when `POSTSIDER_MCP_ALLOW_APPROVAL_DECISIONS=true`; never on the hosted server. Needs the `approvals:decide` scope on the key, which a key never has by default. A key cannot decide an approval it requested or whose post it created. | Schedules the post on a final approval |
 | `postsider_connect_channel` | Get the sign-in link to connect or reconnect a social account (the user approves it on the platform). Needs `channels:write`. | Starts a connection |
 | `postsider_set_channel_enabled` | Switch a channel on or off. Needs `channels:write` and an admin role. | Reversible |
 | `postsider_disconnect_channel` | Disconnect a channel; unpublished posts become drafts. Needs `channels:write`. | Destructive |
@@ -214,6 +217,7 @@ verification checklist, see
 |----------|----------|---------|-------------|
 | `POSTSIDER_API_KEY` | yes | - | Organization API key (Settings -> API) |
 | `POSTSIDER_API_URL` | no | `https://api.postsider.com` | Instance base URL |
+| `POSTSIDER_MCP_ALLOW_APPROVAL_DECISIONS` | no | unset (off) | Local stdio server only. Exactly `true` registers `postsider_decide_approval`. Anything else leaves it out. |
 
 `POSTSIDER_API_URL` must be HTTPS. Plain HTTP is accepted only on loopback
 (`localhost`, `127.0.0.1`, `[::1]`) for local development.
@@ -237,6 +241,13 @@ plus `/api`, e.g. `https://social.example.com/api`. The server appends
   non-empty, dates must be real ISO 8601 dates (`2026-02-30` is refused, not sent
   to the API), post status `draft` or `schedule`, and media imports require a
   public HTTPS URL.
+- Deciding an approval is opt-in and local only. `postsider_decide_approval` is
+  absent unless you start the local stdio server with
+  `POSTSIDER_MCP_ALLOW_APPROVAL_DECISIONS=true`, the hosted server never offers
+  it (OAuth tokens cannot hold `approvals:decide`), and the API key itself must
+  carry the `approvals:decide` scope. The API refuses a key that requested the
+  approval or created the post, so an agent cannot approve its own work. A retry
+  of the same decision sends the same `Idempotency-Key` and is harmless.
 - A missing API key exits 1 with an explanatory message on stderr. stdout carries
   protocol frames only.
 

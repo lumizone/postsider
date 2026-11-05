@@ -21,6 +21,8 @@ Identify the draft from the user's description. If no unique post id is provided
 6. Call `postsider_get_approval_status` and report the stored approval state.
 7. If the request fails, report a concise actionable error without credentials, tokens, debug payloads, or internal telemetry. Do not retry the write blindly.
 
+Deciding an approval is a human act. Only if `postsider_decide_approval` is available (a local server the user opted in) and the user explicitly asked for that exact decision on that approval, call it once; never use it to clear a queue or to approve your own work.
+
 Requesting approval does not publish the post. Never describe `PENDING` or `APPROVED` as `PUBLISHED`.
 
 ## Output

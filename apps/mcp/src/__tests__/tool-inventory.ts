@@ -53,6 +53,15 @@ export const EXPECTED_TOOL_NAMES = [
 export const EXPECTED_TOOL_COUNT = 40;
 
 /**
+ * The one tool that exists only when the local stdio server is started with
+ * `POSTSIDER_MCP_ALLOW_APPROVAL_DECISIONS=true`. It is deliberately NOT in
+ * EXPECTED_TOOL_NAMES: the hosted server and a default stdio server never
+ * register it, so the default counts (40 hosted, 41 stdio) stay unchanged and
+ * the opt-in count is one more (42 stdio).
+ */
+export const DECIDE_APPROVAL_TOOL = 'postsider_decide_approval';
+
+/**
  * The expected risk annotations of every tool.
  *
  * All four MCP hints are stated explicitly (including `false`) so that no tool
@@ -238,4 +247,19 @@ export const EXPECTED_TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
     idempotentHint: true,
     openWorldHint: true,
   },
+};
+
+/**
+ * Annotations of the opt-in decision tool, kept apart from the map above so
+ * that map keeps describing exactly the default hosted surface.
+ *
+ * Not destructive: a decision is a normal workflow step recorded in the audit
+ * trail, and rejecting leaves the post a draft. Idempotent: the tool derives a
+ * stable Idempotency-Key and the API answers a repeat with `changed: false`.
+ */
+export const DECIDE_APPROVAL_ANNOTATIONS: ToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: true,
 };
