@@ -70,6 +70,8 @@ import { PublicApiIdempotencyService } from '@postsider/nestjs-libraries/databas
 import { PostAnalyticsRepository } from '@postsider/nestjs-libraries/database/prisma/post-analytics/post-analytics.repository';
 import { FunnelAttributionService } from '@postsider/nestjs-libraries/database/prisma/attribution/funnel-attribution.service';
 import { ActorDirectoryService } from '@postsider/nestjs-libraries/database/prisma/agent-activity/actor-directory.service';
+import { AgentActivityRepository } from '@postsider/nestjs-libraries/database/prisma/agent-activity/agent-activity.repository';
+import { AgentActivityService } from '@postsider/nestjs-libraries/database/prisma/agent-activity/agent-activity.service';
 import { PostAnalyticsService } from '@postsider/nestjs-libraries/database/prisma/post-analytics/post-analytics.service';
 
 @Global()
@@ -151,6 +153,8 @@ import { PostAnalyticsService } from '@postsider/nestjs-libraries/database/prism
     PostAnalyticsService,
     FunnelAttributionService,
     ActorDirectoryService,
+    AgentActivityRepository,
+    AgentActivityService,
   ],
   get exports() {
     return this.providers;
