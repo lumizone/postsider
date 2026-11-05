@@ -35,8 +35,11 @@ const make = () => {
     getIntegrationsList: jest.fn().mockResolvedValue([{ id: 'int-1' }, { id: 'int-2' }]),
   };
   const orgRepo = { listApiKeys: jest.fn().mockResolvedValue([{ id: 'key-1' }]) };
-  const service = new PolicyRulesService(repo as any, integrations as any, orgRepo as any);
-  return { service, repo, integrations, orgRepo };
+  const flows = {
+    getById: jest.fn().mockImplementation(async (_o: string, id: string) => (id === 'flow-1' ? { id } : null)),
+  };
+  const service = new PolicyRulesService(repo as any, integrations as any, orgRepo as any, flows as any);
+  return { service, repo, integrations, orgRepo, flows };
 };
 
 const input = (over: Record<string, unknown> = {}) => ({
@@ -346,5 +349,125 @@ describe('PolicyRulesService.toRuleInputs', () => {
       expect.objectContaining({ id: 'r1', name: 'Rule', enabled: true, priority: 100, effect: 'BLOCK' })
     );
     expect(r).not.toHaveProperty('organizationId');
+  });
+});
+
+describe('PolicyRulesService approval flow link', () => {
+  const approvalInput = (over: Record<string, unknown> = {}) =>
+    input({ effect: 'REQUIRE_APPROVAL', ...over });
+
+  it('stores a live flow id on a REQUIRE_APPROVAL rule, checked against the org', async () => {
+    const { service, repo, flows } = make();
+    const res: any = await service.create('org-1', approvalInput({ approvalFlowId: 'flow-1' }) as any);
+    expect(flows.getById).toHaveBeenCalledWith('org-1', 'flow-1');
+    expect(repo.create.mock.calls[0][1].approvalFlowId).toBe('flow-1');
+    expect(res.approvalFlowId).toBe('flow-1');
+  });
+
+  it('rejects a flow id on a BLOCK rule', async () => {
+    const { service, repo } = make();
+    const res = await badRequest(service.create('org-1', input({ approvalFlowId: 'flow-1' }) as any));
+    expect(res.error).toBe('approval_flow_invalid');
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unknown, foreign or archived flow (getById finds no live flow)', async () => {
+    const { service, repo } = make();
+    const res = await badRequest(service.create('org-1', approvalInput({ approvalFlowId: 'gone' }) as any));
+    expect(res.error).toBe('approval_flow_invalid');
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it('create without a flow id or with null stores no flow and does not look one up', async () => {
+    const { service, repo, flows } = make();
+    await service.create('org-1', approvalInput() as any);
+    await service.create('org-1', approvalInput({ approvalFlowId: null }) as any);
+    expect(flows.getById).not.toHaveBeenCalled();
+    expect(repo.create.mock.calls[0][1].approvalFlowId).toBeUndefined();
+    expect(repo.create.mock.calls[1][1].approvalFlowId).toBeUndefined();
+  });
+
+  it('fails closed when flows are not wired and a flow id is given', async () => {
+    const { repo, integrations, orgRepo } = make();
+    const noFlows = new PolicyRulesService(repo as any, integrations as any, orgRepo as any);
+    const res = await badRequest(noFlows.create('org-1', approvalInput({ approvalFlowId: 'flow-1' }) as any));
+    expect(res.error).toBe('approval_flow_invalid');
+  });
+
+  it('update sets a live flow on a REQUIRE_APPROVAL rule', async () => {
+    const { service, repo } = make();
+    repo.getById.mockResolvedValue(row({ effect: 'REQUIRE_APPROVAL' }));
+    await service.update('org-1', 'r1', { approvalFlowId: 'flow-1' } as any);
+    expect(repo.update.mock.calls[0][2]).toEqual({ approvalFlowId: 'flow-1' });
+  });
+
+  it('update rejects a flow on a rule whose effective effect is BLOCK', async () => {
+    const { service, repo } = make();
+    repo.getById.mockResolvedValue(row({ effect: 'BLOCK' }));
+    const res = await badRequest(service.update('org-1', 'r1', { approvalFlowId: 'flow-1' } as any));
+    expect(res.error).toBe('approval_flow_invalid');
+    expect(repo.update).not.toHaveBeenCalled();
+  });
+
+  it('update rejects a flow id together with effect BLOCK in the same request', async () => {
+    const { service, repo } = make();
+    repo.getById.mockResolvedValue(row({ effect: 'REQUIRE_APPROVAL' }));
+    const res = await badRequest(service.update('org-1', 'r1', { effect: 'BLOCK', approvalFlowId: 'flow-1' } as any));
+    expect(res.error).toBe('approval_flow_invalid');
+    expect(repo.update).not.toHaveBeenCalled();
+  });
+
+  it('update rejects an unknown flow', async () => {
+    const { service, repo } = make();
+    repo.getById.mockResolvedValue(row({ effect: 'REQUIRE_APPROVAL' }));
+    const res = await badRequest(service.update('org-1', 'r1', { approvalFlowId: 'gone' } as any));
+    expect(res.error).toBe('approval_flow_invalid');
+    expect(repo.update).not.toHaveBeenCalled();
+  });
+
+  it('switching a linked rule to BLOCK clears the flow id', async () => {
+    const { service, repo } = make();
+    repo.getById.mockResolvedValue(row({ effect: 'REQUIRE_APPROVAL', approvalFlowId: 'flow-1' }));
+    await service.update('org-1', 'r1', { effect: 'BLOCK' } as any);
+    expect(repo.update.mock.calls[0][2]).toEqual({ effect: 'BLOCK', approvalFlowId: null });
+  });
+
+  it('switching an unlinked rule to BLOCK does not write approvalFlowId', async () => {
+    const { service, repo } = make();
+    repo.getById.mockResolvedValue(row({ effect: 'REQUIRE_APPROVAL', approvalFlowId: null }));
+    await service.update('org-1', 'r1', { effect: 'BLOCK' } as any);
+    expect(repo.update.mock.calls[0][2]).toEqual({ effect: 'BLOCK' });
+  });
+
+  it('null clears the flow id and is the only field allowed to be null', async () => {
+    const { service, repo, flows } = make();
+    repo.getById.mockResolvedValue(row({ effect: 'REQUIRE_APPROVAL', approvalFlowId: 'flow-1' }));
+    await service.update('org-1', 'r1', { approvalFlowId: null } as any);
+    expect(repo.update.mock.calls[0][2]).toEqual({ approvalFlowId: null });
+    expect(flows.getById).not.toHaveBeenCalled();
+    const res = await badRequest(service.update('org-1', 'r1', { name: null } as any));
+    expect(res.field).toBe('name');
+  });
+
+  it('clearing with null works on a BLOCK rule too', async () => {
+    const { service, repo } = make();
+    repo.getById.mockResolvedValue(row({ effect: 'BLOCK', approvalFlowId: null }));
+    await service.update('org-1', 'r1', { approvalFlowId: null } as any);
+    expect(repo.update.mock.calls[0][2]).toEqual({ approvalFlowId: null });
+  });
+
+  it('re-enabling a rule whose flow was archived meanwhile is refused', async () => {
+    const { service, repo } = make();
+    repo.getById.mockResolvedValue(row({ effect: 'REQUIRE_APPROVAL', enabled: false, approvalFlowId: 'archived' }));
+    const res = await badRequest(service.update('org-1', 'r1', { enabled: true } as any));
+    expect(res.error).toBe('approval_flow_invalid');
+    expect(repo.update).not.toHaveBeenCalled();
+  });
+
+  it('editing an unrelated field of a rule with a stale flow does not need the flow', async () => {
+    const { service, repo, flows } = make();
+    repo.getById.mockResolvedValue(row({ effect: 'REQUIRE_APPROVAL', enabled: false, approvalFlowId: 'archived' }));
+    await service.update('org-1', 'r1', { name: 'new' } as any);
+    expect(flows.getById).not.toHaveBeenCalled();
   });
 });

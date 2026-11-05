@@ -1,6 +1,7 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { PolicyRule } from '@prisma/client';
 import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
+import { ApprovalFlowService } from '@postsider/nestjs-libraries/database/prisma/approval/approval-flow.service';
 import { OrganizationRepository } from '@postsider/nestjs-libraries/database/prisma/organizations/organization.repository';
 import { PolicyRulesRepository } from '@postsider/nestjs-libraries/database/prisma/policies/policy-rules.repository';
 import {
@@ -31,7 +32,8 @@ export class PolicyRulesService {
   constructor(
     private _rules: PolicyRulesRepository,
     private _integrations: IntegrationService,
-    private _organizations: OrganizationRepository
+    private _organizations: OrganizationRepository,
+    @Optional() private _flows?: ApprovalFlowService
   ) {}
 
   async list(orgId: string): Promise<PublicPolicyRule[]> {
@@ -51,6 +53,7 @@ export class PolicyRulesService {
     const enabled = dto.enabled ?? true;
 
     const conditionParams = this.checkParams(dto.condition, dto.conditionParams);
+    const approvalFlowId = await this.checkFlow(orgId, dto.effect, dto.approvalFlowId);
     await this.checkFilters(
       orgId,
       { appliesToActorTypes, appliesToApiKeyIds, appliesToIntegrationIds },
@@ -75,6 +78,7 @@ export class PolicyRulesService {
       condition: dto.condition,
       conditionParams: conditionParams as never,
       effect: dto.effect,
+      ...(approvalFlowId ? { approvalFlowId } : {}),
     });
     return this.toPublicRule(row);
   }
@@ -82,7 +86,8 @@ export class PolicyRulesService {
   async update(orgId: string, id: string, dto: UpdatePolicyRuleDto): Promise<PublicPolicyRule> {
     const existing = await this.mustGet(orgId, id);
     for (const [key, value] of Object.entries(dto)) {
-      if (value === null) {
+      // approvalFlowId is the one field where null means "clear".
+      if (value === null && key !== 'approvalFlowId') {
         throw new BadRequestException({ msg: `${key} must not be null`, field: key });
       }
     }
@@ -101,6 +106,17 @@ export class PolicyRulesService {
     }
     if (dto.appliesToProviders !== undefined) {
       data.appliesToProviders = this.normalizeProviders(dto.appliesToProviders);
+    }
+
+    // A flow only belongs to a REQUIRE_APPROVAL rule: a rule moved to BLOCK
+    // loses it, and a rule that is switched back on must still point to a live flow.
+    const effectiveEffect = dto.effect ?? existing.effect;
+    if (dto.approvalFlowId !== undefined) {
+      data.approvalFlowId = await this.checkFlow(orgId, effectiveEffect, dto.approvalFlowId);
+    } else if (effectiveEffect !== 'REQUIRE_APPROVAL' && existing.approvalFlowId) {
+      data.approvalFlowId = null;
+    } else if (dto.enabled === true && !existing.enabled && existing.approvalFlowId) {
+      await this.checkFlow(orgId, effectiveEffect, existing.approvalFlowId);
     }
 
     const condition = (dto.condition ?? existing.condition) as PolicyConditionName;
@@ -178,6 +194,27 @@ export class PolicyRulesService {
     const row = await this._rules.getById(orgId, id);
     if (!row) throw new NotFoundException({ msg: 'Policy rule not found' });
     return row;
+  }
+
+  /**
+   * Returns the flow id to store (null clears). A flow is accepted only for a
+   * REQUIRE_APPROVAL rule and only when it is a live flow of this organization;
+   * an unknown, foreign or archived id answers the same error.
+   */
+  private async checkFlow(
+    orgId: string,
+    effect: string,
+    flowId: string | null | undefined
+  ): Promise<string | null> {
+    if (flowId === null || flowId === undefined) return null;
+    const invalid = (msg: string) =>
+      new BadRequestException({ error: 'approval_flow_invalid', msg, field: 'approvalFlowId' });
+    if (effect !== 'REQUIRE_APPROVAL') {
+      throw invalid('An approval flow can only be set on a rule whose effect is REQUIRE_APPROVAL.');
+    }
+    const flow = this._flows ? await this._flows.getById(orgId, flowId) : null;
+    if (!flow) throw invalid('Unknown approval flow for this organization.');
+    return flowId;
   }
 
   private normalizeProviders(providers: string[]): string[] {

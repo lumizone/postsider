@@ -115,7 +115,9 @@ export class AgentActivityActionsService {
       approvalPostIds: gated.approvalPostIds,
       evaluatedPostIds: gated.evaluatedPostIds,
       routeToApproval: async (postId: string) =>
-        gated.approvalPostIds.has(postId) ? this._policyGate.routeRetry(orgId, postId) : false,
+        gated.approvalPostIds.has(postId)
+          ? this._policyGate.routeRetry(orgId, postId, gated.approvalRuleIdsByPost?.get(postId))
+          : false,
     });
     return {
       ...result,

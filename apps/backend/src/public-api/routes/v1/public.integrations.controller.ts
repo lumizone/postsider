@@ -752,7 +752,11 @@ export class PublicIntegrationsController {
               approvalPostIds: gated.approvalPostIds,
               evaluatedPostIds: gated.evaluatedPostIds,
               routeToApproval: (postId: string) =>
-                this._policyGate!.routeRetry(org.id, postId),
+                this._policyGate!.routeRetry(
+                  org.id,
+                  postId,
+                  gated.approvalRuleIdsByPost?.get(postId)
+                ),
             }
           : {}),
       });

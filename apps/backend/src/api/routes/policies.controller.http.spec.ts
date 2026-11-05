@@ -189,6 +189,34 @@ describe('PoliciesController (dashboard)', () => {
     expect(rules.update).not.toHaveBeenCalled();
   });
 
+  it('PUT /:id accepts approvalFlowId null (clears the flow) and the view carries approvalFlowId', async () => {
+    rules.update.mockResolvedValue(ruleRow({ effect: 'REQUIRE_APPROVAL', approvalFlowId: null }));
+    const res = await send('PUT', '/r1', { approvalFlowId: null });
+    expect(res.status).toBe(200);
+    expect(rules.update).toHaveBeenCalledWith('org-1', 'r1', { approvalFlowId: null });
+    expect(await res.json()).toMatchObject({ approvalFlowId: null });
+  });
+
+  it('PUT /:id passes a flow id through and still rejects null for other fields', async () => {
+    rules.update.mockResolvedValue(ruleRow({ effect: 'REQUIRE_APPROVAL', approvalFlowId: 'f1' }));
+    const ok = await send('PUT', '/r1', { approvalFlowId: 'f1' });
+    expect(ok.status).toBe(200);
+    expect(rules.update).toHaveBeenCalledWith('org-1', 'r1', { approvalFlowId: 'f1' });
+    expect((await ok.json()).approvalFlowId).toBe('f1');
+    rules.update.mockClear();
+    expect((await send('PUT', '/r1', { effect: null })).status).toBe(400);
+    expect(rules.update).not.toHaveBeenCalled();
+  });
+
+  it('POST / passes approvalFlowId to the service and rejects a 65 character id', async () => {
+    rules.create.mockResolvedValue(ruleRow({ effect: 'REQUIRE_APPROVAL', approvalFlowId: 'f1' }));
+    const res = await send('POST', '', { name: 'a', condition: 'ALWAYS', effect: 'REQUIRE_APPROVAL', approvalFlowId: 'f1' });
+    expect(res.status).toBe(201);
+    expect(rules.create.mock.calls[0][1]).toMatchObject({ approvalFlowId: 'f1' });
+    const bad = await send('POST', '', { name: 'a', condition: 'ALWAYS', effect: 'REQUIRE_APPROVAL', approvalFlowId: 'x'.repeat(65) });
+    expect(bad.status).toBe(400);
+  });
+
   it('PUT /:id sends only known fields, audits changed field names only', async () => {
     rules.update.mockResolvedValue(ruleRow({ name: 'Renamed' }));
     const res = await send('PUT', '/r1', {

@@ -17,6 +17,8 @@ export class PublicPolicyRuleDto {
   @ApiProperty({ enum: POLICY_CONDITIONS }) condition: string;
   @ApiProperty({ type: 'object', additionalProperties: true }) conditionParams: Record<string, unknown>;
   @ApiProperty({ enum: POLICY_EFFECTS }) effect: string;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Approval flow used when this rule holds a post.' })
+  approvalFlowId?: string | null;
   @ApiProperty() createdAt: Date;
   @ApiProperty() updatedAt: Date;
 }

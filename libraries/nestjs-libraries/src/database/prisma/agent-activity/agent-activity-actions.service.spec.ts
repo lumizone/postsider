@@ -33,6 +33,7 @@ const make = () => {
       return {
         policy: { effect: 'REQUIRE_APPROVAL', matched: [{ ruleId: 'r', name: 'R', effect: 'REQUIRE_APPROVAL' }], channels: [] },
         approvalPostIds: new Set(['p-appr']),
+        approvalRuleIdsByPost: new Map([['p-appr', ['r']]]),
         evaluatedPostIds: new Set(['p-appr', 'p-ok']),
       };
     }),
@@ -172,6 +173,6 @@ describe('retryFailed', () => {
     expect(await opts.routeToApproval('p-ok')).toBe(false);
     expect(gate.routeRetry).not.toHaveBeenCalled();
     expect(await opts.routeToApproval('p-appr')).toBe(true);
-    expect(gate.routeRetry).toHaveBeenCalledWith('org-1', 'p-appr');
+    expect(gate.routeRetry).toHaveBeenCalledWith('org-1', 'p-appr', ['r']);
   });
 });

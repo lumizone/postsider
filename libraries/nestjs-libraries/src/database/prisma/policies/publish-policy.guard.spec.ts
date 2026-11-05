@@ -120,8 +120,22 @@ describe('PublishPolicyGuard', () => {
     await expect(guard.checkBeforePublish('org', 'p1')).resolves.toEqual({
       kind: 'approval_requested',
     });
-    expect(router.route).toHaveBeenCalledWith('org', 'p1', { terminateWorkflow: false });
+    expect(router.route).toHaveBeenCalledWith('org', 'p1', { terminateWorkflow: false, ruleIds: ['r-Needs review'] });
     expect(evaluation.recordOutcome).toHaveBeenCalledWith('org', out, 'publish', { postId: 'p1' });
+  });
+
+  it('routes with only the REQUIRE_APPROVAL rule ids in match order, never a BLOCK id', async () => {
+    const matched = [match('REQUIRE_APPROVAL', 'B rule'), match('BLOCK', 'Hard'), match('REQUIRE_APPROVAL', 'A rule')];
+    evaluation.evaluateTargets.mockResolvedValue({
+      effect: 'REQUIRE_APPROVAL',
+      matched,
+      channels: [{ integrationId: 'int1', effect: 'REQUIRE_APPROVAL', matched }],
+    });
+    await guard.checkBeforePublish('org', 'p1');
+    expect(router.route).toHaveBeenCalledWith('org', 'p1', {
+      terminateWorkflow: false,
+      ruleIds: ['r-B rule', 'r-A rule'],
+    });
   });
 
   it('REQUIRE_APPROVAL with an APPROVED approval is evaluated as approved and allowed', async () => {
@@ -144,7 +158,7 @@ describe('PublishPolicyGuard', () => {
     await expect(guard.checkBeforePublish('org', 'p1')).resolves.toEqual({
       kind: 'approval_requested',
     });
-    expect(router.route).toHaveBeenCalledWith('org', 'p1', { terminateWorkflow: false });
+    expect(router.route).toHaveBeenCalledWith('org', 'p1', { terminateWorkflow: false, ruleIds: ['r-Needs review'] });
     expect(evaluation.evaluateTargets).toHaveBeenCalledTimes(1);
   });
 
