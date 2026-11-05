@@ -239,6 +239,19 @@ describe('ApprovalRepository flow snapshot at request time', () => {
     expect(stage.deleteMany.mock.invocationCallOrder[0]).toBeLessThan(stage.createMany.mock.invocationCallOrder[0]);
   });
 
+  it('a reopen runs entirely inside one transaction and a mid-way failure propagates (rolled back by the db)', async () => {
+    const { repo, approval, stage, tx } = make();
+    approval.updateMany.mockResolvedValue({ count: 1 });
+    approval.findFirst.mockResolvedValue({ id: 'a1' });
+    await repo.openRequest('org-1', 'p1', 'u1', actor, snapshot);
+    expect(tx.model.$transaction).toHaveBeenCalledTimes(1);
+    // the base client (outside the tx) is never used for the reopen writes
+    tx.model.$transaction.mockClear();
+    stage.createMany.mockRejectedValueOnce(new Error('boom'));
+    await expect(repo.openRequest('org-1', 'p1', 'u1', actor, snapshot)).rejects.toThrow('boom');
+    expect(tx.model.$transaction).toHaveBeenCalledTimes(1);
+  });
+
   it('a reopen on the implicit stage still drops the old rows but creates none', async () => {
     const { repo, approval, stage } = make();
     approval.updateMany.mockResolvedValue({ count: 1 });
