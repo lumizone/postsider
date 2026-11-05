@@ -1,5 +1,5 @@
 import { HttpException } from '@nestjs/common';
-import { PolicyBlockedException, policyInputTooLarge, sanitizePolicyName } from './policy-errors';
+import { PolicyBlockedException, exposedMatches, policyInputTooLarge, sanitizePolicyName } from './policy-errors';
 
 const outcome = (names: string[]) => ({
   effect: 'BLOCK' as const,
@@ -85,5 +85,26 @@ describe('policyInputTooLarge', () => {
     expect(err.getStatus()).toBe(400);
     expect((err.getResponse() as any).error).toBe('policy_input_too_large');
     expect((err.getResponse() as any).msg).not.toMatch(/[\u2014\u2013]/);
+  });
+});
+
+describe('exposedMatches', () => {
+  const block = { ruleId: 'rb', name: 'No\u2014links', effect: 'BLOCK' as const, condition: 'CONTAINS_LINK' as const };
+  const approval = { ruleId: 'ra', name: 'Review', effect: 'REQUIRE_APPROVAL' as const, condition: 'CONTAINS_LINK' as const };
+
+  it('lists only BLOCK rules for a blocked outcome, equal to the 422 body', () => {
+    const o = { effect: 'BLOCK' as const, matched: [approval, block], channels: [] };
+    const fromHelper = exposedMatches(o);
+    const fromError = (new PolicyBlockedException(o).getResponse() as any).policy.matched;
+    expect(fromHelper).toEqual(fromError);
+    expect(fromHelper.map((m) => m.ruleId)).toEqual(['rb']);
+    expect(fromHelper[0].name).toBe('No links');
+  });
+
+  it('lists every rule when the outcome is not BLOCK', () => {
+    expect(
+      exposedMatches({ effect: 'REQUIRE_APPROVAL', matched: [approval] }).map((m) => m.ruleId)
+    ).toEqual(['ra']);
+    expect(exposedMatches({ effect: 'ALLOW', matched: [] })).toEqual([]);
   });
 });

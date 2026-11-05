@@ -10,7 +10,7 @@ describe('CustomerService', () => {
       countLiveCustomers: jest.fn().mockResolvedValue(0),
       findLiveCustomerByName: jest.fn().mockResolvedValue(null),
       findCustomerById: jest.fn().mockResolvedValue(null),
-      createCustomer: jest.fn().mockImplementation(async (_o: string, name: string) => live('c-new', name)),
+      createCustomerWithinLimit: jest.fn().mockImplementation(async (_o: string, name: string) => live('c-new', name)),
       renameCustomer: jest.fn().mockResolvedValue(true),
       archiveCustomer: jest.fn().mockResolvedValue({ detachedChannels: 0 }),
       ...over,
@@ -30,7 +30,7 @@ describe('CustomerService', () => {
       const { repo, service } = build();
       const res = await service.create('org-1', 'Acme');
       expect(res).toEqual({ customer: live('c-new', 'Acme'), created: true });
-      expect(repo.createCustomer).toHaveBeenCalledWith('org-1', 'Acme');
+      expect(repo.createCustomerWithinLimit).toHaveBeenCalledWith('org-1', 'Acme', 200);
     });
 
     it('returns the same customer with created:false when called twice', async () => {
@@ -40,22 +40,38 @@ describe('CustomerService', () => {
       const second = await service.create('org-1', 'Acme');
       expect(second.created).toBe(false);
       expect(second.customer.id).toBe(first.customer.id);
-      expect(repo.createCustomer).toHaveBeenCalledTimes(1);
+      expect(repo.createCustomerWithinLimit).toHaveBeenCalledTimes(1);
     });
 
     it('rejects the 201st customer with customer_limit_reached', async () => {
       const { repo, service } = build();
-      repo.countLiveCustomers.mockResolvedValue(200);
+      repo.createCustomerWithinLimit.mockResolvedValue(null);
       await expect(service.create('org-1', 'One more')).rejects.toMatchObject({
         status: 400,
         response: { error: 'customer_limit_reached' },
       });
-      expect(repo.createCustomer).not.toHaveBeenCalled();
+    });
+
+    it('a lost race on the same name returns the winner with created:false', async () => {
+      const { repo, service } = build();
+      repo.createCustomerWithinLimit.mockRejectedValue({ code: 'P2002' });
+      repo.findLiveCustomerByName.mockResolvedValueOnce(null).mockResolvedValueOnce(live('c-win', 'Acme'));
+      await expect(service.create('org-1', 'Acme')).resolves.toEqual({
+        customer: live('c-win', 'Acme'),
+        created: false,
+      });
+    });
+
+    it('rethrows other create errors and a P2002 with no live winner', async () => {
+      const { repo, service } = build();
+      repo.createCustomerWithinLimit.mockRejectedValueOnce(new Error('db down'));
+      await expect(service.create('org-1', 'Acme')).rejects.toThrow('db down');
+      repo.createCustomerWithinLimit.mockRejectedValueOnce({ code: 'P2002' });
+      await expect(service.create('org-1', 'Acme')).rejects.toEqual({ code: 'P2002' });
     });
 
     it('still returns an existing customer when the org is at the limit', async () => {
       const { repo, service } = build();
-      repo.countLiveCustomers.mockResolvedValue(200);
       repo.findLiveCustomerByName.mockResolvedValue(live('c9', 'Acme'));
       await expect(service.create('org-1', 'Acme')).resolves.toEqual({
         customer: live('c9', 'Acme'),
@@ -81,6 +97,16 @@ describe('CustomerService', () => {
         response: { error: 'customer_name_taken' },
       });
       expect(repo.renameCustomer).not.toHaveBeenCalled();
+    });
+
+    it('409 customer_name_taken when a concurrent rename wins the unique index', async () => {
+      const { repo, service } = build();
+      repo.findCustomerById.mockResolvedValue(live('c1', 'Old'));
+      repo.renameCustomer.mockRejectedValue({ code: 'P2002' });
+      await expect(service.rename('org-1', 'c1', 'New')).rejects.toMatchObject({
+        status: 409,
+        response: { error: 'customer_name_taken' },
+      });
     });
 
     it('allows renaming to the name the customer already has', async () => {
@@ -203,6 +229,25 @@ describe('IntegrationRepository customer methods', () => {
     expect(customerModel.count).toHaveBeenCalledWith({ where: { orgId: 'org-1', deletedAt: null } });
     await repo.listCustomersWithCounts('org-1');
     expect(customerModel.findMany.mock.calls[0][0].where).toEqual({ orgId: 'org-1', deletedAt: null });
+  });
+
+  it('createCustomerWithinLimit counts and inserts under one advisory lock in one transaction', async () => {
+    const { repo, customerModel, transaction } = build();
+    const execute = jest.fn().mockResolvedValue(1);
+    transaction.model.$transaction.mockImplementation(async (fn: any) =>
+      fn({ customer: customerModel, $executeRaw: execute })
+    );
+    customerModel.count.mockResolvedValue(3);
+    customerModel.create.mockResolvedValue({ id: 'cn' });
+    await expect(repo.createCustomerWithinLimit('org-1', 'Acme', 200)).resolves.toEqual({ id: 'cn' });
+    expect(transaction.model.$transaction).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute.mock.invocationCallOrder[0]).toBeLessThan(customerModel.count.mock.invocationCallOrder[0]);
+    expect(customerModel.create).toHaveBeenCalledWith({ data: { name: 'Acme', orgId: 'org-1' } });
+    customerModel.create.mockClear();
+    customerModel.count.mockResolvedValue(200);
+    await expect(repo.createCustomerWithinLimit('org-1', 'Acme', 200)).resolves.toBeNull();
+    expect(customerModel.create).not.toHaveBeenCalled();
   });
 
   it('rename updates only a live row of the org and reports whether it matched', async () => {

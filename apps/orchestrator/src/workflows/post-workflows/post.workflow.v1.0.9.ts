@@ -83,7 +83,8 @@ const {
 const { markPublishFailed, updatePost } = proxyActivities<PostActivity>({
   startToCloseTimeout: '5 minute',
   retry: {
-    maximumAttempts: 0, // unlimited
+    // No maximumAttempts: omitted means unlimited. 0 is rejected by the Temporal SDK
+    // (RetryPolicy.maximumAttempts must be a positive integer) and wedged the workflow.
     initialInterval: '30 seconds',
     backoffCoefficient: 2,
     maximumInterval: '10 minutes',

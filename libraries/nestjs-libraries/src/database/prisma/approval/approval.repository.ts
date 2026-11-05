@@ -160,44 +160,63 @@ export class ApprovalRepository {
     }));
     // A resolved approval starts a fresh round: any guest link from the prior
     // round pointed at now-stale content and must stop working.
-    const reopened = await model.updateMany({
-      where: {
-        postId,
-        organizationId: orgId,
-        status: { in: ['APPROVED', 'REJECTED'] },
-      },
-      data: {
-        status: 'PENDING',
-        ...requester,
-        requestedAt: new Date(),
-        approverId: null,
-        decidedByType: null,
-        decidedByApiKeyId: null,
-        decidedByOAuthClientId: null,
-        decidedVia: null,
-        note: null,
-        guestName: null,
-        guestEmail: null,
-        resolvedAt: null,
-        guestToken: null,
-        guestTokenHash: null,
-        guestTokenExpiresAt: null,
-        ...progress,
-      },
-    });
-    if (reopened.count === 1) {
-      const approval = await model.findFirst({
+    // The whole re-open is one transaction: a failure half way must never
+    // leave a PENDING approval without its stage rows (the engine would then
+    // fail closed on a flow based approval forever).
+    const reopen = async (client: {
+      postApproval: any;
+      postApprovalStage: any;
+      approvalActionToken: any;
+    }): Promise<PostApproval | null> => {
+      const reopened = await client.postApproval.updateMany({
+        where: {
+          postId,
+          organizationId: orgId,
+          status: { in: ['APPROVED', 'REJECTED'] },
+        },
+        data: {
+          status: 'PENDING',
+          ...requester,
+          requestedAt: new Date(),
+          approverId: null,
+          decidedByType: null,
+          decidedByApiKeyId: null,
+          decidedByOAuthClientId: null,
+          decidedVia: null,
+          note: null,
+          guestName: null,
+          guestEmail: null,
+          resolvedAt: null,
+          guestToken: null,
+          guestTokenHash: null,
+          guestTokenExpiresAt: null,
+          ...progress,
+        },
+      });
+      if (reopened.count !== 1) return null;
+      const approval = await client.postApproval.findFirst({
         where: { postId, organizationId: orgId },
       });
       // The new round starts from the then current flow: old stage rows and
       // any unused decision tokens of the previous round are dropped.
-      await this.deleteStagesAndTokens(orgId, approval!.id);
+      await client.postApprovalStage.deleteMany({
+        where: { approvalId: approval!.id, approval: { organizationId: orgId } },
+      });
+      await client.approvalActionToken.deleteMany({
+        where: { approvalId: approval!.id, organizationId: orgId },
+      });
       if (stageRows.length > 0) {
-        await this._approval.model.postApprovalStage.createMany({
+        await client.postApprovalStage.createMany({
           data: stageRows.map((r) => ({ ...r, approvalId: approval!.id })),
         });
       }
-      return { approval: approval!, created: true };
+      return approval as PostApproval;
+    };
+    const reopenedApproval = this._tx
+      ? await this._tx.model.$transaction((tx) => reopen(tx as any))
+      : await reopen(this._approval.model as any);
+    if (reopenedApproval) {
+      return { approval: reopenedApproval, created: true };
     }
     try {
       const approval = await model.create({
@@ -220,15 +239,6 @@ export class ApprovalRepository {
       });
       return { approval: approval!, created: false };
     }
-  }
-
-  async deleteStagesAndTokens(orgId: string, approvalId: string) {
-    await this._approval.model.postApprovalStage.deleteMany({
-      where: { approvalId, approval: { organizationId: orgId } },
-    });
-    await this._approval.model.approvalActionToken.deleteMany({
-      where: { approvalId, organizationId: orgId },
-    });
   }
 
   getPending(orgId: string) {
@@ -511,49 +521,6 @@ export class ApprovalRepository {
     });
   }
 
-  // --- Legacy single-stage primitives ---------------------------------
-  // @deprecated The decision engine (ApprovalService.decide) uses
-  // decideStageTx and revertFinal. `resolve`, `revertApproved`,
-  // `resolveByGuestToken` and `revertGuestApproval` know nothing about stages
-  // and must not be used for new code; they stay only for their specs and for
-  // rollback compatibility and can be deleted in a follow up.
-
-  // Conditional update (status must still be PENDING) guards against two admins
-  // resolving the same approval concurrently. Returns the affected row count.
-  async resolve(
-    organizationId: string,
-    id: string,
-    approverId: string | null,
-    status: ResolveStatus,
-    note: string | null
-  ) {
-    const res = await this._approval.model.postApproval.updateMany({
-      where: { id, organizationId, status: 'PENDING' },
-      data: {
-        status,
-        approverId,
-        decidedByType: approverId ? 'USER' : null,
-        note,
-        resolvedAt: new Date(),
-      },
-    });
-    return res.count;
-  }
-
-  async revertApproved(organizationId: string, id: string, approverId: string) {
-    const res = await this._approval.model.postApproval.updateMany({
-      where: { id, organizationId, status: 'APPROVED', approverId },
-      data: {
-        status: 'PENDING',
-        approverId: null,
-        decidedByType: null,
-        note: null,
-        resolvedAt: null,
-      },
-    });
-    return res.count;
-  }
-
   // --- Guest (external reviewer) link ---------------------------------
 
   /** `tokenHash` is the SHA-256 hex of the token; the plaintext is never stored. */
@@ -613,67 +580,5 @@ export class ApprovalRepository {
         },
       },
     });
-  }
-
-  /**
-   * Atomically checks token hash + PENDING + not-expired, resolves, and
-   * consumes the token (cleared in the same update): single use, no separate
-   * step that could race between "check" and "consume".
-   */
-  async resolveByGuestToken(
-    token: string,
-    status: ResolveStatus,
-    note: string | null,
-    guest: { name: string; email: string } | null = null
-  ) {
-    const res = await this._approval.model.postApproval.updateMany({
-      where: {
-        guestTokenHash: hashGuestToken(token),
-        status: 'PENDING',
-        guestTokenExpiresAt: { gt: new Date() },
-      },
-      data: {
-        status,
-        approverId: null,
-        decidedByType: null,
-        guestName: guest?.name ?? null,
-        guestEmail: guest?.email ?? null,
-        note,
-        resolvedAt: new Date(),
-        guestToken: null,
-        guestTokenHash: null,
-        guestTokenExpiresAt: null,
-      },
-    });
-    return res.count;
-  }
-
-  /** `tokenHash` is the stored hash to put back (see `hashGuestToken`). */
-  async revertGuestApproval(
-    organizationId: string,
-    id: string,
-    tokenHash: string,
-    expiresAt: Date
-  ) {
-    const res = await this._approval.model.postApproval.updateMany({
-      where: {
-        id,
-        organizationId,
-        status: 'APPROVED',
-        approverId: null,
-        guestTokenHash: null,
-      },
-      data: {
-        status: 'PENDING',
-        note: null,
-        resolvedAt: null,
-        guestName: null,
-        guestEmail: null,
-        guestToken: null,
-        guestTokenHash: tokenHash,
-        guestTokenExpiresAt: expiresAt,
-      },
-    });
-    return res.count;
   }
 }

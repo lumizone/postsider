@@ -14,6 +14,7 @@ import { AuditLogger } from '@postsider/nestjs-libraries/database/prisma/audit/a
 import { HttpExceptionFilter } from '@postsider/nestjs-libraries/services/exception.filter';
 import { runWithActor } from '@postsider/nestjs-libraries/actor/actor-context';
 import { PolicyInputTooLargeError } from '@postsider/nestjs-libraries/policies/policy-text';
+import { PolicyBlockedException } from '@postsider/nestjs-libraries/policies/policy-errors';
 import type { PostActor } from '@postsider/nestjs-libraries/actor/post-actor';
 import type { KeyPermissions } from '@postsider/nestjs-libraries/policies/key-permissions';
 
@@ -97,6 +98,34 @@ describe('POST /policies/evaluate (dry run)', () => {
     expect(audit.logSecurityEvent).not.toHaveBeenCalled();
     expect(audit.logResourceEvent).not.toHaveBeenCalled();
   };
+
+  it('reports the same matched list as the real 422 for a BLOCK plus REQUIRE_APPROVAL input', async () => {
+    const blockRule = { ...match('BLOCK', 'No links'), ruleId: 'rb' };
+    const approvalRule = { ...match('REQUIRE_APPROVAL', 'Needs review'), ruleId: 'ra' };
+    const outcome = {
+      effect: 'BLOCK' as const,
+      matched: [approvalRule, blockRule],
+      channels: [{ integrationId: 'chA', effect: 'BLOCK' as const, matched: [approvalRule, blockRule] }],
+    };
+    evaluation.evaluateTargets.mockResolvedValue(outcome);
+    const dry = await (await send(body())).json();
+    const real = (new PolicyBlockedException(outcome).getResponse() as any).policy;
+    expect(dry.matched).toEqual(real.matched);
+    expect(dry.matched.map((m: any) => m.ruleId)).toEqual(['rb']);
+    expect(dry.effect).toBe(real.effect);
+  });
+
+  it('still lists every REQUIRE_APPROVAL match when nothing blocks', async () => {
+    const a = { ...match('REQUIRE_APPROVAL', 'Review A'), ruleId: 'a' };
+    const b = { ...match('REQUIRE_APPROVAL', 'Review B'), ruleId: 'b' };
+    evaluation.evaluateTargets.mockResolvedValue({
+      effect: 'REQUIRE_APPROVAL',
+      matched: [a, b],
+      channels: [{ integrationId: 'chA', effect: 'REQUIRE_APPROVAL', matched: [a, b] }],
+    });
+    const dry = await (await send(body())).json();
+    expect(dry.matched.map((m: any) => m.ruleId)).toEqual(['a', 'b']);
+  });
 
   it('needs posts:read and does not accept policies:read alone', async () => {
     scopes = ['policies:read', 'policies:write'];

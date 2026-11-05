@@ -1361,7 +1361,6 @@ model PostApprovalStage {
   approval               PostApproval    @relation(fields: [approvalId], references: [id], onDelete: Cascade)
 
   @@unique([approvalId, position])
-  @@index([approvalId])
 }
 
 // One-shot email/link decision token. Only the SHA-256 hash is stored.

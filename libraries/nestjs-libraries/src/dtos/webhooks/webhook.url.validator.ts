@@ -120,6 +120,59 @@ export function isBlockedIp(ip: string): boolean {
   return true;
 }
 
+// Synchronous, DNS-free check used at subscription create/update time. Rejects
+// hosts the delivery dispatcher would always refuse: localhost, *.localhost,
+// and IP literals in blocked ranges (reuses `isBlockedIp`). Hostnames that
+// merely resolve to a private IP are still refused at delivery time.
+export function isLocalWebhookHost(value: unknown): boolean {
+  if (typeof value !== 'string') {
+    return false;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+  const hostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (!hostname) {
+    return false;
+  }
+  if (hostname === 'localhost' || hostname.endsWith('.localhost')) {
+    return true;
+  }
+  if (net.isIP(hostname)) {
+    return isBlockedIp(hostname);
+  }
+  // WHATWG URL normalizes numeric hosts (e.g. 0x7f.1, 2130706433) to dotted
+  // form, so a remaining all-numeric host is not a valid literal: block it.
+  return /^[0-9.]+$/.test(hostname);
+}
+
+@ValidatorConstraint({ name: 'IsNotLocalWebhookHost', async: false })
+export class IsNotLocalWebhookHostConstraint
+  implements ValidatorConstraintInterface
+{
+  validate(value: unknown, _args: ValidationArguments): boolean {
+    return !isLocalWebhookHost(value);
+  }
+
+  defaultMessage(_args: ValidationArguments): string {
+    return 'url must not target localhost, a loopback, private, link-local or otherwise non-public IP address; webhook delivery refuses those hosts';
+  }
+}
+
+export function IsNotLocalWebhookHost(validationOptions?: ValidationOptions) {
+  return function (object: object, propertyName: string) {
+    registerDecorator({
+      target: object.constructor,
+      propertyName,
+      options: validationOptions,
+      validator: IsNotLocalWebhookHostConstraint,
+    });
+  };
+}
+
 export async function isSafePublicHttpsUrl(value: unknown): Promise<boolean> {
   if (typeof value !== 'string' || !value.trim()) {
     return false;

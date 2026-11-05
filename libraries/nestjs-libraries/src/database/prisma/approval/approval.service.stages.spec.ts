@@ -277,6 +277,18 @@ describe('implicit single stage (no flow)', () => {
     expect(w.repo.decideStageTx).not.toHaveBeenCalled();
   });
 
+  it('a key limited to DRAFT may still reject (rejecting schedules nothing)', async () => {
+    const w = makeWorld({ createdBy: { type: 'API_KEY', apiKeyId: 'k1' } });
+    await w.request();
+    const r = await runWithActor(
+      { type: 'API_KEY', apiKeyId: 'k2' },
+      () => w.svc.decide('o1', 'ap1', { actor: { type: 'API_KEY', apiKeyId: 'k2' }, via: 'API' }, 'reject'),
+      { keyPermissions: { allowedActions: ['DRAFT'], allowedIntegrationIds: [] } }
+    );
+    expect(r.status).toBe('REJECTED');
+    expect(w.repo.decideStageTx).toHaveBeenCalled();
+  });
+
   it('a key limited to other channels cannot approve (key_channel_not_allowed)', async () => {
     const w = makeWorld({ createdBy: { type: 'API_KEY', apiKeyId: 'k1' } });
     await w.request();

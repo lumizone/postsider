@@ -37,19 +37,28 @@ import { postWorkflowV109 } from './post.workflow.v1.0.9';
 describe('v1.0.9 activity proxies', () => {
   it('has a dedicated unlimited-retry proxy for post-call writes', () => {
     const writes = mockProxyOptions.find(
-      (o) => o?.retry?.maximumAttempts === 0
+      (o) => o?.retry?.initialInterval === '30 seconds'
     );
     expect(writes).toEqual(
       expect.objectContaining({
         retry: {
-          maximumAttempts: 0,
           initialInterval: '30 seconds',
           backoffCoefficient: 2,
           maximumInterval: '10 minutes',
         },
       })
     );
+    // Unlimited means maximumAttempts is absent: 0 is rejected by the SDK.
+    expect(writes.retry).not.toHaveProperty('maximumAttempts');
     expect(writes.startToCloseTimeout).toBeDefined();
+  });
+
+  it('every retry policy compiles with the real Temporal SDK', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { compileRetryPolicy } = jest.requireActual('@temporalio/common');
+    for (const o of mockProxyOptions) {
+      if (o?.retry) expect(() => compileRetryPolicy(o.retry)).not.toThrow();
+    }
   });
 });
 

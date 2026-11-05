@@ -49,7 +49,8 @@ describe('control plane approvals schema', () => {
     }
     const block = modelBlock('PostApprovalStage');
     expect(block).toMatch(/@@unique\(\[approvalId, position\]\)/);
-    expect(block).toMatch(/@@index\(\[approvalId\]\)/);
+    // the unique index already covers approvalId lookups: no separate index
+    expect(block).not.toMatch(/@@index\(\[approvalId\]\)/);
     expect(field('PostApproval', 'stages')).toMatchObject({ type: 'PostApprovalStage', isList: true });
   });
 

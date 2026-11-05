@@ -810,12 +810,22 @@ export class IntegrationRepository {
             deletedAt: null,
           },
         })) ||
-        (await this._customers.model.customer.create({
-          data: {
-            name,
-            orgId: org,
-          },
-        }));
+        (await this._customers.model.customer
+          .create({
+            data: {
+              name,
+              orgId: org,
+            },
+          })
+          .catch(async (error: any) => {
+            // A concurrent request created the same live name first.
+            if (error?.code !== 'P2002') throw error;
+            const existing = await this._customers.model.customer.findFirst({
+              where: { orgId: org, name, deletedAt: null },
+            });
+            if (!existing) throw error;
+            return existing;
+          }));
 
     return this._integration.model.integration.update({
       where: {
@@ -905,6 +915,22 @@ export class IntegrationRepository {
   createCustomer(orgId: string, name: string) {
     return this._customers.model.customer.create({
       data: { name, orgId },
+    });
+  }
+
+  /**
+   * Creates a customer only while the organization has fewer than `max` live
+   * ones. The count and the insert run in one transaction under a per
+   * organization advisory lock, so concurrent creates cannot overshoot the cap.
+   * Returns null when the cap is reached. A concurrent create of the same name
+   * surfaces as P2002 (partial unique index on live rows); the caller resolves it.
+   */
+  createCustomerWithinLimit(orgId: string, name: string, max: number) {
+    return this._transaction.model.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'customer-cap:' + orgId}))`;
+      const live = await tx.customer.count({ where: { orgId, deletedAt: null } });
+      if (live >= max) return null;
+      return tx.customer.create({ data: { name, orgId } });
     });
   }
 

@@ -48,6 +48,7 @@ function setup(
   opts: {
     review?: Record<string, any>;
     link?: { role: string; disabled: boolean } | null;
+    users?: any[];
     rules?: { preventSelfApproval: boolean; requireDistinctApprovers: boolean } | null;
     assigned?: string[];
   } = {}
@@ -145,11 +146,11 @@ function setup(
   };
   const orgs = {
     getAllUsersOrgs: jest.fn(async () => ({
-      users: [
-        { role: 'SUPERADMIN', user: { id: 'u-owner', email: 'owner@x.co', sendSuccessEmails: true } },
-        { role: 'ADMIN', user: { id: 'u-admin', email: 'admin@x.co', sendSuccessEmails: true } },
-        { role: 'USER', user: { id: 'u-member', email: 'member@x.co', sendSuccessEmails: true } },
-        { role: 'ADMIN', user: { id: 'u-creator', email: 'creator@x.co', sendSuccessEmails: true } },
+      users: opts.users ?? [
+        { role: 'SUPERADMIN', disabled: false, user: { id: 'u-owner', email: 'owner@x.co', sendSuccessEmails: true } },
+        { role: 'ADMIN', disabled: false, user: { id: 'u-admin', email: 'admin@x.co', sendSuccessEmails: true } },
+        { role: 'USER', disabled: false, user: { id: 'u-member', email: 'member@x.co', sendSuccessEmails: true } },
+        { role: 'ADMIN', disabled: false, user: { id: 'u-creator', email: 'creator@x.co', sendSuccessEmails: true } },
       ],
     })),
     getUserOrgLink: jest.fn(async (_org: string, userId: string) =>
@@ -280,13 +281,74 @@ describe('ApprovalLinkService', () => {
       expect(s.repo.deleteOtherStages).toHaveBeenCalledWith(ORG, 'ap1', 1);
     });
 
-    it('does not throw when the email send fails, and leaves no live token behind', async () => {
+    it('does not re-query each member link and skips disabled members', async () => {
+      const s = setup({
+        users: [
+          { role: 'ADMIN', disabled: true, user: { id: 'u-admin', email: 'admin@x.co', sendSuccessEmails: true } },
+          { role: 'SUPERADMIN', disabled: false, user: { id: 'u-owner', email: 'owner@x.co', sendSuccessEmails: true } },
+        ],
+      });
+      await s.service.sendStageEmails(ORG, { id: 'ap1' }, { position: 1, total: 1, name: 'Approval' });
+      expect(s.orgs.getUserOrgLink).not.toHaveBeenCalled();
+      expect(s.sent.map((m) => m.to)).toEqual(['owner@x.co']);
+    });
+
+    it('caps send concurrency at 5 while still reaching every member', async () => {
+      const users = Array.from({ length: 12 }, (_, i) => ({
+        role: 'SUPERADMIN',
+        disabled: false,
+        user: { id: `u${i}`, email: `u${i}@x.co`, sendSuccessEmails: true },
+      }));
+      const s = setup({ users });
+      let active = 0;
+      let peak = 0;
+      s.notifications.sendEmail.mockImplementation(async (to: string, subject: string, html: string) => {
+        active += 1;
+        peak = Math.max(peak, active);
+        await new Promise((r) => setTimeout(r, 5));
+        active -= 1;
+        s.sent.push({ to, subject, html });
+      });
+      await expect(
+        s.service.sendStageEmails(ORG, { id: 'ap1' }, { position: 1, total: 1, name: 'Approval' })
+      ).resolves.toBe(true);
+      expect(s.sent).toHaveLength(12);
+      expect(peak).toBeLessThanOrEqual(5);
+      expect(peak).toBeGreaterThan(1);
+    });
+
+    it('reports false when no link email was actually sent (only the requester is eligible)', async () => {
+      const s = setup({
+        review: {
+          flowId: 'f1',
+          requestedByUserId: 'u-owner',
+          post: {
+            content: 'x',
+            image: '[]',
+            publishDate: null,
+            integrationId: 'i',
+            createdByType: 'USER',
+            createdByUserId: 'u-owner',
+            integration: { name: 'P', providerIdentifier: 'x' },
+          },
+          stages: [
+            { position: 1, name: 'Legal', minRole: 'ADMIN', approverUserIds: ['u-owner'], allowAutomation: false, allowGuest: false, status: 'PENDING' },
+          ],
+        },
+      });
+      await expect(
+        s.service.sendStageEmails(ORG, { id: 'ap1' }, { position: 1, total: 1, name: 'Legal' })
+      ).resolves.toBe(false);
+      expect(s.sent).toHaveLength(0);
+    });
+
+    it('does not throw when every email send fails, reports false and leaves no live token behind', async () => {
       const s = setup();
       s.notifications.sendEmail.mockRejectedValue(new Error('smtp down'));
       const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
       await expect(
         s.service.sendStageEmails(ORG, { id: 'ap1' }, { position: 1, total: 1, name: 'Approval' })
-      ).resolves.toBe(true);
+      ).resolves.toBe(false);
       expect(s.tokens.size).toBe(0);
       expect(warn).toHaveBeenCalled();
       warn.mockRestore();

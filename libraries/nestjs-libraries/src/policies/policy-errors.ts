@@ -22,6 +22,25 @@ export function sanitizeMatches(matched: PolicyMatch[]): PolicyMatch[] {
   return matched.map((m) => ({ ...m, name: sanitizePolicyName(m.name) }));
 }
 
+/**
+ * The single definition of the `matched` list a client sees for an outcome,
+ * shared by the write-time 422 `policy_blocked` body and the dry run
+ * (`POST /public/v1/policies/evaluate`). BLOCK wins over REQUIRE_APPROVAL, so
+ * for a blocked outcome only the BLOCK rules are listed (they are the rules
+ * that refused the write; a REQUIRE_APPROVAL rule is moot because nothing is
+ * routed). For any other outcome every matched rule is listed.
+ */
+export function exposedMatches(outcome: {
+  effect: PolicyEffectName | 'ALLOW';
+  matched: PolicyMatch[];
+}): PolicyMatch[] {
+  const list =
+    outcome.effect === 'BLOCK'
+      ? outcome.matched.filter((m) => m.effect === 'BLOCK')
+      : outcome.matched;
+  return sanitizeMatches(list);
+}
+
 type BlockedOutcome = {
   matched: PolicyMatch[];
   channels: Array<{ integrationId: string; effect: 'ALLOW' | PolicyEffectName }>;
@@ -40,7 +59,7 @@ export class PolicyBlockedException extends HttpException {
         msg: `This post was blocked by a policy: ${names.join(', ')}.`,
         policy: {
           effect: 'BLOCK',
-          matched: sanitizeMatches(outcome.matched.filter((m) => m.effect === 'BLOCK')),
+          matched: exposedMatches({ effect: 'BLOCK', matched: outcome.matched }),
           channels: outcome.channels.filter((c) => c.effect === 'BLOCK').map((c) => c.integrationId),
         },
       },
