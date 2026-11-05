@@ -16,6 +16,7 @@ export const PUBLIC_API_SCOPES = [
   'audit:read',
   'policies:read',
   'policies:write',
+  'approvals:decide',
 ] as const;
 
 export type PublicApiScope = (typeof PUBLIC_API_SCOPES)[number];
