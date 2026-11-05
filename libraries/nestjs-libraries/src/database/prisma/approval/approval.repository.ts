@@ -261,6 +261,123 @@ export class ApprovalRepository {
     });
   }
 
+  // Explicit column list of the public API reads: the guest token columns and
+  // the internal requester id are never selected, so they cannot leak.
+  private static readonly PUBLIC_SELECT = {
+    id: true,
+    postId: true,
+    status: true,
+    note: true,
+    requestedAt: true,
+    resolvedAt: true,
+    requestedByType: true,
+    requestedByUserId: true,
+    requestedByApiKeyId: true,
+    requestedByOAuthClientId: true,
+    approverId: true,
+    decidedByType: true,
+    decidedByApiKeyId: true,
+    decidedByOAuthClientId: true,
+    guestName: true,
+    guestEmail: true,
+    flowId: true,
+    currentStage: true,
+    stages: {
+      orderBy: { position: 'asc' as const },
+      select: {
+        position: true,
+        name: true,
+        status: true,
+        decidedByType: true,
+        decidedByUserId: true,
+        decidedByApiKeyId: true,
+        decidedByOAuthClientId: true,
+        decidedVia: true,
+        decidedAt: true,
+      },
+    },
+  };
+
+  private static publicPost(withContent: boolean) {
+    return {
+      select: {
+        ...(withContent ? { content: true } : {}),
+        integration: {
+          select: { id: true, name: true, providerIdentifier: true },
+        },
+      },
+    };
+  }
+
+  private async attachFlows<T extends { flowId: string | null }>(
+    orgId: string,
+    rows: T[]
+  ): Promise<Array<T & { flow: { id: string; name: string } | null }>> {
+    const ids = [...new Set(rows.map((r) => r.flowId).filter((v): v is string => !!v))];
+    const flows = ids.length
+      ? await this._approval.model.approvalFlow.findMany({
+          where: { organizationId: orgId, id: { in: ids } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const byId = new Map(flows.map((f) => [f.id, f]));
+    return rows.map((r) => ({ ...r, flow: r.flowId ? (byId.get(r.flowId) ?? null) : null }));
+  }
+
+  /**
+   * Public API list: newest first by (requestedAt, id) with a keyset cursor.
+   * Returns up to `take` rows; the service asks for limit + 1 to detect a next page.
+   */
+  async listForPublicApi(
+    orgId: string,
+    q: {
+      status?: 'PENDING' | 'APPROVED' | 'REJECTED';
+      since?: Date;
+      cursor?: { requestedAt: Date; id: string };
+      take: number;
+    }
+  ) {
+    const rows = await this._approval.model.postApproval.findMany({
+      where: {
+        organizationId: orgId,
+        ...(q.status ? { status: q.status } : {}),
+        ...(q.since ? { requestedAt: { gte: q.since } } : {}),
+        ...(q.cursor
+          ? {
+              AND: [
+                {
+                  OR: [
+                    { requestedAt: { lt: q.cursor.requestedAt } },
+                    { requestedAt: q.cursor.requestedAt, id: { lt: q.cursor.id } },
+                  ],
+                },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ requestedAt: 'desc' }, { id: 'desc' }],
+      take: q.take,
+      select: {
+        ...ApprovalRepository.PUBLIC_SELECT,
+        post: ApprovalRepository.publicPost(false),
+      },
+    });
+    return this.attachFlows(orgId, rows);
+  }
+
+  /** One approval for the public API, with the post text (for the preview). */
+  async getForPublicApi(orgId: string, id: string) {
+    const row = await this._approval.model.postApproval.findFirst({
+      where: { id, organizationId: orgId },
+      select: {
+        ...ApprovalRepository.PUBLIC_SELECT,
+        post: ApprovalRepository.publicPost(true),
+      },
+    });
+    if (!row) return null;
+    return (await this.attachFlows(orgId, [row]))[0];
+  }
+
   /**
    * One decision, one transaction. The stage row (when there is one) is
    * claimed with a conditional update on `status PENDING`; the approval row is

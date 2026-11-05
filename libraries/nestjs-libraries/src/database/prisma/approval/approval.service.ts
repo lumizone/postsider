@@ -61,6 +61,13 @@ import {
   type DecisionResult,
   type StageRow,
 } from './approval-decision';
+import {
+  decodeCursor,
+  encodeCursor,
+  previewOf,
+  toPublicApprovalItem,
+  type PublicApprovalItem,
+} from './approval-public.view';
 import { checkKeyPermission } from '@postsider/nestjs-libraries/policies/key-permissions';
 
 export type { Decider, DecideOpts, DecisionResult } from './approval-decision';
@@ -247,6 +254,64 @@ export class ApprovalService {
 
   getStageView(approval: Record<string, any>) {
     return toStageView(approval);
+  }
+
+  /**
+   * Public API list (GET /public/v1/approvals): newest first by requestedAt
+   * then id, keyset cursor. Items never carry token material or internal ids.
+   */
+  async listForApi(
+    orgId: string,
+    q: {
+      status?: 'PENDING' | 'APPROVED' | 'REJECTED';
+      limit?: number;
+      cursor?: string;
+      since?: string;
+    }
+  ): Promise<{ items: PublicApprovalItem[]; nextCursor: string | null }> {
+    const limit = Math.min(Math.max(Math.trunc(q.limit ?? 25), 1), 100);
+    let cursor: ReturnType<typeof decodeCursor> = null;
+    if (q.cursor) {
+      cursor = decodeCursor(q.cursor);
+      if (!cursor) {
+        throw new BadRequestException({ error: 'invalid_cursor' });
+      }
+    }
+    let since: Date | undefined;
+    if (q.since) {
+      since = new Date(q.since);
+      if (Number.isNaN(since.getTime())) {
+        throw new BadRequestException({ error: 'invalid_since' });
+      }
+    }
+    const rows = await this._repo.listForPublicApi(orgId, {
+      ...(q.status ? { status: q.status } : {}),
+      ...(since ? { since } : {}),
+      ...(cursor ? { cursor } : {}),
+      take: limit + 1,
+    });
+    const page = rows.slice(0, limit);
+    const last = page[page.length - 1];
+    return {
+      items: page.map((row) => toPublicApprovalItem(row, row.flow)),
+      nextCursor:
+        rows.length > limit && last
+          ? encodeCursor({ requestedAt: last.requestedAt, id: last.id })
+          : null,
+    };
+  }
+
+  /** One approval plus a plain text preview of the post (404 unknown or foreign). */
+  async getDetailForApi(
+    orgId: string,
+    id: string
+  ): Promise<PublicApprovalItem & { preview: string }> {
+    const row = await this._repo.getForPublicApi(orgId, id);
+    if (!row) throw new NotFoundException('Approval not found');
+    return {
+      ...toPublicApprovalItem(row, row.flow),
+      preview: previewOf((row as any).post?.content),
+    };
   }
 
   // --- Decision engine ---------------------------------------------------
