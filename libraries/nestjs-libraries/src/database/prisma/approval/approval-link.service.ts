@@ -234,7 +234,14 @@ export class ApprovalLinkService {
     }
   }
 
-  /** Used by resolve and reopen paths: every unused token of the approval dies. */
+  /**
+   * Deletes every token of the approval. Called after a final decision made
+   * through an email link. Other paths do not call it: a re-open drops the
+   * tokens inside its own transaction (ApprovalRepository.openRequest), and a
+   * decision made elsewhere leaves tokens that the link flow already refuses
+   * (the approval is no longer PENDING at that stage) and that the daily
+   * retention purge deletes 7 days after expiry or use.
+   */
   async revokeForApproval(orgId: string, approvalId: string): Promise<void> {
     await this._links.deleteForApproval(orgId, approvalId);
   }

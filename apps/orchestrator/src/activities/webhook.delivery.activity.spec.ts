@@ -1,4 +1,5 @@
 import {
+  APPROVAL_TOKEN_RETENTION_DAYS,
   AUDIT_RESOURCE_RETENTION_DAYS,
   DELIVERY_RETENTION_DAYS,
   IDEMPOTENCY_RETENTION_DAYS,
@@ -16,6 +17,10 @@ const build = () => {
       deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     publicApiIdempotency: {
+      findMany: jest.fn().mockResolvedValue([]),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
+    approvalActionToken: {
       findMany: jest.fn().mockResolvedValue([]),
       deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
@@ -69,6 +74,26 @@ describe('WebhookDeliveryActivity', () => {
       });
     });
 
+    it('purges approval link tokens expired or used more than 7 days ago, in batches', async () => {
+      expect(APPROVAL_TOKEN_RETENTION_DAYS).toBe(7);
+      const { activity, prisma } = build();
+      prisma.approvalActionToken.findMany
+        .mockResolvedValueOnce(ids(PURGE_BATCH))
+        .mockResolvedValueOnce(ids(2));
+      prisma.approvalActionToken.deleteMany
+        .mockResolvedValueOnce({ count: PURGE_BATCH })
+        .mockResolvedValueOnce({ count: 2 });
+      const out = await activity.purgeExpiredPublicApiRecords(now);
+      const cutoff = new Date('2026-10-28T00:00:00Z');
+      expect(prisma.approvalActionToken.findMany).toHaveBeenCalledWith({
+        where: { OR: [{ expiresAt: { lt: cutoff } }, { usedAt: { lt: cutoff } }] },
+        select: { id: true },
+        take: PURGE_BATCH,
+      });
+      expect(prisma.approvalActionToken.deleteMany).toHaveBeenCalledTimes(2);
+      expect(out.approvalTokens).toBe(PURGE_BATCH + 2);
+    });
+
     it('loops full batches and sums the deleted counts', async () => {
       const { activity, prisma } = build();
       prisma.publicWebhookDelivery.findMany
@@ -106,6 +131,7 @@ describe('WebhookDeliveryActivity', () => {
       await expect(activity.purgeExpiredPublicApiRecords(now)).resolves.toEqual({
         deliveries: 0,
         idempotency: 0,
+        approvalTokens: 0,
         auditEvents: 0,
       });
       expect(prisma.publicWebhookDelivery.deleteMany).not.toHaveBeenCalled();
@@ -144,6 +170,7 @@ describe('WebhookDeliveryActivity', () => {
         await expect(activity.purgeExpiredPublicApiRecords(now)).resolves.toEqual({
           deliveries: 0,
           idempotency: 0,
+          approvalTokens: 0,
           auditEvents: 3,
         });
       });

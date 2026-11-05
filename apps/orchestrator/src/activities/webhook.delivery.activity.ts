@@ -6,6 +6,8 @@ import { PrismaService } from '@postsider/nestjs-libraries/database/prisma/prism
 export const DELIVERY_RETENTION_DAYS = 30;
 export const IDEMPOTENCY_RETENTION_DAYS = 7;
 export const AUDIT_RESOURCE_RETENTION_DAYS = 365;
+/** Email approval link tokens are kept this long past their expiry or use. */
+export const APPROVAL_TOKEN_RETENTION_DAYS = 7;
 export const PURGE_BATCH = 5000;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -42,6 +44,8 @@ export class WebhookDeliveryActivity {
   /**
    * Deletes finished webhook deliveries older than 30 days and idempotency
    * keys older than 7 days. PENDING deliveries are never touched, however old.
+   * Also deletes email approval link tokens (ApprovalActionToken) whose expiry
+   * or use is more than 7 days old; a live or recently used token is kept.
    * Also deletes audit rows of type 'resource' older than 365 days; security
    * and sign-in audit rows are never matched. Order: deliveries, idempotency,
    * audit, so an audit failure is rethrown (Temporal retries) after the others ran.
@@ -52,6 +56,7 @@ export class WebhookDeliveryActivity {
   ): Promise<{
     deliveries: number;
     idempotency: number;
+    approvalTokens: number;
     auditEvents: number;
   }> {
     const deliveries = await this.purgeInBatches(
@@ -67,6 +72,13 @@ export class WebhookDeliveryActivity {
         createdAt: { lt: new Date(now.getTime() - IDEMPOTENCY_RETENTION_DAYS * DAY_MS) },
       }
     );
+    const tokenCutoff = new Date(
+      now.getTime() - APPROVAL_TOKEN_RETENTION_DAYS * DAY_MS
+    );
+    const approvalTokens = await this.purgeInBatches(
+      this._prisma.approvalActionToken as unknown as PurgeDelegate,
+      { OR: [{ expiresAt: { lt: tokenCutoff } }, { usedAt: { lt: tokenCutoff } }] }
+    );
     const auditEvents = await this.purgeInBatches(
       this._prisma.auditLog as unknown as PurgeDelegate,
       {
@@ -76,7 +88,7 @@ export class WebhookDeliveryActivity {
         },
       }
     );
-    return { deliveries, idempotency, auditEvents };
+    return { deliveries, idempotency, approvalTokens, auditEvents };
   }
 
   private async purgeInBatches(
