@@ -57,6 +57,7 @@ model Organization {
   oauthAuthorizations  OAuthAuthorization[]
   apiKeys              ApiKey[]
   policyRules          PolicyRule[]
+  approvalFlows        ApprovalFlow[]
   providerCredentials  ProviderCredentials[]
   auditLogs            AuditLog[]
   inboundSubscriptions InboundEventSubscription[]
@@ -1132,9 +1133,12 @@ model PolicyRule {
   createdAt             DateTime        @default(now())
   updatedAt             DateTime        @updatedAt
   deletedAt             DateTime?
+  approvalFlowId        String?
   organization          Organization    @relation(fields: [organizationId], references: [id])
+  approvalFlow          ApprovalFlow?   @relation(fields: [approvalFlowId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, deletedAt, enabled])
+  @@index([approvalFlowId])
 }
 
 model ProviderCredentials {
@@ -1284,6 +1288,16 @@ model PostApproval {
   decidedByType       PostActorType?
   guestName           String?        @db.VarChar(120)
   guestEmail          String?        @db.VarChar(254)
+  // Multi-stage approval progress. status is APPROVED only after the LAST stage.
+  flowId              String?
+  currentStage        Int            @default(1)
+  stageCount          Int            @default(1)
+  decidedVia          String?        @db.VarChar(20)
+  decidedByApiKeyId   String?
+  decidedByOAuthClientId String?
+  // SHA-256 hex of the guest link token. The plaintext is never stored.
+  guestTokenHash      String?        @unique
+  stages              PostApprovalStage[]
   post                Post           @relation(fields: [postId], references: [id])
   organization        Organization   @relation(fields: [organizationId], references: [id])
   requestedBy         User           @relation("approvalRequester", fields: [requestedById], references: [id])
@@ -1292,6 +1306,78 @@ model PostApproval {
   @@index([organizationId])
   @@index([status])
   @@index([requestedById])
+}
+
+model ApprovalFlow {
+  id                       String              @id @default(uuid())
+  organizationId           String
+  name                     String              @db.VarChar(120)
+  isDefault                Boolean             @default(false)
+  preventSelfApproval      Boolean             @default(true)
+  requireDistinctApprovers Boolean             @default(true)
+  createdAt                DateTime            @default(now())
+  updatedAt                DateTime            @updatedAt
+  deletedAt                DateTime?
+  organization             Organization        @relation(fields: [organizationId], references: [id])
+  stages                   ApprovalFlowStage[]
+  rules                    PolicyRule[]
+
+  @@index([organizationId, deletedAt])
+}
+
+model ApprovalFlowStage {
+  id              String       @id @default(uuid())
+  flowId          String
+  position        Int
+  name            String       @db.VarChar(80)
+  minRole         Role         @default(ADMIN)
+  approverUserIds String[]     @default([])
+  allowAutomation Boolean      @default(false)
+  allowGuest      Boolean      @default(false)
+  flow            ApprovalFlow @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  @@unique([flowId, position])
+}
+
+// Snapshot of a flow stage taken when the approval is requested, so editing or
+// archiving a flow never changes an approval in progress.
+model PostApprovalStage {
+  id                     String          @id @default(uuid())
+  approvalId             String
+  position               Int
+  name                   String          @db.VarChar(80)
+  minRole                Role            @default(ADMIN)
+  approverUserIds        String[]        @default([])
+  allowAutomation        Boolean         @default(false)
+  allowGuest             Boolean         @default(false)
+  status                 ApprovalStatus  @default(PENDING)
+  decidedByType          PostActorType?
+  decidedByUserId        String?
+  decidedByApiKeyId      String?
+  decidedByOAuthClientId String?
+  decidedVia             String?         @db.VarChar(20)
+  note                   String?         @db.VarChar(500)
+  decidedAt              DateTime?
+  approval               PostApproval    @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+
+  @@unique([approvalId, position])
+  @@index([approvalId])
+}
+
+// One-shot email/link decision token. Only the SHA-256 hash is stored.
+model ApprovalActionToken {
+  id             String    @id @default(uuid())
+  organizationId String
+  approvalId     String
+  stagePosition  Int
+  userId         String
+  tokenHash      String    @unique
+  expiresAt      DateTime
+  usedAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([approvalId])
+  @@index([expiresAt])
 }
 
 model EvergreenSettings {
