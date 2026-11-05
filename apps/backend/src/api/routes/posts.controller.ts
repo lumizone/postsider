@@ -370,7 +370,7 @@ export class PostsController {
       return this._postsService.createPost(org.id, body, 'WEB');
     }
 
-    // Write-time policy gate (USER actor). 'update' is an edit of stored posts
+    // Write-time policy gate (USER actor from the auth middleware). 'update' is an edit of stored posts
     // and is evaluated as a schedule; each element names the stored post it
     // replaces (value id, else thread group) so it is not counted against its
     // own daily cap and its original author still counts as an actor.
@@ -415,9 +415,14 @@ export class PostsController {
     // Only a schedule move is evaluated, against the NEW date. A date-only
     // update never changes the state, so it is not gated.
     if (this._gate && action === 'schedule') {
-      const gated = await this._gate.gateReschedule(org.id, id, date, actorFromUser(user));
+      // Refused moves (published, pending approval, paused) fail before the
+      // gate so they leave no audit row and cause no routing.
+      const { state } = await this._postsService.assertCanReschedule(org.id, id, action);
+      const gated = await this._gate.gateReschedule(org.id, id, date, actorFromUser(user), {
+        storedState: state,
+      });
       if (!gated.proceed) {
-        return { approvalRequested: true, policy: { effect: gated.policy.effect, matched: gated.policy.matched } };
+        return { approvalRequested: gated.approvalRequested, policy: { effect: gated.policy.effect, matched: gated.policy.matched } };
       }
     }
     return this._postsService.changeDate(org.id, id, date, action);

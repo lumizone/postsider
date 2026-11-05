@@ -273,42 +273,60 @@ export class PostPolicyGateService {
    * A dashboard drag to a new date: evaluated like a schedule against the NEW
    * date (max of that date and now). A post whose approval is APPROVED skips
    * REQUIRE_APPROVAL rules only. Fails closed on evaluation errors.
+   * A stored DRAFT stays a draft when moved (ruling P3-R1): it is evaluated as
+   * a DRAFT, reported only, never blocked or routed, and fails open.
    */
   async gateReschedule(
     orgId: string,
     postId: string,
     date: string,
-    actor: PostActor
+    actor: PostActor,
+    opts: { storedState?: string } = {}
   ): Promise<{ proceed: boolean; policy: PolicyOutcome; approvalRequested: boolean }> {
     const when = new Date(date);
     if (Number.isNaN(when.getTime())) {
       throw new BadRequestException({ msg: 'A valid date is required' });
     }
+    const isDraft = opts.storedState === 'DRAFT';
     let outcome: PolicyOutcome;
     try {
       const evaluate = async (approved: boolean) => {
         const target = await this._evaluation.targetFromStoredPost(orgId, postId, {
-          action: 'SCHEDULE',
+          action: isDraft ? 'DRAFT' : 'SCHEDULE',
           approved,
         });
         if (!target) throw new NotFoundException({ msg: 'Post not found' });
         const now = (this._evaluation.clock ?? (() => new Date()))();
-        target.scheduledAt = when.getTime() < now.getTime() ? now : when;
+        target.scheduledAt = isDraft || when.getTime() >= now.getTime() ? when : now;
         const view = actorViewFromColumns(actorToColumns(actor, 'createdBy'), 'createdBy') as ActorView;
         target.actors = [view, ...target.actors.filter((a) => actorKey(a) !== actorKey(view))];
         return this._evaluation.evaluateTargets(orgId, [target], 'write');
       };
       outcome = await evaluate(false);
-      if (outcome.effect === 'REQUIRE_APPROVAL' && this._approvals) {
+      if (!isDraft && outcome.effect === 'REQUIRE_APPROVAL' && this._approvals) {
         const approval = await this._approvals.getForPost(orgId, postId);
         // An approved post only skips REQUIRE_APPROVAL rules; BLOCK still applies.
         if (approval?.status === 'APPROVED') outcome = await evaluate(true);
       }
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
+      // Moving a draft is never refused by a failing evaluation.
+      if (isDraft) return { proceed: true, policy: EMPTY_OUTCOME(), approvalRequested: false };
       return failClosed(error);
     }
 
+    if (isDraft) {
+      if (outcome.effect !== 'ALLOW') await this._evaluation.recordOutcome(orgId, outcome, 'write', { postId });
+      return {
+        proceed: true,
+        policy: {
+          ...outcome,
+          matched: sanitizeMatches(outcome.matched),
+          channels: outcome.channels.map((c) => ({ ...c, matched: sanitizeMatches(c.matched) })),
+        },
+        approvalRequested: false,
+      };
+    }
     if (outcome.effect === 'BLOCK') {
       await this._evaluation.recordOutcome(orgId, outcome, 'write', { postId });
       throw new PolicyBlockedException(outcome);

@@ -637,6 +637,55 @@ describe('PostPolicyGateService', () => {
       expect(evaluation.evaluateTargets).toHaveBeenCalledTimes(1);
     });
 
+    describe('stored DRAFT (report only, ruling P3-R1)', () => {
+      const draft = { storedState: 'DRAFT' };
+      const blocked = {
+        effect: 'BLOCK' as const,
+        matched: [match('BLOCK')],
+        channels: [{ integrationId: 'a', effect: 'BLOCK' as const, matched: [match('BLOCK')] }],
+      };
+
+      it('evaluates as DRAFT at the new date and proceeds on BLOCK, recording it', async () => {
+        evaluation.evaluateTargets.mockResolvedValue(blocked);
+        const out = await gate.gateReschedule('org', 'p1', newDate, userActor, draft);
+        expect(out).toMatchObject({ proceed: true, approvalRequested: false });
+        expect(out.policy.effect).toBe('BLOCK');
+        expect(evaluation.targetFromStoredPost.mock.calls[0][2]).toEqual({ action: 'DRAFT', approved: false });
+        expect(evaluation.evaluateTargets.mock.calls[0][1][0].scheduledAt.toISOString()).toBe('2031-05-05T10:00:00.000Z');
+        expect(evaluation.recordOutcome).toHaveBeenCalledWith('org', blocked, 'write', { postId: 'p1' });
+        expect(router.route).not.toHaveBeenCalled();
+      });
+
+      it('never routes REQUIRE_APPROVAL and never reads the approval', async () => {
+        evaluation.evaluateTargets.mockResolvedValue(requireApproval);
+        const out = await gate.gateReschedule('org', 'p1', newDate, userActor, draft);
+        expect(out).toMatchObject({ proceed: true, approvalRequested: false });
+        expect(router.route).not.toHaveBeenCalled();
+        expect(approvals.getForPost).not.toHaveBeenCalled();
+        expect(evaluation.recordOutcome).toHaveBeenCalledTimes(1);
+      });
+
+      it('ALLOW records nothing', async () => {
+        evaluation.evaluateTargets.mockResolvedValue(allow(['a']));
+        const out = await gate.gateReschedule('org', 'p1', newDate, userActor, draft);
+        expect(out.proceed).toBe(true);
+        expect(evaluation.recordOutcome).not.toHaveBeenCalled();
+      });
+
+      it('fails open on PolicyInputTooLargeError and on other errors', async () => {
+        evaluation.targetFromStoredPost.mockRejectedValue(new PolicyInputTooLargeError(1, 'big'));
+        expect(await gate.gateReschedule('org', 'p1', newDate, userActor, draft)).toMatchObject({ proceed: true });
+        evaluation.targetFromStoredPost.mockRejectedValue(new Error('db down'));
+        expect(await gate.gateReschedule('org', 'p1', newDate, userActor, draft)).toMatchObject({ proceed: true });
+        expect(router.route).not.toHaveBeenCalled();
+      });
+
+      it('an unknown post is still a NotFoundException', async () => {
+        evaluation.targetFromStoredPost.mockResolvedValue(null);
+        await expect(gate.gateReschedule('org', 'p1', newDate, userActor, draft)).rejects.toBeInstanceOf(NotFoundException);
+      });
+    });
+
     it('an unknown post is a NotFoundException', async () => {
       evaluation.targetFromStoredPost.mockResolvedValue(null);
       await expect(gate.gateReschedule('org', 'p1', newDate, userActor)).rejects.toBeInstanceOf(NotFoundException);

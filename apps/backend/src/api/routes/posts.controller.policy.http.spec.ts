@@ -1,6 +1,6 @@
 jest.mock('isomorphic-dompurify', () => ({ sanitize: (v: string) => v }));
 
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { BadRequestException, INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { AddressInfo } from 'net';
 import { PostsController } from './posts.controller';
@@ -23,6 +23,7 @@ describe('PostsController dashboard policy path', () => {
     mapTypeToPost: jest.fn(),
     createPost: jest.fn(),
     changeDate: jest.fn(),
+    assertCanReschedule: jest.fn(),
   };
   const gate = { preflightWrite: jest.fn(), finishCreate: jest.fn(), gateReschedule: jest.fn() };
 
@@ -64,6 +65,7 @@ describe('PostsController dashboard policy path', () => {
     posts.validatePosts.mockResolvedValue([
       { identifier: 'x', name: 'X', emptyContent: false, valid: true, errors: true, tooLong: false },
     ]);
+    posts.assertCanReschedule.mockResolvedValue({ state: 'QUEUE' });
     posts.mapTypeToPost.mockImplementation(async (raw: any) => raw);
     posts.createPost.mockResolvedValue([{ postId: 'p1', integration: 'i1' }]);
     gate.preflightWrite.mockResolvedValue({
@@ -221,12 +223,45 @@ describe('PostsController dashboard policy path', () => {
       posts.changeDate.mockResolvedValue({ ok: true });
       const res = await put({ date: '2030-02-01T10:00:00Z', action: 'schedule' });
       expect(res.status).toBe(200);
-      expect(gate.gateReschedule).toHaveBeenCalledWith('org-1', 'p1', '2030-02-01T10:00:00Z', {
-        type: 'USER',
-        userId: 'u1',
-      });
+      expect(gate.gateReschedule).toHaveBeenCalledWith(
+        'org-1',
+        'p1',
+        '2030-02-01T10:00:00Z',
+        { type: 'USER', userId: 'u1' },
+        { storedState: 'QUEUE' }
+      );
       expect(posts.changeDate).toHaveBeenCalledTimes(1);
       expect(posts.changeDate).toHaveBeenCalledWith('org-1', 'p1', '2030-02-01T10:00:00Z', 'schedule');
+    });
+
+    it('passes the gate approvalRequested value through', async () => {
+      gate.gateReschedule.mockResolvedValue({
+        proceed: false,
+        approvalRequested: false,
+        policy: { effect: 'REQUIRE_APPROVAL', matched: [], channels: [] },
+      });
+      const res = await put({ date: '2030-02-01T10:00:00Z' });
+      expect((await res.json()).approvalRequested).toBe(false);
+    });
+
+    it('a published, pending or paused post is refused before the gate runs', async () => {
+      posts.assertCanReschedule.mockRejectedValue(new BadRequestException('Cannot change a post that is already published'));
+      const res = await put({ date: '2030-02-01T10:00:00Z' });
+      expect(res.status).toBe(400);
+      expect(gate.gateReschedule).not.toHaveBeenCalled();
+      expect(posts.changeDate).not.toHaveBeenCalled();
+    });
+
+    it('passes the stored DRAFT state to the gate', async () => {
+      posts.assertCanReschedule.mockResolvedValue({ state: 'DRAFT' });
+      gate.gateReschedule.mockResolvedValue({
+        proceed: true,
+        approvalRequested: false,
+        policy: { effect: 'ALLOW', matched: [], channels: [] },
+      });
+      await put({ date: '2030-02-01T10:00:00Z' });
+      expect(gate.gateReschedule.mock.calls[0][4]).toEqual({ storedState: 'DRAFT' });
+      expect(posts.changeDate).toHaveBeenCalledTimes(1);
     });
 
     it('a missing action defaults to schedule and is gated', async () => {
@@ -244,6 +279,7 @@ describe('PostsController dashboard policy path', () => {
       const res = await put({ date: '2030-02-01T10:00:00Z', action: 'update' });
       expect(res.status).toBe(200);
       expect(gate.gateReschedule).not.toHaveBeenCalled();
+      expect(posts.assertCanReschedule).not.toHaveBeenCalled();
       expect(posts.changeDate).toHaveBeenCalledWith('org-1', 'p1', '2030-02-01T10:00:00Z', 'update');
     });
   });
