@@ -17,6 +17,7 @@ import {
   assertPending,
   assertRequestable,
 } from './approval.rules';
+import { hashGuestToken } from './guest-token';
 import { ApprovalService } from './approval.service';
 import { runWithActor } from '@postsider/nestjs-libraries/actor/actor-context';
 
@@ -155,7 +156,7 @@ describe('ApprovalService approval compensation', () => {
     expect(repo.revertGuestApproval).toHaveBeenCalledWith(
       'org-1',
       'approval-1',
-      'guest-token',
+      hashGuestToken('guest-token'),
       guestTokenExpiresAt
     );
     expect(notifications.inAppNotification).not.toHaveBeenCalled();

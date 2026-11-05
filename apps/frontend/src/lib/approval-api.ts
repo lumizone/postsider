@@ -24,6 +24,13 @@ export interface PendingApproval {
     };
   };
   requestedBy?: { name: string | null; email: string };
+  // Never contains token material. Admins only: whether an unexpired guest
+  // link exists and when it expires (members always get false / absent).
+  hasGuestLink?: boolean;
+  guestLinkExpiresAt?: string | null;
+  // Filled by the multi-stage approval work; null / empty until then.
+  stage?: Record<string, unknown> | null;
+  stages?: Array<Record<string, unknown>>;
 }
 
 export const requestApproval = (postId: string) =>
@@ -38,7 +45,13 @@ export const rejectPost = (id: string, note?: string) =>
   api.put(`/approval/${id}/reject`, { note });
 
 export const getApprovalByPost = (postId: string) =>
-  api.get<{ status: string; note?: string | null; requestedAt?: string }>(
+  api.get<{
+    status: string;
+    note?: string | null;
+    requestedAt?: string;
+    hasGuestLink?: boolean;
+    guestLinkExpiresAt?: string | null;
+  }>(
     `/approval/post/${postId}`,
   );
 

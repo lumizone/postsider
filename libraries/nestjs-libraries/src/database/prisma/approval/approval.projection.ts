@@ -43,3 +43,65 @@ export function approvalDecidedByView(
   }
   return null;
 }
+
+export type DashboardApproval = {
+  id: string;
+  postId: string;
+  status: string;
+  note: string | null;
+  requestedAt: Date;
+  resolvedAt: Date | null;
+  requestedBy?: { name: string | null; email: string };
+  post?: Record<string, any>;
+  stage: Record<string, any> | null;
+  stages: Array<Record<string, any>>;
+  hasGuestLink: boolean;
+  guestLinkExpiresAt?: Date | null;
+  created?: boolean;
+};
+
+/**
+ * Explicit projection of an approval row for the dashboard routes. Picks known
+ * fields only: no token, no token hash, no requester or approver ids. Admins
+ * learn whether an unexpired guest link exists (and when it expires); members
+ * never do.
+ */
+export function toDashboardApproval(
+  row: Record<string, any>,
+  opts: { isAdmin: boolean }
+): DashboardApproval {
+  const expiresAt: Date | null = row.guestTokenExpiresAt ?? null;
+  const live =
+    opts.isAdmin &&
+    typeof row.guestTokenHash === 'string' &&
+    row.guestTokenHash.length > 0 &&
+    expiresAt !== null &&
+    new Date(expiresAt).getTime() > Date.now();
+  const out: DashboardApproval = {
+    id: row.id as string,
+    postId: row.postId as string,
+    status: row.status as string,
+    note: (row.note ?? null) as string | null,
+    requestedAt: row.requestedAt as Date,
+    resolvedAt: (row.resolvedAt ?? null) as Date | null,
+    stage: row.stage ?? null,
+    stages: Array.isArray(row.stages) ? row.stages : [],
+    hasGuestLink: live,
+  };
+  if (row.requestedBy && typeof row.requestedBy === 'object') {
+    out.requestedBy = {
+      name: row.requestedBy.name ?? null,
+      email: row.requestedBy.email as string,
+    };
+  }
+  if (row.post && typeof row.post === 'object') {
+    out.post = row.post;
+  }
+  if (opts.isAdmin) {
+    out.guestLinkExpiresAt = live ? expiresAt : null;
+  }
+  if (typeof row.created === 'boolean') {
+    out.created = row.created;
+  }
+  return out;
+}

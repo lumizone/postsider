@@ -4,6 +4,7 @@ import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.req
 import { GetUserFromRequest } from '@postsider/nestjs-libraries/user/user.from.request';
 import { Organization, User } from '@prisma/client';
 import { ApprovalService } from '@postsider/nestjs-libraries/database/prisma/approval/approval.service';
+import { toDashboardApproval } from '@postsider/nestjs-libraries/database/prisma/approval/approval.projection';
 import {
   RequestApprovalDto,
   ResolveApprovalDto,
@@ -20,18 +21,32 @@ export class ApprovalController {
     return (org as any).users?.[0]?.role ?? 'USER';
   }
 
+  private isAdmin(org: Organization): boolean {
+    const role = this.roleOf(org);
+    return role === 'ADMIN' || role === 'SUPERADMIN';
+  }
+
+  // Responses are explicit projections: the DB row carries guest token
+  // material and routing ids that no member may ever see.
   @Post('/request')
-  request(
+  async request(
     @GetOrgFromRequest() org: Organization,
     @GetUserFromRequest() user: User,
     @Body() body: RequestApprovalDto
   ) {
-    return this._approval.requestApproval(org.id, body.postId, user.id);
+    const result = await this._approval.requestApproval(
+      org.id,
+      body.postId,
+      user.id
+    );
+    return toDashboardApproval(result, { isAdmin: this.isAdmin(org) });
   }
 
   @Get('/pending')
-  pending(@GetOrgFromRequest() org: Organization) {
-    return this._approval.getPending(org.id);
+  async pending(@GetOrgFromRequest() org: Organization) {
+    const rows = await this._approval.getPending(org.id);
+    const isAdmin = this.isAdmin(org);
+    return rows.map((row) => toDashboardApproval(row, { isAdmin }));
   }
 
   @Put('/:id/approve')
@@ -54,11 +69,12 @@ export class ApprovalController {
   }
 
   @Get('/post/:postId')
-  forPost(
+  async forPost(
     @GetOrgFromRequest() org: Organization,
     @Param('postId') postId: string
   ) {
-    return this._approval.getForPost(org.id, postId);
+    const row = await this._approval.getForPost(org.id, postId);
+    return row ? toDashboardApproval(row, { isAdmin: this.isAdmin(org) }) : row;
   }
 
   // External-reviewer link (e.g. the agency's own client) — ADMIN/SUPERADMIN

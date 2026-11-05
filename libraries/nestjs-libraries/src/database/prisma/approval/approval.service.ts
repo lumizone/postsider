@@ -23,7 +23,7 @@ import {
   PostIdentity,
   emptyPostIdentity,
 } from '@postsider/nestjs-libraries/actor/post-identity';
-import { randomBytes } from 'crypto';
+import { hashGuestToken, newGuestToken } from './guest-token';
 import { AuditLogger } from '@postsider/nestjs-libraries/database/prisma/audit/audit.logger';
 import { recordPostEvent } from '@postsider/nestjs-libraries/database/prisma/audit/post-audit';
 
@@ -250,12 +250,13 @@ export class ApprovalService {
     assertCanApprove(role);
     const approval = await this._repo.getById(orgId, approvalId);
     assertPending(approval);
-    const token = randomBytes(24).toString('base64url');
+    // The plaintext is returned to the caller once; only its hash is stored.
+    const token = newGuestToken();
     const expiresAt = new Date(Date.now() + GUEST_LINK_TTL_MS);
     const count = await this._repo.setGuestToken(
       orgId,
       approvalId,
-      token,
+      hashGuestToken(token),
       expiresAt
     );
     if (!count) {
@@ -322,7 +323,7 @@ export class ApprovalService {
           this._repo.revertGuestApproval(
             approval.organizationId,
             approval.id,
-            token,
+            hashGuestToken(token),
             approval.guestTokenExpiresAt!
           )
       );

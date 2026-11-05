@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PostApproval } from '@prisma/client';
 import { actorToColumns, PostActor } from '@postsider/nestjs-libraries/actor/post-actor';
+import { hashGuestToken } from '@postsider/nestjs-libraries/database/prisma/approval/guest-token';
 import { PrismaRepository } from '@postsider/nestjs-libraries/database/prisma/prisma.service';
 
 type ResolveStatus = 'APPROVED' | 'REJECTED';
@@ -75,6 +76,7 @@ export class ApprovalRepository {
         guestEmail: null,
         resolvedAt: null,
         guestToken: null,
+        guestTokenHash: null,
         guestTokenExpiresAt: null,
       },
     });
@@ -172,15 +174,20 @@ export class ApprovalRepository {
 
   // --- Guest (external reviewer) link ---------------------------------
 
+  /** `tokenHash` is the SHA-256 hex of the token; the plaintext is never stored. */
   async setGuestToken(
     orgId: string,
     id: string,
-    token: string,
+    tokenHash: string,
     expiresAt: Date
   ) {
     const res = await this._approval.model.postApproval.updateMany({
       where: { id, organizationId: orgId },
-      data: { guestToken: token, guestTokenExpiresAt: expiresAt },
+      data: {
+        guestTokenHash: tokenHash,
+        guestToken: null,
+        guestTokenExpiresAt: expiresAt,
+      },
     });
     return res.count;
   }
@@ -188,16 +195,19 @@ export class ApprovalRepository {
   async revokeGuestToken(orgId: string, id: string) {
     const res = await this._approval.model.postApproval.updateMany({
       where: { id, organizationId: orgId },
-      data: { guestToken: null, guestTokenExpiresAt: null },
+      data: { guestTokenHash: null, guestToken: null, guestTokenExpiresAt: null },
     });
     return res.count;
   }
 
-  /** Public lookup — no org context, gated entirely by the unguessable token. */
+  /**
+   * Public lookup, no org context, gated entirely by the unguessable token.
+   * The presented token is hashed here; the plaintext column is never queried.
+   */
   getByGuestToken(token: string) {
     return this._approval.model.postApproval.findFirst({
       where: {
-        guestToken: token,
+        guestTokenHash: hashGuestToken(token),
         status: 'PENDING',
         guestTokenExpiresAt: { gt: new Date() },
       },
@@ -224,9 +234,9 @@ export class ApprovalRepository {
   }
 
   /**
-   * Atomically checks token + PENDING + not-expired, resolves, and consumes
-   * the token (cleared in the same update) — single-use, no separate step
-   * that could race between "check" and "consume".
+   * Atomically checks token hash + PENDING + not-expired, resolves, and
+   * consumes the token (cleared in the same update): single use, no separate
+   * step that could race between "check" and "consume".
    */
   async resolveByGuestToken(
     token: string,
@@ -236,7 +246,7 @@ export class ApprovalRepository {
   ) {
     const res = await this._approval.model.postApproval.updateMany({
       where: {
-        guestToken: token,
+        guestTokenHash: hashGuestToken(token),
         status: 'PENDING',
         guestTokenExpiresAt: { gt: new Date() },
       },
@@ -249,16 +259,18 @@ export class ApprovalRepository {
         note,
         resolvedAt: new Date(),
         guestToken: null,
+        guestTokenHash: null,
         guestTokenExpiresAt: null,
       },
     });
     return res.count;
   }
 
+  /** `tokenHash` is the stored hash to put back (see `hashGuestToken`). */
   async revertGuestApproval(
     organizationId: string,
     id: string,
-    token: string,
+    tokenHash: string,
     expiresAt: Date
   ) {
     const res = await this._approval.model.postApproval.updateMany({
@@ -267,7 +279,7 @@ export class ApprovalRepository {
         organizationId,
         status: 'APPROVED',
         approverId: null,
-        guestToken: null,
+        guestTokenHash: null,
       },
       data: {
         status: 'PENDING',
@@ -275,7 +287,8 @@ export class ApprovalRepository {
         resolvedAt: null,
         guestName: null,
         guestEmail: null,
-        guestToken: token,
+        guestToken: null,
+        guestTokenHash: tokenHash,
         guestTokenExpiresAt: expiresAt,
       },
     });
