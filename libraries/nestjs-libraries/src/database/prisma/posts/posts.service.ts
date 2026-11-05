@@ -90,12 +90,22 @@ export type RetryFailedResult = {
   postId: string;
   integrationId: string;
   previousState: State;
-  action: 'requeued' | 'skipped';
+  action: 'requeued' | 'skipped' | 'approval_requested';
   reason?:
     | 'not_in_error_state'
     | 'unknown_outcome_requires_confirmation'
     | 'already_published'
-    | 'rearm_failed';
+    | 'rearm_failed'
+    | 'not_evaluated';
+};
+
+export type RetryFailedOptions = {
+  includeUnknownOutcome: boolean;
+  /** Rows that a write-time policy sends to human review instead of re-arming. */
+  approvalPostIds?: Set<string>;
+  /** When set, rows the policy gate did not evaluate are never re-armed. */
+  evaluatedPostIds?: Set<string>;
+  routeToApproval?: (postId: string) => Promise<boolean>;
 };
 
 import { actorViewFromColumns } from '@postsider/nestjs-libraries/actor/post-actor';
@@ -1392,8 +1402,19 @@ export class PostsService {
     orgId: string,
     body: CreatePostDto,
     creationMethod: CreationMethod,
-    options: { provenance?: PostProvenance } = {}
+    options: {
+      provenance?: PostProvenance;
+      /**
+       * Channels a policy sent to approval: their posts are created as drafts
+       * (no workflow, no monthly slot) whatever `body.type` says.
+       */
+      forceDraftIntegrationIds?: ReadonlySet<string>;
+    } = {}
   ): Promise<any[]> {
+    const isForcedDraft = (post: { integration?: { id?: string } }) =>
+      !!post.integration?.id &&
+      !!options.forceDraftIntegrationIds?.has(post.integration.id);
+
     if (
       body.type === 'schedule' &&
       dayjs(body.date).isBefore(dayjs().subtract(1, 'minute'))
@@ -1414,7 +1435,9 @@ export class PostsService {
         : body.posts.reduce(
             (total, post) =>
               total +
-              (body.type === 'update'
+              (isForcedDraft(post)
+                ? 0
+                : body.type === 'update'
                 ? post.value.filter((value) => !value.id).length
                 : post.value?.length || 0),
             0
@@ -1491,7 +1514,7 @@ export class PostsService {
         }));
 
         const { posts, createdIds } = await this._postRepository.createOrUpdatePost(
-          body.type,
+          isForcedDraft(post) ? 'draft' : body.type,
           orgId,
           body.type === 'now'
             ? dayjs().format('YYYY-MM-DDTHH:mm:00')
@@ -1702,7 +1725,7 @@ export class PostsService {
   async retryFailedByGroup(
     orgId: string,
     group: string,
-    opts: { includeUnknownOutcome: boolean }
+    opts: RetryFailedOptions
   ): Promise<{ group: string; results: RetryFailedResult[] }> {
     const rows = await this.getTopLevelPostsByGroup(orgId, group);
     if (!rows.length) {
@@ -1721,7 +1744,7 @@ export class PostsService {
   private async retryFailedRow(
     orgId: string,
     row: Awaited<ReturnType<PostsService['getTopLevelPostsByGroup']>>[number],
-    opts: { includeUnknownOutcome: boolean }
+    opts: RetryFailedOptions
   ): Promise<RetryFailedResult> {
     const base = {
       postId: row.id,
@@ -1739,6 +1762,23 @@ export class PostsService {
       return skip('unknown_outcome_requires_confirmation');
     }
     if (row.releaseId && row.releaseId !== 'missing') return skip('already_published');
+
+    if (opts.evaluatedPostIds && !opts.evaluatedPostIds.has(row.id)) {
+      // Became re-armable after the policy gate read the group.
+      return skip('not_evaluated');
+    }
+
+    if (opts.approvalPostIds?.has(row.id)) {
+      // A policy asks for human review: the row is never re-armed here.
+      if (!opts.routeToApproval) return skip('rearm_failed');
+      try {
+        if (!(await opts.routeToApproval(row.id))) return skip('rearm_failed');
+      } catch (err) {
+        this._logger.error(`retryFailed: approval routing failed for post ${row.id}: ${err}`);
+        return skip('rearm_failed');
+      }
+      return { ...base, action: 'approval_requested' };
+    }
 
     const provider = row.integration.providerIdentifier;
     if (provider === 'tiktok') {

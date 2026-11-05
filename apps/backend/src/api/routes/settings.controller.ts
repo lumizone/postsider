@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, HttpException, Param, Post, Put } from '@nestjs/common';
+import { POST_ACTIONS } from '@postsider/nestjs-libraries/policies/policy-types';
 import { GetOrgFromRequest } from '@postsider/nestjs-libraries/user/org.from.request';
 import {
   CreateApiKeyDto,
@@ -34,6 +35,37 @@ export class SettingsController {
     private _polarService: PolarService,
     private _audit: AuditLogger,
   ) {}
+
+  /** A key limit may only name channels of the caller's own organization. */
+  private async assertOwnChannels(orgId: string, ids: string[]) {
+    if (ids.length === 0) return;
+    if (new Set(ids).size !== ids.length) {
+      throw new HttpException({ msg: 'Duplicate channel ids' }, 400);
+    }
+    const channels = await this._integrationService.getIntegrationsList(orgId);
+    const known = new Set(
+      channels
+        .filter((c: { disabled?: boolean }) => !c.disabled)
+        .map((c: { id: string }) => c.id)
+    );
+    const unknown = ids.find((id) => !known.has(id));
+    if (unknown !== undefined) {
+      throw new HttpException({ msg: `Unknown channel id: ${unknown}` }, 400);
+    }
+  }
+
+  /** Defence in depth behind the DTO: actions must be known and unique. */
+  private assertActions(actions: string[]) {
+    const bad = actions.find(
+      (a) => !(POST_ACTIONS as readonly string[]).includes(a)
+    );
+    if (bad !== undefined) {
+      throw new HttpException({ msg: `Invalid allowedActions: ${bad}` }, 400);
+    }
+    if (new Set(actions).size !== actions.length) {
+      throw new HttpException({ msg: 'Invalid allowedActions: duplicates' }, 400);
+    }
+  }
 
   @Get('/post-checker')
   @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
@@ -209,14 +241,21 @@ export class SettingsController {
     // Omitted scopes retain pre-existing API access without silently opting
     // legacy clients into newly added webhook/secret administration.
     const scopes = body.scopes ?? [...LEGACY_PUBLIC_API_SCOPES];
+    const allowedActions = body.allowedActions ?? [];
+    const allowedIntegrationIds = body.allowedIntegrationIds ?? [];
+    this.assertActions(allowedActions);
+    await this.assertOwnChannels(org.id, allowedIntegrationIds);
     const created = await this._organizationService.createApiKey(
       org.id,
       name,
-      scopes
+      scopes,
+      { allowedActions, allowedIntegrationIds }
     );
     await this._audit.logSecurityEvent(org.id, 'api_key.create', user.id, {
       name,
       scopes,
+      allowedActions,
+      allowedIntegrationIds,
     });
     return created;
   }
@@ -233,14 +272,37 @@ export class SettingsController {
     if (body.name !== undefined && !name) {
       throw new HttpException('Name cannot be empty', 400);
     }
-    if (name === undefined && body.scopes === undefined) {
-      throw new HttpException('Name or scopes are required', 400);
+    if (
+      name === undefined &&
+      body.scopes === undefined &&
+      body.allowedActions === undefined &&
+      body.allowedIntegrationIds === undefined
+    ) {
+      throw new HttpException(
+        'Name, scopes or permissions are required',
+        400
+      );
+    }
+    // null passes @IsOptional(); [] clears, undefined leaves untouched.
+    if (body.allowedActions === null || body.allowedIntegrationIds === null) {
+      throw new HttpException(
+        { msg: 'allowedActions and allowedIntegrationIds cannot be null' },
+        400
+      );
+    }
+    if (body.allowedActions !== undefined) {
+      this.assertActions(body.allowedActions);
+    }
+    if (body.allowedIntegrationIds !== undefined) {
+      await this.assertOwnChannels(org.id, body.allowedIntegrationIds);
     }
     let updated: unknown;
     try {
       updated = await this._organizationService.updateNamedApiKey(org.id, id, {
         name,
         scopes: body.scopes,
+        allowedActions: body.allowedActions,
+        allowedIntegrationIds: body.allowedIntegrationIds,
       });
     } catch (error) {
       // Prisma P2025: no row matched (missing, revoked, or another org's key).
@@ -253,6 +315,12 @@ export class SettingsController {
       apiKeyId: id,
       ...(name === undefined ? {} : { name }),
       ...(body.scopes === undefined ? {} : { scopes: body.scopes }),
+      ...(body.allowedActions === undefined
+        ? {}
+        : { allowedActions: body.allowedActions }),
+      ...(body.allowedIntegrationIds === undefined
+        ? {}
+        : { allowedIntegrationIds: body.allowedIntegrationIds }),
     });
     return updated;
   }

@@ -2,6 +2,7 @@ import { describe, it, expect } from '@jest/globals';
 import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { EXPECTED_TOOL_COUNT, EXPECTED_TOOL_NAMES } from './tool-inventory.js';
 
 /**
  * The release wiring is spread across four manifests that no compiler checks:
@@ -64,6 +65,14 @@ describe('release manifests stay wired together', () => {
     expect(serverJson.packages[0].transport).toEqual({ type: 'stdio' });
   });
 
+  it('pins the same tool count in server.json and the tarball smoke', () => {
+    const meta = serverJson._meta['io.modelcontextprotocol.registry/publisher-provided'];
+    expect(meta.toolCount).toBe(EXPECTED_TOOL_COUNT);
+    const smoke = readFileSync(path.join(PKG_DIR, 'scripts', 'tarball-smoke.mjs'), 'utf8');
+    expect(smoke).toContain(`const EXPECTED_TOOL_COUNT = ${EXPECTED_TOOL_COUNT};`);
+    expect(EXPECTED_TOOL_COUNT).toBe(EXPECTED_TOOL_NAMES.length);
+  });
+
   it('ships every file the plugin and the registry path need', () => {
     for (const required of [
       'dist',
@@ -95,5 +104,24 @@ describe('release manifests stay wired together', () => {
 
     expect(entry).toBeDefined();
     expect(entry.source).toBe('./apps/mcp');
+  });
+});
+
+describe('publishing skill documents policy outcomes', () => {
+  const skill = readFileSync(
+    path.join(PKG_DIR, 'skills', 'postsider-content-publishing', 'SKILL.md'),
+    'utf8'
+  );
+
+  it('mentions the dry run tool, the block code and the key refusal', () => {
+    expect(skill).toContain('postsider_check_policy');
+    expect(skill).toContain('policy_blocked');
+    expect(skill).toContain('key_action_not_allowed');
+    expect(skill).toContain('REQUIRE_APPROVAL');
+    expect(skill).toContain('postsider_get_approval_status');
+  });
+
+  it('adds no dashes of the long kinds', () => {
+    expect(skill).not.toMatch(/[\u2013\u2014]/);
   });
 });

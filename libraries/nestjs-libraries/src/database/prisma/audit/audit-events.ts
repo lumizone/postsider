@@ -10,6 +10,8 @@ export const AUDIT_EVENT_TYPES = [
   'post.published',
   'post.failed',
   'post.retry_requested',
+  'post.policy_evaluated',
+  'policy.changed',
 ] as const;
 
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
@@ -19,7 +21,7 @@ export type AuditMetadata = Record<string, string | number | boolean | null>;
 export interface ResourceAuditEntry {
   organizationId: string;
   event: AuditEventType;
-  targetType: 'post';
+  targetType: 'post' | 'organization';
   targetId: string;
   /** undefined -> currentActor(); null -> no verified actor (guest). */
   actor?: PostActor | null;

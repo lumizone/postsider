@@ -42,10 +42,20 @@ import { SubscriptionService } from '@postsider/nestjs-libraries/database/prisma
 import { ProviderEnvHelper } from '@postsider/nestjs-libraries/integrations/provider-env.helper';
 import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
 import { signWebhook } from '@postsider/nestjs-libraries/services/webhook.signature';
+import { PublishPolicyGuard } from '@postsider/nestjs-libraries/database/prisma/policies/publish-policy.guard';
 
 export type PublishAttemptResult =
   | { outcome: 'published'; results: PostResponse[] }
-  | { outcome: 'already_published'; releaseId: string }
+  | {
+      outcome: 'already_published';
+      releaseId: string;
+      /**
+       * Set when a policy held the post for approval. The frozen v1.0.9 workflow
+       * treats every already_published outcome as "stop here": it records no
+       * state, sends no webhooks and starts no plugs or repeats.
+       */
+      withheld?: 'policy_approval';
+    }
   | { outcome: 'failed'; failure: PublishFailure };
 
 // Drops fields the workflow and downstream activities never read — biggest wins are `error` (grows per retry) and `childrenPost` (Prisma side-loads it on every recursive row).
@@ -119,7 +129,8 @@ export class PostActivity {
     private _temporalService: TemporalService,
     private _subscriptionService: SubscriptionService,
     private _providerEnvHelper: ProviderEnvHelper,
-    @Optional() private _audit?: AuditLogger
+    @Optional() private _audit?: AuditLogger,
+    @Optional() private _publishPolicy?: PublishPolicyGuard
   ) {}
 
   @ActivityMethod()
@@ -834,6 +845,24 @@ export class PostActivity {
           );
         }
         return { outcome: 'already_published', releaseId: row.releaseId };
+      }
+      // Policies are checked again right before the provider call: rules may
+      // have changed since the post was accepted. Fails closed.
+      if (this._publishPolicy) {
+        const decision = await this._publishPolicy.checkBeforePublish(
+          orgId,
+          posts[0].id
+        );
+        if (decision.kind === 'blocked' || decision.kind === 'error') {
+          return { outcome: 'failed', failure: decision.failure };
+        }
+        if (decision.kind === 'approval_requested') {
+          return {
+            outcome: 'already_published',
+            releaseId: '',
+            withheld: 'policy_approval',
+          };
+        }
       }
       await this._postService.recordPublishAttempt(orgId, posts[0].id);
       integration = await this._loadIntegration(orgId, integrationId);

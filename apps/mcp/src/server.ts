@@ -784,7 +784,7 @@ export function createPostSiderMcpServer(
     {
       title: 'Create / schedule / publish a post',
       description:
-        'Create a post across one or more channels. Default to "draft" (safe, no publication). Use "schedule" only when the user explicitly authorized the content, channels and future time; use "now" only when they explicitly requested immediate publishing. A draft or approval request is not permission to publish. `type`: "schedule" books it for `date`; "now" publishes immediately; "draft" saves without publishing. Get channel ids from postsider_list_channels, per-channel required `settings` and length limits from postsider_get_channel_rules, and a free slot from postsider_find_slot. Attach media by uploading first (postsider_upload_media_from_url, postsider_upload_media_base64, postsider_upload_media_from_file) or by reusing postsider_list_media, then pass the media objects as `images`. To change a post later use postsider_update_post.',
+        'Create a post across one or more channels. Default to "draft" (safe, no publication). Use "schedule" only when the user explicitly authorized the content, channels and future time; use "now" only when they explicitly requested immediate publishing. A draft or approval request is not permission to publish. `type`: "schedule" books it for `date`; "now" publishes immediately; "draft" saves without publishing. Get channel ids from postsider_list_channels, per-channel required `settings` and length limits from postsider_get_channel_rules, and a free slot from postsider_find_slot. Attach media by uploading first (postsider_upload_media_from_url, postsider_upload_media_base64, postsider_upload_media_from_file) or by reusing postsider_list_media, then pass the media objects as `images`. To change a post later use postsider_update_post. Workspace policies apply: the response includes `policy`. `approvalRequested: true` means the post is waiting for a human and is NOT scheduled or published. A `policy_blocked` error means change the content and never retry it unchanged. Use postsider_check_policy to dry run first.',
       inputSchema: {
         type: z
           .enum(['draft', 'schedule', 'now'])
@@ -864,7 +864,7 @@ export function createPostSiderMcpServer(
     {
       title: 'Edit an existing post',
       description:
-        'Edit a post in place instead of deleting and recreating it. Send only what changes: `content`, `images` (REPLACES the post\'s media list with the given media objects), `date` (ISO 8601 UTC), `settings`, `firstComment` (empty string clears it). Everything else is kept. Use the id of the first post of the thread. Published posts and posts pending approval cannot be edited. A scheduled post is re-armed for its (new) date; a draft stays a draft. Read the post with postsider_get_post first and verify the change afterwards.',
+        'Edit a post in place instead of deleting and recreating it. Send only what changes: `content`, `images` (REPLACES the post\'s media list with the given media objects), `date` (ISO 8601 UTC), `settings`, `firstComment` (empty string clears it). Everything else is kept. Use the id of the first post of the thread. Published posts and posts pending approval cannot be edited. A scheduled post is re-armed for its (new) date; a draft stays a draft. Read the post with postsider_get_post first and verify the change afterwards. Workspace policies apply: the response includes `policy`. `approvalRequested: true` means the post is waiting for a human and is NOT scheduled or published. A `policy_blocked` error means change the content and never retry it unchanged. Use postsider_check_policy to dry run first.',
       inputSchema: {
         postId: nonEmptyId.describe('Id of the post to edit.'),
         content: z.string().optional().describe('New post text (replaces the current text).'),
@@ -920,7 +920,7 @@ export function createPostSiderMcpServer(
     {
       title: 'Update post status',
       description:
-        'Move an existing post between draft and scheduled queue. Switching to "schedule" makes the post eligible for automatic publication at its saved date; do so only after the user explicitly authorized the content, channels and timing. Read the stored post before and after the change. If the post is in ERROR with errorCategory UNKNOWN_OUTCOME, it may already be live on the channel: ask the user to check the channel and confirm before re-queuing it, and prefer postsider_retry_failed_posts for group retries.',
+        'Move an existing post between draft and scheduled queue. Switching to "schedule" makes the post eligible for automatic publication at its saved date; do so only after the user explicitly authorized the content, channels and timing. Read the stored post before and after the change. If the post is in ERROR with errorCategory UNKNOWN_OUTCOME, it may already be live on the channel: ask the user to check the channel and confirm before re-queuing it, and prefer postsider_retry_failed_posts for group retries. Workspace policies apply: the response includes `policy`. `approvalRequested: true` means the post is waiting for a human and is NOT scheduled or published. A `policy_blocked` error means change the content and never retry it unchanged. Use postsider_check_policy to dry run first.',
       inputSchema: {
         postId: nonEmptyId.describe('Post id.'),
         status: z
@@ -950,7 +950,7 @@ export function createPostSiderMcpServer(
     {
       title: 'Retry failed posts',
       description:
-        'Re-queue only the destinations of a post group that are in ERROR, never published, queued, draft or pending approval rows. Read the group first with postsider_get_post. Rows whose errorCategory is UNKNOWN_OUTCOME may already be live on the platform: they are skipped unless includeUnknownOutcome is true, and you must only set it after the user confirmed on the platform that the post is not published. The result lists every row as requeued or skipped with a reason. Do not call this repeatedly; read the posts back to see the new state.',
+        'Re-queue only the destinations of a post group that are in ERROR, never published, queued, draft or pending approval rows. Read the group first with postsider_get_post. Rows whose errorCategory is UNKNOWN_OUTCOME may already be live on the platform: they are skipped unless includeUnknownOutcome is true, and you must only set it after the user confirmed on the platform that the post is not published. The result lists every row as requeued or skipped with a reason. Do not call this repeatedly; read the posts back to see the new state. Workspace policies apply: the response includes `policy`. `approvalRequested: true` means the post is waiting for a human and is NOT scheduled or published. A `policy_blocked` error means change the content and never retry it unchanged. Use postsider_check_policy to dry run first.',
       inputSchema: {
         groupId: nonEmptyId.describe('Post group id (the group field of postsider_get_post).'),
         includeUnknownOutcome: z
@@ -1451,6 +1451,60 @@ export function createPostSiderMcpServer(
     async ({ content, platforms, hasMedia, mediaType }) => {
       try {
         return ok(await client.post('/posts/check', { content, platforms, hasMedia, mediaType }));
+      } catch (e) {
+        return fail(e);
+      }
+    }
+  );
+
+  server.registerTool(
+    'postsider_check_policy',
+    {
+      title: 'Check policy',
+      description:
+        'Dry run the workspace policies for a post you are about to create. It writes nothing: no post, no approval request, no audit entry. Call it before scheduling or publishing, with the same `type`, `date` and `posts` you would send to postsider_create_post. Returns `effect` (ALLOW, REQUIRE_APPROVAL or BLOCK), `matched` (the rules that apply, each with ruleId, name, effect and condition), `channels` (the effect per channel) and `key` (`allowed` says whether this API key may perform the action, with a `code` when it may not). ALLOW means go ahead. REQUIRE_APPROVAL means the post would wait for a human and not be scheduled. BLOCK means change the content or ask the owner; do not try another channel to avoid the rule.',
+      inputSchema: {
+        type: z
+          .enum(['draft', 'schedule', 'now'])
+          .describe('The action you intend: draft, schedule or now (publish immediately).'),
+        date: isoDate
+          .optional()
+          .describe('Intended publish date, ISO 8601 UTC. Required for "schedule". Optional for "draft".'),
+        posts: z
+          .array(
+            z.object({
+              channelId: nonEmptyId.describe('Channel (integration) id the post would go to.'),
+              content: z.string().describe('The post text/caption.'),
+              firstComment: z.string().optional().describe('Optional first comment.'),
+              images: z
+                .array(mediaItem)
+                .optional()
+                .describe('Optional media objects, used to detect video.'),
+            })
+          )
+          .min(1)
+          .max(20)
+          .describe('One entry per channel, same shape as postsider_create_post. At most 20.'),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async ({ type, date, posts }) => {
+      try {
+        if (type === 'schedule' && !date) {
+          throw new Error('`date` is required to check a scheduled post.');
+        }
+        const body = buildCreatePostBody({
+          type,
+          date: date ?? new Date().toISOString(),
+          shortLink: false,
+          posts,
+        });
+        return ok(await client.post('/policies/evaluate', body));
       } catch (e) {
         return fail(e);
       }

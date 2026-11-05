@@ -6,7 +6,7 @@ const model = (name: string) =>
 describe('control plane schema', () => {
   it('PublishErrorCategory has exactly the taxonomy', () => {
     expect(Object.values(PublishErrorCategory).sort()).toEqual(
-      ['AUTH_EXPIRED','INVALID_CONTENT','PERMISSION_MISSING','PROVIDER_UNAVAILABLE','RATE_LIMITED','UNKNOWN','UNKNOWN_OUTCOME'].sort()
+      ['AUTH_EXPIRED','INVALID_CONTENT','PERMISSION_MISSING','POLICY_BLOCKED','PROVIDER_UNAVAILABLE','RATE_LIMITED','UNKNOWN','UNKNOWN_OUTCOME'].sort()
     );
   });
   it('PublicWebhookDeliveryStatus has PENDING, SUCCEEDED, FAILED', () => {

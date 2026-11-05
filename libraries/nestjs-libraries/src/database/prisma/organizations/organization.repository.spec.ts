@@ -113,4 +113,82 @@ describe('OrganizationRepository public API credentials', () => {
     expect(created.key).toMatch(/^ps_/);
     expect(create.mock.calls[0][0].data.key).not.toBe(created.key);
   });
+
+  describe('api-key limits', () => {
+    const organization = { id: 'org-1', subscription: null };
+    const resolve = async (row: Record<string, unknown>) => {
+      const apiKeyFindFirst = jest.fn().mockResolvedValue({
+        id: 'key-1',
+        scopes: ['posts:write'],
+        organization,
+        ...row,
+      });
+      const repository = repositoryWithModels({
+        organization: { findFirst: jest.fn().mockResolvedValue(null) },
+        apiKey: { findFirst: apiKeyFindFirst },
+      });
+      const result: any = await repository.resolvePublicApiCredential('ps_x');
+      return { result, apiKeyFindFirst };
+    };
+
+    it('selects both limit columns', async () => {
+      const { apiKeyFindFirst } = await resolve({});
+      const select = apiKeyFindFirst.mock.calls[0][0].select;
+      expect(select.allowedActions).toBe(true);
+      expect(select.allowedIntegrationIds).toBe(true);
+    });
+
+    it('returns keyPermissions when either list is non-empty', async () => {
+      const a = await resolve({ allowedActions: ['DRAFT'], allowedIntegrationIds: [] });
+      expect(a.result.keyPermissions).toEqual({
+        allowedActions: ['DRAFT'],
+        allowedIntegrationIds: [],
+      });
+      const b = await resolve({ allowedActions: [], allowedIntegrationIds: ['c1'] });
+      expect(b.result.keyPermissions).toEqual({
+        allowedActions: [],
+        allowedIntegrationIds: ['c1'],
+      });
+    });
+
+    it('returns no keyPermissions when both lists are empty', async () => {
+      const { result } = await resolve({ allowedActions: [], allowedIntegrationIds: [] });
+      expect(result.credentialType).toBe('api-key');
+      expect(result.keyPermissions).toBeUndefined();
+    });
+
+    it('never returns keyPermissions for a legacy key', async () => {
+      const repository = repositoryWithModels({
+        organization: { findFirst: jest.fn().mockResolvedValue(organization) },
+        apiKey: { findFirst: jest.fn() },
+      });
+      const result: any = await repository.resolvePublicApiCredential('legacy');
+      expect(result.credentialType).toBe('legacy');
+      expect(result).not.toHaveProperty('keyPermissions');
+    });
+
+    it('selects the limits in list, create and update results', async () => {
+      const findMany = jest.fn().mockResolvedValue([]);
+      const create = jest.fn().mockResolvedValue({ id: 'k' });
+      const update = jest.fn().mockResolvedValue({ id: 'k' });
+      const repository = repositoryWithModels({ apiKey: { findMany, create, update } });
+      await repository.listApiKeys('org-1');
+      await repository.createApiKey('org-1', 'n', ['posts:write'] as any, {
+        allowedActions: ['DRAFT'],
+        allowedIntegrationIds: ['c1'],
+      });
+      await repository.updateNamedApiKey('org-1', 'k', { allowedActions: [] });
+      for (const call of [findMany, create, update]) {
+        const select = call.mock.calls[0][0].select;
+        expect(select.allowedActions).toBe(true);
+        expect(select.allowedIntegrationIds).toBe(true);
+        expect(select).not.toHaveProperty('key');
+      }
+      expect(create.mock.calls[0][0].data).toMatchObject({
+        allowedActions: ['DRAFT'],
+        allowedIntegrationIds: ['c1'],
+      });
+      expect(update.mock.calls[0][0].data).toEqual({ allowedActions: [] });
+    });
+  });
 });

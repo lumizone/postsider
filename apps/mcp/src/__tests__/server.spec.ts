@@ -862,6 +862,103 @@ describe('createPostSiderMcpServer', () => {
       expect(lastCall().body).toMatchObject({ tone: 'punchy', count: 3 });
     });
 
+    it('dry runs the policy check without hitting any write endpoint', async () => {
+      const verdict = {
+        effect: 'REQUIRE_APPROVAL',
+        matched: [{ ruleId: 'r1', name: 'Links need review', effect: 'REQUIRE_APPROVAL', condition: 'CONTAINS_LINK' }],
+        channels: [{ integrationId: 'c1', effect: 'REQUIRE_APPROVAL' }],
+        key: { allowed: true },
+      };
+      const r = await call(
+        'postsider_check_policy',
+        {
+          type: 'schedule',
+          date: '2030-01-01T10:00:00Z',
+          posts: [{ channelId: 'c1', content: 'see https://x.test', firstComment: 'fc', images: [{ id: 'm1', path: 'a.png' }] }],
+        },
+        JSON.stringify(verdict)
+      );
+      expect(r.isError).toBeFalsy();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const { url, init, body } = lastCall();
+      expect(url).toMatch(/\/public\/v1\/policies\/evaluate$/);
+      expect(init.method).toBe('POST');
+      expect(body).toMatchObject({
+        type: 'schedule',
+        date: '2030-01-01T10:00:00Z',
+        posts: [
+          {
+            integration: { id: 'c1' },
+            value: [{ content: 'see https://x.test', image: [{ id: 'm1', path: 'a.png' }] }],
+            firstComment: 'fc',
+          },
+        ],
+      });
+      expect(JSON.parse((r.content as { text?: string }[])[0].text ?? '')).toEqual(verdict);
+    });
+
+    it('allows a policy check for a draft without a date', async () => {
+      await call('postsider_check_policy', { type: 'draft', posts: [{ channelId: 'c1', content: 'hi' }] });
+      expect(lastCall().url).toMatch(/\/policies\/evaluate$/);
+      expect(typeof lastCall().body.date).toBe('string');
+    });
+
+    it('requires a date to check a scheduled policy and never calls the API without it', async () => {
+      const r = await call('postsider_check_policy', { type: 'schedule', posts: [{ channelId: 'c1', content: 'hi' }] });
+      expect(r.isError).toBe(true);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('refuses more than 20 posts in a policy check', async () => {
+      const posts = Array.from({ length: 21 }, () => ({ channelId: 'c1', content: 'hi' }));
+      const r = await call('postsider_check_policy', { type: 'draft', posts });
+      expect(r.isError).toBe(true);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('describes the policy tool as read only and mentions its outcomes, with no dashes', async () => {
+      const c = await connect();
+      const { tools } = await c.listTools();
+      await c.close();
+      const tool = tools.find((t) => t.name === 'postsider_check_policy')!;
+      expect(tool.title).toBe('Check policy');
+      expect(tool.description).toMatch(/writes nothing/i);
+      for (const word of ['ALLOW', 'REQUIRE_APPROVAL', 'BLOCK']) {
+        expect(tool.description).toContain(word);
+      }
+      expect(tool.description).toContain('before');
+      expect(tool.description).not.toMatch(/[\u2013\u2014]/);
+      for (const name of [
+        'postsider_create_post',
+        'postsider_update_post',
+        'postsider_update_post_status',
+        'postsider_retry_failed_posts',
+      ]) {
+        const d = tools.find((t) => t.name === name)!.description!;
+        expect(d).toContain('approvalRequested');
+        expect(d).toContain('policy_blocked');
+        // One whole sentence at the very end; no splice into existing text.
+        expect(d.endsWith('Use postsider_check_policy to dry run first.')).toBe(true);
+        expect(d).not.toContain('  ');
+        expect(d).not.toMatch(/\.[A-Za-z]/);
+        expect(d.indexOf(' Workspace policies apply:')).toBeGreaterThan(d.lastIndexOf('. ', d.indexOf(' Workspace policies apply:') - 1) - 1);
+      }
+      // Existing safety guidance stays contiguous.
+      const byName = (n: string) => tools.find((t) => t.name === n)!.description!;
+      expect(byName('postsider_update_post_status')).toContain(
+        'it may already be live on the channel: ask the user to check the channel and confirm before re-queuing it, and prefer postsider_retry_failed_posts for group retries. Workspace policies apply:'
+      );
+      expect(byName('postsider_retry_failed_posts')).toContain(
+        'Do not call this repeatedly; read the posts back to see the new state. Workspace policies apply:'
+      );
+      expect(byName('postsider_update_post')).toContain(
+        'Read the post with postsider_get_post first and verify the change afterwards. Workspace policies apply:'
+      );
+      expect(byName('postsider_create_post')).toContain(
+        'To change a post later use postsider_update_post. Workspace policies apply:'
+      );
+    });
+
     it('limits platforms in a check to three', async () => {
       const r = await call('postsider_check_post', {
         content: 'hi',

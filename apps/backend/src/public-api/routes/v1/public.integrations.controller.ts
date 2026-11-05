@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   HttpException,
+  Optional,
   Param,
   Post,
   Put,
@@ -18,10 +19,12 @@ import {
 import { CustomFileValidationPipe } from '@postsider/nestjs-libraries/upload/custom.upload.validation';
 import {
   ApiExtraModels,
+  ApiForbiddenResponse,
   ApiHeader,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { PublicPostIdentityFieldsDto } from '@postsider/nestjs-libraries/dtos/posts/public-post-identity.dto';
 import { PublicPostFailureFieldsDto } from '@postsider/nestjs-libraries/dtos/posts/public-post-failure.dto';
@@ -89,6 +92,13 @@ import { PostValidationException } from '@postsider/backend/api/routes/posts.val
 import { timer } from '@postsider/helpers/utils/timer';
 import { ioRedis } from '@postsider/nestjs-libraries/redis/redis.service';
 import { PublicApiIdempotencyService } from '@postsider/nestjs-libraries/database/prisma/idempotency/public-api-idempotency.service';
+import {
+  actionForCreateType,
+  actionForStoredState,
+  assertKeyAllowed,
+} from '@postsider/nestjs-libraries/policies/key-permission.guard';
+import { currentActor, currentKeyPermissions } from '@postsider/nestjs-libraries/actor/actor-context';
+import { PostPolicyGateService } from '@postsider/nestjs-libraries/database/prisma/policies/post-policy-gate.service';
 import { parseProvenance } from '@postsider/nestjs-libraries/actor/post-provenance';
 import { AgencyOverviewService } from '@postsider/nestjs-libraries/database/prisma/agency/agency-overview.service';
 import { CustomerReportService } from '@postsider/nestjs-libraries/database/prisma/agency/customer-report.service';
@@ -120,7 +130,8 @@ export class PublicIntegrationsController {
     private _idempotency: PublicApiIdempotencyService,
     private _agencyOverview: AgencyOverviewService,
     private _customerReport: CustomerReportService,
-    private _auditEvents: AuditEventsService
+    private _auditEvents: AuditEventsService,
+    @Optional() private _policyGate?: PostPolicyGateService
   ) {}
 
   @Post('/upload')
@@ -391,7 +402,7 @@ export class PublicIntegrationsController {
   @ApiOperation({
     summary: 'List post activity',
     description:
-      'Audit trail of a post group, newest first, including after deletion. Events: post.created, post.updated, post.deleted, post.status_changed, post.approval_requested, post.approval_resolved, post.published, post.failed, post.retry_requested. Metadata never contains post content.',
+      'Audit trail of a post group, newest first, including after deletion. Events: post.created, post.updated, post.deleted, post.status_changed, post.approval_requested, post.approval_resolved, post.published, post.failed, post.retry_requested, post.policy_evaluated. Metadata never contains post content.',
   })
   @ApiOkResponse({ type: PublicAuditEventsResponseDto })
   async getPostActivity(
@@ -418,6 +429,19 @@ export class PublicIntegrationsController {
   @Post('/posts')
   @RequirePublicApiScopes('posts:write')
   @CheckPolicies([AuthorizationActions.Create, Sections.POSTS_PER_MONTH])
+  @ApiOperation({
+    summary: 'Create posts',
+    description:
+      'Creates one post per channel as a draft, a scheduled post or an immediate publish. Key limits and organization policy rules are checked before anything is written. Errors: 403 key_action_not_allowed or key_channel_not_allowed when the API key limits refuse the action or a channel, and 422 policy_blocked when a BLOCK rule matches a schedule or publish now write. Drafts are reported but never blocked at write time; a BLOCK rule still stops them when they are published. When a REQUIRE_APPROVAL rule matches a channel, that channel is written as a draft and an approval is requested. Each element of the response array carries policy: { effect, matched } and approvalRequested. If the approval request fails, the call returns the error and the draft stays; repeating it with the same Idempotency-Key after such a router failure can create duplicate drafts. Use POST /public/v1/policies/evaluate to dry run first. Key channel limits cover creating, editing, scheduling, retrying and duplicating posts, not deleting posts or channel administration. Internal plugs (for example x-repost-post-users) post to other channels with no policy or key check.',
+  })
+  @ApiForbiddenResponse({
+    description:
+      'Scope missing, or the key limits refuse the request: error key_action_not_allowed (the key may not draft, schedule or publish now) or key_channel_not_allowed (a channel is outside the key allowed channels). Nothing is written.',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'error policy_blocked: a BLOCK rule matches. The body carries policy: { effect, matched, channels }. Nothing is written.',
+  })
   async createPost(
     @GetOrgFromRequest() org: Organization,
     @Body() rawBody: any,
@@ -438,6 +462,13 @@ export class PublicIntegrationsController {
     );
     body.type = rawBody.type;
 
+    // The key's limits are checked before any validation work, idempotency
+    // claim or write. An unknown type falls through to the DTO validation.
+    assertKeyAllowed(
+      actionForCreateType(rawBody.type),
+      body.posts.map((p) => p.integration.id)
+    );
+
     this.assertMediaDomains(body.posts);
 
     await this.assertPostsValid(org.id, body.posts, body.type);
@@ -453,9 +484,22 @@ export class PublicIntegrationsController {
     if (claim?.kind === 'replay') return claim.response;
 
     try {
-      const result = await this._postsService.createPost(org.id, body, creationMethod, {
+      // Write-time policy gate: BLOCK on schedule or now throws here and the
+      // claim is released. Channels that need approval are created as drafts.
+      const pre = await this._policyGate?.preflightWrite(
+        org.id,
+        body as any,
+        currentActor()
+      );
+      const created = await this._postsService.createPost(org.id, body, creationMethod, {
         provenance,
+        ...(pre?.approvalIntegrationIds.size
+          ? { forceDraftIntegrationIds: pre.approvalIntegrationIds }
+          : {}),
       });
+      const result = pre
+        ? await this._policyGate!.finishCreate(org.id, created, pre)
+        : created;
       if (claim?.kind === 'new') await this._idempotency.complete(claim.id, result);
       return result;
     } catch (error) {
@@ -540,6 +584,19 @@ export class PublicIntegrationsController {
    */
   @Put('/posts/:id')
   @RequirePublicApiScopes('posts:write')
+  @ApiOperation({
+    summary: 'Update a post',
+    description:
+      'Edits a post in place; only the fields sent change. The edited content is checked against the API key limits and the organization policy rules like a new write. Errors: 403 key_action_not_allowed or key_channel_not_allowed, and 422 policy_blocked when a BLOCK rule matches a scheduled post. A channel that a REQUIRE_APPROVAL rule covers is written as a draft and an approval is requested, and an edit of an already approved queued post goes back to approval. Each element of the response array carries policy: { effect, matched } and approvalRequested.',
+  })
+  @ApiForbiddenResponse({
+    description:
+      'Scope missing, or the key limits refuse the request: error key_action_not_allowed (the key may not draft, schedule or publish now) or key_channel_not_allowed (a channel is outside the key allowed channels). Nothing is written.',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'error policy_blocked: a BLOCK rule matches. The body carries policy: { effect, matched, channels }. Nothing is written.',
+  })
   async updatePost(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string,
@@ -581,6 +638,10 @@ export class PublicIntegrationsController {
       patch
     );
     const body = await this._postsService.mapTypeToPost(dto, org.id);
+    assertKeyAllowed(
+      actionForStoredState(state),
+      body.posts.map((p) => p.integration.id)
+    );
 
     this.assertMediaDomains(body.posts);
     // A draft may stay half-written, so it only gets the lenient checks.
@@ -590,7 +651,28 @@ export class PublicIntegrationsController {
       state === 'DRAFT' ? 'draft' : 'update'
     );
 
-    return this._postsService.createPost(org.id, body, 'API', { provenance });
+    // The patched content is evaluated like a new write. The stored post is
+    // excluded from its own daily cap, and an armed post that now needs
+    // approval is moved back to draft and sent to the approval queue.
+    const pre = await this._policyGate?.preflightWrite(
+      org.id,
+      {
+        type: state === 'DRAFT' ? 'draft' : 'schedule',
+        date: (dto as any).date ?? (body as any).date,
+        posts: body.posts,
+      } as any,
+      currentActor(),
+      { editingPostId: id }
+    );
+    // A channel that needs approval is written as a draft right away, so the
+    // edited content is never armed and nothing races the routing.
+    const updated = await this._postsService.createPost(org.id, body, 'API', {
+      provenance,
+      ...(pre?.approvalIntegrationIds.size
+        ? { forceDraftIntegrationIds: pre.approvalIntegrationIds }
+        : {}),
+    });
+    return pre ? this._policyGate!.finishCreate(org.id, updated, pre) : updated;
   }
 
   @Delete('/posts/:id')
@@ -619,6 +701,19 @@ export class PublicIntegrationsController {
 
   @Post('/posts/group/:group/retry-failed')
   @RequirePublicApiScopes('posts:write')
+  @ApiOperation({
+    summary: 'Retry the failed destinations of a post group',
+    description:
+      'Re-queues the destinations of a post group that are in ERROR. The retry is evaluated against the organization policies like a schedule: when a BLOCK rule matches any failed destination the whole call is refused with 422 (policy_blocked) and nothing is re-armed, including rows that failed with POLICY_BLOCKED while the rule still matches. A destination that a REQUIRE_APPROVAL rule covers is not re-queued but sent to the approval queue and reported with action approval_requested. Each result row has action requeued, skipped or approval_requested. The response carries a top level policy object with the effect and the matched rules. Also answers 403 key_action_not_allowed or key_channel_not_allowed when the key limits refuse scheduling on a failed channel.',
+  })
+  @ApiForbiddenResponse({
+    description:
+      'Scope missing, or the key limits refuse the request: error key_action_not_allowed (the key may not draft, schedule or publish now) or key_channel_not_allowed (a channel is outside the key allowed channels). Nothing is written.',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'error policy_blocked: a BLOCK rule matches. The body carries policy: { effect, matched, channels }. Nothing is written.',
+  })
   async retryFailedByGroup(
     @GetOrgFromRequest() org: Organization,
     @Param('group') group: string,
@@ -627,6 +722,16 @@ export class PublicIntegrationsController {
   ) {
     Sentry.metrics.count('public_api-request', 1);
     const includeUnknownOutcome = body.includeUnknownOutcome === true;
+    if (currentKeyPermissions()) {
+      // Retrying re-arms the failed rows, so it counts as scheduling them.
+      const rows = await this._postsService.getTopLevelPostsByGroup(org.id, group);
+      const failed = rows.filter((r) => r.state === 'ERROR');
+      if (failed.length) {
+        assertKeyAllowed('SCHEDULE', [
+          ...new Set(failed.map((r) => r.integrationId)),
+        ]);
+      }
+    }
     const claim = await this._idempotency.claim(org.id, idempotencyKey, {
       route: 'retry-failed',
       group,
@@ -635,11 +740,30 @@ export class PublicIntegrationsController {
     if (claim?.kind === 'replay') return claim.response;
 
     try {
-      const result = await this._postsService.retryFailedByGroup(org.id, group, {
+      // Retry re-arms publishing, so it is gated like a schedule: a BLOCK
+      // refuses the whole call (422) before any row is touched.
+      const gated = await this._policyGate?.gateRetry(org.id, group, {
         includeUnknownOutcome,
       });
-      if (claim?.kind === 'new') await this._idempotency.complete(claim.id, result);
-      return result;
+      const result = await this._postsService.retryFailedByGroup(org.id, group, {
+        includeUnknownOutcome,
+        ...(gated
+          ? {
+              approvalPostIds: gated.approvalPostIds,
+              evaluatedPostIds: gated.evaluatedPostIds,
+              routeToApproval: (postId: string) =>
+                this._policyGate!.routeRetry(org.id, postId),
+            }
+          : {}),
+      });
+      const merged = gated
+        ? {
+            ...result,
+            policy: { effect: gated.policy.effect, matched: gated.policy.matched },
+          }
+        : result;
+      if (claim?.kind === 'new') await this._idempotency.complete(claim.id, merged);
+      return merged;
     } catch (error) {
       if (claim?.kind === 'new') await this._idempotency.release(claim.id);
       throw error;
@@ -926,13 +1050,56 @@ export class PublicIntegrationsController {
 
   @Put('/posts/:id/status')
   @RequirePublicApiScopes('posts:write')
+  @ApiOperation({
+    summary: 'Change a post status between draft and queued',
+    description:
+      'Moves a post to draft or schedules it. Moving to draft is reported but never blocked. Scheduling is checked against the API key limits and the organization policy rules. Errors: 403 key_action_not_allowed or key_channel_not_allowed, and 422 policy_blocked when a BLOCK rule matches. A post that is already in APPROVAL and is scheduled again answers 200 with state APPROVAL when a REQUIRE_APPROVAL rule matches, 422 policy_blocked on a BLOCK rule, and 400 when no rule matches. The response carries policy: { effect, matched } and approvalRequested.',
+  })
+  @ApiForbiddenResponse({
+    description:
+      'Scope missing, or the key limits refuse the request: error key_action_not_allowed (the key may not draft, schedule or publish now) or key_channel_not_allowed (a channel is outside the key allowed channels). Nothing is written.',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'error policy_blocked: a BLOCK rule matches. The body carries policy: { effect, matched, channels }. Nothing is written.',
+  })
   async changePostStatus(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string,
     @Body() body: ChangePostStatusDto
   ) {
     Sentry.metrics.count('public_api-request', 1);
-    return this._postsService.changePostStatus(org.id, id, body.status);
+    if (currentKeyPermissions()) {
+      const stored = await this._postsService.getPost(org.id, id);
+      assertKeyAllowed(
+        body.status === 'draft' ? 'DRAFT' : 'SCHEDULE',
+        [stored.integration]
+      );
+    }
+    if (!this._policyGate) {
+      return this._postsService.changePostStatus(org.id, id, body.status);
+    }
+    // Drafts are report only. Scheduling is blocked (422) or routed to approval.
+    const gated = await this._policyGate.gateStatus(org.id, id, body.status);
+    // A draft report that could not be evaluated carries no policy rather than ALLOW.
+    const policy =
+      gated.evaluated === false
+        ? undefined
+        : { effect: gated.policy.effect, matched: gated.policy.matched };
+    if (!gated.proceed) {
+      return {
+        id,
+        state: 'APPROVAL',
+        policy,
+        approvalRequested: gated.approvalRequested,
+      };
+    }
+    const changed = await this._postsService.changePostStatus(
+      org.id,
+      id,
+      body.status
+    );
+    return { ...changed, policy, approvalRequested: false };
   }
 
   @Put('/posts/:id/release-id')

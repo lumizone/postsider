@@ -48,6 +48,12 @@ import { ComposerHelpersRepository } from '@postsider/nestjs-libraries/database/
 import { ComposerHelpersService } from '@postsider/nestjs-libraries/database/prisma/composer-helpers/composer-helpers.service';
 import { ApprovalRepository } from '@postsider/nestjs-libraries/database/prisma/approval/approval.repository';
 import { ApprovalService } from '@postsider/nestjs-libraries/database/prisma/approval/approval.service';
+import { PolicyRulesRepository } from '@postsider/nestjs-libraries/database/prisma/policies/policy-rules.repository';
+import { PolicyEvaluationService } from '@postsider/nestjs-libraries/database/prisma/policies/policy-evaluation.service';
+import { PolicyApprovalRouter } from '@postsider/nestjs-libraries/database/prisma/policies/policy-approval-router';
+import { PostPolicyGateService } from '@postsider/nestjs-libraries/database/prisma/policies/post-policy-gate.service';
+import { PublishPolicyGuard } from '@postsider/nestjs-libraries/database/prisma/policies/publish-policy.guard';
+import { PolicyRulesService } from '@postsider/nestjs-libraries/database/prisma/policies/policy-rules.service';
 import { ProviderEnvHelper } from '@postsider/nestjs-libraries/integrations/provider-env.helper';
 import { AuditEventsService } from '@postsider/nestjs-libraries/database/prisma/audit/audit-events.service';
 import { AuditLogger } from '@postsider/nestjs-libraries/database/prisma/audit/audit.logger';
@@ -128,6 +134,12 @@ import { PostAnalyticsService } from '@postsider/nestjs-libraries/database/prism
     ComposerHelpersService,
     ApprovalRepository,
     ApprovalService,
+    PolicyRulesRepository,
+    PolicyRulesService,
+    PolicyEvaluationService,
+    PolicyApprovalRouter,
+    PostPolicyGateService,
+    PublishPolicyGuard,
     ChannelAssignmentRepository,
     ChannelAssignmentService,
     PublicApiIdempotencyService,

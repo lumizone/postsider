@@ -1,7 +1,7 @@
 import { AUDIT_EVENT_TYPES, sanitizeAuditMetadata } from './audit-events';
 
 describe('audit events', () => {
-  it('lists exactly the nine event names in order', () => {
+  it('lists exactly the ten event names in order', () => {
     expect([...AUDIT_EVENT_TYPES]).toEqual([
       'post.created',
       'post.updated',
@@ -12,6 +12,8 @@ describe('audit events', () => {
       'post.published',
       'post.failed',
       'post.retry_requested',
+      'post.policy_evaluated',
+      'policy.changed',
     ]);
   });
 

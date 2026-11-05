@@ -8,6 +8,14 @@ recorded here.
 
 ### Added
 
+- `postsider_check_policy`: dry run the workspace policies before creating a
+  post. Returns the effect (ALLOW, REQUIRE_APPROVAL or BLOCK), the matched rule
+  names and whether the API key may perform the action. Writes nothing. The tool
+  count is now 40 (41 on the local stdio server).
+- Readable errors for API key limits (`key_action_not_allowed`,
+  `key_channel_not_allowed`) and for a post refused by policy
+  (`policy_blocked`). Post tools now document `policy` in responses and
+  `approvalRequested: true` meaning the post awaits a human.
 - `postsider_retry_failed_posts`: re-queue only the ERROR destinations of a
   post group. Unknown-outcome rows are skipped unless explicitly confirmed.
 - `postsider_get_post_activity`: list who did what to a post and when, with the

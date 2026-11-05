@@ -7,6 +7,7 @@ import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { PublicIntegrationsController } from './public.integrations.controller';
 import { PublicWorkspaceController } from './public.workspace.controller';
 import { PublicAuditController } from './public.audit.controller';
+import { PublicPoliciesController } from './public.policies.controller';
 import { PUBLIC_API_SCOPES_KEY } from '@postsider/backend/services/auth/public-api-scope.decorator';
 import { isPublicApiScope } from '@postsider/nestjs-libraries/services/public-api-scopes';
 
@@ -79,5 +80,32 @@ describe('PublicAuditController scope contract', () => {
   it('has exactly one handler, guarded by audit:read', () => {
     expect(handlers).toHaveLength(1);
     expect(Reflect.getMetadata(PUBLIC_API_SCOPES_KEY, handlers[0].handler)).toEqual(['audit:read']);
+  });
+});
+
+describe('PublicPoliciesController scope contract', () => {
+  const prototype = PublicPoliciesController.prototype;
+  const handlers = Object.getOwnPropertyNames(prototype)
+    .map((name) => ({ name, handler: (prototype as any)[name] }))
+    .filter(({ handler }) => Reflect.hasMetadata(METHOD_METADATA, handler));
+
+  it('has six handlers, each with known scopes', () => {
+    expect(handlers).toHaveLength(6);
+    for (const { handler } of handlers) {
+      const scopes = Reflect.getMetadata(PUBLIC_API_SCOPES_KEY, handler);
+      expect(scopes?.length).toBeGreaterThan(0);
+      expect(scopes.every(isPublicApiScope)).toBe(true);
+    }
+  });
+
+  it.each([
+    ['list', ['policies:read']],
+    ['get', ['policies:read']],
+    ['create', ['policies:write']],
+    ['update', ['policies:write']],
+    ['remove', ['policies:write']],
+    ['evaluate', ['posts:read']],
+  ])('authorizes %s only with %j', (name, expected) => {
+    expect(Reflect.getMetadata(PUBLIC_API_SCOPES_KEY, (prototype as any)[name])).toEqual(expected);
   });
 });

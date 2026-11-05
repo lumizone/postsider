@@ -31,11 +31,15 @@ describe('public reliability OpenAPI', () => {
       'INVALID_CONTENT',
       'PROVIDER_UNAVAILABLE',
       'UNKNOWN_OUTCOME',
+      'POLICY_BLOCKED',
       'UNKNOWN',
     ]);
     expect(document.paths['/public/v1/posts/{id}'].get.description).toContain(
       'errorCategory'
     );
+    const retry = document.paths['/public/v1/posts/group/{group}/retry-failed'].post;
+    expect(retry.description).toContain('approval_requested');
+    expect(retry.description).toContain('422');
     await app.close();
   });
 });

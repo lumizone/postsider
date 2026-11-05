@@ -9,6 +9,8 @@ import { Test } from '@nestjs/testing';
 import { json } from 'express';
 import type { AddressInfo } from 'net';
 import { PublicIntegrationsController } from './public.integrations.controller';
+import { passthroughPolicyGate } from './passthrough-policy-gate.spec-helper';
+import { PostPolicyGateService } from '@postsider/nestjs-libraries/database/prisma/policies/post-policy-gate.service';
 import { PublicWorkspaceController } from './public.workspace.controller';
 import { IntegrationService } from '@postsider/nestjs-libraries/database/prisma/integrations/integration.service';
 import { PostsService } from '@postsider/nestjs-libraries/database/prisma/posts/posts.service';
@@ -55,6 +57,7 @@ describe('Public API over HTTP', () => {
     const tokens = new Map<any, any>([
       [IntegrationService, integrationService],
       [PostsService, postsService],
+      [PostPolicyGateService, passthroughPolicyGate],
       [MediaService, mediaService],
       [PostCheckerService, postChecker],
     ]);

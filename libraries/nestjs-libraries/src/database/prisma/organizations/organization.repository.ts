@@ -10,9 +10,20 @@ import { AuthService } from '@postsider/helpers/auth/auth.service';
 import { LEGACY_PUBLIC_API_SCOPES } from '@postsider/nestjs-libraries/services/public-api-oauth-scopes';
 import { CreateOrgUserDto } from '@postsider/nestjs-libraries/dtos/auth/create.org.user.dto';
 import { PublicApiScope } from '@postsider/nestjs-libraries/services/public-api-scopes';
+import type { KeyPermissions } from '@postsider/nestjs-libraries/policies/key-permissions';
+import type { PostActionName } from '@postsider/nestjs-libraries/policies/policy-types';
 import { makeId } from '@postsider/nestjs-libraries/services/make.is';
 import { isBillingEnabled } from '@postsider/nestjs-libraries/services/billing.flag';
 import { pricing } from '@postsider/nestjs-libraries/database/prisma/subscriptions/pricing';
+
+const API_KEY_PUBLIC_SELECT = {
+  id: true,
+  name: true,
+  scopes: true,
+  allowedActions: true,
+  allowedIntegrationIds: true,
+  createdAt: true,
+} as const;
 
 @Injectable()
 export class OrganizationRepository {
@@ -104,16 +115,26 @@ export class OrganizationRepository {
       select: {
         id: true,
         scopes: true,
+        allowedActions: true,
+        allowedIntegrationIds: true,
         organization: { include: subscriptionInclude },
       },
     });
     if (!selfService) return null;
+
+    const allowedActions: PostActionName[] = selfService.allowedActions ?? [];
+    const allowedIntegrationIds: string[] = selfService.allowedIntegrationIds ?? [];
+    const keyPermissions: KeyPermissions | undefined =
+      allowedActions.length > 0 || allowedIntegrationIds.length > 0
+        ? { allowedActions, allowedIntegrationIds }
+        : undefined;
 
     return {
       organization: selfService.organization,
       scopes: selfService.scopes ?? [],
       credentialType: 'api-key' as const,
       apiKeyId: selfService.id,
+      keyPermissions,
     };
   }
 
@@ -661,12 +682,7 @@ export class OrganizationRepository {
     const db = this._organization.model as any;
     return db.apiKey.findMany({
       where: { organizationId: orgId, deletedAt: null },
-      select: {
-        id: true,
-        name: true,
-        scopes: true,
-        createdAt: true,
-      },
+      select: API_KEY_PUBLIC_SELECT,
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -674,7 +690,8 @@ export class OrganizationRepository {
   async createApiKey(
     organizationId: string,
     name: string,
-    scopes: PublicApiScope[]
+    scopes: PublicApiScope[],
+    perms?: Partial<KeyPermissions>
   ) {
     const db = this._organization.model as any;
     const rawKey = 'ps_' + makeId(40);
@@ -684,9 +701,13 @@ export class OrganizationRepository {
         name,
         key: hashedKey,
         scopes,
+        ...(perms?.allowedActions ? { allowedActions: perms.allowedActions } : {}),
+        ...(perms?.allowedIntegrationIds
+          ? { allowedIntegrationIds: perms.allowedIntegrationIds }
+          : {}),
         organization: { connect: { id: organizationId } },
       },
-      select: { id: true, name: true, scopes: true, createdAt: true },
+      select: API_KEY_PUBLIC_SELECT,
     });
     // Return the raw key only at creation (never again).
     return { ...created, key: rawKey };
@@ -695,7 +716,12 @@ export class OrganizationRepository {
   async updateNamedApiKey(
     orgId: string,
     keyId: string,
-    input: { name?: string; scopes?: PublicApiScope[] }
+    input: {
+      name?: string;
+      scopes?: PublicApiScope[];
+      allowedActions?: PostActionName[];
+      allowedIntegrationIds?: string[];
+    }
   ) {
     const db = this._organization.model as any;
     return db.apiKey.update({
@@ -705,8 +731,14 @@ export class OrganizationRepository {
       data: {
         ...(input.name === undefined ? {} : { name: input.name }),
         ...(input.scopes === undefined ? {} : { scopes: input.scopes }),
+        ...(input.allowedActions === undefined
+          ? {}
+          : { allowedActions: input.allowedActions }),
+        ...(input.allowedIntegrationIds === undefined
+          ? {}
+          : { allowedIntegrationIds: input.allowedIntegrationIds }),
       },
-      select: { id: true, name: true, scopes: true, createdAt: true },
+      select: API_KEY_PUBLIC_SELECT,
     });
   }
 

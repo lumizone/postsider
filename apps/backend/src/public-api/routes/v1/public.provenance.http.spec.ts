@@ -4,6 +4,8 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { AddressInfo } from 'net';
 import { PublicIntegrationsController } from './public.integrations.controller';
+import { passthroughPolicyGate } from './passthrough-policy-gate.spec-helper';
+import { PostPolicyGateService } from '@postsider/nestjs-libraries/database/prisma/policies/post-policy-gate.service';
 import { PostsService } from '@postsider/nestjs-libraries/database/prisma/posts/posts.service';
 import { PublicApiIdempotencyService } from '@postsider/nestjs-libraries/database/prisma/idempotency/public-api-idempotency.service';
 import { HttpExceptionFilter } from '@postsider/nestjs-libraries/services/exception.filter';
@@ -24,6 +26,7 @@ describe('post provenance over HTTP', () => {
   beforeAll(async () => {
     const tokens = new Map<any, any>([
       [PostsService, postsService],
+      [PostPolicyGateService, passthroughPolicyGate],
       [PublicApiIdempotencyService, idempotency],
     ]);
     const moduleRef = await Test.createTestingModule({ controllers: [PublicIntegrationsController] })

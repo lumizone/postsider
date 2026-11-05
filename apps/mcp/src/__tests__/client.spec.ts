@@ -536,6 +536,79 @@ describe('PostsiderClient', () => {
       await expect(client.get('/social/x')).rejects.toThrow(/reconnect the OAuth MCP client/);
     });
 
+    describe('policy and key limit errors', () => {
+      const fail = async (status: number, body: unknown) => {
+        fetchMock.mockResolvedValue(
+          mockResponse({ ok: false, status, statusText: 'x', text: typeof body === 'string' ? body : JSON.stringify(body) })
+        );
+        const client = new PostsiderClient(apiKey, 'https://api.postsider.com');
+        return (await client.post('/posts', { type: 'schedule' }).catch((e: unknown) => e)) as Error;
+      };
+
+      it('maps key_action_not_allowed to an owner instruction', async () => {
+        const e = await fail(403, {
+          error: 'key_action_not_allowed',
+          msg: 'This API key may not publish now.',
+          action: 'PUBLISH_NOW',
+          allowedActions: ['DRAFT', 'SCHEDULE'],
+        });
+        expect(e.message).toBe(
+          'This API key may not publish now. Allowed actions: create drafts, schedule. Ask the owner to change the key limits in Settings, API.'
+        );
+      });
+
+      it('maps key_channel_not_allowed and names the channel and the allowed ones', async () => {
+        const e = await fail(403, {
+          error: 'key_channel_not_allowed',
+          integrationId: 'chan_9',
+          allowedIntegrationIds: ['chan_1', 'chan_2'],
+        });
+        expect(e.message).toContain('chan_9');
+        expect(e.message).toContain('chan_1, chan_2');
+        expect(e.message).toContain('Ask the owner to change the key limits in Settings, API.');
+      });
+
+      it('maps policy_blocked to a no retry message with sanitized rule names and no raw body', async () => {
+        const e = await fail(422, {
+          error: 'policy_blocked',
+          msg: 'This post was blocked by a policy: x.',
+          policy: {
+            effect: 'BLOCK',
+            matched: [
+              { ruleId: 'r1', name: 'No\u2014links\nplease', effect: 'BLOCK', condition: 'CONTAINS_LINK' },
+              { ruleId: 'r2', name: 'Secret\u202edash-name', effect: 'BLOCK', condition: 'ALWAYS' },
+            ],
+            channels: ['c1'],
+          },
+        });
+        expect(e.message).toBe(
+          'Blocked by policy: No links please, Secret dash name. Do not retry with the same content; change the content or ask the owner.'
+        );
+        expect(e.message).not.toMatch(/r1|ruleId|CONTAINS_LINK/);
+      });
+
+      it('bounds the number and length of rule names', async () => {
+        const matched = Array.from({ length: 12 }, (_, i) => ({ ruleId: `r${i}`, name: `Rule${i}`.padEnd(200, 'x'), effect: 'BLOCK' }));
+        const e = await fail(422, { error: 'policy_blocked', policy: { matched } });
+        expect(e.message.length).toBeLessThan(600);
+        expect(e.message).toContain('Rule0');
+        expect(e.message).not.toContain('Rule7');
+      });
+
+      it('keeps other 403 and 422 behavior unchanged', async () => {
+        const e403 = await fail(403, { msg: 'nope', error: 'something_else' });
+        expect(e403.message).toContain('Permission denied (403) for POST /posts.');
+        const e422 = await fail(422, { msg: 'bad content' });
+        expect(e422.message).toBe('PostSider API POST /posts failed (422): bad content');
+      });
+
+      it('does not trust non string or malformed fields', async () => {
+        const e = await fail(403, { error: 'key_action_not_allowed', action: { x: 1 }, allowedActions: 'DRAFT' });
+        expect(e.message).toContain('Ask the owner to change the key limits in Settings, API.');
+        expect(e.message).not.toContain('[object');
+      });
+    });
+
     it('explains a plan restriction (402) without retry advice', async () => {
       fetchMock.mockResolvedValue(
         mockResponse({

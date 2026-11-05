@@ -158,6 +158,60 @@ describe('postWorkflowV109', () => {
     expect(mockActivities.markPublishFailed).not.toHaveBeenCalled();
   });
 
+  it('3b. withheld for policy approval returns without touching state, webhooks, plugs or repeat', async () => {
+    // A REQUIRE_APPROVAL rule matched at publish time: the activity parks the post
+    // in the approval queue and reports it through the frozen already_published outcome.
+    mockActivities.getPostsListForPublish.mockResolvedValue([
+      row('p1', { intervalInDays: 2 }),
+    ]);
+    mockActivities.internalPlugsById.mockResolvedValue([
+      { type: 'internal-plug', delay: 0 },
+    ]);
+    mockActivities.publishPostById.mockResolvedValue({
+      outcome: 'already_published',
+      releaseId: '',
+      withheld: 'policy_approval',
+    });
+    await expect(run()).resolves.toBeUndefined();
+    expect(mockActivities.publishPostById).toHaveBeenCalledTimes(1);
+    expect(mockActivities.markPublishFailed).not.toHaveBeenCalled();
+    expect(mockActivities.updatePost).not.toHaveBeenCalled();
+    expect(mockActivities.sendWebhooks).not.toHaveBeenCalled();
+    expect(mockActivities.internalPlugsById).not.toHaveBeenCalled();
+    expect(mockActivities.globalPlugsById).not.toHaveBeenCalled();
+    expect(mockActivities.processInternalPlug).not.toHaveBeenCalled();
+    expect(mockActivities.changeState).not.toHaveBeenCalled();
+    expect(mockActivities.inAppNotification).not.toHaveBeenCalled();
+    expect(require('@temporalio/workflow').startChild).not.toHaveBeenCalled();
+    expect(retrySleeps()).toEqual([]);
+  });
+
+  it('3c. a POLICY_BLOCKED failure is recorded once, notified once and never retried', async () => {
+    mockActivities.publishPostById.mockResolvedValue({
+      outcome: 'failed',
+      failure: {
+        category: 'POLICY_BLOCKED',
+        retryable: false,
+        autoRetry: 'none',
+        message: 'Blocked by policy: No links.',
+      },
+    });
+    await expect(run()).resolves.toBe(false);
+    expect(mockActivities.publishPostById).toHaveBeenCalledTimes(1);
+    expect(mockActivities.refreshTokenWithCauseById).not.toHaveBeenCalled();
+    expect(retrySleeps()).toEqual([]);
+    expect(mockActivities.markPublishFailed).toHaveBeenCalledTimes(1);
+    expect(mockActivities.markPublishFailed).toHaveBeenCalledWith(
+      'org',
+      'p1',
+      expect.objectContaining({ category: 'POLICY_BLOCKED', retryable: false }),
+      expect.any(Array)
+    );
+    expect(mockActivities.inAppNotification).toHaveBeenCalledTimes(1);
+    expect(mockActivities.updatePost).not.toHaveBeenCalled();
+    expect(mockActivities.sendWebhooks).not.toHaveBeenCalled();
+  });
+
   it('4. rate limited once then success', async () => {
     mockActivities.publishPostById
       .mockResolvedValueOnce(rateLimited)

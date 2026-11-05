@@ -9,6 +9,7 @@ import { grantedScopesForOAuth } from '@postsider/nestjs-libraries/services/publ
 import { pricing } from '@postsider/nestjs-libraries/database/prisma/subscriptions/pricing';
 import { runWithActor } from '@postsider/nestjs-libraries/actor/actor-context';
 import { actorFromPublicCredential } from '@postsider/nestjs-libraries/actor/post-actor';
+import type { KeyPermissions } from '@postsider/nestjs-libraries/policies/key-permissions';
 import { FunnelAttributionService } from '@postsider/nestjs-libraries/database/prisma/attribution/funnel-attribution.service';
 
 @Injectable()
@@ -19,6 +20,8 @@ export class PublicAuthMiddleware implements NestMiddleware {
     @Optional() private _funnelAttribution?: FunnelAttributionService
   ) {}
   async use(req: Request, res: Response, next: NextFunction) {
+    // Only a self-service api-key row can carry limits; set in that branch.
+    let keyPermissions: KeyPermissions | undefined;
     const auth = (req.headers.authorization ||
       req.headers.Authorization) as string;
     if (!auth) {
@@ -141,10 +144,22 @@ export class PublicAuthMiddleware implements NestMiddleware {
         req.org = { ...org, users: [{ role: 'SUPERADMIN', disabled: false }] };
         // @ts-ignore
         req.publicApiScopes = credential.scopes;
+        const limits =
+          credential.credentialType === 'api-key'
+            ? (credential as { keyPermissions?: KeyPermissions }).keyPermissions
+            : undefined;
+        if (
+          limits &&
+          (limits.allowedActions.length > 0 ||
+            limits.allowedIntegrationIds.length > 0)
+        ) {
+          keyPermissions = limits;
+        }
         // @ts-ignore
         req.publicApiCredential = {
           type: credential.credentialType,
           ...(credential.apiKeyId ? { id: credential.apiKeyId } : {}),
+          ...(keyPermissions ? { permissions: keyPermissions } : {}),
         };
       }
     } catch (err) {
@@ -155,7 +170,8 @@ export class PublicAuthMiddleware implements NestMiddleware {
     runWithActor(
       // @ts-ignore
       actorFromPublicCredential(req.publicApiCredential),
-      () => next()
+      () => next(),
+      keyPermissions ? { keyPermissions } : undefined
     );
   }
 }
