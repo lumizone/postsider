@@ -109,7 +109,7 @@ export function toGroupSummary(
   const destinations: GroupDestination[] = rows.map((r) => ({
     postId: r.id,
     integrationId: r.integrationId,
-    integrationName: r.integration.name,
+    integrationName: cleanDisplayName(r.integration.name) ?? '',
     providerIdentifier: r.integration.providerIdentifier,
     picture: r.integration.picture,
     state: r.state,

@@ -179,6 +179,17 @@ describe('toGroupSummary', () => {
   });
 });
 
+describe('destination channel name', () => {
+  it('is cleaned like the detail view (bidi and control characters removed)', () => {
+    const s = toGroupSummary(
+      [row({ integration: { id: 'i1', name: '  Ch\u202Ean\u200B\u0007  ', providerIdentifier: 'x', picture: null } } as any)],
+      noResolve,
+      []
+    );
+    expect(s.destinations[0].integrationName).toBe('Chan');
+  });
+});
+
 describe('detail helpers', () => {
   it('plainText strips tags, keeps block breaks and removes bidi and control characters', () => {
     expect(plainText('<p>A &amp; B</p><p>C<br>D</p>')).toBe('A & B\nC\nD');

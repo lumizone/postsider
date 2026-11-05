@@ -88,4 +88,11 @@ describe('summarizeDateResult', () => {
     expect(summarizeDateResult({})).toEqual({ approvalRequested: false });
     expect(summarizeDateResult('x')).toEqual({ approvalRequested: false });
   });
+
+  it('treats a REQUIRE_APPROVAL policy outcome as not applied even when approvalRequested is false', () => {
+    const res = { approvalRequested: false, policy: { effect: 'REQUIRE_APPROVAL' } };
+    expect(summarizeDateResult(res)).toEqual({ approvalRequested: true });
+    expect(summarizeDateResult({ policy: { effect: 'ALLOW' } })).toEqual({ approvalRequested: false });
+    expect(summarizeDateResult({ policy: 'REQUIRE_APPROVAL' })).toEqual({ approvalRequested: false });
+  });
 });
