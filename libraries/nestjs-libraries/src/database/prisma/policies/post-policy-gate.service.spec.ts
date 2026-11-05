@@ -1,6 +1,6 @@
 jest.mock('isomorphic-dompurify', () => ({ sanitize: (v: string) => v }));
 
-import { HttpException } from '@nestjs/common';
+import { HttpException, NotFoundException } from '@nestjs/common';
 import { PostPolicyGateService } from './post-policy-gate.service';
 import { PolicyBlockedException } from '@postsider/nestjs-libraries/policies/policy-errors';
 import { PolicyInputTooLargeError } from '@postsider/nestjs-libraries/policies/policy-text';
@@ -37,9 +37,11 @@ describe('PostPolicyGateService', () => {
     evaluateTargets: jest.fn(),
     recordOutcome: jest.fn(),
     topLevelRowsOfGroup: jest.fn(),
+    clock: jest.fn(),
   };
   const router = { route: jest.fn() };
-  const gate = new PostPolicyGateService(evaluation as any, router as any);
+  const approvals = { getForPost: jest.fn() };
+  const gate = new PostPolicyGateService(evaluation as any, router as any, approvals as any);
   const actor = { type: 'API_KEY', apiKeyId: 'k1' } as any;
   const body = (type: 'draft' | 'schedule' | 'now', ids = ['a']) =>
     ({
@@ -167,6 +169,43 @@ describe('PostPolicyGateService', () => {
       const targets = evaluation.evaluateTargets.mock.calls[0][1];
       expect(targets[0].excludePostId).toBe('p1');
       expect(targets[0].actors.map((a: any) => a.type).sort()).toEqual(['AGENT', 'API_KEY']);
+    });
+
+    it('dashboard edit: each target excludes its own stored post, by value id or group', async () => {
+      evaluation.targetFromStoredPost.mockImplementation(async (_o: string, id: string) =>
+        target('a', {
+          actors: [{ type: 'USER', userId: `author-${id}`, apiKeyId: null, oauthClientId: null }],
+        })
+      );
+      evaluation.topLevelRowsOfGroup.mockResolvedValue([
+        { id: 'other', integrationId: 'zzz' },
+        { id: 'root-b', integrationId: 'b' },
+      ]);
+      evaluation.evaluateTargets.mockResolvedValue(allow(['a', 'b', 'c']));
+      await gate.preflightWrite('org', body('schedule', ['a', 'b', 'c']), actor, {
+        editing: [{ postId: 'p-a' }, { group: 'g1' }, undefined],
+      });
+      const targets = evaluation.evaluateTargets.mock.calls[0][1];
+      expect(targets[0].excludePostId).toBe('p-a');
+      expect(targets[1].excludePostId).toBe('root-b');
+      expect(targets[2].excludePostId).toBeUndefined();
+      expect(targets[0].actors.some((a: any) => a.userId === 'author-p-a')).toBe(true);
+      expect(targets[1].actors.some((a: any) => a.userId === 'author-root-b')).toBe(true);
+      expect(evaluation.topLevelRowsOfGroup).toHaveBeenCalledWith('org', 'g1');
+    });
+
+    it('dashboard edit of a scheduled post fails closed when the stored post is too large', async () => {
+      evaluation.targetFromStoredPost.mockRejectedValue(new PolicyInputTooLargeError(1, 'big'));
+      const err: any = await gate
+        .preflightWrite('org', body('schedule'), actor, { editing: [{ postId: 'p1' }] })
+        .catch((e) => e);
+      expect(err.getResponse().error).toBe('policy_input_too_large');
+    });
+
+    it('dashboard edit of a draft fails open when the stored post is too large', async () => {
+      evaluation.targetFromStoredPost.mockRejectedValue(new PolicyInputTooLargeError(1, 'big'));
+      const out = await gate.preflightWrite('org', body('draft'), actor, { editing: [{ postId: 'p1' }] });
+      expect(out.evaluated).toBe(false);
     });
 
     it('create path leaves excludePostId unset', async () => {
@@ -501,6 +540,131 @@ describe('PostPolicyGateService', () => {
       const err: any = await gate.gateRetry('org', 'g', retryOpts).catch((e) => e);
       expect(err.getStatus()).toBe(400);
       expect(err.getResponse().error).toBe('policy_input_too_large');
+    });
+  });
+
+  describe('gateReschedule', () => {
+    const userActor = { type: 'USER', userId: 'u1' } as any;
+    const newDate = '2031-05-05T10:00:00Z';
+    const storedTarget = () =>
+      target('a', {
+        scheduledAt: new Date('2030-01-01T10:00:00Z'),
+        actors: [{ type: 'AGENT', userId: null, apiKeyId: 'k9', oauthClientId: null }],
+      });
+    beforeEach(() => {
+      evaluation.targetFromStoredPost.mockImplementation(async () => storedTarget());
+      evaluation.clock.mockReturnValue(new Date('2030-06-01T00:00:00Z'));
+      approvals.getForPost.mockResolvedValue(null);
+    });
+    const requireApproval = {
+      effect: 'REQUIRE_APPROVAL' as const,
+      matched: [match('REQUIRE_APPROVAL')],
+      channels: [{ integrationId: 'a', effect: 'REQUIRE_APPROVAL' as const, matched: [match('REQUIRE_APPROVAL')] }],
+    };
+
+    it('evaluates the NEW date in the write phase with the dragging user plus the stored actors', async () => {
+      evaluation.evaluateTargets.mockImplementation(async (_o: string, targets: any[], phase: string) => {
+        // an OUTSIDE_WINDOW style evaluator looks at the target date
+        expect(phase).toBe('write');
+        return targets[0].scheduledAt.toISOString() === '2031-05-05T10:00:00.000Z'
+          ? allow(['a'])
+          : { effect: 'BLOCK', matched: [match('BLOCK')], channels: [{ integrationId: 'a', effect: 'BLOCK', matched: [match('BLOCK')] }] };
+      });
+      const out = await gate.gateReschedule('org', 'p1', newDate, userActor);
+      expect(out).toMatchObject({ proceed: true, approvalRequested: false });
+      const t = evaluation.evaluateTargets.mock.calls[0][1][0];
+      expect(t.actors.map((a: any) => a.type)).toEqual(['USER', 'AGENT']);
+      expect(evaluation.targetFromStoredPost.mock.calls[0][2]).toEqual({ action: 'SCHEDULE', approved: false });
+    });
+
+    it('a past date is evaluated at now', async () => {
+      evaluation.evaluateTargets.mockResolvedValue(allow(['a']));
+      await gate.gateReschedule('org', 'p1', '2020-01-01T00:00:00Z', userActor);
+      expect(evaluation.evaluateTargets.mock.calls[0][1][0].scheduledAt.toISOString()).toBe('2030-06-01T00:00:00.000Z');
+    });
+
+    it('BLOCK throws 422 and records once with the post id', async () => {
+      const blocked = {
+        effect: 'BLOCK' as const,
+        matched: [match('BLOCK')],
+        channels: [{ integrationId: 'a', effect: 'BLOCK' as const, matched: [match('BLOCK')] }],
+      };
+      evaluation.evaluateTargets.mockResolvedValue(blocked);
+      await expect(gate.gateReschedule('org', 'p1', newDate, userActor)).rejects.toBeInstanceOf(PolicyBlockedException);
+      expect(evaluation.recordOutcome).toHaveBeenCalledTimes(1);
+      expect(evaluation.recordOutcome).toHaveBeenCalledWith('org', blocked, 'write', { postId: 'p1' });
+      expect(router.route).not.toHaveBeenCalled();
+    });
+
+    it('REQUIRE_APPROVAL routes with terminateWorkflow true and does not proceed', async () => {
+      evaluation.evaluateTargets.mockResolvedValue(requireApproval);
+      const out = await gate.gateReschedule('org', 'p1', newDate, userActor);
+      expect(out).toMatchObject({ proceed: false, approvalRequested: true });
+      expect(router.route).toHaveBeenCalledWith('org', 'p1', { terminateWorkflow: true });
+      expect(evaluation.recordOutcome).toHaveBeenCalledWith('org', requireApproval, 'write', { postId: 'p1' });
+    });
+
+    it('an already requested approval is routed once and requested false passes through', async () => {
+      evaluation.evaluateTargets.mockResolvedValue(requireApproval);
+      router.route.mockResolvedValue({ requested: false, approvalId: 'ap' });
+      const out = await gate.gateReschedule('org', 'p1', newDate, userActor);
+      expect(out).toMatchObject({ proceed: false, approvalRequested: false });
+    });
+
+    it('ALLOW proceeds without routing or recording', async () => {
+      evaluation.evaluateTargets.mockResolvedValue(allow(['a']));
+      const out = await gate.gateReschedule('org', 'p1', newDate, userActor);
+      expect(out).toMatchObject({ proceed: true, approvalRequested: false });
+      expect(router.route).not.toHaveBeenCalled();
+    });
+
+    it('an APPROVED approval re-evaluates with approved true and proceeds', async () => {
+      evaluation.evaluateTargets
+        .mockResolvedValueOnce(requireApproval)
+        .mockResolvedValueOnce(allow(['a']));
+      approvals.getForPost.mockResolvedValue({ status: 'APPROVED' });
+      const out = await gate.gateReschedule('org', 'p1', newDate, userActor);
+      expect(out.proceed).toBe(true);
+      expect(evaluation.targetFromStoredPost.mock.calls[1][2]).toEqual({ action: 'SCHEDULE', approved: true });
+      expect(router.route).not.toHaveBeenCalled();
+    });
+
+    it('a pending approval does not count as approved', async () => {
+      evaluation.evaluateTargets.mockResolvedValue(requireApproval);
+      approvals.getForPost.mockResolvedValue({ status: 'PENDING' });
+      const out = await gate.gateReschedule('org', 'p1', newDate, userActor);
+      expect(out.proceed).toBe(false);
+      expect(evaluation.evaluateTargets).toHaveBeenCalledTimes(1);
+    });
+
+    it('an unknown post is a NotFoundException', async () => {
+      evaluation.targetFromStoredPost.mockResolvedValue(null);
+      await expect(gate.gateReschedule('org', 'p1', newDate, userActor)).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('fails closed with 400 policy_input_too_large', async () => {
+      evaluation.targetFromStoredPost.mockRejectedValue(new PolicyInputTooLargeError(1, 'big'));
+      const err: any = await gate.gateReschedule('org', 'p1', newDate, userActor).catch((e) => e);
+      expect(err.getStatus()).toBe(400);
+      expect(err.getResponse().error).toBe('policy_input_too_large');
+      expect(router.route).not.toHaveBeenCalled();
+    });
+
+    it('other evaluation errors bubble (never ALLOW)', async () => {
+      evaluation.evaluateTargets.mockRejectedValue(new Error('db down'));
+      await expect(gate.gateReschedule('org', 'p1', newDate, userActor)).rejects.toThrow('db down');
+    });
+
+    it('rejects an invalid date with 400', async () => {
+      await expect(gate.gateReschedule('org', 'p1', 'nope', userActor)).rejects.toBeInstanceOf(HttpException);
+      expect(evaluation.targetFromStoredPost).not.toHaveBeenCalled();
+    });
+
+    it('exposes sanitized rule names', async () => {
+      const dirty = { ...requireApproval, matched: [{ ...match('REQUIRE_APPROVAL'), name: 'A\u2014B' }] };
+      evaluation.evaluateTargets.mockResolvedValue(dirty);
+      const out = await gate.gateReschedule('org', 'p1', newDate, userActor);
+      expect(out.policy.matched[0].name).toBe('A B');
     });
   });
 });

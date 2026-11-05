@@ -9,6 +9,7 @@ import {
   Param,
   Post,
   Put,
+  Optional,
   Query,
   Res,
   UploadedFile,
@@ -41,6 +42,9 @@ import {
   Sections,
 } from '@postsider/backend/services/auth/permissions/permission.exception.class';
 import { PostValidationException } from '@postsider/backend/api/routes/posts.validation.exception';
+import { PostPolicyGateService } from '@postsider/nestjs-libraries/database/prisma/policies/post-policy-gate.service';
+import { dashboardPolicyType } from '@postsider/nestjs-libraries/policies/dashboard-policy-type';
+import { actorFromUser } from '@postsider/nestjs-libraries/actor/post-actor';
 import { AiQuotaExceededError } from '@postsider/nestjs-libraries/database/prisma/subscriptions/subscription.service';
 
 @ApiTags('Posts')
@@ -51,7 +55,8 @@ export class PostsController {
     private _shortLinkService: ShortLinkService,
     private _smartSlots: SmartSlotsService,
     private _csvImport: CsvImportService,
-    private _postChecker: PostCheckerService
+    private _postChecker: PostCheckerService,
+    @Optional() private _gate?: PostPolicyGateService
   ) {}
 
   @Post('/check')
@@ -319,6 +324,7 @@ export class PostsController {
   @CheckPolicies([AuthorizationActions.Create, Sections.POSTS_PER_MONTH])
   async createPost(
     @GetOrgFromRequest() org: Organization,
+    @GetUserFromRequest() user: User,
     @Body() rawBody: any
   ) {
     // Server-side validation — never trust the client to have validated.
@@ -360,7 +366,34 @@ export class PostsController {
     }
 
     const body = await this._postsService.mapTypeToPost(rawBody, org.id);
-    return this._postsService.createPost(org.id, body, 'WEB');
+    if (!this._gate) {
+      return this._postsService.createPost(org.id, body, 'WEB');
+    }
+
+    // Write-time policy gate (USER actor). 'update' is an edit of stored posts
+    // and is evaluated as a schedule; each element names the stored post it
+    // replaces (value id, else thread group) so it is not counted against its
+    // own daily cap and its original author still counts as an actor.
+    const editing = (body.posts ?? []).map((p: any) => {
+      const postId = p?.value?.find((v: any) => typeof v?.id === 'string' && v.id)?.id;
+      const group = typeof p?.group === 'string' && p.group ? p.group : undefined;
+      return postId || group ? { postId, group } : undefined;
+    });
+    const gateBody = { ...body, type: dashboardPolicyType(body.type) };
+    const pre = await this._gate.preflightWrite(
+      org.id,
+      gateBody as any,
+      actorFromUser(user),
+      editing.some(Boolean) ? { editing } : {}
+    );
+    // A channel that needs approval is written as a draft right away, so the
+    // content is never armed and nothing races the routing.
+    const created = await this._postsService.createPost(org.id, body, 'WEB', {
+      ...(pre.approvalIntegrationIds.size
+        ? { forceDraftIntegrationIds: pre.approvalIntegrationIds }
+        : {}),
+    });
+    return this._gate.finishCreate(org.id, created, pre);
   }
 
   @Delete('/:group')
@@ -372,12 +405,21 @@ export class PostsController {
   }
 
   @Put('/:id/date')
-  changeDate(
+  async changeDate(
     @GetOrgFromRequest() org: Organization,
+    @GetUserFromRequest() user: User,
     @Param('id') id: string,
     @Body('date') date: string,
     @Body('action') action: 'schedule' | 'update' = 'schedule'
   ) {
+    // Only a schedule move is evaluated, against the NEW date. A date-only
+    // update never changes the state, so it is not gated.
+    if (this._gate && action === 'schedule') {
+      const gated = await this._gate.gateReschedule(org.id, id, date, actorFromUser(user));
+      if (!gated.proceed) {
+        return { approvalRequested: true, policy: { effect: gated.policy.effect, matched: gated.policy.matched } };
+      }
+    }
     return this._postsService.changeDate(org.id, id, date, action);
   }
 
