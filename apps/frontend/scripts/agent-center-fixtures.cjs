@@ -9,6 +9,7 @@
  *   world "default": 10 groups, one per row bucket.
  *   world "many":    60 groups with one pending approval each (bulk cap test).
  *   role: "ADMIN" (default) or "USER".
+ *   failPolicyUpdate: true makes PUT /policies/:id answer 500 (toggle rollback check).
  */
 
 const NOW = Date.now();
@@ -232,6 +233,12 @@ const POLICIES = [
     appliesToActorTypes: [], appliesToApiKeyIds: [], appliesToIntegrationIds: [], appliesToProviders: [],
     condition: "CONTAINS_WORDS", conditionParams: { words: ["giveaway", "free money"] }, effect: "BLOCK",
   },
+  {
+    // The stored name has a bidi override and a zero width space: only the edit input may show it.
+    id: "r4", name: "Raw\u202E Name\u200B", displayName: "Clean Name", enabled: true, priority: 40,
+    appliesToActorTypes: [], appliesToApiKeyIds: [], appliesToIntegrationIds: [], appliesToProviders: [],
+    condition: "ALWAYS", conditionParams: {}, effect: "REQUIRE_APPROVAL",
+  },
 ];
 
 function createFixtures(opts) {
@@ -321,6 +328,9 @@ function createFixtures(opts) {
       });
     }
     if (path === "/policies" && method === "POST") return json(Object.assign({ id: "r-new", displayName: (body && body.name) || "" }, body || {}), 201);
+    if (/^\/policies\/[^/]+$/.test(path) && method === "PUT" && opts && opts.failPolicyUpdate) {
+      return json({ message: "Policy store unavailable" }, 500);
+    }
     if (/^\/policies\/[^/]+$/.test(path)) return json(method === "DELETE" ? {} : Object.assign({}, POLICIES[0], body || {}));
 
     if (path === "/settings/api-keys" && method === "GET") {
@@ -331,8 +341,13 @@ function createFixtures(opts) {
           allowedActions: ["DRAFT", "SCHEDULE"], allowedIntegrationIds: ["int-x"], createdAt: iso(60 * 24 * 12),
         },
         { id: "k-2", name: "Content agent", scopes: ["posts:read"], allowedActions: [], allowedIntegrationIds: [], createdAt: iso(60 * 24 * 40) },
+        // Only restriction is a channel that no longer exists.
+        { id: "k-3", name: "Dead channel key", scopes: ["posts:read"], allowedActions: [], allowedIntegrationIds: ["int-gone"], createdAt: iso(60 * 24 * 30) },
+        // A live and a dead channel plus an action limit.
+        { id: "k-4", name: "Mixed key", scopes: ["posts:read"], allowedActions: ["DRAFT"], allowedIntegrationIds: ["int-x", "int-gone"], createdAt: iso(60 * 24 * 20) },
       ]);
     }
+    if (/^\/settings\/api-keys\/[^/]+$/.test(path) && method === "PUT") return json(Object.assign({}, body || {}));
 
     return json([]);
   }

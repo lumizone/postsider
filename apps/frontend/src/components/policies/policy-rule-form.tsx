@@ -64,6 +64,10 @@ export function PolicyRuleForm({ rule, apiKeys, channels, onSave, onClose }: Pro
   const shown = submitted ? errors : {};
 
   const panelRef = useRef<HTMLDivElement | null>(null);
+  // Captured during the first render, before autoFocus moves focus into the form.
+  const openerRef = useRef<HTMLElement | null>(
+    typeof document !== "undefined" ? (document.activeElement as HTMLElement | null) : null
+  );
   const busyRef = useRef(busy);
   busyRef.current = busy;
   const closeRef = useRef(onClose);
@@ -72,7 +76,7 @@ export function PolicyRuleForm({ rule, apiKeys, channels, onSave, onClose }: Pro
   // Focus goes into the dialog on open, Tab wraps inside it, Escape closes it
   // (not while saving) and focus returns to the opener on close.
   useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null;
+    const opener = openerRef.current;
     const panel = panelRef.current;
     if (panel && !panel.contains(document.activeElement)) {
       panel.querySelector<HTMLElement>(FOCUSABLE)?.focus();
