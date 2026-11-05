@@ -201,7 +201,10 @@ export class PublicWorkspaceController {
     this.assertAdmin(org);
     const hasName = body?.name !== undefined && body?.name !== null;
     const hasId = body?.customerId !== undefined && body?.customerId !== null;
-    if (hasName && hasId) {
+    // customerId: null is an explicit "unassign"; combined with a name it is
+    // just as ambiguous as two ids, so any present customerId key counts.
+    const hasCustomerIdKey = body?.customerId !== undefined;
+    if (hasName && (hasId || hasCustomerIdKey)) {
       throw new HttpException(
         { msg: 'Send either name or customerId, not both.' },
         400

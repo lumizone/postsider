@@ -80,6 +80,26 @@ describe('PublicWorkspaceController', () => {
     expect(c._integrationService.updateOnCustomerName).toHaveBeenCalledWith('org-1', 'c1', 'Acme');
   });
 
+  it('400s when name is sent together with customerId, including an explicit null', async () => {
+    const c = build();
+    c._customerService = { get: jest.fn() };
+    c._integrationService.updateIntegrationGroup = jest.fn();
+    for (const body of [
+      { name: 'Acme', customerId: null },
+      { name: 'Acme', customerId: 'cu1' },
+    ]) {
+      await expect(c.setChannelCustomer(orgWith('ADMIN'), 'c1', body)).rejects.toMatchObject({ status: 400 });
+    }
+    expect(c._integrationService.updateIntegrationGroup).not.toHaveBeenCalled();
+    expect(c._integrationService.updateOnCustomerName).not.toHaveBeenCalled();
+    // customerId: null alone still unassigns
+    await expect(c.setChannelCustomer(orgWith('ADMIN'), 'c1', { customerId: null })).resolves.toEqual({
+      id: 'c1',
+      customer: null,
+      customerId: null,
+    });
+  });
+
   it('turns a full plan into a payment-required error on enable', async () => {
     const c = build({
       integration: { enableChannel: jest.fn().mockRejectedValue(new ChannelCapacityExceededError()) },
