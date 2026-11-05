@@ -50,6 +50,12 @@
   gap: 8px;
 }
 
+/* Narrow screens: the actions drop under the rule so the name keeps its width. */
+@media (max-width: 520px) {
+  .row { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
+  .rowActions { grid-column: 1 / -1; }
+}
+
 .chip {
   display: inline-flex;
   align-items: center;
