@@ -1,9 +1,11 @@
 jest.mock('isomorphic-dompurify', () => ({ sanitize: (v: string) => v }));
 
-import { BadRequestException, INestApplication, NotFoundException, ValidationPipe } from '@nestjs/common';
+import { BadRequestException, HttpException, INestApplication, NotFoundException, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { AddressInfo } from 'net';
 import { AgentActivityController } from './agent-activity.controller';
+import { AgentActivityActionsService } from '@postsider/nestjs-libraries/database/prisma/agent-activity/agent-activity-actions.service';
+import { AuthorizationActions, Sections } from '@postsider/backend/services/auth/permissions/permission.exception.class';
 import { AgentActivityService } from '@postsider/nestjs-libraries/database/prisma/agent-activity/agent-activity.service';
 import { CHECK_POLICIES_KEY } from '@postsider/backend/services/auth/permissions/permissions.ability';
 import { HttpExceptionFilter } from '@postsider/nestjs-libraries/services/exception.filter';
@@ -12,10 +14,11 @@ describe('AgentActivityController (dashboard reads)', () => {
   let app: INestApplication;
   let base: string;
   let role = 'USER';
+  const actions = { bulkResolve: jest.fn(), retryFailed: jest.fn() };
   const service = { summary: jest.fn(), list: jest.fn(), filters: jest.fn(), detail: jest.fn() };
 
   beforeAll(async () => {
-    const tokens = new Map<any, any>([[AgentActivityService, service]]);
+    const tokens = new Map<any, any>([[AgentActivityService, service], [AgentActivityActionsService, actions]]);
     const moduleRef = await Test.createTestingModule({ controllers: [AgentActivityController] })
       .useMocker((token) => tokens.get(token) ?? {})
       .compile();
@@ -24,6 +27,7 @@ describe('AgentActivityController (dashboard reads)', () => {
     app.useGlobalFilters(new HttpExceptionFilter());
     app.use((req: any, _res: any, next: any) => {
       req.org = { id: 'org-1', defaultTimezone: 'Europe/Warsaw', users: [{ role }] };
+      req.user = { id: 'user-9' };
       next();
     });
     await app.listen(0);
@@ -142,6 +146,77 @@ describe('AgentActivityController (dashboard reads)', () => {
       expect(
         Reflect.getMetadata(CHECK_POLICIES_KEY, AgentActivityController.prototype.detail)
       ).toBeUndefined();
+    });
+  });
+
+  describe('actions', () => {
+    const post = (path: string, body: unknown) =>
+      fetch(`${base}${path}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+    it('both routes require admin policy metadata', () => {
+      for (const name of ['bulkApprovals', 'retryFailed'] as const) {
+        expect(Reflect.getMetadata(CHECK_POLICIES_KEY, AgentActivityController.prototype[name])).toEqual([
+          [AuthorizationActions.Create, Sections.ADMIN],
+        ]);
+      }
+    });
+
+    it('bulk passes org, user id, caller role and body', async () => {
+      role = 'ADMIN';
+      actions.bulkResolve.mockResolvedValue({ results: [], summary: { done: 0, skipped: 0, failed: 0 } });
+      const res = await post('/approvals/bulk', { action: 'approve', approvalIds: ['a'] });
+      expect(res.status).toBe(201);
+      expect(actions.bulkResolve).toHaveBeenCalledWith(
+        'org-1',
+        'user-9',
+        'ADMIN',
+        expect.objectContaining({ action: 'approve', approvalIds: ['a'] })
+      );
+    });
+
+    it('a missing role defaults to USER (service rejects)', async () => {
+      actions.bulkResolve.mockResolvedValue({ results: [], summary: { done: 0, skipped: 0, failed: 0 } });
+      await post('/approvals/bulk', { action: 'approve', approvalIds: ['a'] });
+      expect(actions.bulkResolve.mock.calls[0][2]).toBe('USER');
+    });
+
+    it('51 ids is a 400 and the service is not called', async () => {
+      const res = await post('/approvals/bulk', {
+        action: 'approve',
+        approvalIds: Array.from({ length: 51 }, (_, i) => `a${i}`),
+      });
+      expect(res.status).toBe(400);
+      expect(actions.bulkResolve).not.toHaveBeenCalled();
+    });
+
+    it('retry-failed defaults includeUnknownOutcome to false', async () => {
+      actions.retryFailed.mockResolvedValue({ group: 'g1', results: [], policy: {} });
+      const res = await post('/groups/g1/retry-failed', {});
+      expect(res.status).toBe(201);
+      expect(actions.retryFailed).toHaveBeenCalledWith('org-1', 'g1', { includeUnknownOutcome: false });
+    });
+
+    it('retry-failed forwards includeUnknownOutcome true', async () => {
+      actions.retryFailed.mockResolvedValue({ group: 'g1', results: [], policy: {} });
+      await post('/groups/g1/retry-failed', { includeUnknownOutcome: true });
+      expect(actions.retryFailed).toHaveBeenCalledWith('org-1', 'g1', { includeUnknownOutcome: true });
+    });
+
+    it('retry-failed rejects a non-boolean with 400', async () => {
+      const res = await post('/groups/g1/retry-failed', { includeUnknownOutcome: 'yes' });
+      expect(res.status).toBe(400);
+      expect(actions.retryFailed).not.toHaveBeenCalled();
+    });
+
+    it('a service 404 and a 422 surface unchanged', async () => {
+      actions.retryFailed.mockRejectedValueOnce(new NotFoundException('Group not found'));
+      expect((await post('/groups/zzz/retry-failed', {})).status).toBe(404);
+      actions.retryFailed.mockRejectedValueOnce(new HttpException({ error: 'policy_blocked' }, 422));
+      expect((await post('/groups/g1/retry-failed', {})).status).toBe(422);
     });
   });
 });

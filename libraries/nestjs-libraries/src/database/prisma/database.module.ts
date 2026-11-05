@@ -71,6 +71,7 @@ import { PostAnalyticsRepository } from '@postsider/nestjs-libraries/database/pr
 import { FunnelAttributionService } from '@postsider/nestjs-libraries/database/prisma/attribution/funnel-attribution.service';
 import { ActorDirectoryService } from '@postsider/nestjs-libraries/database/prisma/agent-activity/actor-directory.service';
 import { AgentActivityRepository } from '@postsider/nestjs-libraries/database/prisma/agent-activity/agent-activity.repository';
+import { AgentActivityActionsService } from '@postsider/nestjs-libraries/database/prisma/agent-activity/agent-activity-actions.service';
 import { AgentActivityService } from '@postsider/nestjs-libraries/database/prisma/agent-activity/agent-activity.service';
 import { PostAnalyticsService } from '@postsider/nestjs-libraries/database/prisma/post-analytics/post-analytics.service';
 
@@ -155,6 +156,7 @@ import { PostAnalyticsService } from '@postsider/nestjs-libraries/database/prism
     ActorDirectoryService,
     AgentActivityRepository,
     AgentActivityService,
+    AgentActivityActionsService,
   ],
   get exports() {
     return this.providers;
