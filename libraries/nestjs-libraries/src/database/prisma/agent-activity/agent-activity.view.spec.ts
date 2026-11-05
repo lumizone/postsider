@@ -1,4 +1,4 @@
-import { toGroupSummary, ActivityRow, plainText, cleanMetadata, parseRecordedPolicy, threadTexts } from './agent-activity.view';
+import { toGroupSummary, ActivityRow, plainText, cleanMetadata, timelineMetadata, parseRecordedPolicy, threadTexts } from './agent-activity.view';
 import type { ActorResolver } from './actor-directory.service';
 
 const row = (over: Partial<ActivityRow> = {}): ActivityRow =>
@@ -184,6 +184,28 @@ describe('detail helpers', () => {
     expect(plainText('<p>A &amp; B</p><p>C<br>D</p>')).toBe('A & B\nC\nD');
     expect(plainText('x\u202Ey\u200Bz\u0007')).toBe('xyz');
     expect(plainText(null)).toBe('');
+  });
+
+  it('plainText keeps ZWJ, LRM and RLM but strips overrides, isolates and other zero-width characters', () => {
+    expect(plainText('a\u200Db\u200Ec\u200Fd')).toBe('a\u200Db\u200Ec\u200Fd');
+    expect(plainText('x\u202Ay\u202Dz\u2066a\u2069b\u200Bc\u200Cd\u2060e\uFEFFf')).toBe('xyzabcdef');
+  });
+
+  it('timelineMetadata keeps only keys the audit writers emit and cleans values', () => {
+    expect(
+      timelineMetadata({
+        approvalId: 'a1',
+        decision: 'APPROVED',
+        ruleNames: 'R\u202E',
+        includeUnknownOutcome: true,
+        guestToken: 'secret',
+        token: 't',
+        key: 'k',
+        nested: { x: 1 },
+      })
+    ).toEqual({ approvalId: 'a1', decision: 'APPROVED', ruleNames: 'R', includeUnknownOutcome: true });
+    expect(timelineMetadata(null)).toEqual({});
+    expect(timelineMetadata('x')).toEqual({});
   });
 
   it('plainText is capped', () => {

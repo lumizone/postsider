@@ -241,7 +241,9 @@ const METADATA_STRING_MAX = 500;
 const METADATA_MAX_DEPTH = 4;
 // eslint-disable-next-line no-control-regex
 const CONTROL_KEEP_NEWLINE = /[\u0000-\u0009\u000B-\u001F\u007F-\u009F]/g;
-const INVISIBLE = /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g;
+// Post bodies keep ZWJ (U+200D) and LRM/RLM (U+200E/F): they are real content and the
+// reviewer must see what will be published. Overrides, isolates and other zero-width stay out.
+const INVISIBLE = /[\u200B\u200C\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g;
 
 /** Plain text of stored HTML: block boundaries become line breaks, untrusted characters are removed. */
 export function plainText(html: string | null | undefined): string {
@@ -256,6 +258,23 @@ export function plainText(html: string | null | undefined): string {
     .replace(/\n{3,}/g, '\n\n')
     .trim();
   return Array.from(text).slice(0, CONTENT_TEXT_MAX).join('').trim();
+}
+
+/** Keys the audit writers emit (approval, post, retry, publish and policy events). */
+const TIMELINE_METADATA_KEYS = new Set([
+  'approvalId', 'decision', 'by', 'group', 'integrationId', 'state', 'publishDate', 'creationMethod',
+  'from', 'to', 'includeUnknownOutcome', 'previousErrorCategory', 'errorCategory', 'errorRetryable',
+  'releaseUrl', 'effect', 'phase', 'matchedCount', 'ruleIds', 'ruleNames',
+]);
+
+/** Timeline metadata: only known keys survive, values are cleaned. */
+export function timelineMetadata(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (TIMELINE_METADATA_KEYS.has(k)) out[k] = cleanMetadata(v, 1);
+  }
+  return out;
 }
 
 /** Audit metadata is flat in practice; strings are cleaned and nesting is bounded. */

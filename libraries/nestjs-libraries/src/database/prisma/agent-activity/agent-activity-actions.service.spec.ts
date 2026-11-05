@@ -109,6 +109,13 @@ describe('bulkResolve', () => {
     expect(approval.approve).toHaveBeenCalledTimes(4);
   });
 
+  it('an empty or blank reject note is stored as null/undefined, not an empty string', async () => {
+    const { svc, approval } = make();
+    await svc.bulkResolve('org-1', 'u1', 'ADMIN', { action: 'reject', approvalIds: ['a', 'b'], note: '   ' } as any);
+    await svc.bulkResolve('org-1', 'u1', 'ADMIN', { action: 'reject', approvalIds: ['c'], note: '' } as any);
+    for (const call of approval.reject.mock.calls) expect(call[4]).toBeUndefined();
+  });
+
   it('reject passes the note, approve does not', async () => {
     const { svc, approval } = make();
     await svc.bulkResolve('org-1', 'u1', 'SUPERADMIN', { action: 'reject', approvalIds: ['a'], note: 'no thanks' } as any);
@@ -119,9 +126,19 @@ describe('bulkResolve', () => {
 });
 
 describe('retryFailed', () => {
+  it('a USER role gets 403 before the gate and nothing is touched (independent of the route guard)', async () => {
+    const { svc, gate, posts } = make();
+    for (const flag of [false, true]) {
+      await expect(svc.retryFailed('org-1', 'USER', 'g1', { includeUnknownOutcome: flag })).rejects.toBeInstanceOf(ForbiddenException);
+    }
+    expect(gate.gateRetry).not.toHaveBeenCalled();
+    expect(gate.routeRetry).not.toHaveBeenCalled();
+    expect(posts.retryFailedByGroup).not.toHaveBeenCalled();
+  });
+
   it('gates before retrying, forwards includeUnknownOutcome verbatim and adds policy', async () => {
     const { svc, gate, posts, order } = make();
-    const out = await svc.retryFailed('org-1', 'g1', { includeUnknownOutcome: false });
+    const out = await svc.retryFailed('org-1', 'ADMIN', 'g1', { includeUnknownOutcome: false });
     expect(order).toEqual(['gate', 'retry']);
     expect(gate.gateRetry).toHaveBeenCalledWith('org-1', 'g1', { includeUnknownOutcome: false });
     const opts = posts.retryFailedByGroup.mock.calls[0][2] as any;
@@ -134,7 +151,7 @@ describe('retryFailed', () => {
 
   it('forwards includeUnknownOutcome true to both the gate and the retry', async () => {
     const { svc, gate, posts } = make();
-    await svc.retryFailed('org-1', 'g1', { includeUnknownOutcome: true });
+    await svc.retryFailed('org-1', 'SUPERADMIN', 'g1', { includeUnknownOutcome: true });
     expect(gate.gateRetry).toHaveBeenCalledWith('org-1', 'g1', { includeUnknownOutcome: true });
     expect((posts.retryFailedByGroup.mock.calls[0][2] as any).includeUnknownOutcome).toBe(true);
   });
@@ -144,13 +161,13 @@ describe('retryFailed', () => {
     gate.gateRetry.mockRejectedValueOnce(
       new PolicyBlockedException({ matched: [], channels: [] } as any)
     );
-    await expect(svc.retryFailed('org-1', 'g1', { includeUnknownOutcome: false })).rejects.toMatchObject({ status: 422 });
+    await expect(svc.retryFailed('org-1', 'ADMIN', 'g1', { includeUnknownOutcome: false })).rejects.toMatchObject({ status: 422 });
     expect(posts.retryFailedByGroup).not.toHaveBeenCalled();
   });
 
   it('routeToApproval only routes ids in the gate set', async () => {
     const { svc, gate, posts } = make();
-    await svc.retryFailed('org-1', 'g1', { includeUnknownOutcome: false });
+    await svc.retryFailed('org-1', 'ADMIN', 'g1', { includeUnknownOutcome: false });
     const opts = posts.retryFailedByGroup.mock.calls[0][2] as any;
     expect(await opts.routeToApproval('p-ok')).toBe(false);
     expect(gate.routeRetry).not.toHaveBeenCalled();

@@ -92,7 +92,7 @@ export class AgentActivityController {
     @Param('group') group: string,
     @Body() body: RetryFailedDto
   ) {
-    return this._actions.retryFailed(org.id, group, {
+    return this._actions.retryFailed(org.id, (org as any).users?.[0]?.role ?? 'USER', group, {
       includeUnknownOutcome: body?.includeUnknownOutcome === true,
     });
   }

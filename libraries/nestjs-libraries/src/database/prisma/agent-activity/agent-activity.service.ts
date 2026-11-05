@@ -9,7 +9,7 @@ import {
   RULE_NAME_MAX,
   RecordedPolicy,
   TimelineItem,
-  cleanMetadata,
+  timelineMetadata,
   parseRecordedPolicy,
   toDestinationDetail,
   toGroupSummary,
@@ -333,7 +333,7 @@ export class AgentActivityService {
               state: 'unknown' as const,
               authorizedBy: null,
             },
-      metadata: cleanMetadata(e.metadata),
+      metadata: timelineMetadata(e.metadata),
     }));
 
     const recordedEvent = events.find((e) => e.type === 'post.policy_evaluated');

@@ -412,7 +412,7 @@ describe('AgentActivityService.detail', () => {
     audit.list.mockResolvedValue({
       events: [
         ev({ id: 'e2', type: 'post.approval_resolved', actor: { type: 'GUEST' }, metadata: { by: 'guest' } }),
-        ev({ id: 'e1', actor: { type: 'API_KEY', apiKeyId: 'k1' }, metadata: { note: 'a\u202Eb', n: 3, nested: { s: 'x\u200By' } } }),
+        ev({ id: 'e1', actor: { type: 'API_KEY', apiKeyId: 'k1' }, metadata: { ruleNames: 'a\u202Eb', matchedCount: 3, guestToken: 'secret', nested: { s: 'x' } } }),
       ],
       nextCursor: null,
     });
@@ -421,7 +421,7 @@ describe('AgentActivityService.detail', () => {
     expect(out.timeline[0]).toMatchObject({ id: 'e2', type: 'post.approval_resolved', postId: 'p1', actor: { type: 'GUEST' } });
     expect(out.timeline[0].actor).not.toHaveProperty('name');
     expect(out.timeline[1].actor).toMatchObject({ type: 'API_KEY', id: 'k1' });
-    expect(out.timeline[1].metadata).toEqual({ note: 'ab', n: 3, nested: { s: 'xy' } });
+    expect(out.timeline[1].metadata).toEqual({ ruleNames: 'ab', matchedCount: 3 });
     const views = directory.resolve.mock.calls[0][1];
     expect(views).toContainEqual({ type: 'API_KEY', apiKeyId: 'k1' });
     expect(JSON.stringify(views)).not.toContain('GUEST');

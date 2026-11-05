@@ -197,13 +197,13 @@ describe('AgentActivityController (dashboard reads)', () => {
       actions.retryFailed.mockResolvedValue({ group: 'g1', results: [], policy: {} });
       const res = await post('/groups/g1/retry-failed', {});
       expect(res.status).toBe(201);
-      expect(actions.retryFailed).toHaveBeenCalledWith('org-1', 'g1', { includeUnknownOutcome: false });
+      expect(actions.retryFailed).toHaveBeenCalledWith('org-1', 'USER', 'g1', { includeUnknownOutcome: false });
     });
 
     it('retry-failed forwards includeUnknownOutcome true', async () => {
       actions.retryFailed.mockResolvedValue({ group: 'g1', results: [], policy: {} });
       await post('/groups/g1/retry-failed', { includeUnknownOutcome: true });
-      expect(actions.retryFailed).toHaveBeenCalledWith('org-1', 'g1', { includeUnknownOutcome: true });
+      expect(actions.retryFailed).toHaveBeenCalledWith('org-1', 'USER', 'g1', { includeUnknownOutcome: true });
     });
 
     it('retry-failed rejects a non-boolean with 400', async () => {

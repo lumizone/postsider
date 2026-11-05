@@ -66,7 +66,7 @@ export class AgentActivityActionsService {
       if (body.action === 'approve') {
         await this._approval.approve(orgId, approvalId, userId, role);
       } else {
-        await this._approval.reject(orgId, approvalId, userId, role, body.note);
+        await this._approval.reject(orgId, approvalId, userId, role, body.note?.trim() || undefined);
       }
       return { approvalId, postId, status: 'done' };
     } catch (error) {
@@ -102,9 +102,12 @@ export class AgentActivityActionsService {
    */
   async retryFailed(
     orgId: string,
+    role: string,
     group: string,
     opts: { includeUnknownOutcome: boolean }
   ): Promise<{ group: string; results: RetryFailedResult[]; policy: unknown }> {
+    // Own role check: the route guard grants everything when billing is off.
+    assertCanApprove(role);
     const includeUnknownOutcome = opts.includeUnknownOutcome === true;
     const gated = await this._policyGate.gateRetry(orgId, group, { includeUnknownOutcome });
     const result = await this._posts.retryFailedByGroup(orgId, group, {
