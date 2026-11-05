@@ -62,7 +62,7 @@ async function step(name, fn) {
 
 /** A fresh browser context with fixtures, theme, locale and console capture. */
 async function open(opts) {
-  const o = Object.assign({ theme: "light", width: 1440, height: 900, locale: "en", role: "ADMIN", world: "default" }, opts);
+  const o = Object.assign({ theme: "light", width: 1440, height: 900, locale: "en", role: "ADMIN", world: "default", failPolicyUpdate: false }, opts);
   const ctx = await browser.newContext({ viewport: { width: o.width, height: o.height } });
   await ctx.addInitScript(
     ([theme, locale]) => {
@@ -73,7 +73,7 @@ async function open(opts) {
     },
     [o.theme, o.locale]
   );
-  const fx = createFixtures({ role: o.role, world: o.world });
+  const fx = createFixtures({ role: o.role, world: o.world, failPolicyUpdate: o.failPolicyUpdate });
   await ctx.route("http://localhost:3000/**", async (route) => {
     const req = route.request();
     const origin = req.headers()["origin"] || BASE;
@@ -410,6 +410,120 @@ async function main() {
     c.ok(plTitle !== "" && plTitle !== enTitle, `title not translated: "${enTitle}" vs "${plTitle}"`);
     await shot(pl.page, "agents-pl-light.png");
     await finishPage(c, pl);
+  });
+
+  // 12. API key limit saves: the PUT body for unlimited, rename-only and stale ids.
+  const keyRow = (page, name) => page.locator("tr, li, div").filter({ hasText: name }).filter({ has: page.getByTitle("Rename") }).last();
+  async function openKeyEditor(page, name) {
+    await page.goto(BASE + "/settings/api", { waitUntil: "domcontentloaded" });
+    await page.getByText(name).first().waitFor({ timeout: 60000 });
+    await keyRow(page, name).getByTitle("Rename").click();
+    const modal = page.getByRole("dialog", { name: "Rename API key" });
+    await modal.waitFor({ state: "visible", timeout: 5000 });
+    // The channel list loads separately; wait until the stale note logic can run.
+    await page.waitForTimeout(800);
+    return modal;
+  }
+  const putsOf = (s) => s.fx.calls.filter((x) => x.method === "PUT" && /^\/settings\/api-keys\//.test(x.path));
+
+  await step("12a unlimited save sends two empty arrays", async (c) => {
+    const s = await open({});
+    const modal = await openKeyEditor(s.page, "n8n production");
+    await modal.getByRole("switch", { name: "Limit what this key can do" }).click();
+    await modal.getByRole("button", { name: "Save" }).click();
+    await modal.waitFor({ state: "detached", timeout: 10000 });
+    const puts = putsOf(s);
+    c.ok(puts.length === 1 && puts[0].path.endsWith("/k-1"), "PUT count/path: " + JSON.stringify(puts.map((x) => x.path)));
+    const b = puts[0] && puts[0].body;
+    c.ok(b && Array.isArray(b.allowedActions) && b.allowedActions.length === 0 && Array.isArray(b.allowedIntegrationIds) && b.allowedIntegrationIds.length === 0, "unlimited body: " + JSON.stringify(b));
+    await finishPage(c, s);
+  });
+
+  await step("12b rename without touching limits sends no limit fields (also for a dead-channel-only key)", async (c) => {
+    const s = await open({});
+    for (const [name, id] of [["n8n production", "k-1"], ["Dead channel key", "k-3"]]) {
+      const modal = await openKeyEditor(s.page, name);
+      c.ok((await modal.getByText("Some saved channels no longer exist or are disabled. They are removed when you save.").count()) === (id === "k-3" ? 1 : 0), "stale note state for " + name);
+      const save = modal.getByRole("button", { name: "Save" });
+      c.ok(await save.isEnabled(), "Save disabled for " + name);
+      await modal.locator('input[type="text"]').fill(name + " renamed");
+      await save.click();
+      await modal.waitFor({ state: "detached", timeout: 10000 });
+    }
+    const puts = putsOf(s);
+    c.ok(puts.length === 2, "PUT count " + puts.length);
+    for (const p of puts) {
+      c.ok(p.body && !("allowedActions" in p.body) && !("allowedIntegrationIds" in p.body) && /renamed$/.test(p.body.name), "rename body: " + JSON.stringify(p.body));
+    }
+    await finishPage(c, s);
+  });
+
+  await step("12c touching the limit drops stale channel ids", async (c) => {
+    const s = await open({});
+    const modal = await openKeyEditor(s.page, "Mixed key");
+    c.ok((await modal.getByText("Some saved channels no longer exist or are disabled. They are removed when you save.").count()) === 1, "stale note missing");
+    await modal.getByRole("checkbox", { name: "Schedule", exact: true }).check();
+    await modal.getByRole("button", { name: "Save" }).click();
+    await modal.waitFor({ state: "detached", timeout: 10000 });
+    const puts = putsOf(s);
+    const b = puts[0] && puts[0].body;
+    c.ok(puts.length === 1 && b && JSON.stringify(b.allowedActions) === JSON.stringify(["DRAFT", "SCHEDULE"]) && JSON.stringify(b.allowedIntegrationIds) === JSON.stringify(["int-x"]), "stale body: " + JSON.stringify(b));
+    await finishPage(c, s);
+  });
+
+  // 13. USER role on /settings/policies: graceful no-access, no write controls.
+  await step("13 USER role on policies page", async (c) => {
+    const s = await open({ role: "USER" });
+    await s.page.goto(BASE + "/settings/policies", { waitUntil: "domcontentloaded" });
+    await s.page.getByText("Only organization administrators can manage policies.").waitFor({ timeout: 60000 });
+    c.ok((await s.page.getByRole("button", { name: "Add rule" }).count()) === 0, "USER sees Add rule");
+    c.ok((await s.page.getByText("Approve every automated post").count()) === 0, "USER sees the rule list");
+    await shot(s.page, "policies-user-light.png");
+    await finishPage(c, s);
+  });
+
+  // 14. Toggle rolls back on a server error.
+  await step("14 policy toggle rolls back on server error", async (c) => {
+    const s = await open({ failPolicyUpdate: true });
+    await s.page.goto(BASE + "/settings/policies", { waitUntil: "domcontentloaded" });
+    const sw = s.page.getByRole("switch", { name: "Enable rule Quiet words" });
+    await sw.waitFor({ timeout: 60000 });
+    c.ok((await sw.getAttribute("aria-checked")) === "false", "rule starts enabled");
+    await sw.click();
+    await s.page.getByRole("alert").first().waitFor({ timeout: 10000 });
+    await s.page.waitForTimeout(300);
+    c.ok((await sw.getAttribute("aria-checked")) === "false", "switch not restored after the failed update");
+    c.ok(s.fx.calls.filter((x) => x.method === "PUT" && x.path === "/policies/r3").length === 1, "expected exactly one PUT");
+    // The failing request logs one console error for the 500; everything else must be clean.
+    s.consoleErrors = s.consoleErrors.filter((m) => !/status of 500/.test(m));
+    await shot(s.page, "policies-toggle-rollback-light.png");
+    await finishPage(c, s);
+  });
+
+  // 15. displayName in the list, raw name only in the edit input.
+  await step("15 list shows displayName, only the edit input shows the raw name", async (c) => {
+    const s = await open({});
+    await s.page.goto(BASE + "/settings/policies", { waitUntil: "domcontentloaded" });
+    await s.page.getByText("Clean Name").first().waitFor({ timeout: 60000 });
+    const text = await s.page.evaluate(() => document.body.innerText);
+    c.ok(!/Raw/.test(text) && !/[\u202E\u200B]/.test(text), "raw name leaked into page text");
+    c.ok((await s.page.getByRole("switch", { name: "Enable rule Clean Name" }).count()) === 1, "switch label should use displayName");
+    const row = s.page.locator("li").filter({ hasText: "Clean Name" }).first();
+    await row.getByRole("button", { name: /edit/i }).first().click();
+    const form = s.page.getByRole("dialog");
+    await form.waitFor({ state: "visible", timeout: 5000 });
+    const val = await form.locator("input").first().inputValue();
+    c.ok(val === "Raw\u202E Name\u200B", "edit input value is not the raw name: " + JSON.stringify(val));
+    // Focus is inside the dialog, Tab stays inside it, Escape closes and focus returns to the opener.
+    c.ok(await s.page.evaluate(() => !!document.activeElement && !!document.activeElement.closest('[role="dialog"]')), "focus not inside the dialog on open");
+    for (let i = 0; i < 60; i++) await s.page.keyboard.press("Tab");
+    c.ok(await s.page.evaluate(() => !!document.activeElement.closest('[role="dialog"]')), "Tab escaped the dialog");
+    for (let i = 0; i < 60; i++) await s.page.keyboard.press("Shift+Tab");
+    c.ok(await s.page.evaluate(() => !!document.activeElement.closest('[role="dialog"]')), "Shift+Tab escaped the dialog");
+    await s.page.keyboard.press("Escape");
+    await form.waitFor({ state: "detached", timeout: 5000 });
+    c.ok(await s.page.evaluate(() => !!document.activeElement && document.activeElement !== document.body && !!document.activeElement.closest("li")), "focus did not return to the row's edit button");
+    await finishPage(c, s);
   });
 
   await browser.close();

@@ -404,6 +404,7 @@ The dashboard page `/agents` ("Agent activity", in the sidebar after Approval) s
 - The "today" boundary is one hour off on the day clocks spring forward, in zones that skip local midnight (for example Santiago and Havana).
 - The dashboard policy helpers are copies of the public controller's. They need to be merged later.
 - Claimed provenance is never verified.
+- The Agent activity and Policies pages are translated in English and Polish only. The other nine languages fall back to English for those pages.
 - A member with the USER role who calls an admin route can get `402` before `403` when billing is on. Either way nothing is changed.
 
 ---

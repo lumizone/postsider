@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { settingsStyles as s } from "@/components/settings-ui";
 import { ApiError } from "@/lib/api";
 import { useT, type MessageKey } from "@/lib/i18n";
@@ -47,6 +47,9 @@ function toggle<T>(list: T[], value: T, on: boolean): T[] {
   return on ? [...without, value] : without;
 }
 
+const FOCUSABLE =
+  'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
+
 export function PolicyRuleForm({ rule, apiKeys, channels, onSave, onClose }: Props) {
   const t = useT();
   const uid = useId();
@@ -60,13 +63,52 @@ export function PolicyRuleForm({ rule, apiKeys, channels, onSave, onClose }: Pro
   const errors = useMemo(() => validateForm(form), [form]);
   const shown = submitted ? errors : {};
 
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  // Captured during the first render, before autoFocus moves focus into the form.
+  const openerRef = useRef<HTMLElement | null>(
+    typeof document !== "undefined" ? (document.activeElement as HTMLElement | null) : null
+  );
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  // Focus goes into the dialog on open, Tab wraps inside it, Escape closes it
+  // (not while saving) and focus returns to the opener on close.
   useEffect(() => {
+    const opener = openerRef.current;
+    const panel = panelRef.current;
+    if (panel && !panel.contains(document.activeElement)) {
+      panel.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+    }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !busy) onClose();
+      if (e.key === "Escape") {
+        if (!busyRef.current) closeRef.current();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const nodes = panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE);
+      if (!nodes || nodes.length === 0) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      const active = document.activeElement;
+      if (!panelRef.current?.contains(active)) {
+        e.preventDefault();
+        first.focus();
+      } else if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [busy, onClose]);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      if (opener && opener.isConnected) opener.focus();
+    };
+  }, []);
 
   const set = <K extends keyof PolicyFormState>(key: K, value: PolicyFormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -132,6 +174,7 @@ export function PolicyRuleForm({ rule, apiKeys, channels, onSave, onClose }: Pro
   return (
     <div className={styles.overlay} onClick={() => !busy && onClose()}>
       <div
+        ref={panelRef}
         className={styles.modal}
         role="dialog"
         aria-modal="true"

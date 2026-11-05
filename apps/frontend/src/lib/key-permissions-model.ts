@@ -40,6 +40,29 @@ export function permissionsPayload(s: KeyPermissionsState): {
   return { allowedActions: cleanActions(s.actions), allowedIntegrationIds: cleanIds(s.integrationIds) };
 }
 
+/** True when the limit controls hold exactly what the stored row had. */
+export function samePermissions(a: KeyPermissionsState, b: KeyPermissionsState): boolean {
+  const pa = permissionsPayload(a);
+  const pb = permissionsPayload(b);
+  const eq = (x: readonly string[], y: readonly string[]) =>
+    x.length === y.length && [...x].sort().every((v, i) => v === [...y].sort()[i]);
+  return eq(pa.allowedActions, pb.allowedActions) && eq(pa.allowedIntegrationIds, pb.allowedIntegrationIds);
+}
+
+/**
+ * Permission fields for an edit save. When the user did not touch the limit
+ * controls nothing is sent (the server leaves omitted fields as they are), so a
+ * pure rename never changes or widens the limit, even if it only names a dead
+ * channel. When touched, both lists are sent (stale ids already reconciled).
+ */
+export function permissionsPayloadForEdit(
+  current: KeyPermissionsState,
+  initial: KeyPermissionsState
+): { allowedActions: KeyAction[]; allowedIntegrationIds: string[] } | null {
+  if (samePermissions(current, initial)) return null;
+  return permissionsPayload(current);
+}
+
 export function isPermissionsSaveable(s: KeyPermissionsState): boolean {
   if (!s.limited) return true;
   return s.actions.length > 0 || s.integrationIds.length > 0;

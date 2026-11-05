@@ -5,6 +5,8 @@ import {
   isPermissionsSaveable,
   permissionsFromRow,
   permissionsPayload,
+  permissionsPayloadForEdit,
+  samePermissions,
   reconcileWithKnown,
   type KeyPermissionsState,
 } from './key-permissions-model';
@@ -127,5 +129,39 @@ describe('channelCountKey', () => {
   });
   it('falls back for a bad locale', () => {
     expect(channelCountKey(2, 'not a locale!!')).toBe('many');
+  });
+});
+
+describe('permissionsPayloadForEdit', () => {
+  const dead: KeyPermissionsState = { limited: true, actions: [], integrationIds: ['gone'] };
+
+  it('sends nothing when the limit controls are untouched (pure rename)', () => {
+    expect(permissionsPayloadForEdit(dead, dead)).toBeNull();
+    expect(permissionsPayloadForEdit({ ...dead }, permissionsFromRow({ allowedIntegrationIds: ['gone'] }))).toBeNull();
+    const unl: KeyPermissionsState = { limited: false, actions: [], integrationIds: [] };
+    expect(permissionsPayloadForEdit(unl, unl)).toBeNull();
+  });
+
+  it('sends both lists when the user changed something', () => {
+    expect(permissionsPayloadForEdit({ limited: false, actions: [], integrationIds: [] }, dead)).toEqual({
+      allowedActions: [],
+      allowedIntegrationIds: [],
+    });
+    expect(permissionsPayloadForEdit({ ...dead, actions: ['DRAFT'] }, dead)).toEqual({
+      allowedActions: ['DRAFT'],
+      allowedIntegrationIds: ['gone'],
+    });
+  });
+
+  it('samePermissions ignores order and the hidden lists of an unlimited state', () => {
+    expect(
+      samePermissions(
+        { limited: true, actions: ['DRAFT', 'SCHEDULE'], integrationIds: ['b', 'a'] },
+        { limited: true, actions: ['SCHEDULE', 'DRAFT'], integrationIds: ['a', 'b'] }
+      )
+    ).toBe(true);
+    expect(
+      samePermissions({ limited: false, actions: ['DRAFT'], integrationIds: [] }, { limited: false, actions: [], integrationIds: [] })
+    ).toBe(true);
   });
 });
