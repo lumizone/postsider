@@ -9,6 +9,7 @@ import {
   IsUrl,
   MaxLength,
 } from 'class-validator';
+import { IsNotLocalWebhookHost } from '@postsider/nestjs-libraries/dtos/webhooks/webhook.url.validator';
 import {
   PUBLIC_WEBHOOK_EVENTS,
   PublicWebhookEvent,
@@ -22,6 +23,7 @@ export class CreatePublicWebhookSubscriptionDto {
 
   @ApiProperty({ example: 'https://hooks.example.com/postsider' })
   @IsUrl({ protocols: ['https'], require_protocol: true })
+  @IsNotLocalWebhookHost()
   @MaxLength(2048)
   url: string;
 
