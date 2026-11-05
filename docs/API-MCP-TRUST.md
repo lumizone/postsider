@@ -151,8 +151,12 @@ Deciding: `POST /approvals/:id/approve` and `/reject` accept an optional
 `Idempotency-Key`. With a key, a retry replays the stored answer and the same key
 with a different body is a conflict. Without a key, repeating the same decision
 returns 200 with `changed: false`, and the opposite decision answers
-`409 approval_already_resolved`. A retry after a non-final approval never decides
-the next stage, because a decision is tied to the stage that was current.
+`409 approval_already_resolved`. Both calls (and the dashboard) accept an optional
+`expectStage`, the `stage.position` you read. When it is sent and the approval has
+moved on, nothing is decided and the answer is `409 stage_changed` with the current
+stage in the body. A retry after a non-final approval never decides the next stage
+only when `expectStage` is sent (email links always send it); without it a decision
+applies to whichever stage is current, so automation should always send it.
 
 ### Approval identity
 
@@ -210,8 +214,10 @@ Residual risks, stated plainly:
 - A decision made in the dashboard or API does not delete the unused email links; they
   stay until the TTL and answer `409 approval_already_resolved`, which also tells the
   holder the final status. They cannot decide anything.
-- Link emails go only to members who could use the link. Recipient selection ignores
-  channel assignment narrowing and honours the member's success-email preference.
+- Link emails go only to members who could use the link. Recipient selection applies
+  the channel assignment narrowing of the plain approver email (with assignments on
+  the channel, only assigned approvers get a link) and honours the member's
+  success-email preference.
 - If `JWT_SECRET` or `FRONTEND_URL` is missing, links are not produced and the plain
   notification is sent.
 - An approval whose eligible set is empty would deadlock; the flow validator checks

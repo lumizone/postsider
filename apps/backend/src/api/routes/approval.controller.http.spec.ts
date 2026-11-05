@@ -35,6 +35,8 @@ describe('ApprovalController response projection', () => {
     getPending: jest.fn(),
     getForPost: jest.fn(),
     requestApproval: jest.fn(),
+    approve: jest.fn(),
+    reject: jest.fn(),
   };
 
   beforeAll(async () => {
@@ -125,5 +127,45 @@ describe('ApprovalController response projection', () => {
     const text = await res.text();
     expectClean(text);
     expect(JSON.parse(text).created).toBe(true);
+  });
+
+  describe('stage guard', () => {
+    const put = (path: string, body?: unknown) =>
+      fetch(`${base}${path}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+
+    it('approve forwards the stage the admin saw', async () => {
+      role = 'ADMIN';
+      approvals.approve.mockResolvedValue({ approved: true, postId: 'p1' });
+      const res = await put('/a1/approve', { expectStage: 2 });
+      expect(res.status).toBe(200);
+      expect(approvals.approve).toHaveBeenCalledWith('org-1', 'a1', 'u-me', 'ADMIN', 2);
+    });
+
+    it('approve without a body keeps working (expectStage optional)', async () => {
+      role = 'ADMIN';
+      approvals.approve.mockResolvedValue({ approved: true, postId: 'p1' });
+      const res = await put('/a1/approve');
+      expect(res.status).toBe(200);
+      expect(approvals.approve).toHaveBeenCalledWith('org-1', 'a1', 'u-me', 'ADMIN', undefined);
+    });
+
+    it('reject forwards note and stage', async () => {
+      role = 'ADMIN';
+      approvals.reject.mockResolvedValue({ rejected: true, postId: 'p1' });
+      const res = await put('/a1/reject', { note: 'no', expectStage: 1 });
+      expect(res.status).toBe(200);
+      expect(approvals.reject).toHaveBeenCalledWith('org-1', 'a1', 'u-me', 'ADMIN', 'no', 1);
+    });
+
+    it.each([0, -1, 1.5, 'x'])('expectStage %p is a 400 and nothing is decided', async (bad) => {
+      role = 'ADMIN';
+      const res = await put('/a1/approve', { expectStage: bad });
+      expect(res.status).toBe(400);
+      expect(approvals.approve).not.toHaveBeenCalled();
+    });
   });
 });

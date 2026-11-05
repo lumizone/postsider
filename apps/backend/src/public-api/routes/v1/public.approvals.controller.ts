@@ -36,7 +36,7 @@ import {
 } from '@postsider/nestjs-libraries/dtos/approval/public-approval.dto';
 
 const DECISION_ERRORS =
-  'Errors: 403 self_approval_blocked (the key or client created or requested this approval, or the flow requires a different approver), 403 not_allowed_for_stage (the stage does not allow automation), 403 key_action_not_allowed or key_channel_not_allowed (approving schedules the post, so the key needs the schedule action on its channel), 409 approval_already_resolved (decided the opposite way already). Deciding the same way twice answers 200 with changed false.';
+  'Errors: 403 self_approval_blocked (the key or client created or requested this approval, or the flow requires a different approver), 403 not_allowed_for_stage (the stage does not allow automation), 403 key_action_not_allowed or key_channel_not_allowed (approving schedules the post, so the key needs the schedule action on its channel), 409 approval_already_resolved (decided the opposite way already), 409 stage_changed (expectStage was sent and the approval is no longer at that stage; the body carries the current stage). Send expectStage (the stage.position you read) so a retry or a stale view can never decide a later stage; it is optional. Deciding the same way twice answers 200 with changed false.';
 
 @ApiTags('Public API Approvals')
 @ApiHeader({
@@ -99,7 +99,7 @@ export class PublicApprovalsController {
       'Scope missing, self_approval_blocked, not_allowed_for_stage, key_action_not_allowed or key_channel_not_allowed',
   })
   @ApiNotFoundResponse({ description: 'Unknown approval id for this organization' })
-  @ApiConflictResponse({ description: 'approval_already_resolved, or an Idempotency-Key conflict' })
+  @ApiConflictResponse({ description: 'approval_already_resolved, stage_changed (expectStage no longer current), or an Idempotency-Key conflict' })
   approve(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string,
@@ -123,7 +123,7 @@ export class PublicApprovalsController {
     description: 'Scope missing, self_approval_blocked or not_allowed_for_stage',
   })
   @ApiNotFoundResponse({ description: 'Unknown approval id for this organization' })
-  @ApiConflictResponse({ description: 'approval_already_resolved, or an Idempotency-Key conflict' })
+  @ApiConflictResponse({ description: 'approval_already_resolved, stage_changed (expectStage no longer current), or an Idempotency-Key conflict' })
   reject(
     @GetOrgFromRequest() org: Organization,
     @Param('id') id: string,
@@ -153,14 +153,20 @@ export class PublicApprovalsController {
     const note = typeof body?.note === 'string' ? body.note : null;
     const decider: Decider = { actor, via: 'API' };
 
+    const expectStage =
+      typeof body?.expectStage === 'number' ? body.expectStage : undefined;
     const claim = await this._idempotency.claim(org.id, idempotencyKey, {
       approvalId: id,
       decision,
       note,
+      ...(expectStage !== undefined ? { expectStage } : {}),
     });
     if (claim?.kind === 'replay') return claim.response;
     try {
-      const result = await this._approvals.decide(org.id, id, decider, decision, { note });
+      const result = await this._approvals.decide(org.id, id, decider, decision, {
+        note,
+        ...(expectStage !== undefined ? { expectStage, strictStage: true } : {}),
+      });
       if (claim?.kind === 'new') await this._idempotency.complete(claim.id, result);
       return result;
     } catch (error) {

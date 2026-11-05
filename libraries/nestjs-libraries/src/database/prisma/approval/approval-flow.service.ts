@@ -171,7 +171,13 @@ export class ApprovalFlowService {
     return this.getDefault(orgId);
   }
 
-  /** Pure: what an approval stores when it is requested, so later edits never change it. */
+  /**
+   * Pure: what an approval stores when it is requested. The stages (names,
+   * roles, approvers) are frozen into the approval's own rows. The two
+   * `rules` flags are NOT frozen: the decision engine reads them live from
+   * the flow at decision time (getFlowRules), so an edit to the flow applies
+   * to approvals already in flight.
+   */
   snapshot(flow: FlowWithStages): FlowSnapshot {
     const stages = sortedStages(flow);
     return {

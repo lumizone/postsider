@@ -625,6 +625,46 @@ describe('races', () => {
   });
 });
 
+describe('stage guard for the dashboard and the public API (strictStage)', () => {
+  it('a stale expectStage is a 409 stage_changed that names the current stage and writes nothing', async () => {
+    const w = makeWorld({ flow: twoStages() });
+    await w.request();
+    await w.svc.decide('o1', 'ap1', user('a'), 'approve');
+    w.repo.decideStageTx.mockClear();
+    await expect(
+      w.svc.decide('o1', 'ap1', user('b'), 'approve', { expectStage: 1, strictStage: true })
+    ).rejects.toMatchObject({
+      status: 409,
+      response: { error: 'stage_changed', stage: { position: 2, total: 2 } },
+    });
+    await expect(
+      w.svc.decide('o1', 'ap1', user('b'), 'reject', { expectStage: 1, strictStage: true })
+    ).rejects.toMatchObject({ status: 409, response: { error: 'stage_changed' } });
+    expect(w.repo.decideStageTx).not.toHaveBeenCalled();
+  });
+
+  it('a matching expectStage decides normally', async () => {
+    const w = makeWorld({ flow: twoStages() });
+    await w.request();
+    const r = await w.svc.decide('o1', 'ap1', user('a'), 'approve', { expectStage: 1, strictStage: true });
+    expect(r).toMatchObject({ changed: true, final: false, stage: { position: 1, total: 2 } });
+  });
+
+  it('dashboard approve and reject forward the stage the admin saw; a stale one is 409 stage_changed', async () => {
+    const w = makeWorld({ flow: twoStages() });
+    await w.request();
+    await w.svc.decide('o1', 'ap1', user('a'), 'approve');
+    await expect(w.svc.approve('o1', 'ap1', 'b', 'ADMIN', 1)).rejects.toMatchObject({
+      status: 409,
+      response: { error: 'stage_changed', stage: { position: 2, total: 2 } },
+    });
+    await expect(w.svc.reject('o1', 'ap1', 'b', 'ADMIN', undefined, 1)).rejects.toMatchObject({
+      status: 409,
+      response: { error: 'stage_changed' },
+    });
+  });
+});
+
 describe('schedule failure on the final stage', () => {
   it('reverts the approval and the last stage row, propagates the error, sends no success signals', async () => {
     const w = makeWorld({ flow: twoStages() });

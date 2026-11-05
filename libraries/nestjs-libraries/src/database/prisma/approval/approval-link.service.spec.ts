@@ -49,6 +49,7 @@ function setup(
     review?: Record<string, any>;
     link?: { role: string; disabled: boolean } | null;
     rules?: { preventSelfApproval: boolean; requireDistinctApprovers: boolean } | null;
+    assigned?: string[];
   } = {}
 ) {
   const tokens = new Map<string, Token>();
@@ -136,6 +137,11 @@ function setup(
     sendEmail: jest.fn(async (to: string, subject: string, html: string) => {
       sent.push({ to, subject, html });
     }),
+    narrowToChannelAssignees: jest.fn(async (_o: string, _i: string | undefined, members: any[]) =>
+      opts.assigned
+        ? members.filter((m: any) => opts.assigned!.includes(m.user.id))
+        : members
+    ),
   };
   const orgs = {
     getAllUsersOrgs: jest.fn(async () => ({
@@ -228,6 +234,14 @@ describe('ApprovalLinkService', () => {
         expect(s.tokens.has(url[2])).toBe(false);
         expect(m.html).toContain('intent=reject');
       }
+    });
+
+    it('respects the channel assignment narrowing: unassigned approvers get no mail and no live token', async () => {
+      const s = setup({ assigned: ['u-admin'] });
+      await s.service.sendStageEmails(ORG, { id: 'ap1' }, { position: 1, total: 1, name: 'Approval' });
+      expect(s.notifications.narrowToChannelAssignees).toHaveBeenCalledWith(ORG, 'int1', expect.any(Array));
+      expect(s.sent.map((m) => m.to)).toEqual(['admin@x.co']);
+      expect(s.tokens.size).toBe(1);
     });
 
     it('sets the expiry from APPROVAL_LINK_TTL_HOURS (default 48 h)', async () => {

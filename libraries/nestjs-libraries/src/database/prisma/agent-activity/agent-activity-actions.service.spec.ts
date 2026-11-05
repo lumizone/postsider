@@ -83,6 +83,27 @@ describe('bulkResolve', () => {
     expect(approval.approve).toHaveBeenCalledTimes(5);
   });
 
+  it('forwards the stage each approval was shown at; a stale stage is skipped as stage_changed', async () => {
+    const { svc, approval } = make();
+    const { ConflictException } = jest.requireActual('@nestjs/common');
+    approval.approve.mockImplementation(async (_o: string, id: string, _u: string, _r: string, expectStage?: number) => {
+      if (id === 'moved') throw new ConflictException({ error: 'stage_changed', stage: { position: 2, total: 2 } });
+      return { approved: true, postId: `post-${id}`, expectStage };
+    });
+    const out = await svc.bulkResolve('org-1', 'u1', 'ADMIN', {
+      action: 'approve',
+      approvalIds: ['fresh', 'moved', 'nostage'],
+      stages: { fresh: 1, moved: 1 },
+    } as any);
+    expect(approval.approve.mock.calls.map((c: any[]) => [c[1], c[4]])).toEqual([
+      ['fresh', 1],
+      ['moved', 1],
+      ['nostage', undefined],
+    ]);
+    expect(out.results[1]).toMatchObject({ status: 'skipped', reason: 'stage_changed' });
+    expect(out.summary).toEqual({ done: 2, skipped: 1, failed: 0 });
+  });
+
   it('maps an already resolved approval to skipped/already_resolved', async () => {
     const { svc } = make();
     const first = await svc.bulkResolve('org-1', 'u1', 'ADMIN', { action: 'approve', approvalIds: ['a', 'b'] } as any);
@@ -120,9 +141,9 @@ describe('bulkResolve', () => {
   it('reject passes the note, approve does not', async () => {
     const { svc, approval } = make();
     await svc.bulkResolve('org-1', 'u1', 'SUPERADMIN', { action: 'reject', approvalIds: ['a'], note: 'no thanks' } as any);
-    expect(approval.reject).toHaveBeenCalledWith('org-1', 'a', 'u1', 'SUPERADMIN', 'no thanks');
+    expect(approval.reject).toHaveBeenCalledWith('org-1', 'a', 'u1', 'SUPERADMIN', 'no thanks', undefined);
     await svc.bulkResolve('org-1', 'u1', 'ADMIN', { action: 'approve', approvalIds: ['b'], note: 'ignored' } as any);
-    expect(approval.approve).toHaveBeenCalledWith('org-1', 'b', 'u1', 'ADMIN');
+    expect(approval.approve).toHaveBeenCalledWith('org-1', 'b', 'u1', 'ADMIN', undefined);
   });
 });
 

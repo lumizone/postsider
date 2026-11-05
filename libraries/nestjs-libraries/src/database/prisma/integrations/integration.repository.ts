@@ -806,6 +806,8 @@ export class IntegrationRepository {
           where: {
             orgId: org,
             name,
+            // an archived customer must not be re-attached by name
+            deletedAt: null,
           },
         })) ||
         (await this._customers.model.customer.create({

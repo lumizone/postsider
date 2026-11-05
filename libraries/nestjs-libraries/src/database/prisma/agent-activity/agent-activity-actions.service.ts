@@ -1,4 +1,4 @@
-import { BadRequestException, HttpException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, HttpException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ApprovalService } from '@postsider/nestjs-libraries/database/prisma/approval/approval.service';
 import { ApprovalRepository } from '@postsider/nestjs-libraries/database/prisma/approval/approval.repository';
 import { assertCanApprove } from '@postsider/nestjs-libraries/database/prisma/approval/approval.rules';
@@ -10,7 +10,7 @@ export type BulkItemResult = {
   approvalId: string;
   postId: string | null;
   status: 'done' | 'skipped' | 'failed';
-  reason?: 'already_resolved' | 'not_found' | 'error';
+  reason?: 'already_resolved' | 'not_found' | 'stage_changed' | 'error';
   message?: string;
 };
 
@@ -42,9 +42,24 @@ export class AgentActivityActionsService {
   }> {
     // First, before any lookup: a non-approver touches nothing.
     assertCanApprove(role);
+    const stages = body.stages ?? {};
+    for (const value of Object.values(stages)) {
+      if (!Number.isInteger(value) || value < 1) {
+        throw new BadRequestException('stages must map approval ids to positive integers');
+      }
+    }
     const results: BulkItemResult[] = [];
     for (const approvalId of body.approvalIds) {
-      results.push(await this.resolveOne(orgId, userId, role, approvalId, body));
+      results.push(
+        await this.resolveOne(
+          orgId,
+          userId,
+          role,
+          approvalId,
+          body,
+          Object.prototype.hasOwnProperty.call(stages, approvalId) ? stages[approvalId] : undefined
+        )
+      );
     }
     const summary = { done: 0, skipped: 0, failed: 0 };
     for (const r of results) summary[r.status] += 1;
@@ -56,7 +71,8 @@ export class AgentActivityActionsService {
     userId: string,
     role: string,
     approvalId: string,
-    body: BulkApprovalsDto
+    body: BulkApprovalsDto,
+    expectStage?: number
   ): Promise<BulkItemResult> {
     let postId: string | null = null;
     try {
@@ -64,14 +80,20 @@ export class AgentActivityActionsService {
       if (!approval) return { approvalId, postId: null, status: 'skipped', reason: 'not_found' };
       postId = approval.postId ?? null;
       if (body.action === 'approve') {
-        await this._approval.approve(orgId, approvalId, userId, role);
+        await this._approval.approve(orgId, approvalId, userId, role, expectStage);
       } else {
-        await this._approval.reject(orgId, approvalId, userId, role, body.note?.trim() || undefined);
+        await this._approval.reject(orgId, approvalId, userId, role, body.note?.trim() || undefined, expectStage);
       }
       return { approvalId, postId, status: 'done' };
     } catch (error) {
       if (error instanceof NotFoundException) {
         return { approvalId, postId, status: 'skipped', reason: 'not_found' };
+      }
+      if (error instanceof ConflictException) {
+        const code = (error.getResponse() as { error?: string })?.error;
+        if (code === 'stage_changed') {
+          return { approvalId, postId, status: 'skipped', reason: 'stage_changed' };
+        }
       }
       if (error instanceof BadRequestException) {
         const message = String(error.message ?? '');

@@ -172,6 +172,7 @@ export default function ApprovalPage() {
       case "approval_already_resolved":
         return t("approval.errorAlreadyResolved");
       case "approval_stage_invalid":
+      case "stage_changed":
         return t("approval.errorStageMoved");
       case "key_action_not_allowed":
       case "key_channel_not_allowed":
@@ -198,7 +199,7 @@ export default function ApprovalPage() {
     } catch (e) {
       setError(messageFor(e, t("approval.actionError")));
       const code = errorCode(e);
-      if (code === "approval_already_resolved" || code === "approval_stage_invalid") {
+      if (code === "approval_already_resolved" || code === "approval_stage_invalid" || code === "stage_changed") {
         setRejectFor(null);
         setNote("");
         await refresh();
@@ -398,14 +399,14 @@ export default function ApprovalPage() {
                         className={ap.reasonInput}
                       />
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <button type="button" style={{ ...ghostBtn, color: "var(--danger-bright)", borderColor: "color-mix(in srgb, var(--danger) 38%, transparent)" }} disabled={anyBusy} onClick={() => act(a.id, () => rejectPost(a.id, note || undefined))}>{t("approval.confirmReject")}</button>
+                        <button type="button" style={{ ...ghostBtn, color: "var(--danger-bright)", borderColor: "color-mix(in srgb, var(--danger) 38%, transparent)" }} disabled={anyBusy} onClick={() => act(a.id, () => rejectPost(a.id, note || undefined, a.stage?.position))}>{t("approval.confirmReject")}</button>
                         <button type="button" style={ghostBtn} onClick={() => { setRejectFor(null); setNote(""); }}>{t("common.cancel")}</button>
                       </div>
                     </div>
                   ) : (
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <button type="button" style={{ ...ghostBtn, background: "var(--fg)", color: "var(--bg)", border: "none", fontWeight: 600, opacity: canDecide ? 1 : 0.5 }} disabled={anyBusy || !canDecide} onClick={() => act(a.id, () => approvePost(a.id))}>{t("approval.approveSchedule")}</button>
+                        <button type="button" style={{ ...ghostBtn, background: "var(--fg)", color: "var(--bg)", border: "none", fontWeight: 600, opacity: canDecide ? 1 : 0.5 }} disabled={anyBusy || !canDecide} onClick={() => act(a.id, () => approvePost(a.id, a.stage?.position))}>{t("approval.approveSchedule")}</button>
                         <button type="button" style={ghostBtn} disabled={anyBusy || !canDecide} onClick={() => { setRejectFor(a.id); setNote(""); }}>{t("approval.reject")}</button>
                         {guestAllowed && (
                           <button type="button" style={ghostBtn} disabled={linkBusyId === a.id || anyBusy} onClick={() => getGuestLink(a.id)}>{t("approval.guestLink")}</button>

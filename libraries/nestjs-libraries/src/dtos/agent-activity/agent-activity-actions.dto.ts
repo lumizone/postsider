@@ -5,6 +5,7 @@ import {
   IsArray,
   IsBoolean,
   IsIn,
+  IsObject,
   IsOptional,
   IsString,
   MaxLength,
@@ -28,6 +29,15 @@ export class BulkApprovalsDto {
   @IsString()
   @MaxLength(500)
   note?: string;
+
+  /**
+   * Optional: approval id -> stage position the admin saw. An approval whose
+   * current stage differs is skipped (stage_changed) instead of decided.
+   * Values are validated in the service.
+   */
+  @IsOptional()
+  @IsObject()
+  stages?: Record<string, number>;
 }
 
 export class RetryFailedDto {

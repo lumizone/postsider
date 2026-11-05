@@ -134,12 +134,20 @@ export class ApprovalLinkService {
       await this._links.deleteOtherStages(orgId, approval.id, stage.position);
 
       const org = await this._organizations.getAllUsersOrgs(orgId);
-      const users = ((org?.users ?? []) as any[]).filter((u) => u?.user?.id);
+      const allUsers = ((org?.users ?? []) as any[]).filter((u) => u?.user?.id);
       const eligible = new Set(
         eligibleMemberIds(
           def,
-          users.map((u) => ({ userId: u.user.id, role: u.role }))
+          allUsers.map((u) => ({ userId: u.user.id, role: u.role }))
         )
+      );
+      // Same channel-assignment narrowing as the plain approver email: fewer
+      // mailboxes hold a live credential. Narrowing applies to the eligible
+      // members, so an assignee who cannot decide never hides a real approver.
+      const users = await this._notifications.narrowToChannelAssignees(
+        orgId,
+        review.post?.integrationId,
+        allUsers.filter((u) => eligible.has(u.user.id))
       );
       const origin = originOf(
         review,

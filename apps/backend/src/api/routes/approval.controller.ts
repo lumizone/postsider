@@ -53,9 +53,16 @@ export class ApprovalController {
   approve(
     @GetOrgFromRequest() org: Organization,
     @GetUserFromRequest() user: User,
-    @Param('id') id: string
+    @Param('id') id: string,
+    @Body() body?: ResolveApprovalDto
   ) {
-    return this._approval.approve(org.id, id, user.id, this.roleOf(org));
+    return this._approval.approve(
+      org.id,
+      id,
+      user.id,
+      this.roleOf(org),
+      body?.expectStage
+    );
   }
 
   @Put('/:id/reject')
@@ -63,9 +70,16 @@ export class ApprovalController {
     @GetOrgFromRequest() org: Organization,
     @GetUserFromRequest() user: User,
     @Param('id') id: string,
-    @Body() body: ResolveApprovalDto
+    @Body() body?: ResolveApprovalDto
   ) {
-    return this._approval.reject(org.id, id, user.id, this.roleOf(org), body.note);
+    return this._approval.reject(
+      org.id,
+      id,
+      user.id,
+      this.roleOf(org),
+      body?.note,
+      body?.expectStage
+    );
   }
 
   @Get('/post/:postId')

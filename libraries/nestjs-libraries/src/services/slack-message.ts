@@ -7,6 +7,8 @@ export function isSlackWebhookUrl(url: string): boolean {
     return (
       parsed.protocol === 'https:' &&
       parsed.hostname === 'hooks.slack.com' &&
+      // the default https port only (an explicit :443 parses to '')
+      parsed.port === '' &&
       !parsed.username &&
       !parsed.password &&
       parsed.pathname.startsWith('/services/')

@@ -55,10 +55,16 @@ export const requestApproval = (postId: string) =>
 export const getPendingApprovals = () =>
   api.get<PendingApproval[]>("/approval/pending");
 
-export const approvePost = (id: string) => api.put(`/approval/${id}/approve`);
+// `expectStage` is the stage position the admin was looking at; the server
+// answers 409 stage_changed instead of deciding a later stage by accident.
+export const approvePost = (id: string, expectStage?: number) =>
+  api.put(`/approval/${id}/approve`, expectStage === undefined ? undefined : { expectStage });
 
-export const rejectPost = (id: string, note?: string) =>
-  api.put(`/approval/${id}/reject`, { note });
+export const rejectPost = (id: string, note?: string, expectStage?: number) =>
+  api.put(`/approval/${id}/reject`, {
+    note,
+    ...(expectStage === undefined ? {} : { expectStage }),
+  });
 
 export const getApprovalByPost = (postId: string) =>
   api.get<{

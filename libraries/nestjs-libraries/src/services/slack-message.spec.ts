@@ -34,12 +34,17 @@ describe('isSlackWebhookUrl', () => {
   it('accepts a real incoming webhook url', () => {
     expect(isSlackWebhookUrl('https://hooks.slack.com/services/T0/B0/XXXX')).toBe(true);
   });
+  it('accepts the explicit default https port', () => {
+    expect(isSlackWebhookUrl('https://hooks.slack.com:443/services/T0/B0/XXXX')).toBe(true);
+  });
   it.each([
     'https://hooks.slack.com.evil.com/services/T0/B0/X',
     'http://hooks.slack.com/services/T0/B0/X',
     'https://hooks.slack.com/other',
     'https://evil.com/hooks.slack.com/services/x',
     'https://user@evil.com/services/x',
+    'https://hooks.slack.com:8443/services/T0/B0/X',
+    'https://hooks.slack.com:444/services/T0/B0/X',
     'not a url',
     '',
   ])('rejects %s', (url) => {

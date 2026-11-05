@@ -219,6 +219,36 @@ describe('PublicApprovalsController', () => {
       });
     });
 
+    it('expectStage is forwarded as a strict stage guard and joins the idempotency claim', async () => {
+      idem.claim.mockResolvedValue({ kind: 'new', id: 'claim-9' });
+      approvals.decide.mockResolvedValue(decision());
+      const res = await send('POST', '/approvals/a1/approve', { note: 'n', expectStage: 2 }, { 'idempotency-key': 'k' });
+      expect(res.status).toBe(200);
+      expect(approvals.decide.mock.calls[0][4]).toEqual({ note: 'n', expectStage: 2, strictStage: true });
+      expect(idem.claim).toHaveBeenCalledWith('org-1', 'k', {
+        approvalId: 'a1',
+        decision: 'approve',
+        note: 'n',
+        expectStage: 2,
+      });
+    });
+
+    it('a stale expectStage surfaces the engine 409 stage_changed with the current stage', async () => {
+      const { ConflictException: CE } = jest.requireActual('@nestjs/common');
+      approvals.decide.mockRejectedValue(new CE({ error: 'stage_changed', stage: { position: 2, total: 2 } }));
+      const res = await send('POST', '/approvals/a1/reject', { expectStage: 1 });
+      expect(res.status).toBe(409);
+      const text = JSON.stringify(await res.json());
+      expect(text).toContain('stage_changed');
+      expect(text).toContain('"position":2');
+    });
+
+    it.each([0, -3, 1.5, 'x'])('expectStage %p is a 400', async (bad) => {
+      const res = await send('POST', '/approvals/a1/approve', { expectStage: bad });
+      expect(res.status).toBe(400);
+      expect(approvals.decide).not.toHaveBeenCalled();
+    });
+
     it('a note over 500 characters is 400', async () => {
       const res = await send('POST', '/approvals/a1/approve', { note: 'x'.repeat(501) });
       expect(res.status).toBe(400);

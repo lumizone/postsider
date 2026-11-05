@@ -54,4 +54,14 @@ export class DecideApprovalDto {
   @IsString()
   @MaxLength(APPROVAL_NOTE_MAX)
   note?: string;
+
+  @ApiPropertyOptional({
+    minimum: 1,
+    description:
+      'The stage position (stage.position of the approval) you are deciding. When sent and the approval has moved to another stage, nothing is decided and the answer is 409 stage_changed with the current stage. Optional; without it the decision applies to whichever stage is current.',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  expectStage?: number;
 }

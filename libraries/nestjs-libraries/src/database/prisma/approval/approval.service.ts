@@ -386,6 +386,14 @@ export class ApprovalService {
       this.assertKeyMaySchedule(post.integrationId);
     }
     if (opts.expectStage !== undefined && opts.expectStage !== position) {
+      if (opts.strictStage) {
+        throw new ConflictException({
+          error: 'stage_changed',
+          status: 'PENDING',
+          msg: 'The approval is no longer at the stage you decided.',
+          stage: { position, total },
+        });
+      }
       return this.lostRace(orgId, approvalId, wanted, opts.expectStage);
     }
 
@@ -576,14 +584,17 @@ export class ApprovalService {
     orgId: string,
     approvalId: string,
     approverId: string,
-    role: string
+    role: string,
+    expectStage?: number
   ) {
     assertCanApprove(role);
     const result = await this.decideFromDashboard(
       orgId,
       approvalId,
       approverId,
-      'approve'
+      'approve',
+      undefined,
+      expectStage
     );
     return { approved: true, postId: result.postId };
   }
@@ -593,7 +604,8 @@ export class ApprovalService {
     approvalId: string,
     approverId: string,
     role: string,
-    note?: string
+    note?: string,
+    expectStage?: number
   ) {
     assertCanApprove(role);
     const result = await this.decideFromDashboard(
@@ -601,7 +613,8 @@ export class ApprovalService {
       approvalId,
       approverId,
       'reject',
-      note
+      note,
+      expectStage
     );
     return { rejected: true, postId: result.postId };
   }
@@ -611,7 +624,8 @@ export class ApprovalService {
     approvalId: string,
     approverId: string,
     decision: 'approve' | 'reject',
-    note?: string
+    note?: string,
+    expectStage?: number
   ): Promise<DecisionResult> {
     let result: DecisionResult;
     try {
@@ -620,7 +634,12 @@ export class ApprovalService {
         approvalId,
         { actor: { type: 'USER', userId: approverId }, via: 'DASHBOARD' },
         decision,
-        { note: note ?? null }
+        {
+          note: note ?? null,
+          ...(expectStage !== undefined
+            ? { expectStage, strictStage: true }
+            : {}),
+        }
       );
     } catch (error) {
       if (this.isAlreadyResolved(error)) {

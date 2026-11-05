@@ -29,6 +29,12 @@ export type DecideOpts = {
   note?: string | null;
   /** Reject the call (as a lost race) when the approval is no longer at this stage. */
   expectStage?: number;
+  /**
+   * With expectStage: answer a mismatch with 409 `stage_changed` (naming the
+   * current stage) instead of the quiet lost-race answer the email link uses.
+   * Dashboard and public API callers set it; it is meaningless without expectStage.
+   */
+  strictStage?: boolean;
   /** Plaintext guest link token, consumed in the decision transaction. */
   guestToken?: string;
 };
