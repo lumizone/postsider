@@ -2,7 +2,7 @@
 
 import { api } from "@/lib/api";
 import { analyticsConsent, readCookie as cookie } from "@/lib/analytics-consent";
-import { ensureGa, gaEnabled, gaEvent } from "@/lib/ga4";
+import { ensureGa, flushUmamiQueue, gaEnabled, gaEvent } from "@/lib/ga4";
 
 export { analyticsConsent };
 
@@ -23,7 +23,31 @@ type Journey = {
 };
 type Umami = { track: (name: string, data?: Record<string, string>) => void };
 declare global {
-  interface Window { umami?: Umami; }
+  interface Window {
+    umami?: Umami;
+    psUmamiBeforeSend?: (type: string, payload: Record<string, unknown>) => Record<string, unknown>;
+  }
+}
+
+/** Umami loads only for our own hosts, so forks never report into our instance. */
+function umamiAllowed(): boolean {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname;
+  return host === "app.postsider.com" || host.endsWith(".postsider.com");
+}
+
+function stripQueryAndHash(value: unknown): unknown {
+  if (typeof value !== "string" || !value) return value;
+  return value.split("#")[0].split("?")[0];
+}
+
+/** Umami before-send hook: never let a query string or hash leave the browser. */
+export function psUmamiBeforeSend(_type: string, payload: Record<string, unknown>) {
+  if (payload && typeof payload === "object") {
+    if ("url" in payload) payload.url = stripQueryAndHash(payload.url);
+    if ("referrer" in payload) payload.referrer = stripQueryAndHash(payload.referrer);
+  }
+  return payload;
 }
 
 let loadAttempted = false;
@@ -44,8 +68,9 @@ export function gaMappingFor(
 ): { name: string; params: Record<string, string> } {
   switch (stage) {
     case "signup_completed":
-      // Method is not known here without new PII, so it is omitted.
-      return { name: "sign_up", params: {} };
+      // Server-confirmed signup. Named differently from the visitor `sign_up`
+      // event (fired at registration) so the two never double count.
+      return { name: "signup_confirmed", params: {} };
     case "onboarding_type_selected":
       return {
         name: "onboarding_type_selected",
@@ -121,20 +146,25 @@ function flush() {
   }
 }
 
-/** One Umami instance, and NO automatic capture of sensitive app URLs. */
+/** Loads Umami + GA for everyone on our hosts; only the journey id needs consent. */
 export function ensureFunnelAnalytics() {
-  if (!analyticsConsent() || typeof document === "undefined") return;
-  journeyId();
+  if (typeof document === "undefined") return;
+  if (analyticsConsent()) journeyId();
   ensureGa();
-  if (typeof window !== "undefined" && window.umami) { flush(); return; }
+  if (!umamiAllowed()) return;
+  if (typeof window !== "undefined" && window.umami) { flushUmamiQueue(); flush(); return; }
   if (loadAttempted) return;
   loadAttempted = true;
+  window.psUmamiBeforeSend = psUmamiBeforeSend;
   const s = document.createElement("script");
   s.defer = true;
   s.src = UMAMI_SRC;
   s.setAttribute("data-website-id", WEBSITE_ID);
-  s.setAttribute("data-auto-track", "false");
-  s.onload = flush;
+  s.setAttribute("data-auto-track", "true");
+  s.setAttribute("data-exclude-search", "true");
+  s.setAttribute("data-exclude-hash", "true");
+  s.setAttribute("data-before-send", "psUmamiBeforeSend");
+  s.onload = () => { flushUmamiQueue(); flush(); };
   s.onerror = () => { loadAttempted = false; };
   document.head.appendChild(s);
 }

@@ -1,4 +1,10 @@
 const pt = {
+  analyticsConsent: {
+    text: "Usamos o Umami, sem cookies, para estatísticas básicas. Com a sua permissão, o Google Analytics e o Google Ads podem definir cookies para medir inscrições e anúncios.",
+    accept: "Aceitar",
+    reject: "Recusar",
+    privacy: "Política de privacidade",
+  },
   common: {
     save: "Salvar",
     cancel: "Cancelar",

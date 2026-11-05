@@ -10,6 +10,7 @@ import styles from "./auth.module.css";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useT } from "@/lib/i18n";
+import { trackSignUp } from "@/lib/ga4";
 
 export function RegisterForm() {
   const t = useT();
@@ -61,6 +62,8 @@ export function RegisterForm() {
         },
         { anonymous: true, silent: true },
       );
+
+      trackSignUp("email");
 
       if (res?.mfaEnrollmentRequired) {
         router.replace("/login/mfa/enroll");

@@ -1,4 +1,10 @@
 const zh = {
+  analyticsConsent: {
+    text: "我们使用不含 Cookie 的 Umami 进行基础统计。经您同意，Google Analytics 和 Google Ads 可能会设置 Cookie，用于衡量注册和广告效果。",
+    accept: "接受",
+    reject: "拒绝",
+    privacy: "隐私政策",
+  },
   common: {
     save: "保存",
     cancel: "取消",

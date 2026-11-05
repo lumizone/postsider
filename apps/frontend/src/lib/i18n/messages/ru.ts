@@ -1,4 +1,10 @@
 const ru = {
+  analyticsConsent: {
+    text: "Для базовой статистики мы используем Umami без cookie. С вашего согласия Google Analytics и Google Ads могут сохранять cookie, чтобы измерять регистрации и рекламу.",
+    accept: "Принять",
+    reject: "Отклонить",
+    privacy: "Политика конфиденциальности",
+  },
   common: {
     save: "Сохранить",
     cancel: "Отмена",

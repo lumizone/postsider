@@ -1,4 +1,10 @@
 const ja = {
+  analyticsConsent: {
+    text: "基本的な統計には Cookie を使わない Umami を使用しています。ご同意いただいた場合のみ、Google Analytics と Google 広告が登録や広告の計測のために Cookie を設定することがあります。",
+    accept: "同意する",
+    reject: "拒否する",
+    privacy: "プライバシーポリシー",
+  },
   common: {
     save: "保存",
     cancel: "キャンセル",
