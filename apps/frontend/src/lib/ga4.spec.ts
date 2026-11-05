@@ -143,7 +143,7 @@ describe('GA4 gating and hosted defaults', () => {
     const { ga } = load();
     expect(ga.ensureGa()).toBe(true);
     expect(ga.ensureGa()).toBe(true);
-    expect(b.scripts).toEqual(['https://www.googletagmanager.com/gtag/js?id=' + ID]);
+    expect(b.scripts).toEqual(['https://www.googletagmanager.com/gtag/js?id=AW-123456789']);
     const calls = gtagCalls();
     const names = calls.map((c: unknown[]) => c[0] + ':' + c[1]);
     expect(names.indexOf('consent:default')).toBeLessThan(names.indexOf('config:' + ID));
