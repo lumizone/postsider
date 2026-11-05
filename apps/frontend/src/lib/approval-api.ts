@@ -28,9 +28,25 @@ export interface PendingApproval {
   // link exists and when it expires (members always get false / absent).
   hasGuestLink?: boolean;
   guestLinkExpiresAt?: string | null;
-  // Filled by the multi-stage approval work; null / empty until then.
-  stage?: Record<string, unknown> | null;
-  stages?: Array<Record<string, unknown>>;
+  // Where the approval is now (always present from the server; the implicit
+  // single stage is "Approval", 1 of 1) and the progress of every stage.
+  stage?: ApprovalStageSummary | null;
+  stages?: ApprovalStageRow[];
+}
+
+export interface ApprovalStageSummary {
+  position: number;
+  total: number;
+  name: string;
+}
+
+export interface ApprovalStageRow {
+  position: number;
+  name: string;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "NOT_REACHED";
+  /** Who decided it; a USER entry carries userId, never an email or token. */
+  decidedBy?: { type?: string; userId?: string } | null;
+  decidedAt?: string | null;
 }
 
 export const requestApproval = (postId: string) =>
@@ -51,10 +67,14 @@ export const getApprovalByPost = (postId: string) =>
     requestedAt?: string;
     hasGuestLink?: boolean;
     guestLinkExpiresAt?: string | null;
+    stage?: ApprovalStageSummary | null;
+    stages?: ApprovalStageRow[];
   }>(
     `/approval/post/${postId}`,
   );
 
+// Admin only. The plaintext token is in this response and nowhere else: the
+// dashboard lists only hasGuestLink / guestLinkExpiresAt.
 export const createGuestLink = (id: string) =>
   api.post<{ token: string; expiresAt: string }>(`/approval/${id}/guest-link`);
 

@@ -8,6 +8,7 @@ import { PolicyRuleForm } from "@/components/policies/policy-rule-form";
 import { PolicyDryRunPanel } from "@/components/policies/policy-dry-run-panel";
 import styles from "@/components/policies/policies.module.css";
 import { ApiError } from "@/lib/api";
+import { listApprovalFlows, type ApprovalFlow } from "@/lib/approval-flows-api";
 import { useAuth } from "@/lib/auth-context";
 import { useT, type MessageKey } from "@/lib/i18n";
 import { useChannels } from "@/lib/use-channels";
@@ -31,6 +32,7 @@ export default function PoliciesSettingsPage() {
 
   const [rules, setRules] = useState<PolicyRule[]>([]);
   const [apiKeys, setApiKeys] = useState<PolicyApiKeyChoice[]>([]);
+  const [flows, setFlows] = useState<ApprovalFlow[] | null>([]);
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +74,14 @@ export default function PoliciesSettingsPage() {
         if (!cancelled) setApiKeys(keys);
       })
       .catch(() => {});
+    // The flow choice on a rule is a convenience too: null tells the form it failed.
+    listApprovalFlows()
+      .then((list) => {
+        if (!cancelled) setFlows(list);
+      })
+      .catch(() => {
+        if (!cancelled) setFlows(null);
+      });
     return () => {
       cancelled = true;
     };
@@ -222,6 +232,7 @@ export default function PoliciesSettingsPage() {
           rule={editing === "new" ? null : editing}
           apiKeys={apiKeys}
           channels={channelChoices}
+          flows={flows}
           onSave={onSave}
           onClose={() => setEditing(null)}
         />
