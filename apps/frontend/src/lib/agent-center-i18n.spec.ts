@@ -1,5 +1,14 @@
 import en from './i18n/messages/en';
 import pl from './i18n/messages/pl';
+import ru from './i18n/messages/ru';
+import zh from './i18n/messages/zh';
+import fr from './i18n/messages/fr';
+import de from './i18n/messages/de';
+import pt from './i18n/messages/pt';
+import itMessages from './i18n/messages/it';
+import ja from './i18n/messages/ja';
+import ko from './i18n/messages/ko';
+import tr from './i18n/messages/tr';
 
 type Tree = { [k: string]: string | Tree };
 
@@ -117,5 +126,59 @@ describe('createPost policy keys', () => {
 
   it('keeps the rules placeholder in the blocked text', () => {
     expect(placeholders(enCp.policyBlocked)).toEqual(['rules']);
+  });
+});
+
+// Every key of the existing namespaces that Phase 4 added must exist in all
+// eleven locale files (agentActivity and policies fall back to English by
+// design, so they are not listed here).
+const ALL_LOCALES: Array<[string, unknown]> = [
+  ['en', en],
+  ['pl', pl],
+  ['ru', ru],
+  ['zh', zh],
+  ['fr', fr],
+  ['de', de],
+  ['pt', pt],
+  ['it', itMessages],
+  ['ja', ja],
+  ['ko', ko],
+  ['tr', tr],
+];
+
+const ALL_LOCALE_KEYS: string[] = [
+  'nav.agents',
+  'settings.policies',
+  ...KEY_PERMISSION_KEYS.map((k) => `settingsApi.${k}`),
+  ...CREATE_POST_POLICY_KEYS.map((k) => `createPost.${k}`),
+];
+
+const lookup = (messages: unknown, path: string): unknown =>
+  path
+    .split('.')
+    .reduce<unknown>(
+      (node, part) =>
+        node !== null && typeof node === 'object'
+          ? (node as Record<string, unknown>)[part]
+          : undefined,
+      messages
+    );
+
+describe('Phase 4 keys in all locales', () => {
+  it('lists exactly the keys that exist in English', () => {
+    const enApi = Object.keys((en as unknown as { settingsApi: object }).settingsApi);
+    expect(KEY_PERMISSION_KEYS.filter((k) => !enApi.includes(k))).toEqual([]);
+    expect(ALL_LOCALE_KEYS.length).toBe(2 + KEY_PERMISSION_KEYS.length + CREATE_POST_POLICY_KEYS.length);
+  });
+
+  describe.each(ALL_LOCALES)('locale %s', (_name, messages) => {
+    it.each(ALL_LOCALE_KEYS)('%s is a non-empty string with the English placeholders and no dashes', (key) => {
+      const value = lookup(messages, key);
+      const english = lookup(en, key) as string;
+      expect(typeof value).toBe('string');
+      expect((value as string).trim().length).toBeGreaterThan(0);
+      expect(placeholders(value as string)).toEqual(placeholders(english));
+      expect(/[\u2013\u2014]/.test(value as string)).toBe(false);
+    });
   });
 });
