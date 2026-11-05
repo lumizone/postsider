@@ -122,8 +122,22 @@ describe('PoliciesController (dashboard)', () => {
     rules.list.mockResolvedValue([ruleRow()]);
     const res = await send('GET', '');
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ policies: [ruleRow()] });
+    expect(await res.json()).toEqual({ policies: [{ ...ruleRow(), displayName: 'No links' }] });
     expect(rules.list).toHaveBeenCalledWith('org-1');
+  });
+
+  it('list, create and update add a cleaned displayName and keep the raw name', async () => {
+    const dirty = 'Evil\u202e\u200b\u0007 rule';
+    rules.list.mockResolvedValue([ruleRow({ name: dirty })]);
+    rules.create.mockResolvedValue(ruleRow({ name: dirty }));
+    rules.update.mockResolvedValue(ruleRow({ name: dirty }));
+    const listed = (await (await send('GET', '')).json()).policies[0];
+    const created = await (await send('POST', '', { name: dirty, condition: 'ALWAYS', effect: 'BLOCK' })).json();
+    const updated = await (await send('PUT', '/r1', { name: dirty })).json();
+    for (const r of [listed, created, updated]) {
+      expect(r.name).toBe(dirty);
+      expect(r.displayName).toBe('Evil rule');
+    }
   });
 
   it('POST / picks only known rule fields, audits and returns 201', async () => {

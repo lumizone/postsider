@@ -28,7 +28,7 @@ import { DashboardEvaluatePolicyDto } from '@postsider/nestjs-libraries/dtos/pol
 import { EvaluatePolicyDto } from '@postsider/nestjs-libraries/dtos/policies/evaluate-policy.dto';
 import { checkKeyPermission, type KeyPermissions } from '@postsider/nestjs-libraries/policies/key-permissions';
 import { actionForCreateType } from '@postsider/nestjs-libraries/policies/key-permission.guard';
-import { policyInputTooLarge, sanitizeMatches } from '@postsider/nestjs-libraries/policies/policy-errors';
+import { policyInputTooLarge, sanitizeMatches, sanitizePolicyName } from '@postsider/nestjs-libraries/policies/policy-errors';
 import { PolicyInputTooLargeError } from '@postsider/nestjs-libraries/policies/policy-text';
 import { actorFromUser, type PostActor } from '@postsider/nestjs-libraries/actor/post-actor';
 
@@ -92,8 +92,8 @@ type AuditOp = 'policy.create' | 'policy.update' | 'policy.delete';
 /**
  * Same two entries as the public controller: the hashed security entry and the
  * readable policy.changed resource entry. Names and flags only, never
- * conditionParams values. The actor is the dashboard user (the async actor
- * context is empty on dashboard requests, so it is passed explicitly). Best effort.
+ * conditionParams values. The actor is the dashboard user, passed explicitly for
+ * clarity (the auth middleware also sets it in the async actor context). Best effort.
  */
 async function auditPolicyChange(
   audit: AuditLogger,
@@ -127,6 +127,16 @@ async function auditPolicyChange(
   } catch {
     // never fails the request
   }
+}
+
+/**
+ * Rules as returned to the dashboard. `name` stays raw for the admin edit form
+ * only; `displayName` is the cleaned name (controls, bidi and zero-width
+ * characters stripped, bounded). The frontend MUST render displayName in lists
+ * and tooltips and put the raw name only in the edit input value.
+ */
+function withDisplayName<T extends { name: string }>(rule: T): T & { displayName: string } {
+  return { ...rule, displayName: sanitizePolicyName(rule.name) };
 }
 
 const unknownApiKey = () =>
@@ -207,7 +217,7 @@ export class PoliciesController {
   @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
   async list(@GetOrgFromRequest() org: Organization) {
     assertCanManagePolicies(org);
-    return { policies: await this._rules.list(org.id) };
+    return { policies: (await this._rules.list(org.id)).map(withDisplayName) };
   }
 
   @Post('/')
@@ -220,7 +230,7 @@ export class PoliciesController {
     assertCanManagePolicies(org);
     const row = await this._rules.create(org.id, pickRuleFields(body));
     await auditPolicyChange(this._audit, 'policy.create', org.id, user, row);
-    return row;
+    return withDisplayName(row);
   }
 
   @Put('/:id')
@@ -235,7 +245,7 @@ export class PoliciesController {
     const fields = pickRuleFields(body);
     const row = await this._rules.update(org.id, id, fields);
     await auditPolicyChange(this._audit, 'policy.update', org.id, user, row, Object.keys(fields));
-    return row;
+    return withDisplayName(row);
   }
 
   @Delete('/:id')
