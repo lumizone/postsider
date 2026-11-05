@@ -40,7 +40,7 @@ import { PolicyEvaluationService } from '@postsider/nestjs-libraries/database/pr
 import { EvaluatePolicyDto } from '@postsider/nestjs-libraries/dtos/policies/evaluate-policy.dto';
 import { checkKeyPermission } from '@postsider/nestjs-libraries/policies/key-permissions';
 import { actionForCreateType } from '@postsider/nestjs-libraries/policies/key-permission.guard';
-import { policyInputTooLarge, sanitizeMatches } from '@postsider/nestjs-libraries/policies/policy-errors';
+import { exposedMatches, policyInputTooLarge } from '@postsider/nestjs-libraries/policies/policy-errors';
 import { PolicyInputTooLargeError } from '@postsider/nestjs-libraries/policies/policy-text';
 
 // The global ValidationPipe does not whitelist, so unknown body fields
@@ -162,7 +162,7 @@ export class PublicPoliciesController {
   @ApiOperation({
     summary: 'Dry run the policy rules against a draft body',
     description:
-      'Takes the same shape as a post create body (type, date, posts) and returns what the rules would decide for the calling credential, plus whether the credential key limits would allow the action (key.code is key_action_not_allowed or key_channel_not_allowed). Writes nothing: no post, approval, audit entry or idempotency record. Requires posts:read, not policies:read, so any credential that can read posts can probe the rule settings through it. Send the literal path /public/v1/policies/evaluate: an encoded spelling is not classified as a read and needs posts:write. A draft is reported but never blocked at write time, while a BLOCK rule still stops it at publish time. In this response channels is a list of objects with integrationId and effect, while the 422 policy_blocked body lists channel id strings. A post is evaluated at the moment it will go out, so a past date counts as now. Internal plugs (for example x-repost-post-users) post to other channels without any policy check.',
+      'Takes the same shape as a post create body (type, date, posts) and returns what the rules would decide for the calling credential, plus whether the credential key limits would allow the action (key.code is key_action_not_allowed or key_channel_not_allowed). Writes nothing: no post, approval, audit entry or idempotency record. Requires posts:read, not policies:read, so any credential that can read posts can probe the rule settings through it. Send the literal path /public/v1/policies/evaluate: an encoded spelling is not classified as a read and needs posts:write. When the effect is BLOCK, matched lists only the BLOCK rules, exactly as the 422 policy_blocked body does. A draft is reported but never blocked at write time, while a BLOCK rule still stops it at publish time. In this response channels is a list of objects with integrationId and effect, while the 422 policy_blocked body lists channel id strings. A post is evaluated at the moment it will go out, so a past date counts as now. Internal plugs (for example x-repost-post-users) post to other channels without any policy check.',
   })
   @ApiOkResponse({
     type: PublicPolicyEvaluationDto,
@@ -188,7 +188,7 @@ export class PublicPoliciesController {
     );
     return {
       effect: outcome.effect,
-      matched: sanitizeMatches(outcome.matched),
+      matched: exposedMatches(outcome),
       channels: outcome.channels.map((c) => ({ integrationId: c.integrationId, effect: c.effect })),
       key: keyCheck.allowed ? { allowed: true } : { allowed: false, code: keyCheck.code },
     };
