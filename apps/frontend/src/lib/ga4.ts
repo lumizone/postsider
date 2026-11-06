@@ -83,7 +83,9 @@ export function ensureGa(): boolean {
   }
   const gtag = window.gtag as GtagFn;
   gtag("consent", "default", { ...consentState(), wait_for_update: 500 });
-  const src = "https://www.googletagmanager.com/gtag/js?id=" + id;
+  // The hosted Google tag container is the Ads id (it also carries the GA4
+  // destination); gtag/js?id=G-72MBFGEQRR itself returns 404.
+  const src = "https://www.googletagmanager.com/gtag/js?id=" + (googleAdsId() || id);
   if (!document.querySelector('script[src="' + src + '"]')) {
     const s = document.createElement("script");
     s.async = true;
